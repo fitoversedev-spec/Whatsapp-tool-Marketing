@@ -10,9 +10,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// NOTE: SQLite does not support native enums, so we use String fields.
+// NOTE: SQLite did not support native enums, so we use String fields.
 // Allowed values (validated at the API layer via Zod):
 //   role: "admin" | "sales"
+//   user.approvalStatus: "pending" | "approved" | "rejected"
 //   template.status: "draft" | "pending_admin" | "submitted" | "approved" | "rejected" | "paused"
 //   broadcast.status: "draft" | "running" | "completed" | "failed"
 //   conversation.status: "open" | "closed"
@@ -21,13 +22,16 @@ datasource db {
 //   message.status: "queued" | "sent" | "delivered" | "read" | "failed"
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  name         String
-  role         String
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  name            String
+  role            String
+  approvalStatus  String    @default("pending") @map("approval_status")
+  rejectionReason String?   @map("rejection_reason")
+  isActive        Boolean   @default(true) @map("is_active")
+  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   draftedTemplates  Template[]     @relation("DraftedTemplates")
   approvedTemplates Template[]     @relation("ApprovedTemplates")

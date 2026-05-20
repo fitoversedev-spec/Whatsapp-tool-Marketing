@@ -1,17 +1,16 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function SignupPage() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "sales">("sales");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -23,17 +22,44 @@ export default function SignupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password, role }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: "Sign up failed" }));
         setError(data.error ?? "Sign up failed");
         return;
       }
-      router.push("/inbox");
+      setSubmitted(true);
     } catch {
       setError("Network error");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (submitted) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 text-3xl mb-4">
+              ⏳
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Awaiting approval</h1>
+            <p className="text-slate-600 mb-4">
+              Thanks, <strong>{name}</strong>! Your account has been created and is now pending review by an administrator.
+            </p>
+            <p className="text-sm text-slate-500 mb-6">
+              You&apos;ll be able to sign in once an admin approves your request for <strong>{role}</strong> access.
+            </p>
+            <Link
+              href="/login"
+              className="inline-block bg-wa-green hover:bg-wa-green/90 text-white font-semibold py-2.5 px-6 rounded-lg transition shadow-md"
+            >
+              Back to sign in
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -52,9 +78,7 @@ export default function SignupPage() {
           className="bg-white rounded-2xl shadow-xl p-8 space-y-5 border border-slate-200"
         >
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Full Name
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
             <input
               type="text"
               required
@@ -67,9 +91,7 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Email
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
             <input
               type="email"
               required
@@ -82,9 +104,7 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Password
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
             <input
               type="password"
               required
@@ -95,11 +115,9 @@ export default function SignupPage() {
               autoComplete="new-password"
             />
           </div>
-          
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Role
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Requesting role</label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as "admin" | "sales")}
@@ -108,6 +126,7 @@ export default function SignupPage() {
               <option value="sales">Sales Representative</option>
               <option value="admin">Administrator</option>
             </select>
+            <p className="text-xs text-slate-500 mt-1.5">An admin will review your request before granting access.</p>
           </div>
 
           {error && (
@@ -121,7 +140,7 @@ export default function SignupPage() {
             disabled={loading}
             className="w-full bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition shadow-md"
           >
-            {loading ? "Creating account…" : "Sign Up"}
+            {loading ? "Submitting…" : "Request access"}
           </button>
         </form>
 

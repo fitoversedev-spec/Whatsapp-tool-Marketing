@@ -5,13 +5,10 @@ import InboxClient from "./InboxClient";
 export default async function InboxPage() {
   const user = await requireUser();
 
-  // Role-based visibility: admin sees all, sales sees own + unassigned
   const where =
     user.role === "admin"
       ? {}
-      : {
-          OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }],
-        };
+      : { OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }] };
 
   const conversations = await prisma.conversation.findMany({
     where,
@@ -30,6 +27,7 @@ export default async function InboxPage() {
         contactPhone: c.contactPhone,
         contactName: c.contactName,
         assignedToName: c.assignedTo?.name ?? null,
+        assignedToUserId: c.assignedToUserId,
         lastInboundAt: c.lastInboundAt?.toISOString() ?? null,
         lastOutboundAt: c.lastOutboundAt?.toISOString() ?? null,
         unreadCount: c.unreadCount,

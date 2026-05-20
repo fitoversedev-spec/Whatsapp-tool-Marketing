@@ -22,11 +22,20 @@ async function main() {
   if (!admin) {
     const passwordHash = await bcrypt.hash(password, 10);
     admin = await prisma.user.create({
-      data: { email, passwordHash, name, role: "admin" },
+      data: { email, passwordHash, name, role: "admin", approvalStatus: "approved" },
     });
     console.log(`Created admin user ${admin.email} (id=${admin.id})`);
   } else {
-    console.log(`Admin ${email} already exists`);
+    // Make sure seed admin stays approved even if the row pre-exists
+    if (admin.approvalStatus !== "approved") {
+      admin = await prisma.user.update({
+        where: { id: admin.id },
+        data: { approvalStatus: "approved" },
+      });
+      console.log(`Promoted existing admin ${email} to approved`);
+    } else {
+      console.log(`Admin ${email} already exists`);
+    }
   }
 
   if (process.env.DEMO_SEED !== "true") return;
@@ -36,10 +45,56 @@ async function main() {
   if (!sales) {
     const hash = await bcrypt.hash("sales123", 10);
     sales = await prisma.user.create({
-      data: { email: "sales@demo.local", passwordHash: hash, name: "Priya (Sales)", role: "sales" },
+      data: {
+        email: "sales@demo.local",
+        passwordHash: hash,
+        name: "Priya (Sales)",
+        role: "sales",
+        approvalStatus: "approved",
+      },
     });
     console.log(`Created sales user ${sales.email}`);
+  } else if (sales.approvalStatus !== "approved") {
+    sales = await prisma.user.update({
+      where: { id: sales.id },
+      data: { approvalStatus: "approved" },
+    });
+    console.log(`Promoted existing sales user ${sales.email} to approved`);
   }
+
+  // Demo pending/rejected users so the approvals UI has content
+  const demoSignups = [
+    {
+      email: "rahul.kumar@demo.local",
+      name: "Rahul Kumar",
+      role: "sales",
+      approvalStatus: "pending",
+      rejectionReason: null,
+    },
+    {
+      email: "anita.sharma@demo.local",
+      name: "Anita Sharma",
+      role: "admin",
+      approvalStatus: "pending",
+      rejectionReason: null,
+    },
+    {
+      email: "former.contractor@demo.local",
+      name: "Vikram (Ex-Contractor)",
+      role: "sales",
+      approvalStatus: "rejected",
+      rejectionReason: "Contract ended on 2026-04-30",
+    },
+  ];
+  const demoHash = await bcrypt.hash("demo1234", 10);
+  for (const u of demoSignups) {
+    const existing = await prisma.user.findUnique({ where: { email: u.email } });
+    if (existing) continue;
+    await prisma.user.create({
+      data: { ...u, passwordHash: demoHash },
+    });
+  }
+  console.log("Seeded demo signup requests (2 pending, 1 rejected)");
 
   // Demo templates
   const tplDefs = [
@@ -314,6 +369,20 @@ async function main() {
     if (recipientData.length > 0) {
       await prisma.broadcastRecipient.createMany({ data: recipientData, skipDuplicates: true });
     }
+
+    // Recompute counters from the actual recipient rows so totals stay consistent
+    const groups = await prisma.broadcastRecipient.groupBy({
+      by: ["status"],
+      where: { broadcastId: created.id },
+      _count: { _all: true },
+    });
+    const c: Record<string, number> = { sent: 0, delivered: 0, read: 0, failed: 0, queued: 0 };
+    for (const g of groups) c[g.status] = g._count._all;
+    const total = c.sent + c.delivered + c.read + c.failed + c.queued;
+    await prisma.broadcast.update({
+      where: { id: created.id },
+      data: { total, sent: c.sent, delivered: c.delivered, read: c.read, failed: c.failed },
+    });
   }
   console.log(`Seeded ${broadcastDefs.length} broadcasts with sample recipients`);
   console.log("\nLogin credentials:");

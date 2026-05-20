@@ -9,11 +9,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setErrorCode(null);
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
@@ -24,6 +26,7 @@ export default function LoginPage() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: "Login failed" }));
         setError(data.error ?? "Login failed");
+        setErrorCode(data.code ?? null);
         return;
       }
       router.push("/inbox");
@@ -33,6 +36,14 @@ export default function LoginPage() {
       setLoading(false);
     }
   }
+
+  const errorIcon = errorCode === "pending" ? "⏳" : errorCode === "rejected" ? "🚫" : errorCode === "inactive" ? "🔒" : null;
+  const errorBg =
+    errorCode === "pending"
+      ? "bg-amber-50 border-amber-200 text-amber-800"
+      : errorCode === "rejected" || errorCode === "inactive"
+      ? "bg-slate-50 border-slate-200 text-slate-700"
+      : "bg-red-50 border-red-200 text-red-600";
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
@@ -79,8 +90,9 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
+            <div className={`text-sm border rounded-lg px-3 py-2 flex items-start gap-2 ${errorBg}`}>
+              {errorIcon && <span className="shrink-0 text-base leading-tight">{errorIcon}</span>}
+              <span className="flex-1">{error}</span>
             </div>
           )}
 

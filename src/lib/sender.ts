@@ -10,6 +10,24 @@ async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+type FilterRule = {
+  column: string;
+  condition: "equals" | "contains" | "starts_with" | "not_empty";
+  value?: string;
+};
+
+function matchesFilter(cellValue: string, rule: FilterRule): boolean {
+  const cell = String(cellValue ?? "").trim().toLowerCase();
+  const val = String(rule.value ?? "").trim().toLowerCase();
+  switch (rule.condition) {
+    case "equals": return cell === val;
+    case "contains": return cell.includes(val);
+    case "starts_with": return cell.startsWith(val);
+    case "not_empty": return cell.length > 0;
+    default: return true;
+  }
+}
+
 export async function runBroadcast(broadcastId: string): Promise<void> {
   const broadcast = await prisma.broadcast.findUnique({
     where: { id: broadcastId },
@@ -20,8 +38,10 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
 
   const mapping = JSON.parse(broadcast.variableMapping) as {
     phoneColumn: string;
+    countryCodeColumn?: string | null;
     nameColumn?: string | null;
     variables: Record<string, string>;
+    filterRules?: FilterRule[];
   };
 
   // Materialise recipients if not done
@@ -44,26 +64,47 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
       (await prisma.optOut.findMany({ select: { phoneE164: true } })).map((o) => o.phoneE164)
     );
 
+    // Column resolver: header name → numeric → letter
     const getColumnIndex = (colKey: string): number => {
       if (!colKey) return -1;
-      const idx = headers.findIndex(
+      const byHeader = headers.findIndex(
         (h) => String(h).trim().toLowerCase() === colKey.trim().toLowerCase()
       );
-      if (idx >= 0) return idx;
-      try {
-        return colIndex(colKey);
-      } catch {
-        return -1;
-      }
+      if (byHeader >= 0) return byHeader;
+      if (/^\d+$/.test(colKey)) return parseInt(colKey, 10);
+      try { return colIndex(colKey); } catch { return -1; }
     };
 
     const phoneIdx = getColumnIndex(mapping.phoneColumn);
+    const countryCodeIdx = mapping.countryCodeColumn ? getColumnIndex(mapping.countryCodeColumn) : -1;
     const nameIdx = mapping.nameColumn ? getColumnIndex(mapping.nameColumn) : -1;
+
+    // Resolve filter column indices once
+    const activeFilters = (mapping.filterRules ?? []).filter((r) => r.column?.trim());
+    const filterIndices = activeFilters.map((r) => ({ rule: r, idx: getColumnIndex(r.column) }));
+
     const insertData: Array<{ broadcastId: string; phoneE164: string; name: string | null; variables: string }> = [];
 
     for (const row of dataRows) {
-      const phone = normalizePhone(String(row[phoneIdx] ?? ""));
+      // Apply filter rules
+      if (filterIndices.length > 0) {
+        const passes = filterIndices.every(({ rule, idx }) => {
+          if (idx < 0) return false;
+          return matchesFilter(String(row[idx] ?? ""), rule);
+        });
+        if (!passes) continue;
+      }
+
+      // Build phone — combine country code + phone if provided
+      let rawPhone = String(row[phoneIdx] ?? "").trim();
+      if (countryCodeIdx >= 0) {
+        const cc = String(row[countryCodeIdx] ?? "").replace(/\D/g, "");
+        rawPhone = cc + rawPhone.replace(/\D/g, "");
+      }
+
+      const phone = normalizePhone(rawPhone);
       if (!phone || optOuts.has(phone)) continue;
+
       const variables: Record<string, string> = {};
       for (const [k, col] of Object.entries(mapping.variables)) {
         variables[k] = String(row[getColumnIndex(col)] ?? "");

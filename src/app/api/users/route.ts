@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
       name: parsed.data.name,
       role: parsed.data.role,
       passwordHash,
+      approvalStatus: "approved", // admin-invited users are auto-approved
     },
   });
 

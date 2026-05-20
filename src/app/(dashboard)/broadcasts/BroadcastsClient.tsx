@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useRef, FormEvent, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
+import { useToast } from "@/components/Toast";
+import * as XLSX from "xlsx";
 
 type Broadcast = {
   id: string;
@@ -20,6 +22,8 @@ type Broadcast = {
 };
 
 type Template = { id: string; name: string; language: string; body: string };
+
+type FilterRule = { column: string; condition: "equals" | "contains" | "starts_with" | "not_empty"; value: string };
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700",
@@ -42,7 +46,7 @@ export default function BroadcastsClient({
     <>
       <PageHeader
         title="Broadcasts"
-        description="Send approved templates to a Google Sheet of contacts."
+        description="Send approved templates to a list of contacts."
         action={
           <button
             onClick={() => setShowComposer(true)}
@@ -178,6 +182,8 @@ function Stat({ label, value, color }: { label: string; value: number | string; 
   );
 }
 
+// ─── Broadcast Composer ───────────────────────────────────────────────────────
+
 function BroadcastComposer({
   templates,
   onClose,
@@ -188,55 +194,135 @@ function BroadcastComposer({
   onLaunched: () => void;
 }) {
   const [name, setName] = useState("");
-  const [sheetUrl, setSheetUrl] = useState("");
-  const [sheetRange, setSheetRange] = useState("Sheet1!A2:D");
-  const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
-  const [phoneColumn, setPhoneColumn] = useState("A");
-  const [nameColumn, setNameColumn] = useState("B");
-  const [var1Column, setVar1Column] = useState("B");
-  const [preview, setPreview] = useState<any>(null);
-  const [busy, setBusy] = useState(false);
+  const [source, setSource] = useState<"file" | "sheet">("file");
 
+  // File upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileRows, setFileRows] = useState<any[][] | null>(null);
+  const [sheetNames, setSheetNames] = useState<string[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState("");
+  const [fileLabel, setFileLabel] = useState("");
+  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
+
+  // Google sheet state
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [sheetRange, setSheetRange] = useState("Sheet1!A2:G");
+
+  // Column mapping
+  const [phoneColumn, setPhoneColumn] = useState("C");
+  const [countryCodeColumn, setCountryCodeColumn] = useState("B");
+  const [nameColumn, setNameColumn] = useState("A");
+  const [var1Column, setVar1Column] = useState("A");
+
+  // Filter rules
+  const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
+
+  const [preview, setPreview] = useState<any>(null);
+  const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  // ── File Parsing ────────────────────────────────────────────────────────────
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const data = evt.target?.result;
+      const wb = XLSX.read(data, { type: "binary" });
+      setWorkbook(wb);
+      setSheetNames(wb.SheetNames);
+      const firstSheet = wb.SheetNames[0];
+      setSelectedSheet(firstSheet);
+      loadSheet(wb, firstSheet);
+      setFileLabel(`${file.name} — ${wb.SheetNames.length} sheet(s)`);
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  function loadSheet(wb: XLSX.WorkBook, sheetName: string) {
+    const ws = wb.Sheets[sheetName];
+    const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+    setFileRows(rows);
+    setPreview(null);
+  }
+
+  function onSheetSelect(sheetName: string) {
+    setSelectedSheet(sheetName);
+    if (workbook) loadSheet(workbook, sheetName);
+  }
+
+  // ── Filter Rule Helpers ─────────────────────────────────────────────────────
+  function addFilter() {
+    setFilterRules((prev) => [...prev, { column: "", condition: "equals", value: "" }]);
+  }
+
+  function updateFilter(index: number, field: keyof FilterRule, value: string) {
+    setFilterRules((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
+  }
+
+  function removeFilter(index: number) {
+    setFilterRules((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // ── Preview ─────────────────────────────────────────────────────────────────
   async function doPreview() {
     setBusy(true);
+    const payload: any = {
+      phoneColumn,
+      nameColumn,
+      countryCodeColumn: countryCodeColumn || undefined,
+      variableMapping: { "1": var1Column },
+      filterRules: filterRules.filter((r) => r.column),
+    };
+    if (source === "file") {
+      if (!fileRows) { setBusy(false); toast.error("Please upload a file first."); return; }
+      payload.fileRows = fileRows;
+    } else {
+      payload.sheetUrl = sheetUrl;
+      payload.sheetRange = sheetRange;
+    }
     const res = await fetch("/api/broadcasts/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sheetUrl,
-        sheetRange,
-        phoneColumn,
-        nameColumn,
-        variableMapping: { "1": var1Column },
-      }),
+      body: JSON.stringify(payload),
     });
     setBusy(false);
     const data = await res.json();
-    if (!res.ok) return alert(data.error ?? "Preview failed");
+    if (!res.ok) { toast.error(data.error ?? "Preview failed"); return; }
     setPreview(data);
   }
 
+  // ── Launch ──────────────────────────────────────────────────────────────────
   async function launch(e: FormEvent) {
     e.preventDefault();
-    if (!preview) return alert("Preview first");
+    if (!preview) { toast.error("Preview first"); return; }
     setBusy(true);
+    const payload: any = {
+      name,
+      templateId,
+      phoneColumn,
+      nameColumn,
+      countryCodeColumn: countryCodeColumn || undefined,
+      variableMapping: { "1": var1Column },
+      filterRules: filterRules.filter((r) => r.column),
+    };
+    if (source === "file") {
+      payload.fileData = JSON.stringify(fileRows);
+    } else {
+      payload.sheetUrl = sheetUrl;
+      payload.sheetRange = sheetRange;
+    }
     const res = await fetch("/api/broadcasts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        sheetUrl,
-        sheetRange,
-        templateId,
-        phoneColumn,
-        nameColumn,
-        variableMapping: { "1": var1Column },
-      }),
+      body: JSON.stringify(payload),
     });
     setBusy(false);
     const data = await res.json();
-    if (!res.ok) return alert(data.error ?? "Launch failed");
+    if (!res.ok) { toast.error(data.error ?? "Launch failed"); return; }
     await fetch(`/api/broadcasts/${data.broadcast.id}/launch`, { method: "POST" });
+    toast.success(`Broadcast launched to ${preview.willSend} contacts`);
     onLaunched();
   }
 
@@ -246,36 +332,126 @@ function BroadcastComposer({
         onSubmit={launch}
         className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto"
       >
+        {/* Header */}
         <div className="p-5 sm:p-6 border-b border-slate-200 sticky top-0 bg-white z-10">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900">New broadcast</h2>
         </div>
 
-        <div className="p-5 sm:p-6 space-y-4">
+        <div className="p-5 sm:p-6 space-y-5">
+          {/* Campaign Name */}
           <Field label="Campaign name" required>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="input"
-              placeholder="May Promo"
+              placeholder="May Promo — Salem"
               required
             />
           </Field>
 
-          <Field label="Google Sheet URL" required>
-            <input
-              type="url"
-              value={sheetUrl}
-              onChange={(e) => setSheetUrl(e.target.value)}
-              className="input"
-              placeholder="https://docs.google.com/spreadsheets/d/..."
-              required
-            />
-          </Field>
+          {/* Source Toggle */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Contact source</label>
+            <div className="flex rounded-lg border border-slate-300 overflow-hidden w-fit">
+              <button
+                type="button"
+                onClick={() => { setSource("file"); setPreview(null); }}
+                className={`px-4 py-2 text-sm font-medium transition ${source === "file" ? "bg-wa-green text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                📁 Upload File
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSource("sheet"); setPreview(null); }}
+                className={`px-4 py-2 text-sm font-medium transition border-l border-slate-300 ${source === "sheet" ? "bg-wa-green text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                📊 Google Sheet
+              </button>
+            </div>
+          </div>
 
-          <Field label="Sheet range">
-            <input value={sheetRange} onChange={(e) => setSheetRange(e.target.value)} className="input" />
-          </Field>
+          {/* File Upload */}
+          {source === "file" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Excel / CSV file <span className="text-red-500">*</span>
+              </label>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:border-wa-green hover:bg-green-50 transition"
+              >
+                {fileLabel ? (
+                  <div className="text-sm text-slate-700">
+                    <div className="text-wa-green font-semibold mb-1">✓ {fileLabel}</div>
+                    <div className="text-slate-500">{fileRows ? fileRows.length - 1 : 0} data rows loaded</div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500">
+                    <div className="text-2xl mb-2">📂</div>
+                    Click to upload <strong>.xlsx</strong>, <strong>.xls</strong> or <strong>.csv</strong>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
 
+              {/* Sheet picker for multi-sheet files */}
+              {sheetNames.length > 1 && (
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Sheet to use</label>
+                  <select
+                    value={selectedSheet}
+                    onChange={(e) => onSheetSelect(e.target.value)}
+                    className="input"
+                  >
+                    {sheetNames.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Column headers preview */}
+              {fileRows && fileRows[0] && (
+                <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="text-xs text-slate-500 mb-1 font-medium">Detected columns (row 1):</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(fileRows[0] as string[]).map((h, i) => (
+                      <span key={i} className="inline-block bg-white border border-slate-300 rounded px-2 py-0.5 text-xs text-slate-700">
+                        <span className="text-slate-400 mr-1">{String.fromCharCode(65 + i)}:</span>{h || "(empty)"}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Google Sheet */}
+          {source === "sheet" && (
+            <>
+              <Field label="Google Sheet URL" required>
+                <input
+                  type="url"
+                  value={sheetUrl}
+                  onChange={(e) => setSheetUrl(e.target.value)}
+                  className="input"
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  required={source === "sheet"}
+                />
+              </Field>
+              <Field label="Sheet range">
+                <input value={sheetRange} onChange={(e) => setSheetRange(e.target.value)} className="input" />
+              </Field>
+            </>
+          )}
+
+          {/* Template */}
           <Field label="Template" required>
             <select
               value={templateId}
@@ -291,30 +467,116 @@ function BroadcastComposer({
             </select>
           </Field>
 
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Phone col">
-              <input
-                value={phoneColumn}
-                onChange={(e) => setPhoneColumn(e.target.value.toUpperCase())}
-                className="input"
-              />
-            </Field>
-            <Field label="Name col">
-              <input
-                value={nameColumn}
-                onChange={(e) => setNameColumn(e.target.value.toUpperCase())}
-                className="input"
-              />
-            </Field>
-            <Field label="{{1}} col">
-              <input
-                value={var1Column}
-                onChange={(e) => setVar1Column(e.target.value.toUpperCase())}
-                className="input"
-              />
-            </Field>
+          {/* Column Mapping */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Column mapping</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Field label="Name col">
+                <input
+                  value={nameColumn}
+                  onChange={(e) => { setNameColumn(e.target.value); setPreview(null); }}
+                  className="input"
+                  placeholder="A"
+                />
+              </Field>
+              <Field label="Country code col">
+                <input
+                  value={countryCodeColumn}
+                  onChange={(e) => { setCountryCodeColumn(e.target.value); setPreview(null); }}
+                  className="input"
+                  placeholder="B (optional)"
+                />
+              </Field>
+              <Field label="Phone col">
+                <input
+                  value={phoneColumn}
+                  onChange={(e) => { setPhoneColumn(e.target.value); setPreview(null); }}
+                  className="input"
+                  placeholder="C"
+                />
+              </Field>
+              <Field label="{'{{1}}'} col">
+                <input
+                  value={var1Column}
+                  onChange={(e) => { setVar1Column(e.target.value); setPreview(null); }}
+                  className="input"
+                  placeholder="A"
+                />
+              </Field>
+            </div>
           </div>
 
+          {/* Filter Rules */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-slate-700">
+                Filter contacts <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <button
+                type="button"
+                onClick={addFilter}
+                className="text-xs text-wa-green font-semibold hover:underline"
+              >
+                + Add filter
+              </button>
+            </div>
+
+            {filterRules.length === 0 && (
+              <div className="text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg px-4 py-3">
+                No filters — all valid contacts will be included. Click <strong>+ Add filter</strong> to narrow down (e.g. only Salem).
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {filterRules.map((rule, i) => (
+                <div key={i} className="flex gap-2 items-start bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <div className="flex-1 grid grid-cols-3 gap-2">
+                    <div>
+                      <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Column</div>
+                      <input
+                        value={rule.column}
+                        onChange={(e) => { updateFilter(i, "column", e.target.value); setPreview(null); }}
+                        className="input text-sm"
+                        placeholder="Attribute 1 or F"
+                      />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Condition</div>
+                      <select
+                        value={rule.condition}
+                        onChange={(e) => { updateFilter(i, "condition", e.target.value); setPreview(null); }}
+                        className="input text-sm bg-white"
+                      >
+                        <option value="equals">equals</option>
+                        <option value="contains">contains</option>
+                        <option value="starts_with">starts with</option>
+                        <option value="not_empty">not empty</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Value</div>
+                      <input
+                        value={rule.value}
+                        onChange={(e) => { updateFilter(i, "value", e.target.value); setPreview(null); }}
+                        className="input text-sm"
+                        placeholder="Salem"
+                        disabled={rule.condition === "not_empty"}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { removeFilter(i); setPreview(null); }}
+                    className="mt-5 text-slate-400 hover:text-red-500 text-lg leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Preview Button */}
           <button
             type="button"
             onClick={doPreview}
@@ -324,24 +586,28 @@ function BroadcastComposer({
             {busy ? "Loading…" : "Preview recipients →"}
           </button>
 
+          {/* Preview Results */}
           {preview && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm">
               <div className="font-medium text-slate-900 mb-2">Preview</div>
-              <div className="grid grid-cols-3 gap-3 text-center mb-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center mb-3">
                 <PreviewStat label="Will send" value={preview.willSend} color="text-green-700" />
+                <PreviewStat label="Filtered out" value={preview.filtered ?? 0} color="text-blue-700" />
                 <PreviewStat label="Opt-outs" value={preview.optOuts} color="text-amber-700" />
                 <PreviewStat label="Invalid" value={preview.invalid} color="text-red-700" />
               </div>
               {preview.samples?.length > 0 && (
                 <>
-                  <div className="text-xs text-slate-500 mb-1">First 3:</div>
+                  <div className="text-xs text-slate-500 mb-1">First 3 matching contacts:</div>
                   <ul className="space-y-1">
                     {preview.samples.slice(0, 3).map((s: any, i: number) => (
                       <li
                         key={i}
                         className="text-xs text-slate-700 bg-white border border-slate-200 rounded p-2 break-words"
                       >
-                        <span className="text-slate-400">+{s.phone}:</span> {s.preview}
+                        <span className="text-slate-400">+{s.phone}</span>
+                        {s.name && <span className="ml-1 font-medium">{s.name}</span>}
+                        {s.preview && <span className="ml-1 text-slate-400">— {s.preview}</span>}
                       </li>
                     ))}
                   </ul>
@@ -351,6 +617,7 @@ function BroadcastComposer({
           )}
         </div>
 
+        {/* Footer */}
         <div className="p-5 sm:p-6 border-t border-slate-200 flex flex-col sm:flex-row sm:justify-end gap-2 sticky bottom-0 bg-white">
           <button
             type="button"
@@ -364,29 +631,32 @@ function BroadcastComposer({
             disabled={busy || !preview}
             className="order-1 sm:order-2 bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-5 py-2.5 rounded-lg"
           >
-            {busy ? "Launching…" : `Launch (${preview?.willSend ?? 0})`}
+            {busy ? "Launching…" : `Launch (${preview?.willSend ?? 0} contacts)`}
           </button>
         </div>
-      </form>
-      <style jsx>{`
-        :global(.input) {
-          width: 100%;
-          padding: 0.625rem 0.75rem;
-          border-radius: 0.5rem;
-          border: 1px solid #cbd5e1;
-          outline: none;
-          font-size: 16px;
-        }
-        @media (min-width: 640px) {
+
+        <style jsx>{`
           :global(.input) {
-            font-size: 14px;
+            width: 100%;
+            padding: 0.625rem 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid #cbd5e1;
+            outline: none;
+            font-size: 16px;
           }
-        }
-        :global(.input:focus) {
-          border-color: #25d366;
-          box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.2);
-        }
-      `}</style>
+          @media (min-width: 640px) {
+            :global(.input) { font-size: 14px; }
+          }
+          :global(.input:focus) {
+            border-color: #25d366;
+            box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.2);
+          }
+          :global(.input:disabled) {
+            background: #f8fafc;
+            color: #94a3b8;
+          }
+        `}</style>
+      </form>
     </div>
   );
 }
@@ -400,15 +670,7 @@ function PreviewStat({ label, value, color }: { label: string; value: number; co
   );
 }
 
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-sm font-medium text-slate-700 mb-1.5">

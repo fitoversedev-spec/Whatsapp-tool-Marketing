@@ -6,7 +6,11 @@ export async function getCurrentUser() {
   const session = await getSession();
   if (!session.userId) return null;
   const user = await prisma.user.findUnique({ where: { id: session.userId } });
-  if (!user || !user.isActive) return null;
+  // Block deleted / inactive / non-approved users from any access
+  if (!user) return null;
+  if (user.deletedAt) return null;
+  if (!user.isActive) return null;
+  if (user.approvalStatus !== "approved") return null;
   return user;
 }
 

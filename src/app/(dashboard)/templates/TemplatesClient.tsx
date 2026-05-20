@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
+import { useToast } from "@/components/Toast";
 
 type Template = {
   id: string;
@@ -35,6 +36,7 @@ export default function TemplatesClient({
   templates: Template[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [showDraft, setShowDraft] = useState(false);
   const [filter, setFilter] = useState<string>("all");
 
@@ -42,10 +44,12 @@ export default function TemplatesClient({
 
   async function act(id: string, action: "submit_for_review" | "submit_to_meta") {
     const res = await fetch(`/api/templates/${id}/${action}`, { method: "POST" });
-    if (res.ok) router.refresh();
-    else {
+    if (res.ok) {
+      toast.success(action === "submit_for_review" ? "Submitted for admin review" : "Submitted to Meta");
+      router.refresh();
+    } else {
       const err = await res.json().catch(() => ({}));
-      alert(err.error ?? "Action failed");
+      toast.error(err.error ?? "Action failed");
     }
   }
 
@@ -148,6 +152,7 @@ export default function TemplatesClient({
 }
 
 function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
   const [name, setName] = useState("");
   const [language, setLanguage] = useState("en");
   const [category, setCategory] = useState<"MARKETING" | "UTILITY" | "AUTHENTICATION">("MARKETING");
@@ -165,11 +170,12 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     });
     setSaving(false);
     if (res.ok) {
+      toast.success("Template saved as draft");
       onSaved();
       onClose();
     } else {
       const err = await res.json().catch(() => ({}));
-      alert(err.error ?? "Save failed");
+      toast.error(err.error ?? "Save failed");
     }
   }
 

@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
     await session.save();
 
     return NextResponse.json({ ok: true, user: { email: user.email, name: user.name, role: user.role as "admin" | "sales" } });
-  } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error: any) {
+    console.error("Signup error:", error);
+    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
   }
 }

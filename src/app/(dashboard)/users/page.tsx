@@ -14,7 +14,7 @@ export default async function UsersPage() {
         id: u.id,
         email: u.email,
         name: u.name,
-        role: u.role,
+        role: u.role as "admin" | "sales",
         isActive: u.isActive,
         createdAt: u.createdAt.toISOString(),
       }))}

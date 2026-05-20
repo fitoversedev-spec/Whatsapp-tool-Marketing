@@ -6,8 +6,9 @@ import { parseSheetId } from "@/lib/sheets";
 
 const schema = z.object({
   name: z.string().min(1).max(120),
-  sheetUrl: z.string().min(10),
-  sheetRange: z.string().min(1),
+  sheetUrl: z.string().min(10).optional(),
+  sheetRange: z.string().min(1).optional(),
+  fileData: z.string().min(2).optional(),
   templateId: z.string().uuid(),
   phoneColumn: z.string(),
   nameColumn: z.string().optional(),
@@ -26,13 +27,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Template must be approved" }, { status: 422 });
   }
 
-  const sheetId = parseSheetId(parsed.data.sheetUrl);
+  const sheetId = parsed.data.sheetUrl ? parseSheetId(parsed.data.sheetUrl) : null;
 
   const broadcast = await prisma.broadcast.create({
     data: {
       name: parsed.data.name,
       sheetId,
-      sheetRange: parsed.data.sheetRange,
+      sheetRange: parsed.data.sheetRange ?? null,
+      fileData: parsed.data.fileData ?? null,
       templateId: parsed.data.templateId,
       variableMapping: JSON.stringify({
         phoneColumn: parsed.data.phoneColumn,

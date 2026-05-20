@@ -24,7 +24,7 @@ export default async function InboxPage() {
 
   return (
     <InboxClient
-      currentUser={{ id: user.id, name: user.name, role: user.role }}
+      currentUser={{ id: user.id, name: user.name, role: user.role as "admin" | "sales" }}
       initialConversations={conversations.map((c) => ({
         id: c.id,
         contactPhone: c.contactPhone,

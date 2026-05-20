@@ -112,8 +112,9 @@ model Message {
 model Broadcast {
   id               String    @id @default(uuid())
   name             String
-  sheetId          String    @map("sheet_id")
-  sheetRange       String    @map("sheet_range")
+  sheetId          String?   @map("sheet_id")
+  sheetRange       String?   @map("sheet_range")
+  fileData         String?   @map("file_data")
   templateId       String    @map("template_id")
   variableMapping  String    @map("variable_mapping")
   status           String    @default("draft")

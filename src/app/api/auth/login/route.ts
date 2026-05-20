@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
   session.userId = user.id;
   session.email = user.email;
   session.name = user.name;
-  session.role = user.role;
+  session.role = user.role as "admin" | "sales";
   await session.save();
 
-  return NextResponse.json({ ok: true, user: { email: user.email, name: user.name, role: user.role } });
+  return NextResponse.json({ ok: true, user: { email: user.email, name: user.name, role: user.role as "admin" | "sales" } });
 }

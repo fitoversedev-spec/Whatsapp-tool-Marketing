@@ -27,21 +27,46 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
   // Materialise recipients if not done
   let recipientCount = await prisma.broadcastRecipient.count({ where: { broadcastId } });
   if (recipientCount === 0) {
-    const rows = await readSheet({ sheetUrlOrId: broadcast.sheetId, range: broadcast.sheetRange });
+    let headers: string[] = [];
+    let dataRows: string[][];
+
+    if (broadcast.fileData) {
+      const parsed = JSON.parse(broadcast.fileData) as string[][];
+      headers = parsed[0] || [];
+      dataRows = parsed.slice(1);
+    } else if (broadcast.sheetId && broadcast.sheetRange) {
+      dataRows = await readSheet({ sheetUrlOrId: broadcast.sheetId, range: broadcast.sheetRange });
+    } else {
+      throw new Error("No data source configured for broadcast");
+    }
+
     const optOuts = new Set(
       (await prisma.optOut.findMany({ select: { phoneE164: true } })).map((o) => o.phoneE164)
     );
 
-    const phoneIdx = colIndex(mapping.phoneColumn);
-    const nameIdx = mapping.nameColumn ? colIndex(mapping.nameColumn) : -1;
+    const getColumnIndex = (colKey: string): number => {
+      if (!colKey) return -1;
+      const idx = headers.findIndex(
+        (h) => String(h).trim().toLowerCase() === colKey.trim().toLowerCase()
+      );
+      if (idx >= 0) return idx;
+      try {
+        return colIndex(colKey);
+      } catch {
+        return -1;
+      }
+    };
+
+    const phoneIdx = getColumnIndex(mapping.phoneColumn);
+    const nameIdx = mapping.nameColumn ? getColumnIndex(mapping.nameColumn) : -1;
     const insertData: Array<{ broadcastId: string; phoneE164: string; name: string | null; variables: string }> = [];
 
-    for (const row of rows) {
+    for (const row of dataRows) {
       const phone = normalizePhone(String(row[phoneIdx] ?? ""));
       if (!phone || optOuts.has(phone)) continue;
       const variables: Record<string, string> = {};
       for (const [k, col] of Object.entries(mapping.variables)) {
-        variables[k] = String(row[colIndex(col)] ?? "");
+        variables[k] = String(row[getColumnIndex(col)] ?? "");
       }
       insertData.push({
         broadcastId,

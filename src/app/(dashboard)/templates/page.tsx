@@ -14,7 +14,7 @@ export default async function TemplatesPage() {
 
   return (
     <TemplatesClient
-      currentUser={{ role: user.role }}
+      currentUser={{ role: user.role as "admin" | "sales" }}
       templates={templates.map((t) => ({
         id: t.id,
         name: t.name,

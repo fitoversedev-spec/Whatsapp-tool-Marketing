@@ -236,6 +236,44 @@ async function main() {
     update: {},
   });
 
+  // Demo saved contacts — a pool spread across cities so location filtering is visible
+  const cities = ["Salem", "Chennai", "Coimbatore", "Madurai"];
+  const categories = ["VIP", "Regular", "New"];
+  const firstNames = [
+    "Arun", "Divya", "Karthik", "Lakshmi", "Manoj", "Nisha", "Praveen", "Revathi",
+    "Saravanan", "Tamil", "Uma", "Vijay", "Yamuna", "Bala", "Deepa", "Ganesh",
+    "Hema", "Iniya", "Jaya", "Kumar",
+  ];
+  const existingContactCount = await prisma.contact.count();
+  if (existingContactCount === 0) {
+    const contactData: { phone: string; name: string; allowCampaign: boolean; fields: string }[] = [];
+    for (let i = 0; i < 40; i++) {
+      const city = cities[i % cities.length];
+      const category = categories[i % categories.length];
+      const name = `${firstNames[i % firstNames.length]} ${city.slice(0, 1)}`;
+      const phone = `9190${(10000000 + i * 137).toString().slice(0, 8)}`;
+      // Every 7th contact opts out of campaigns — demonstrates the consent gate
+      const allowCampaign = i % 7 !== 0;
+      contactData.push({
+        phone,
+        name,
+        allowCampaign,
+        fields: JSON.stringify({
+          Location: city,
+          Category: category,
+          AllowSMS: i % 5 === 0 ? "FALSE" : "TRUE",
+        }),
+      });
+    }
+    await prisma.contact.createMany({ data: contactData, skipDuplicates: true });
+    const blocked = contactData.filter((c) => !c.allowCampaign).length;
+    console.log(
+      `Seeded ${contactData.length} demo contacts across ${cities.length} cities (${blocked} no-campaign)`
+    );
+  } else {
+    console.log(`Contacts pool already has ${existingContactCount} entries — skipped`);
+  }
+
   // Demo broadcasts
   const broadcastDefs = [
     {

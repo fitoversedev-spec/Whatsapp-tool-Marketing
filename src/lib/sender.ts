@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { readSheet, colIndex } from "./sheets";
 import { normalizePhone } from "./phone";
 import { sendTemplate, describeMetaError } from "./whatsapp";
+import { parseFields, contactPassesFilters, ContactFilterRule } from "./contacts";
 
 const PACE_MS = parseInt(process.env.SENDER_PACE_MS || "120", 10); // ~8/sec
 const CHUNK_SIZE = parseInt(process.env.SENDER_CHUNK_SIZE || "50", 10);
@@ -11,7 +12,8 @@ async function sleep(ms: number) {
 }
 
 type FilterRule = {
-  column: string;
+  column?: string;
+  field?: string;
   condition: "equals" | "contains" | "starts_with" | "not_empty";
   value?: string;
 };
@@ -27,6 +29,8 @@ function matchesFilter(cellValue: string, rule: FilterRule): boolean {
     default: return true;
   }
 }
+
+type Template = { name: string; language: string };
 
 export async function runBroadcast(broadcastId: string): Promise<void> {
   const broadcast = await prisma.broadcast.findUnique({
@@ -44,87 +48,32 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
     filterRules?: FilterRule[];
   };
 
-  // Materialise recipients if not done
-  let recipientCount = await prisma.broadcastRecipient.count({ where: { broadcastId } });
+  const recipientCount = await prisma.broadcastRecipient.count({ where: { broadcastId } });
+
   if (recipientCount === 0) {
-    let headers: string[] = [];
-    let dataRows: string[][];
-
-    if (broadcast.fileData) {
-      const parsed = JSON.parse(broadcast.fileData) as string[][];
-      headers = parsed[0] || [];
-      dataRows = parsed.slice(1);
-    } else if (broadcast.sheetId && broadcast.sheetRange) {
-      dataRows = await readSheet({ sheetUrlOrId: broadcast.sheetId, range: broadcast.sheetRange });
-    } else {
-      throw new Error("No data source configured for broadcast");
-    }
-
     const optOuts = new Set(
       (await prisma.optOut.findMany({ select: { phoneE164: true } })).map((o) => o.phoneE164)
     );
 
-    // Column resolver: header name → numeric → letter
-    const getColumnIndex = (colKey: string): number => {
-      if (!colKey) return -1;
-      const byHeader = headers.findIndex(
-        (h) => String(h).trim().toLowerCase() === colKey.trim().toLowerCase()
-      );
-      if (byHeader >= 0) return byHeader;
-      if (/^\d+$/.test(colKey)) return parseInt(colKey, 10);
-      try { return colIndex(colKey); } catch { return -1; }
-    };
+    let insertData: Array<{
+      broadcastId: string;
+      phoneE164: string;
+      name: string | null;
+      variables: string;
+    }> = [];
 
-    const phoneIdx = getColumnIndex(mapping.phoneColumn);
-    const countryCodeIdx = mapping.countryCodeColumn ? getColumnIndex(mapping.countryCodeColumn) : -1;
-    const nameIdx = mapping.nameColumn ? getColumnIndex(mapping.nameColumn) : -1;
-
-    // Resolve filter column indices once
-    const activeFilters = (mapping.filterRules ?? []).filter((r) => r.column?.trim());
-    const filterIndices = activeFilters.map((r) => ({ rule: r, idx: getColumnIndex(r.column) }));
-
-    const insertData: Array<{ broadcastId: string; phoneE164: string; name: string | null; variables: string }> = [];
-
-    for (const row of dataRows) {
-      // Apply filter rules
-      if (filterIndices.length > 0) {
-        const passes = filterIndices.every(({ rule, idx }) => {
-          if (idx < 0) return false;
-          return matchesFilter(String(row[idx] ?? ""), rule);
-        });
-        if (!passes) continue;
-      }
-
-      // Build phone — combine country code + phone if provided
-      let rawPhone = String(row[phoneIdx] ?? "").trim();
-      if (countryCodeIdx >= 0) {
-        const cc = String(row[countryCodeIdx] ?? "").replace(/\D/g, "");
-        rawPhone = cc + rawPhone.replace(/\D/g, "");
-      }
-
-      const phone = normalizePhone(rawPhone);
-      if (!phone || optOuts.has(phone)) continue;
-
-      const variables: Record<string, string> = {};
-      for (const [k, col] of Object.entries(mapping.variables)) {
-        variables[k] = String(row[getColumnIndex(col)] ?? "");
-      }
-      insertData.push({
-        broadcastId,
-        phoneE164: phone,
-        name: nameIdx >= 0 ? String(row[nameIdx] ?? "") : null,
-        variables: JSON.stringify(variables),
-      });
+    if (broadcast.sourceType === "contacts") {
+      insertData = await materialiseFromContacts(broadcastId, mapping, optOuts);
+    } else {
+      insertData = await materialiseFromFileOrSheet(broadcastId, broadcast, mapping, optOuts);
     }
 
     if (insertData.length > 0) {
       await prisma.broadcastRecipient.createMany({ data: insertData, skipDuplicates: true });
     }
-
-    recipientCount = insertData.length;
     await prisma.broadcast.update({
       where: { id: broadcastId },
-      data: { total: recipientCount, status: "running", launchedAt: new Date() },
+      data: { total: insertData.length, status: "running", launchedAt: new Date() },
     });
   } else {
     await prisma.broadcast.update({
@@ -133,7 +82,120 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
     });
   }
 
-  // Process queued recipients in chunks
+  await dispatchQueued(broadcastId, broadcast.template);
+}
+
+// ─── Source: Saved Contacts ─────────────────────────────────────────────────
+async function materialiseFromContacts(
+  broadcastId: string,
+  mapping: { variables: Record<string, string>; filterRules?: FilterRule[] },
+  optOuts: Set<string>
+) {
+  const rules = (mapping.filterRules ?? [])
+    .map((r) => ({ field: r.field ?? r.column ?? "", condition: r.condition, value: r.value }))
+    .filter((r) => r.field.trim()) as ContactFilterRule[];
+
+  const contacts = await prisma.contact.findMany();
+  const insertData: Array<{ broadcastId: string; phoneE164: string; name: string | null; variables: string }> = [];
+
+  for (const c of contacts) {
+    const fields = parseFields(c.fields);
+    if (!contactPassesFilters({ name: c.name, fields }, rules)) continue;
+    if (!c.allowCampaign) continue; // consent gate — never message non-consenting contacts
+    if (optOuts.has(c.phone)) continue;
+    const variables: Record<string, string> = {};
+    for (const [k, fieldName] of Object.entries(mapping.variables)) {
+      variables[k] = fieldName.toLowerCase() === "name" ? c.name ?? "" : fields[fieldName] ?? "";
+    }
+    insertData.push({
+      broadcastId,
+      phoneE164: c.phone,
+      name: c.name,
+      variables: JSON.stringify(variables),
+    });
+  }
+  return insertData;
+}
+
+// ─── Source: File upload / Google Sheet ─────────────────────────────────────
+async function materialiseFromFileOrSheet(
+  broadcastId: string,
+  broadcast: { fileData: string | null; sheetId: string | null; sheetRange: string | null },
+  mapping: {
+    phoneColumn: string;
+    countryCodeColumn?: string | null;
+    nameColumn?: string | null;
+    variables: Record<string, string>;
+    filterRules?: FilterRule[];
+  },
+  optOuts: Set<string>
+) {
+  let headers: string[] = [];
+  let dataRows: string[][];
+
+  if (broadcast.fileData) {
+    const parsed = JSON.parse(broadcast.fileData) as string[][];
+    headers = parsed[0] || [];
+    dataRows = parsed.slice(1);
+  } else if (broadcast.sheetId && broadcast.sheetRange) {
+    dataRows = await readSheet({ sheetUrlOrId: broadcast.sheetId, range: broadcast.sheetRange });
+  } else {
+    throw new Error("No data source configured for broadcast");
+  }
+
+  const getColumnIndex = (colKey: string): number => {
+    if (!colKey) return -1;
+    const byHeader = headers.findIndex(
+      (h) => String(h).trim().toLowerCase() === colKey.trim().toLowerCase()
+    );
+    if (byHeader >= 0) return byHeader;
+    if (/^\d+$/.test(colKey)) return parseInt(colKey, 10);
+    try { return colIndex(colKey); } catch { return -1; }
+  };
+
+  const phoneIdx = getColumnIndex(mapping.phoneColumn);
+  const countryCodeIdx = mapping.countryCodeColumn ? getColumnIndex(mapping.countryCodeColumn) : -1;
+  const nameIdx = mapping.nameColumn ? getColumnIndex(mapping.nameColumn) : -1;
+
+  const activeFilters = (mapping.filterRules ?? []).filter((r) => (r.column ?? "").trim());
+  const filterIndices = activeFilters.map((r) => ({ rule: r, idx: getColumnIndex(r.column ?? "") }));
+
+  const insertData: Array<{ broadcastId: string; phoneE164: string; name: string | null; variables: string }> = [];
+
+  for (const row of dataRows) {
+    if (filterIndices.length > 0) {
+      const passes = filterIndices.every(({ rule, idx }) => {
+        if (idx < 0) return false;
+        return matchesFilter(String(row[idx] ?? ""), rule);
+      });
+      if (!passes) continue;
+    }
+
+    let rawPhone = String(row[phoneIdx] ?? "").trim();
+    if (countryCodeIdx >= 0) {
+      const cc = String(row[countryCodeIdx] ?? "").replace(/\D/g, "");
+      rawPhone = cc + rawPhone.replace(/\D/g, "");
+    }
+
+    const phone = normalizePhone(rawPhone);
+    if (!phone || optOuts.has(phone)) continue;
+
+    const variables: Record<string, string> = {};
+    for (const [k, col] of Object.entries(mapping.variables)) {
+      variables[k] = String(row[getColumnIndex(col)] ?? "");
+    }
+    insertData.push({
+      broadcastId,
+      phoneE164: phone,
+      name: nameIdx >= 0 ? String(row[nameIdx] ?? "") : null,
+      variables: JSON.stringify(variables),
+    });
+  }
+  return insertData;
+}
+
+// ─── Dispatch: process queued recipients in throttled chunks ────────────────
+async function dispatchQueued(broadcastId: string, template: Template) {
   while (true) {
     const batch = await prisma.broadcastRecipient.findMany({
       where: { broadcastId, status: "queued" },
@@ -154,8 +216,8 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
         ];
         const result = await sendTemplate({
           to: r.phoneE164,
-          templateName: broadcast.template.name,
-          language: broadcast.template.language,
+          templateName: template.name,
+          language: template.language,
           components,
         });
         await prisma.broadcastRecipient.update({
@@ -172,7 +234,7 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
       await sleep(PACE_MS);
     }
 
-    // Recompute counters
+    // Recompute counters after each chunk
     const groups = await prisma.broadcastRecipient.groupBy({
       by: ["status"],
       where: { broadcastId },

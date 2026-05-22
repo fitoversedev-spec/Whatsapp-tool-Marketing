@@ -113,9 +113,22 @@ model Message {
   @@map("messages")
 }
 
+model Contact {
+  id            String   @id @default(uuid())
+  phone         String   @unique @map("phone_e164")
+  name          String?
+  allowCampaign Boolean  @default(true) @map("allow_campaign") // consent gate — false = never broadcast
+  fields        String   @default("{}") // JSON object of extra columns (location, category, etc.)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("contacts")
+}
+
 model Broadcast {
   id               String    @id @default(uuid())
   name             String
+  sourceType       String    @default("file") @map("source_type") // "file" | "sheet" | "contacts"
   sheetId          String?   @map("sheet_id")
   sheetRange       String?   @map("sheet_range")
   fileData         String?   @map("file_data")

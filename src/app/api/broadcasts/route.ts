@@ -5,18 +5,20 @@ import { prisma } from "@/lib/prisma";
 import { parseSheetId } from "@/lib/sheets";
 
 const filterRuleSchema = z.object({
-  column: z.string(),
+  column: z.string().optional(),
+  field: z.string().optional(),
   condition: z.enum(["equals", "contains", "starts_with", "not_empty"]),
   value: z.string().optional().default(""),
 });
 
 const schema = z.object({
   name: z.string().min(1).max(120),
+  sourceType: z.enum(["file", "sheet", "contacts"]).default("file"),
   sheetUrl: z.string().min(10).optional(),
   sheetRange: z.string().min(1).optional(),
   fileData: z.string().min(2).optional(),
   templateId: z.string().uuid(),
-  phoneColumn: z.string(),
+  phoneColumn: z.string().optional(),
   countryCodeColumn: z.string().optional(),
   nameColumn: z.string().optional(),
   variableMapping: z.record(z.string(), z.string()),
@@ -35,21 +37,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Template must be approved" }, { status: 422 });
   }
 
+  const { sourceType } = parsed.data;
+
+  // Validate the source has what it needs
+  if (sourceType === "file" && !parsed.data.fileData) {
+    return NextResponse.json({ error: "File data is required" }, { status: 400 });
+  }
+  if (sourceType === "sheet" && (!parsed.data.sheetUrl || !parsed.data.sheetRange)) {
+    return NextResponse.json({ error: "Sheet URL and range are required" }, { status: 400 });
+  }
+
   const sheetId = parsed.data.sheetUrl ? parseSheetId(parsed.data.sheetUrl) : null;
 
   const broadcast = await prisma.broadcast.create({
     data: {
       name: parsed.data.name,
+      sourceType,
       sheetId,
       sheetRange: parsed.data.sheetRange ?? null,
       fileData: parsed.data.fileData ?? null,
       templateId: parsed.data.templateId,
       variableMapping: JSON.stringify({
-        phoneColumn: parsed.data.phoneColumn,
+        phoneColumn: parsed.data.phoneColumn ?? null,
         countryCodeColumn: parsed.data.countryCodeColumn ?? null,
         nameColumn: parsed.data.nameColumn ?? null,
         variables: parsed.data.variableMapping,
-        filterRules: (parsed.data.filterRules ?? []).filter((r) => r.column.trim()),
+        filterRules: (parsed.data.filterRules ?? []).filter((r) => (r.column || r.field || "").trim()),
       }),
       status: "draft",
       createdByUserId: user.id,

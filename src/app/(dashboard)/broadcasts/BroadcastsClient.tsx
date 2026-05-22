@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, FormEvent, ChangeEvent } from "react";
+import { useState, useEffect, useRef, FormEvent, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
@@ -24,6 +24,7 @@ type Broadcast = {
 type Template = { id: string; name: string; language: string; body: string };
 
 type FilterRule = { column: string; condition: "equals" | "contains" | "starts_with" | "not_empty"; value: string };
+type ContactFilter = { field: string; condition: "equals" | "contains" | "starts_with" | "not_empty"; value: string };
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700",
@@ -194,7 +195,13 @@ function BroadcastComposer({
   onLaunched: () => void;
 }) {
   const [name, setName] = useState("");
-  const [source, setSource] = useState<"file" | "sheet">("file");
+  const [source, setSource] = useState<"file" | "sheet" | "contacts">("contacts");
+
+  // Saved Contacts state
+  const [contactFields, setContactFields] = useState<string[]>([]);
+  const [contactTotal, setContactTotal] = useState(0);
+  const [contactFilters, setContactFilters] = useState<ContactFilter[]>([]);
+  const [contactVar1, setContactVar1] = useState("name");
 
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -221,6 +228,30 @@ function BroadcastComposer({
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+
+  // Load saved-contact field keys for the filter + variable dropdowns
+  useEffect(() => {
+    fetch("/api/contacts/meta")
+      .then((r) => (r.ok ? r.json() : { fields: [], totalContacts: 0 }))
+      .then((d) => {
+        setContactFields((d.fields ?? []).map((f: any) => f.key));
+        setContactTotal(d.totalContacts ?? 0);
+      })
+      .catch(() => {});
+  }, []);
+
+  function addContactFilter() {
+    setContactFilters((prev) => [...prev, { field: "", condition: "equals", value: "" }]);
+    setPreview(null);
+  }
+  function updateContactFilter(index: number, key: keyof ContactFilter, value: string) {
+    setContactFilters((prev) => prev.map((r, i) => (i === index ? { ...r, [key]: value } : r)));
+    setPreview(null);
+  }
+  function removeContactFilter(index: number) {
+    setContactFilters((prev) => prev.filter((_, i) => i !== index));
+    setPreview(null);
+  }
 
   // ── File Parsing ────────────────────────────────────────────────────────────
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -268,6 +299,24 @@ function BroadcastComposer({
   // ── Preview ─────────────────────────────────────────────────────────────────
   async function doPreview() {
     setBusy(true);
+
+    // Saved Contacts source — preview against the contact pool
+    if (source === "contacts") {
+      const res = await fetch("/api/contacts/filter-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filterRules: contactFilters.filter((r) => r.field),
+          variableMapping: { "1": contactVar1 },
+        }),
+      });
+      setBusy(false);
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Preview failed"); return; }
+      setPreview(data);
+      return;
+    }
+
     const payload: any = {
       phoneColumn,
       nameColumn,
@@ -298,21 +347,28 @@ function BroadcastComposer({
     e.preventDefault();
     if (!preview) { toast.error("Preview first"); return; }
     setBusy(true);
-    const payload: any = {
-      name,
-      templateId,
-      phoneColumn,
-      nameColumn,
-      countryCodeColumn: countryCodeColumn || undefined,
-      variableMapping: { "1": var1Column },
-      filterRules: filterRules.filter((r) => r.column),
-    };
-    if (source === "file") {
-      payload.fileData = JSON.stringify(fileRows);
+
+    const payload: any = { name, templateId, sourceType: source };
+
+    if (source === "contacts") {
+      payload.variableMapping = { "1": contactVar1 };
+      payload.filterRules = contactFilters
+        .filter((r) => r.field)
+        .map((r) => ({ field: r.field, condition: r.condition, value: r.value }));
     } else {
-      payload.sheetUrl = sheetUrl;
-      payload.sheetRange = sheetRange;
+      payload.phoneColumn = phoneColumn;
+      payload.nameColumn = nameColumn;
+      payload.countryCodeColumn = countryCodeColumn || undefined;
+      payload.variableMapping = { "1": var1Column };
+      payload.filterRules = filterRules.filter((r) => r.column);
+      if (source === "file") {
+        payload.fileData = JSON.stringify(fileRows);
+      } else {
+        payload.sheetUrl = sheetUrl;
+        payload.sheetRange = sheetRange;
+      }
     }
+
     const res = await fetch("/api/broadcasts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -352,11 +408,18 @@ function BroadcastComposer({
           {/* Source Toggle */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Contact source</label>
-            <div className="flex rounded-lg border border-slate-300 overflow-hidden w-fit">
+            <div className="flex flex-wrap rounded-lg border border-slate-300 overflow-hidden w-fit">
+              <button
+                type="button"
+                onClick={() => { setSource("contacts"); setPreview(null); }}
+                className={`px-4 py-2 text-sm font-medium transition ${source === "contacts" ? "bg-wa-green text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                📒 Saved Contacts
+              </button>
               <button
                 type="button"
                 onClick={() => { setSource("file"); setPreview(null); }}
-                className={`px-4 py-2 text-sm font-medium transition ${source === "file" ? "bg-wa-green text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                className={`px-4 py-2 text-sm font-medium transition border-l border-slate-300 ${source === "file" ? "bg-wa-green text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
               >
                 📁 Upload File
               </button>
@@ -369,6 +432,24 @@ function BroadcastComposer({
               </button>
             </div>
           </div>
+
+          {/* Saved Contacts source */}
+          {source === "contacts" && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+              <div className="text-sm text-slate-700">
+                Sending to your saved contact pool —{" "}
+                <strong>{contactTotal} contact{contactTotal === 1 ? "" : "s"}</strong> available.
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Use the filters below to target a subset (e.g. Location equals Salem). No filters = the whole pool.
+              </div>
+              {contactTotal === 0 && (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-2">
+                  No contacts saved yet. Go to the <strong>Contacts</strong> page and upload a file first.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* File Upload */}
           {source === "file" && (
@@ -467,114 +548,211 @@ function BroadcastComposer({
             </select>
           </Field>
 
-          {/* Column Mapping */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Column mapping</label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Field label="Name col">
-                <input
-                  value={nameColumn}
-                  onChange={(e) => { setNameColumn(e.target.value); setPreview(null); }}
-                  className="input"
-                  placeholder="A"
-                />
-              </Field>
-              <Field label="Country code col">
-                <input
-                  value={countryCodeColumn}
-                  onChange={(e) => { setCountryCodeColumn(e.target.value); setPreview(null); }}
-                  className="input"
-                  placeholder="B (optional)"
-                />
-              </Field>
-              <Field label="Phone col">
-                <input
-                  value={phoneColumn}
-                  onChange={(e) => { setPhoneColumn(e.target.value); setPreview(null); }}
-                  className="input"
-                  placeholder="C"
-                />
-              </Field>
-              <Field label="{'{{1}}'} col">
-                <input
-                  value={var1Column}
-                  onChange={(e) => { setVar1Column(e.target.value); setPreview(null); }}
-                  className="input"
-                  placeholder="A"
-                />
-              </Field>
-            </div>
-          </div>
-
-          {/* Filter Rules */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Filter contacts <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <button
-                type="button"
-                onClick={addFilter}
-                className="text-xs text-wa-green font-semibold hover:underline"
-              >
-                + Add filter
-              </button>
-            </div>
-
-            {filterRules.length === 0 && (
-              <div className="text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg px-4 py-3">
-                No filters — all valid contacts will be included. Click <strong>+ Add filter</strong> to narrow down (e.g. only Salem).
+          {/* Column Mapping — file / sheet only */}
+          {source !== "contacts" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Column mapping</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Field label="Name col">
+                  <input
+                    value={nameColumn}
+                    onChange={(e) => { setNameColumn(e.target.value); setPreview(null); }}
+                    className="input"
+                    placeholder="A"
+                  />
+                </Field>
+                <Field label="Country code col">
+                  <input
+                    value={countryCodeColumn}
+                    onChange={(e) => { setCountryCodeColumn(e.target.value); setPreview(null); }}
+                    className="input"
+                    placeholder="B (optional)"
+                  />
+                </Field>
+                <Field label="Phone col">
+                  <input
+                    value={phoneColumn}
+                    onChange={(e) => { setPhoneColumn(e.target.value); setPreview(null); }}
+                    className="input"
+                    placeholder="C"
+                  />
+                </Field>
+                <Field label="{'{{1}}'} col">
+                  <input
+                    value={var1Column}
+                    onChange={(e) => { setVar1Column(e.target.value); setPreview(null); }}
+                    className="input"
+                    placeholder="A"
+                  />
+                </Field>
               </div>
-            )}
-
-            <div className="space-y-2">
-              {filterRules.map((rule, i) => (
-                <div key={i} className="flex gap-2 items-start bg-slate-50 border border-slate-200 rounded-lg p-3">
-                  <div className="flex-1 grid grid-cols-3 gap-2">
-                    <div>
-                      <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Column</div>
-                      <input
-                        value={rule.column}
-                        onChange={(e) => { updateFilter(i, "column", e.target.value); setPreview(null); }}
-                        className="input text-sm"
-                        placeholder="Attribute 1 or F"
-                      />
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Condition</div>
-                      <select
-                        value={rule.condition}
-                        onChange={(e) => { updateFilter(i, "condition", e.target.value); setPreview(null); }}
-                        className="input text-sm bg-white"
-                      >
-                        <option value="equals">equals</option>
-                        <option value="contains">contains</option>
-                        <option value="starts_with">starts with</option>
-                        <option value="not_empty">not empty</option>
-                      </select>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Value</div>
-                      <input
-                        value={rule.value}
-                        onChange={(e) => { updateFilter(i, "value", e.target.value); setPreview(null); }}
-                        className="input text-sm"
-                        placeholder="Salem"
-                        disabled={rule.condition === "not_empty"}
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { removeFilter(i); setPreview(null); }}
-                    className="mt-5 text-slate-400 hover:text-red-500 text-lg leading-none"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
             </div>
-          </div>
+          )}
+
+          {/* Variable mapping — contacts source */}
+          {source === "contacts" && (
+            <Field label="Template variable {'{{1}}'} maps to">
+              <select
+                value={contactVar1}
+                onChange={(e) => { setContactVar1(e.target.value); setPreview(null); }}
+                className="input"
+              >
+                <option value="name">name</option>
+                {contactFields.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          {/* Filter Rules — file / sheet (column-based) */}
+          {source !== "contacts" && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Filter contacts <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={addFilter}
+                  className="text-xs text-wa-green font-semibold hover:underline"
+                >
+                  + Add filter
+                </button>
+              </div>
+
+              {filterRules.length === 0 && (
+                <div className="text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg px-4 py-3">
+                  No filters — all valid contacts will be included. Click <strong>+ Add filter</strong> to narrow down (e.g. only Salem).
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {filterRules.map((rule, i) => (
+                  <div key={i} className="flex gap-2 items-start bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <div className="flex-1 grid grid-cols-3 gap-2">
+                      <div>
+                        <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Column</div>
+                        <input
+                          value={rule.column}
+                          onChange={(e) => { updateFilter(i, "column", e.target.value); setPreview(null); }}
+                          className="input text-sm"
+                          placeholder="Attribute 1 or F"
+                        />
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Condition</div>
+                        <select
+                          value={rule.condition}
+                          onChange={(e) => { updateFilter(i, "condition", e.target.value); setPreview(null); }}
+                          className="input text-sm bg-white"
+                        >
+                          <option value="equals">equals</option>
+                          <option value="contains">contains</option>
+                          <option value="starts_with">starts with</option>
+                          <option value="not_empty">not empty</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Value</div>
+                        <input
+                          value={rule.value}
+                          onChange={(e) => { updateFilter(i, "value", e.target.value); setPreview(null); }}
+                          className="input text-sm"
+                          placeholder="Salem"
+                          disabled={rule.condition === "not_empty"}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { removeFilter(i); setPreview(null); }}
+                      className="mt-5 text-slate-400 hover:text-red-500 text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Filter Rules — saved contacts (field-based) */}
+          {source === "contacts" && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Filter by field <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={addContactFilter}
+                  className="text-xs text-wa-green font-semibold hover:underline"
+                >
+                  + Add filter
+                </button>
+              </div>
+
+              {contactFilters.length === 0 && (
+                <div className="text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg px-4 py-3">
+                  No filters — the whole pool ({contactTotal}) will be targeted. Add a filter to narrow down (e.g. Location equals Salem).
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {contactFilters.map((rule, i) => (
+                  <div key={i} className="flex gap-2 items-start bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <div className="flex-1 grid grid-cols-3 gap-2">
+                      <div>
+                        <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Field</div>
+                        <select
+                          value={rule.field}
+                          onChange={(e) => updateContactFilter(i, "field", e.target.value)}
+                          className="input text-sm bg-white"
+                        >
+                          <option value="">Select…</option>
+                          <option value="name">name</option>
+                          {contactFields.map((f) => (
+                            <option key={f} value={f}>{f}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Condition</div>
+                        <select
+                          value={rule.condition}
+                          onChange={(e) => updateContactFilter(i, "condition", e.target.value)}
+                          className="input text-sm bg-white"
+                        >
+                          <option value="equals">equals</option>
+                          <option value="contains">contains</option>
+                          <option value="starts_with">starts with</option>
+                          <option value="not_empty">not empty</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-500 mb-1 uppercase font-medium">Value</div>
+                        <input
+                          value={rule.value}
+                          onChange={(e) => updateContactFilter(i, "value", e.target.value)}
+                          className="input text-sm"
+                          placeholder="Salem"
+                          disabled={rule.condition === "not_empty"}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeContactFilter(i)}
+                      className="mt-5 text-slate-400 hover:text-red-500 text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Preview Button */}
           <button
@@ -594,7 +772,11 @@ function BroadcastComposer({
                 <PreviewStat label="Will send" value={preview.willSend} color="text-green-700" />
                 <PreviewStat label="Filtered out" value={preview.filtered ?? 0} color="text-blue-700" />
                 <PreviewStat label="Opt-outs" value={preview.optOuts} color="text-amber-700" />
-                <PreviewStat label="Invalid" value={preview.invalid} color="text-red-700" />
+                {preview.noConsent !== undefined ? (
+                  <PreviewStat label="No consent" value={preview.noConsent} color="text-red-700" />
+                ) : (
+                  <PreviewStat label="Invalid" value={preview.invalid} color="text-red-700" />
+                )}
               </div>
               {preview.samples?.length > 0 && (
                 <>

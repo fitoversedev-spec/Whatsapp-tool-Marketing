@@ -11,6 +11,7 @@ type Props = {
 
 const NAV = [
   { href: "/inbox", label: "Inbox", icon: "💬" },
+  { href: "/contacts", label: "Contacts", icon: "📒" },
   { href: "/templates", label: "Templates", icon: "📝" },
   { href: "/broadcasts", label: "Broadcasts", icon: "📣" },
   { href: "/users", label: "Users", icon: "👥", adminOnly: true, badgeKey: "pending" as const },

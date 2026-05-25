@@ -343,6 +343,36 @@ function UploadModal({
   const [showAdjust, setShowAdjust] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Source: file upload OR Google Sheet
+  const [source, setSource] = useState<"file" | "sheet">("file");
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [sheetRange, setSheetRange] = useState("Sheet1");
+  const [loadingSheet, setLoadingSheet] = useState(false);
+
+  // Shared: take parsed rows, run the analyzer, populate the mapping state
+  function applyParsedRows(parsed: any[][], label: string) {
+    setRows(parsed);
+    setFileLabel(label);
+    const analysis = analyzeFile(parsed);
+    setHeaders(analysis.headers);
+    setPhoneCol(analysis.phoneColumn);
+    setCcCol(analysis.countryCodeColumn);
+    setNameCol(analysis.nameColumn);
+    setAllowCol(analysis.allowCampaignColumn);
+    setFieldCols(analysis.fieldColumns);
+    setDetections(analysis.detections);
+    setMeta({ rowCount: analysis.rowCount, columnCount: analysis.columnCount });
+    setShowAdjust(false);
+  }
+
+  function resetParsed() {
+    setRows(null);
+    setHeaders([]);
+    setFileLabel("");
+    setDetections([]);
+    setMeta(null);
+  }
+
   function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -351,22 +381,37 @@ function UploadModal({
       const wb = XLSX.read(evt.target?.result, { type: "binary" });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const parsed: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-      setRows(parsed);
-      setFileLabel(`${file.name} — ${parsed.length - 1} rows`);
-
-      // Analyze content + headers to auto-map every column
-      const analysis = analyzeFile(parsed);
-      setHeaders(analysis.headers);
-      setPhoneCol(analysis.phoneColumn);
-      setCcCol(analysis.countryCodeColumn);
-      setNameCol(analysis.nameColumn);
-      setAllowCol(analysis.allowCampaignColumn);
-      setFieldCols(analysis.fieldColumns);
-      setDetections(analysis.detections);
-      setMeta({ rowCount: analysis.rowCount, columnCount: analysis.columnCount });
-      setShowAdjust(false);
+      applyParsedRows(parsed, `${file.name} — ${parsed.length - 1} rows`);
     };
     reader.readAsBinaryString(file);
+  }
+
+  async function loadSheet() {
+    if (!sheetUrl.trim()) {
+      toast.error("Paste a Google Sheet URL first");
+      return;
+    }
+    setLoadingSheet(true);
+    try {
+      const res = await fetch("/api/contacts/read-sheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sheetUrl: sheetUrl.trim(),
+          sheetRange: sheetRange.trim() || "Sheet1",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not read sheet");
+        return;
+      }
+      applyParsedRows(data.rows, `Google Sheet — ${data.rowCount} rows`);
+    } catch {
+      toast.error("Network error reading sheet");
+    } finally {
+      setLoadingSheet(false);
+    }
   }
 
   function toggleFieldCol(h: string) {
@@ -376,7 +421,7 @@ function UploadModal({
   async function doImport(e: FormEvent) {
     e.preventDefault();
     if (!rows) {
-      toast.error("Upload a file first");
+      toast.error("Load a file or Google Sheet first");
       return;
     }
     if (!phoneCol) {
@@ -412,34 +457,103 @@ function UploadModal({
   }
 
   return (
-    <ModalShell title="Upload contacts" onClose={onClose} wide>
+    <ModalShell title="Import contacts" onClose={onClose} wide>
       <form onSubmit={doImport} className="space-y-4">
-        <div
-          onClick={() => fileRef.current?.click()}
-          className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:border-wa-green hover:bg-green-50 transition"
-        >
-          {fileLabel ? (
-            <div className="text-sm text-wa-green font-semibold">✓ {fileLabel}</div>
-          ) : (
-            <div className="text-sm text-slate-500">
-              <div className="text-2xl mb-1">📂</div>
-              Click to upload <strong>.xlsx</strong>, <strong>.xls</strong> or <strong>.csv</strong>
-            </div>
-          )}
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={handleFile}
-          />
+        {/* Source toggle */}
+        <div className="flex rounded-lg border border-slate-300 overflow-hidden w-fit">
+          <button
+            type="button"
+            onClick={() => {
+              setSource("file");
+              resetParsed();
+            }}
+            className={`px-4 py-2 text-sm font-medium transition ${
+              source === "file" ? "bg-wa-green text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            📁 Upload File
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSource("sheet");
+              resetParsed();
+            }}
+            className={`px-4 py-2 text-sm font-medium transition border-l border-slate-300 ${
+              source === "sheet" ? "bg-wa-green text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            📊 Google Sheet
+          </button>
         </div>
+
+        {/* File upload */}
+        {source === "file" && (
+          <div
+            onClick={() => fileRef.current?.click()}
+            className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:border-wa-green hover:bg-green-50 transition"
+          >
+            {fileLabel ? (
+              <div className="text-sm text-wa-green font-semibold">✓ {fileLabel}</div>
+            ) : (
+              <div className="text-sm text-slate-500">
+                <div className="text-2xl mb-1">📂</div>
+                Click to upload <strong>.xlsx</strong>, <strong>.xls</strong> or <strong>.csv</strong>
+              </div>
+            )}
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={handleFile}
+            />
+          </div>
+        )}
+
+        {/* Google Sheet */}
+        {source === "sheet" && (
+          <div className="space-y-3">
+            <Field label="Google Sheet URL" required>
+              <input
+                type="url"
+                value={sheetUrl}
+                onChange={(e) => setSheetUrl(e.target.value)}
+                className="cinput"
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+              />
+            </Field>
+            <Field label="Tab / range">
+              <input
+                value={sheetRange}
+                onChange={(e) => setSheetRange(e.target.value)}
+                className="cinput"
+                placeholder="Sheet1"
+              />
+            </Field>
+            <button
+              type="button"
+              onClick={loadSheet}
+              disabled={loadingSheet}
+              className="bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
+            >
+              {loadingSheet ? "Loading…" : "Load sheet"}
+            </button>
+            {fileLabel && (
+              <div className="text-sm text-wa-green font-semibold">✓ {fileLabel}</div>
+            )}
+            <div className="text-xs text-slate-500">
+              The sheet must be shared with the service account. The range should include the
+              header row — <strong>Sheet1</strong> reads the whole tab.
+            </div>
+          </div>
+        )}
 
         {/* Detection summary */}
         {detections.length > 0 && meta && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3.5">
             <div className="text-sm font-semibold text-blue-900 mb-2.5">
-              🔍 File analyzed — {meta.rowCount} rows, {meta.columnCount} columns
+              🔍 Analyzed — {meta.rowCount} rows, {meta.columnCount} columns
             </div>
             <div className="space-y-1.5">
               {detections.map((d) => (

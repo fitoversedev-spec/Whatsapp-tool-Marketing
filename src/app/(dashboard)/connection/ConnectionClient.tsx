@@ -134,7 +134,6 @@ export default function ConnectionClient({ status }: { status: ConnectionStatus 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Stat label="Name" value={waba.name} />
               <Stat label="WABA ID" value={waba.id} mono small />
-              {waba.currency && <Stat label="Currency" value={waba.currency} />}
               {waba.timezoneId && <Stat label="Timezone ID" value={waba.timezoneId} />}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">

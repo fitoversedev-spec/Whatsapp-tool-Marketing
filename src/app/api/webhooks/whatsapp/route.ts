@@ -17,10 +17,23 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const raw = await req.text();
+  // Use arrayBuffer for byte-exact body capture — req.text() can normalize
+  // newlines on some platforms, breaking HMAC signature verification.
+  const rawBuf = Buffer.from(await req.arrayBuffer());
+  const raw = rawBuf.toString("utf8");
   const signature = req.headers.get("x-hub-signature-256");
 
   if (!verifyMetaSignature(raw, signature)) {
+    // Log diagnostic info so we can see why Meta's real events fail HMAC
+    // while curl tests pass. Logged but not exposed in response.
+    console.error("[webhook] signature mismatch", {
+      sigHeader: signature,
+      bodyLen: rawBuf.length,
+      bodyFirst200: raw.slice(0, 200),
+      bodyLast50: raw.slice(-50),
+      appSecretSet: !!process.env.META_APP_SECRET,
+      appSecretLen: (process.env.META_APP_SECRET ?? "").length,
+    });
     return NextResponse.json({ error: "invalid_signature" }, { status: 401 });
   }
 

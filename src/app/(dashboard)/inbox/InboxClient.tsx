@@ -40,7 +40,7 @@ export default function InboxClient({
   const [messages, setMessages] = useState<Message[]>([]);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
-  const [withinWindow, setWithinWindow] = useState<boolean>(true);
+  const [withinWindow, setWithinWindow] = useState<boolean>(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"open" | "closed" | "all">("open");
   const [showReassign, setShowReassign] = useState(false);
@@ -128,6 +128,10 @@ export default function InboxClient({
         setReply("");
       } else {
         const err = await res.json().catch(() => ({}));
+        // If 24h window expired, update local state so the UI disables correctly
+        if (res.status === 422) {
+          setWithinWindow(false);
+        }
         toast.error(err.error ?? "Send failed");
       }
     } catch {

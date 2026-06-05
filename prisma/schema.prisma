@@ -183,3 +183,14 @@ model OptOut {
 
   @@map("opt_outs")
 }
+
+// Key-value config storage. Holds the long-lived Meta access token
+// and its expiry (seconds since epoch) for the auto-refresh cycle.
+// Keys: "meta_access_token", "meta_token_expires_at"
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}

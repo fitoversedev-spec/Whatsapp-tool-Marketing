@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 type Props = {
   user: { name: string; email: string; role: "admin" | "sales" };
   pendingCount?: number;
+  tokenExpired?: boolean;
 };
 
 const NAV = [
@@ -18,7 +19,7 @@ const NAV = [
   { href: "/users", label: "Users", icon: "👥", adminOnly: true, badgeKey: "pending" as const },
 ];
 
-export default function Sidebar({ user, pendingCount = 0 }: Props) {
+export default function Sidebar({ user, pendingCount = 0, tokenExpired = false }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -125,6 +126,20 @@ export default function Sidebar({ user, pendingCount = 0 }: Props) {
             );
           })}
         </nav>
+
+        {/* Token expiry warning — visible to admin on all pages */}
+        {tokenExpired && (
+          <Link
+            href="/connection"
+            className="mx-3 mb-2 flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 hover:bg-red-100 transition"
+          >
+            <span className="text-base shrink-0">🔑</span>
+            <div>
+              <div className="text-xs font-bold text-red-800 leading-tight">Token Expired</div>
+              <div className="text-[10px] text-red-700 mt-0.5 leading-tight">Messages cannot be sent. Click to fix →</div>
+            </div>
+          </Link>
+        )}
 
         <div className="p-3 border-t border-slate-200">
           <Link

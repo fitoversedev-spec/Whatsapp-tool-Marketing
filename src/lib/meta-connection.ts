@@ -2,21 +2,22 @@
 // Used by the /connection page to show phone, WABA, templates, payment status.
 
 import axios from "axios";
+import { getMetaAccessToken } from "./token-manager";
 
 const API = process.env.META_GRAPH_API_VERSION || "v21.0";
 const PHONE_ID = process.env.META_PHONE_NUMBER_ID || "";
 const WABA_ID = process.env.META_WABA_ID || "";
-const TOKEN = process.env.META_ACCESS_TOKEN || "";
 const APP_SECRET = process.env.META_APP_SECRET || "";
 const VERIFY_TOKEN = process.env.META_WEBHOOK_VERIFY_TOKEN || "";
 
-function auth() {
-  return { headers: { Authorization: `Bearer ${TOKEN}` } };
+async function auth() {
+  const token = await getMetaAccessToken();
+  return { headers: { Authorization: `Bearer ${token}` } };
 }
 
 async function safeGet<T>(url: string): Promise<{ data?: T; error?: string }> {
   try {
-    const r = await axios.get(url, auth());
+    const r = await axios.get(url, await auth());
     return { data: r.data as T };
   } catch (err: any) {
     const m = err.response?.data?.error?.message ?? err.message;
@@ -78,7 +79,8 @@ export type ConnectionStatus = {
 
 export async function getConnectionStatus(): Promise<ConnectionStatus> {
   const errors: string[] = [];
-  const configured = !!(PHONE_ID && WABA_ID && TOKEN);
+  const token = await getMetaAccessToken();
+  const configured = !!(PHONE_ID && WABA_ID && token);
 
   const status: ConnectionStatus = {
     configured,
@@ -92,7 +94,7 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
   };
 
   if (!configured) {
-    errors.push("Meta credentials not set in .env — fill META_PHONE_NUMBER_ID, META_WABA_ID, META_ACCESS_TOKEN.");
+    errors.push("Meta credentials not set — fill META_PHONE_NUMBER_ID, META_WABA_ID, and seed an access token via the Connection page.");
     return status;
   }
 
@@ -100,7 +102,7 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
   if (APP_SECRET) {
     const appToken = `1460614352002830|${APP_SECRET}`;
     const tok = await safeGet<{ data: any }>(
-      `https://graph.facebook.com/${API}/debug_token?input_token=${TOKEN}&access_token=${appToken}`
+      `https://graph.facebook.com/${API}/debug_token?input_token=${token}&access_token=${appToken}`
     );
     if (tok.data?.data) {
       status.tokenInfo = {

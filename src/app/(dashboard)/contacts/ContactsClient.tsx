@@ -51,7 +51,10 @@ export default function ContactsClient({
 }) {
   const toast = useToast();
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
-  const [totalCount, setTotalCount] = useState(total);
+  // poolTotal = unfiltered count of every contact in the pool (header).
+  // filteredCount = how many match the current search/filter (shown alongside when active).
+  const [poolTotal, setPoolTotal] = useState(total);
+  const [filteredCount, setFilteredCount] = useState(total);
   const [keys, setKeys] = useState<string[]>(fieldKeys);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -80,7 +83,7 @@ export default function ContactsClient({
       if (res.ok) {
         const data = await res.json();
         setContacts(data.contacts);
-        setTotalCount(data.total);
+        setFilteredCount(data.total);
         setTotalPages(data.totalPages);
         setPage(data.page);
       }
@@ -98,7 +101,10 @@ export default function ContactsClient({
     load({ page: 1 });
     fetch("/api/contacts/meta")
       .then((r) => r.json())
-      .then((d) => setKeys(d.fields?.map((f: any) => f.key) ?? []))
+      .then((d) => {
+        setKeys(d.fields?.map((f: any) => f.key) ?? []);
+        if (typeof d.totalContacts === "number") setPoolTotal(d.totalContacts);
+      })
       .catch(() => {});
   }
 
@@ -106,7 +112,15 @@ export default function ContactsClient({
     <>
       <PageHeader
         title="Contacts"
-        description={`${totalCount} contact${totalCount === 1 ? "" : "s"} in your pool. Upload once, reuse for any broadcast.`}
+        description={
+          filteredCount !== poolTotal
+            ? `${filteredCount.toLocaleString()} of ${poolTotal.toLocaleString()} contact${
+                poolTotal === 1 ? "" : "s"
+              } match your filter. Upload once, reuse for any broadcast.`
+            : `${poolTotal.toLocaleString()} contact${
+                poolTotal === 1 ? "" : "s"
+              } in your pool. Upload once, reuse for any broadcast.`
+        }
         action={
           <div className="flex gap-2 w-full sm:w-auto">
             <button

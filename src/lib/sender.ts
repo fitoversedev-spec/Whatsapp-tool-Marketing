@@ -30,7 +30,7 @@ function matchesFilter(cellValue: string, rule: FilterRule): boolean {
   }
 }
 
-type Template = { name: string; language: string };
+type Template = { name: string; language: string; body?: string | null };
 
 export async function runBroadcast(broadcastId: string): Promise<void> {
   const broadcast = await prisma.broadcast.findUnique({
@@ -203,17 +203,25 @@ async function dispatchQueued(broadcastId: string, template: Template) {
     });
     if (batch.length === 0) break;
 
+    const templateHasVars = /\{\{\s*\d+\s*\}\}/.test(template.body ?? "");
     for (const r of batch) {
       try {
         const rVars = JSON.parse(r.variables) as Record<string, string>;
-        const components = [
-          {
-            type: "body" as const,
-            parameters: Object.entries(rVars)
-              .sort(([a], [b]) => Number(a) - Number(b))
-              .map(([, value]) => ({ type: "text" as const, text: value })),
-          },
-        ];
+        // Only include body component if the template body actually has {{N}} placeholders.
+        // The UI hardcodes a {{1}} mapping even for templates with no variables;
+        // sending parameters to a no-variable template causes Meta error #132000.
+        const paramEntries = templateHasVars
+          ? Object.entries(rVars).sort(([a], [b]) => Number(a) - Number(b))
+          : [];
+        const components =
+          paramEntries.length > 0
+            ? [
+                {
+                  type: "body" as const,
+                  parameters: paramEntries.map(([, value]) => ({ type: "text" as const, text: value })),
+                },
+              ]
+            : [];
         const result = await sendTemplate({
           to: r.phoneE164,
           templateName: template.name,

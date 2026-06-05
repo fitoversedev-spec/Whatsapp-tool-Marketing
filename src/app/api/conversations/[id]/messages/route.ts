@@ -68,7 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
   }
 
-  if (!isMetaConfigured()) {
+  if (!(await isMetaConfigured())) {
     return NextResponse.json({ error: "Meta credentials not configured on server" }, { status: 500 });
   }
 

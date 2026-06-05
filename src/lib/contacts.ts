@@ -46,6 +46,10 @@ export function contactPassesFilters(
   if (!rules || rules.length === 0) return true;
   return rules.every((rule) => {
     if (!rule.field?.trim()) return true;
+    // Defensive: rules requiring a value but having none are treated as no-ops.
+    // The UI sometimes carries stale `{field:X, condition:"equals", value:""}` state
+    // that would otherwise silently filter out every contact.
+    if (rule.condition !== "not_empty" && !(rule.value ?? "").trim()) return true;
     // "name" is a top-level field; everything else is in fields{}
     const value =
       rule.field.toLowerCase() === "name"

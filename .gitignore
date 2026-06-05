@@ -8,3 +8,4 @@ node_modules/
 *.db-journal
 prisma/*.db
 prisma/*.db-journal
+*.tsbuildinfo

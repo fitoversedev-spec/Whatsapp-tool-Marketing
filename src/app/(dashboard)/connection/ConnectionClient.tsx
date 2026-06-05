@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import type { ConnectionStatus } from "@/lib/meta-connection";
+import type { TokenStatus } from "@/lib/token-manager";
 
 const QUALITY_COLORS: Record<string, string> = {
   GREEN: "bg-green-100 text-green-800",
@@ -13,11 +14,55 @@ const QUALITY_COLORS: Record<string, string> = {
   UNKNOWN: "bg-slate-100 text-slate-700",
 };
 
-export default function ConnectionClient({ status }: { status: ConnectionStatus }) {
+export default function ConnectionClient({
+  status,
+  tokenStatus,
+}: {
+  status: ConnectionStatus;
+  tokenStatus: TokenStatus;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [syncing, setSyncing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [seedingToken, setSeedingToken] = useState(false);
+  const [forceRefreshing, setForceRefreshing] = useState(false);
+  const [shortToken, setShortToken] = useState("");
+
+  async function seedToken() {
+    if (!shortToken.trim()) {
+      toast.error("Paste a token first");
+      return;
+    }
+    setSeedingToken(true);
+    const res = await fetch("/api/admin/meta-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: shortToken.trim() }),
+    });
+    setSeedingToken(false);
+    const data = await res.json();
+    if (res.ok) {
+      toast.success(`Token exchanged — valid for ${data.daysUntilExpiry} days`);
+      setShortToken("");
+      router.refresh();
+    } else {
+      toast.error(data.error ?? "Token exchange failed");
+    }
+  }
+
+  async function forceRefreshToken() {
+    setForceRefreshing(true);
+    const res = await fetch("/api/admin/meta-token/refresh", { method: "POST" });
+    setForceRefreshing(false);
+    const data = await res.json();
+    if (res.ok) {
+      toast.success(`Refreshed — now valid for ${data.daysUntilExpiry} days`);
+      router.refresh();
+    } else {
+      toast.error(data.error ?? "Refresh failed");
+    }
+  }
 
   async function syncTemplates() {
     setSyncing(true);
@@ -44,6 +89,7 @@ export default function ConnectionClient({ status }: { status: ConnectionStatus 
   const profile = status.profile;
   const templates = status.templates ?? [];
   const errors = status.errors ?? [];
+  const tokenExpired = status.tokenInfo && !status.tokenInfo.valid;
 
   return (
     <>
@@ -99,6 +145,26 @@ export default function ConnectionClient({ status }: { status: ConnectionStatus 
             )}
           </div>
         </div>
+
+        {/* Expired token alert — shown prominently when token is invalid */}
+        {tokenExpired && (
+          <div className="rounded-2xl border border-red-300 bg-red-50 p-4 sm:p-5 flex items-start gap-3">
+            <div className="text-2xl">🔑</div>
+            <div className="flex-1">
+              <div className="font-bold text-red-900 text-base">Access Token Expired — Messages Cannot Be Sent</div>
+              <div className="text-sm text-red-800 mt-1">
+                Your <code className="bg-red-100 px-1 rounded">META_ACCESS_TOKEN</code> in <code className="bg-red-100 px-1 rounded">.env</code> has expired.
+                This is why recipients are not receiving messages.
+              </div>
+              <ol className="text-sm text-red-800 mt-3 list-decimal pl-5 space-y-1">
+                <li>Go to <strong>Meta Business Manager → System Users</strong> or <strong>Meta for Developers → your App → WhatsApp → API Setup</strong></li>
+                <li>Generate a new <strong>permanent access token</strong> (or a new 60-day token)</li>
+                <li>Update <code className="bg-red-100 px-1 rounded">META_ACCESS_TOKEN</code> in your <code className="bg-red-100 px-1 rounded">.env</code> file</li>
+                <li>Restart the server (<code className="bg-red-100 px-1 rounded">npm run dev</code>)</li>
+              </ol>
+            </div>
+          </div>
+        )}
 
         {/* Phone number */}
         {phone && (
@@ -264,6 +330,87 @@ export default function ConnectionClient({ status }: { status: ConnectionStatus 
                 Subscribe to fields: <strong>messages</strong> and <strong>message_template_status_update</strong>
               </li>
             </ol>
+          </div>
+        </Card>
+
+        {/* Token Management — long-lived token + auto-refresh */}
+        <Card
+          title="Token management"
+          subtitle="60-day long-lived token with auto-refresh near expiry"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div className="text-sm">
+              <div className="text-slate-700">
+                <span className="text-slate-500">Source:</span>{" "}
+                <span className="font-semibold">
+                  {tokenStatus.source === "db"
+                    ? "Database (long-lived)"
+                    : tokenStatus.source === "env"
+                    ? ".env (legacy, please seed via the form below)"
+                    : "None"}
+                </span>
+              </div>
+              {tokenStatus.expiresAtIso && (
+                <div className="text-slate-700 mt-0.5">
+                  <span className="text-slate-500">Expires:</span>{" "}
+                  <span className="font-semibold">
+                    {new Date(tokenStatus.expiresAtIso).toLocaleString()}
+                  </span>{" "}
+                  <span
+                    className={`ml-1 inline-block px-1.5 py-0.5 text-[10px] rounded font-semibold uppercase tracking-wide ${
+                      (tokenStatus.daysUntilExpiry ?? 0) > 7
+                        ? "bg-green-100 text-green-700"
+                        : (tokenStatus.daysUntilExpiry ?? 0) > 0
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {(tokenStatus.daysUntilExpiry ?? 0) > 0
+                      ? `${tokenStatus.daysUntilExpiry}d left`
+                      : "expired"}
+                  </span>
+                </div>
+              )}
+              {tokenStatus.refreshedAt && (
+                <div className="text-xs text-slate-500 mt-0.5">
+                  Last refreshed: {new Date(tokenStatus.refreshedAt).toLocaleString()}
+                </div>
+              )}
+            </div>
+            {tokenStatus.source === "db" && (
+              <button
+                onClick={forceRefreshToken}
+                disabled={forceRefreshing}
+                className="px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-medium disabled:opacity-50 whitespace-nowrap"
+              >
+                {forceRefreshing ? "Refreshing…" : "↻ Refresh now"}
+              </button>
+            )}
+          </div>
+          <div className="border-t border-slate-200 pt-4">
+            <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+              Seed a new token
+            </div>
+            <div className="text-xs text-slate-500 mb-2">
+              Paste a short-lived user token from Meta Dev Console → it&apos;ll be exchanged for a 60-day token and stored. Auto-refreshes within 5 days of expiry.
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={shortToken}
+                onChange={(e) => setShortToken(e.target.value)}
+                placeholder="EAAU…"
+                className="flex-1 input text-sm font-mono"
+                disabled={seedingToken}
+              />
+              <button
+                onClick={seedToken}
+                disabled={seedingToken || !shortToken.trim()}
+                className="px-3 py-1.5 text-sm bg-wa-green hover:bg-wa-green/90 text-white rounded-lg font-medium disabled:opacity-50 whitespace-nowrap"
+              >
+                {seedingToken ? "Exchanging…" : "Exchange & save"}
+              </button>
+            </div>
           </div>
         </Card>
 

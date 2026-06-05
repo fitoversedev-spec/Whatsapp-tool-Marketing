@@ -1,16 +1,17 @@
 import axios, { AxiosError } from "axios";
+import { getMetaAccessToken } from "./token-manager";
 
 const API_VERSION = process.env.META_GRAPH_API_VERSION || "v21.0";
 const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID || "";
 const WABA_ID = process.env.META_WABA_ID || "";
-const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN || "";
 
 const messagesUrl = () => `https://graph.facebook.com/${API_VERSION}/${PHONE_NUMBER_ID}/messages`;
 const wabaTemplatesUrl = () => `https://graph.facebook.com/${API_VERSION}/${WABA_ID}/message_templates`;
 
-function authHeaders() {
+async function authHeaders() {
+  const token = await getMetaAccessToken();
   return {
-    Authorization: `Bearer ${ACCESS_TOKEN}`,
+    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 }
@@ -38,7 +39,7 @@ export async function sendTemplate(args: {
         components: args.components ?? [],
       },
     },
-    { headers: authHeaders() }
+    { headers: await authHeaders() }
   );
   return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
 }
@@ -52,14 +53,14 @@ export async function sendText(args: { to: string; body: string }): Promise<{ wa
       type: "text",
       text: { body: args.body, preview_url: false },
     },
-    { headers: authHeaders() }
+    { headers: await authHeaders() }
   );
   return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
 }
 
 export async function listTemplates() {
   const res = await axios.get(wabaTemplatesUrl(), {
-    headers: authHeaders(),
+    headers: await authHeaders(),
     params: { limit: 200 },
   });
   return res.data?.data ?? [];
@@ -79,13 +80,14 @@ export async function submitTemplate(args: {
       category: args.category,
       components: args.components,
     },
-    { headers: authHeaders() }
+    { headers: await authHeaders() }
   );
   return { id: res.data?.id ?? "", status: res.data?.status ?? "submitted" };
 }
 
-export function isMetaConfigured() {
-  return !!(PHONE_NUMBER_ID && WABA_ID && ACCESS_TOKEN);
+export async function isMetaConfigured() {
+  const token = await getMetaAccessToken();
+  return !!(PHONE_NUMBER_ID && WABA_ID && token);
 }
 
 export function describeMetaError(err: unknown): { code: string; message: string } {

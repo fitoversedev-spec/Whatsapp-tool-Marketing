@@ -114,9 +114,14 @@ function pickBest(
 
 export function analyzeFile(rows: any[][]): FileAnalysis {
   const rawHeaders = rows[0] ?? [];
+  // Disambiguate duplicate column headers: "Phone", "Phone", "Phone" → "Phone", "Phone (2)", "Phone (3)"
+  // Otherwise the column mapping UI shows two identical entries and users can't tell them apart.
+  const seenCount: Record<string, number> = {};
   const headers = rawHeaders.map((h: any, i: number) => {
-    const t = String(h ?? "").trim();
-    return t || `Column ${colLetter(i)}`;
+    const base = String(h ?? "").trim() || `Column ${colLetter(i)}`;
+    const n = (seenCount[base] ?? 0) + 1;
+    seenCount[base] = n;
+    return n === 1 ? base : `${base} (${n})`;
   });
   const dataRows = rows.slice(1);
   const stats = computeStats(headers, dataRows);

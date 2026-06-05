@@ -31,11 +31,17 @@ export async function GET(req: NextRequest) {
   }));
 
   if (search) {
-    filtered = filtered.filter(
-      (c) =>
-        c.phone.toLowerCase().includes(search) ||
-        (c.name ?? "").toLowerCase().includes(search)
-    );
+    filtered = filtered.filter((c) => {
+      if (c.phone.toLowerCase().includes(search)) return true;
+      if ((c.name ?? "").toLowerCase().includes(search)) return true;
+      // Also match any field value (Attribute 1, Location, etc.) so users can
+      // type "Salem" and find contacts where Salem appears in Attribute 1 — not
+      // just in the name. Use the precise field filter for exact-equals lookups.
+      for (const v of Object.values(c.fields)) {
+        if (String(v ?? "").toLowerCase().includes(search)) return true;
+      }
+      return false;
+    });
   }
 
   if (field && value) {

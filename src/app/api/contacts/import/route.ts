@@ -100,10 +100,12 @@ export async function POST(req: NextRequest) {
       });
       updated++;
     } else {
-      await prisma.contact.create({
+      const created = await prisma.contact.create({
         data: { phone, name: name || null, allowCampaign, fields: JSON.stringify(fields) },
       });
-      existingByPhone.set(phone, { id: "new", phone, fields: JSON.stringify(fields) });
+      // Cache with the REAL id so subsequent rows with the same phone update
+      // (rather than failing P2025 on a literal "new" id).
+      existingByPhone.set(phone, { id: created.id, phone, fields: JSON.stringify(fields) });
       added++;
     }
   }

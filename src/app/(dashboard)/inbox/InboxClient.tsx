@@ -88,15 +88,36 @@ export default function InboxClient({
     return () => clearTimeout(id);
   }, [search]);
 
-  // Load messages when selection changes
+  // Load messages when selection changes + poll every 8s while open so
+  // inbound replies stream in without the user having to re-click the thread.
   useEffect(() => {
     if (!selected) return;
-    fetch(`/api/conversations/${selected}/messages`)
-      .then((r) => r.json())
-      .then((data) => {
-        setMessages(data.messages ?? []);
-        setWithinWindow(data.withinWindow ?? false);
+    let cancelled = false;
+    const load = async () => {
+      const r = await fetch(`/api/conversations/${selected}/messages`);
+      if (!r.ok || cancelled) return;
+      const data = await r.json();
+      if (cancelled) return;
+      setMessages((prev) => {
+        // Avoid pointless re-render (and scroll jump) when the message list
+        // is unchanged. Cheap shallow check on last id + length.
+        const next: Message[] = data.messages ?? [];
+        if (
+          prev.length === next.length &&
+          prev[prev.length - 1]?.id === next[next.length - 1]?.id
+        ) {
+          return prev;
+        }
+        return next;
       });
+      setWithinWindow(data.withinWindow ?? false);
+    };
+    load();
+    const t = setInterval(load, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
   }, [selected]);
 
   // Scroll to bottom on new messages

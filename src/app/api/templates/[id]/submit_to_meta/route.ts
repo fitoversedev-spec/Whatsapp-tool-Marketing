@@ -15,7 +15,23 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   // Build components in Meta format
   const components: Record<string, unknown>[] = [];
-  if (tpl.header) components.push({ type: "HEADER", ...(JSON.parse(tpl.header) as any) });
+  if (tpl.header) {
+    const h = JSON.parse(tpl.header) as
+      | { format: "TEXT"; text: string }
+      | { format: "IMAGE" | "VIDEO" | "DOCUMENT"; url: string; filename?: string };
+    if (h.format === "TEXT") {
+      components.push({ type: "HEADER", format: "TEXT", text: h.text });
+    } else {
+      // Meta requires example.header_handle for media headers. The handle is a
+      // publicly accessible URL Meta downloads to review the template; once
+      // approved, you can supply a different (per-message) URL at send time.
+      components.push({
+        type: "HEADER",
+        format: h.format,
+        example: { header_handle: [h.url] },
+      });
+    }
+  }
   components.push({ type: "BODY", text: tpl.body });
   if (tpl.footer) components.push({ type: "FOOTER", text: tpl.footer });
   if (tpl.buttons) components.push({ type: "BUTTONS", ...(JSON.parse(tpl.buttons) as any) });

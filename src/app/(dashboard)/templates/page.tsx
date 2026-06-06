@@ -20,6 +20,7 @@ export default async function TemplatesPage() {
         name: t.name,
         language: t.language,
         category: t.category,
+        header: t.header,
         body: t.body,
         footer: t.footer,
         status: t.status,

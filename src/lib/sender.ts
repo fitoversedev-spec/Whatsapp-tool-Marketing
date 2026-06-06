@@ -30,7 +30,12 @@ function matchesFilter(cellValue: string, rule: FilterRule): boolean {
   }
 }
 
-type Template = { name: string; language: string; body?: string | null };
+type Template = {
+  name: string;
+  language: string;
+  body?: string | null;
+  header?: string | null;
+};
 
 export async function runBroadcast(broadcastId: string): Promise<void> {
   const broadcast = await prisma.broadcast.findUnique({
@@ -204,6 +209,34 @@ async function dispatchQueued(broadcastId: string, template: Template) {
     if (batch.length === 0) break;
 
     const templateHasVars = /\{\{\s*\d+\s*\}\}/.test(template.body ?? "");
+
+    // Build the static header component once per dispatch (same media for all
+    // recipients in this broadcast). Only media headers need a parameter at
+    // send time — TEXT headers are static and need no parameter unless they
+    // contain a {{1}} placeholder (not supported by this UI yet).
+    let headerComponent: any | null = null;
+    if (template.header) {
+      try {
+        const h = JSON.parse(template.header) as
+          | { format: "TEXT"; text: string }
+          | { format: "IMAGE" | "VIDEO" | "DOCUMENT"; url: string; filename?: string };
+        if (h.format === "IMAGE") {
+          headerComponent = { type: "header", parameters: [{ type: "image", image: { link: h.url } }] };
+        } else if (h.format === "VIDEO") {
+          headerComponent = { type: "header", parameters: [{ type: "video", video: { link: h.url } }] };
+        } else if (h.format === "DOCUMENT") {
+          headerComponent = {
+            type: "header",
+            parameters: [
+              { type: "document", document: { link: h.url, filename: h.filename ?? "document.pdf" } },
+            ],
+          };
+        }
+      } catch {
+        /* fall through — no header parameter */
+      }
+    }
+
     for (const r of batch) {
       try {
         const rVars = JSON.parse(r.variables) as Record<string, string>;
@@ -213,15 +246,14 @@ async function dispatchQueued(broadcastId: string, template: Template) {
         const paramEntries = templateHasVars
           ? Object.entries(rVars).sort(([a], [b]) => Number(a) - Number(b))
           : [];
-        const components =
-          paramEntries.length > 0
-            ? [
-                {
-                  type: "body" as const,
-                  parameters: paramEntries.map(([, value]) => ({ type: "text" as const, text: value })),
-                },
-              ]
-            : [];
+        const components: any[] = [];
+        if (headerComponent) components.push(headerComponent);
+        if (paramEntries.length > 0) {
+          components.push({
+            type: "body" as const,
+            parameters: paramEntries.map(([, value]) => ({ type: "text" as const, text: value })),
+          });
+        }
         const result = await sendTemplate({
           to: r.phoneE164,
           templateName: template.name,

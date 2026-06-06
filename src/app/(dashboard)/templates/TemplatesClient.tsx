@@ -10,6 +10,7 @@ type Template = {
   name: string;
   language: string;
   category: string;
+  header: string | null;
   body: string;
   footer: string | null;
   status: string;
@@ -17,6 +18,20 @@ type Template = {
   draftedByName: string;
   approvedByName: string | null;
   updatedAt: string;
+};
+
+type HeaderFormat = "NONE" | "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
+
+const HEADER_ACCEPT: Record<Exclude<HeaderFormat, "NONE" | "TEXT">, string> = {
+  IMAGE: "image/jpeg,image/png",
+  VIDEO: "video/mp4,video/3gpp",
+  DOCUMENT: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt",
+};
+
+const HEADER_LIMIT_MB: Record<Exclude<HeaderFormat, "NONE" | "TEXT">, number> = {
+  IMAGE: 5,
+  VIDEO: 16,
+  DOCUMENT: 100,
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -108,6 +123,7 @@ export default function TemplatesClient({
                     {t.status.replace("_", " ")}
                   </span>
                 </div>
+                <TemplateHeaderPreview header={t.header} />
                 <div className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 mb-3 whitespace-pre-wrap font-mono text-xs break-words">
                   {t.body}
                 </div>
@@ -160,13 +176,82 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const [footer, setFooter] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Header state
+  const [headerFormat, setHeaderFormat] = useState<HeaderFormat>("NONE");
+  const [headerText, setHeaderText] = useState("");
+  const [headerMediaUrl, setHeaderMediaUrl] = useState<string | null>(null);
+  const [headerFilename, setHeaderFilename] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (headerFormat === "NONE" || headerFormat === "TEXT") return;
+
+    const limitBytes = HEADER_LIMIT_MB[headerFormat] * 1024 * 1024;
+    if (file.size > limitBytes) {
+      toast.error(`File too large. Max ${HEADER_LIMIT_MB[headerFormat]}MB for ${headerFormat}.`);
+      e.target.value = "";
+      return;
+    }
+
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("headerType", headerFormat);
+    const res = await fetch("/api/templates/upload-media", { method: "POST", body: fd });
+    setUploading(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(data.error ?? "Upload failed");
+      e.target.value = "";
+      return;
+    }
+    setHeaderMediaUrl(data.url);
+    setHeaderFilename(file.name);
+    toast.success("Media uploaded — preview below");
+  }
+
+  function clearMedia() {
+    setHeaderMediaUrl(null);
+    setHeaderFilename(null);
+  }
+
+  function onHeaderFormatChange(next: HeaderFormat) {
+    setHeaderFormat(next);
+    setHeaderText("");
+    setHeaderMediaUrl(null);
+    setHeaderFilename(null);
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
+
+    // Validate header
+    let header: any = null;
+    if (headerFormat === "TEXT") {
+      if (!headerText.trim()) {
+        toast.error("Header text is required when format is TEXT.");
+        return;
+      }
+      header = { format: "TEXT", text: headerText.trim() };
+    } else if (headerFormat !== "NONE") {
+      if (!headerMediaUrl) {
+        toast.error(`Upload a ${headerFormat.toLowerCase()} file before saving.`);
+        return;
+      }
+      header = {
+        format: headerFormat,
+        url: headerMediaUrl,
+        ...(headerFilename ? { filename: headerFilename } : {}),
+      };
+    }
+
     setSaving(true);
     const res = await fetch("/api/templates", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, language, category, body, footer: footer || null }),
+      body: JSON.stringify({ name, language, category, body, footer: footer || null, header }),
     });
     setSaving(false);
     if (res.ok) {
@@ -224,6 +309,88 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
               </select>
             </Field>
           </div>
+
+          <Field label="Header (optional)">
+            <select
+              value={headerFormat}
+              onChange={(e) => onHeaderFormatChange(e.target.value as HeaderFormat)}
+              className="input"
+            >
+              <option value="NONE">None</option>
+              <option value="TEXT">Text</option>
+              <option value="IMAGE">Image (max 5MB — JPEG/PNG)</option>
+              <option value="VIDEO">Video (max 16MB — MP4/3GP)</option>
+              <option value="DOCUMENT">Document (max 100MB — PDF/Office/TXT)</option>
+            </select>
+          </Field>
+
+          {headerFormat === "TEXT" && (
+            <Field label="Header text (max 60 chars)">
+              <input
+                value={headerText}
+                onChange={(e) => setHeaderText(e.target.value)}
+                className="input"
+                placeholder="Welcome to Fitoverse!"
+                maxLength={60}
+              />
+            </Field>
+          )}
+
+          {(headerFormat === "IMAGE" || headerFormat === "VIDEO" || headerFormat === "DOCUMENT") && (
+            <Field label={`Upload ${headerFormat.toLowerCase()}`}>
+              {!headerMediaUrl ? (
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept={HEADER_ACCEPT[headerFormat]}
+                    onChange={handleFileSelect}
+                    disabled={uploading}
+                    className="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 disabled:opacity-50"
+                  />
+                  {uploading && (
+                    <div className="text-xs text-slate-500">Uploading to Vercel Blob…</div>
+                  )}
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                  {headerFormat === "IMAGE" && (
+                    <img
+                      src={headerMediaUrl}
+                      alt="Header preview"
+                      className="max-h-40 mx-auto rounded-md border border-slate-200"
+                    />
+                  )}
+                  {headerFormat === "VIDEO" && (
+                    <video
+                      src={headerMediaUrl}
+                      controls
+                      className="max-h-40 mx-auto rounded-md border border-slate-200"
+                    />
+                  )}
+                  {headerFormat === "DOCUMENT" && (
+                    <div className="flex items-center gap-2 text-sm text-slate-700">
+                      <span>📄</span>
+                      <a
+                        href={headerMediaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-wa-green hover:underline truncate"
+                      >
+                        {headerFilename ?? "View uploaded document"}
+                      </a>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={clearMedia}
+                    className="mt-2 text-xs text-red-600 hover:underline"
+                  >
+                    Remove and upload a different file
+                  </button>
+                </div>
+              )}
+            </Field>
+          )}
 
           <Field label="Body" required>
             <textarea
@@ -301,4 +468,52 @@ function Field({
       {children}
     </div>
   );
+}
+
+// Renders a small preview of the template's header on each card.
+// header is JSON: { format, text? , url?, filename? } or null.
+function TemplateHeaderPreview({ header }: { header: string | null }) {
+  if (!header) return null;
+  let h: any;
+  try {
+    h = JSON.parse(header);
+  } catch {
+    return null;
+  }
+  if (!h?.format) return null;
+
+  if (h.format === "TEXT") {
+    return <div className="text-xs font-semibold text-slate-900 mb-2 break-words">{h.text}</div>;
+  }
+  if (h.format === "IMAGE" && h.url) {
+    return (
+      <img
+        src={h.url}
+        alt="Template header"
+        className="rounded-lg border border-slate-200 max-h-32 mb-3 object-cover"
+      />
+    );
+  }
+  if (h.format === "VIDEO" && h.url) {
+    return (
+      <video
+        src={h.url}
+        controls
+        className="rounded-lg border border-slate-200 max-h-40 mb-3"
+      />
+    );
+  }
+  if (h.format === "DOCUMENT" && h.url) {
+    return (
+      <a
+        href={h.url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5 text-xs text-wa-green hover:underline mb-2"
+      >
+        📄 {h.filename ?? "View document"}
+      </a>
+    );
+  }
+  return null;
 }

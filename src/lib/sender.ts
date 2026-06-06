@@ -87,7 +87,10 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
     });
   }
 
-  await dispatchQueued(broadcastId, broadcast.template);
+  await dispatchQueued(broadcastId, broadcast.template, {
+    templateId: broadcast.template.id,
+    senderUserId: broadcast.createdByUserId,
+  });
 }
 
 // ─── Source: Saved Contacts ─────────────────────────────────────────────────
@@ -199,8 +202,18 @@ async function materialiseFromFileOrSheet(
   return insertData;
 }
 
+// Render the template body with this recipient's variables ({{1}}, {{2}}, …)
+// for storage in the Message.body — gives the inbox a real chat-style preview.
+function renderTemplateBody(templateBody: string, rVars: Record<string, string>): string {
+  return templateBody.replace(/\{\{\s*(\d+)\s*\}\}/g, (_, n) => rVars[String(n)] ?? "");
+}
+
 // ─── Dispatch: process queued recipients in throttled chunks ────────────────
-async function dispatchQueued(broadcastId: string, template: Template) {
+async function dispatchQueued(
+  broadcastId: string,
+  template: Template,
+  ctx: { templateId: string; senderUserId: string }
+) {
   while (true) {
     const batch = await prisma.broadcastRecipient.findMany({
       where: { broadcastId, status: "queued" },
@@ -264,6 +277,40 @@ async function dispatchQueued(broadcastId: string, template: Template) {
           where: { id: r.id },
           data: { status: "sent", waMessageId: result.waMessageId, sentAt: new Date() },
         });
+
+        // Surface this send in the inbox as a normal outbound message so the
+        // conversation reads like a chat — broadcast send, then any reply from
+        // the recipient lands in the same thread.
+        const renderedBody = renderTemplateBody(template.body ?? "", rVars);
+        const convo = await prisma.conversation.upsert({
+          where: { contactPhone: r.phoneE164 },
+          create: {
+            contactPhone: r.phoneE164,
+            contactName: r.name,
+            originBroadcastId: broadcastId,
+            lastOutboundAt: new Date(),
+          },
+          update: {
+            contactName: r.name ?? undefined,
+            lastOutboundAt: new Date(),
+          },
+        });
+        await prisma.message
+          .create({
+            data: {
+              conversationId: convo.id,
+              direction: "outbound",
+              type: "template",
+              body: renderedBody,
+              waMessageId: result.waMessageId,
+              templateId: ctx.templateId,
+              status: "sent",
+              sentByUserId: ctx.senderUserId,
+            },
+          })
+          .catch(() => {
+            /* If waMessageId unique collides (retry edge case), ignore. */
+          });
       } catch (err) {
         const e = describeMetaError(err);
         await prisma.broadcastRecipient.update({

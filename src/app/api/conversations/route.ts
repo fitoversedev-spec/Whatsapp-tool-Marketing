@@ -35,14 +35,22 @@ export async function GET(req: NextRequest) {
           },
         ],
       },
-      orderBy: { lastInboundAt: "desc" },
+      orderBy: [
+        { lastInboundAt: { sort: "desc", nulls: "last" } },
+        { lastOutboundAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+      ],
       take: 100,
       include: { assignedTo: { select: { name: true } } },
     });
   } else {
     conversations = await prisma.conversation.findMany({
       where: roleWhere,
-      orderBy: { lastInboundAt: "desc" },
+      orderBy: [
+        { lastInboundAt: { sort: "desc", nulls: "last" } },
+        { lastOutboundAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+      ],
       take: 100,
       include: { assignedTo: { select: { name: true } } },
     });

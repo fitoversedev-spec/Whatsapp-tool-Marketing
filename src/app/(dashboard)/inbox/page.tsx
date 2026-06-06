@@ -12,7 +12,11 @@ export default async function InboxPage() {
 
   const conversations = await prisma.conversation.findMany({
     where,
-    orderBy: { lastInboundAt: "desc" },
+    orderBy: [
+      { lastInboundAt: { sort: "desc", nulls: "last" } },
+      { lastOutboundAt: { sort: "desc", nulls: "last" } },
+      { createdAt: "desc" },
+    ],
     take: 100,
     include: {
       assignedTo: { select: { name: true } },

@@ -54,6 +54,7 @@ export default function TemplatesClient({
   const toast = useToast();
   const [showDraft, setShowDraft] = useState(false);
   const [filter, setFilter] = useState<string>("all");
+  const [syncing, setSyncing] = useState(false);
 
   const filtered = filter === "all" ? templates : templates.filter((t) => t.status === filter);
 
@@ -68,18 +69,58 @@ export default function TemplatesClient({
     }
   }
 
+  // Manual reconciliation with Meta. Normally the
+  // `message_template_status_update` webhook keeps statuses in sync, but if
+  // the webhook misses an event (Meta only retries for a limited time)
+  // admins can re-sync from here.
+  async function syncFromMeta() {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/templates/sync", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Sync failed");
+      } else {
+        const { changed, unchanged } = data as { changed: number; unchanged: number };
+        if (changed === 0) {
+          toast.success(`All ${unchanged} template(s) already in sync with Meta`);
+        } else {
+          toast.success(`Synced ${changed} template(s) from Meta`);
+        }
+        router.refresh();
+      }
+    } catch (err) {
+      toast.error("Sync request failed");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
         title="Templates"
         description="Message templates synced with Meta."
         action={
-          <button
-            onClick={() => setShowDraft(true)}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg transition w-full sm:w-auto"
-          >
-            + New template
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {currentUser.role === "admin" && (
+              <button
+                onClick={syncFromMeta}
+                disabled={syncing}
+                className="bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-700 font-medium px-4 py-2 rounded-lg transition"
+                title="Pull live status from Meta and update local DB"
+              >
+                {syncing ? "Syncing…" : "↻ Sync from Meta"}
+              </button>
+            )}
+            <button
+              onClick={() => setShowDraft(true)}
+              className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg transition"
+            >
+              + New template
+            </button>
+          </div>
         }
       />
 

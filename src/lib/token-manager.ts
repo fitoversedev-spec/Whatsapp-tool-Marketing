@@ -15,7 +15,11 @@
 import axios from "axios";
 import { prisma } from "./prisma";
 
-const APP_ID = "1460614352002830"; // Fito Marketing tool
+// App ID drives the fb_exchange_token call. Defaults to the original "Fito
+// Marketing tool" app id for backwards compatibility; override via META_APP_ID
+// env when migrating to a new app (e.g. "Fitoverse Messaging" = 974466495199004
+// in Fitoverse business — same business as the WABA).
+const APP_ID = process.env.META_APP_ID || "1460614352002830";
 const APP_SECRET = process.env.META_APP_SECRET || "";
 const API = process.env.META_GRAPH_API_VERSION || "v21.0";
 

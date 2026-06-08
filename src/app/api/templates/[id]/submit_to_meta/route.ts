@@ -20,7 +20,10 @@ import { prisma } from "@/lib/prisma";
 import { submitTemplate, describeMetaError } from "@/lib/whatsapp";
 import { getMetaAccessToken } from "@/lib/token-manager";
 
-const APP_ID = "1460614352002830"; // Fito Marketing tool
+// Resumable Upload API requires our App ID. Same env-driven pattern as
+// token-manager.ts — defaults to original "Fito Marketing tool" for
+// backwards compat, override via META_APP_ID when on a different app.
+const APP_ID = process.env.META_APP_ID || "1460614352002830";
 const API = process.env.META_GRAPH_API_VERSION || "v21.0";
 
 async function uploadResumable(

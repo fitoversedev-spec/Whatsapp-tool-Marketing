@@ -18,7 +18,7 @@ export default async function BroadcastsPage() {
   });
 
   const approvedTemplates = await prisma.template.findMany({
-    where: { status: "approved" },
+    where: { status: "approved", deletedAt: null },
     orderBy: { name: "asc" },
     select: { id: true, name: true, language: true, body: true },
   });

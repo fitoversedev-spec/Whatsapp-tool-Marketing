@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
   const template = await prisma.template.findUnique({ where: { id: parsed.data.templateId } });
-  if (!template || template.status !== "approved") {
-    return NextResponse.json({ error: "Template must be approved" }, { status: 422 });
+  if (!template || template.status !== "approved" || template.deletedAt) {
+    return NextResponse.json({ error: "Template must be approved and active" }, { status: 422 });
   }
 
   const { sourceType } = parsed.data;

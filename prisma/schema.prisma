@@ -59,6 +59,11 @@ model Template {
   submittedAt       DateTime? @map("submitted_at")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
+  // Soft delete — when set, template is hidden from default list views
+  // and excluded from the Broadcasts template picker. The Meta-side
+  // template is NOT deleted; admin can restore from the "Show deleted"
+  // filter on the Templates page.
+  deletedAt         DateTime? @map("deleted_at")
 
   draftedBy  User        @relation("DraftedTemplates", fields: [draftedByUserId], references: [id])
   approvedBy User?       @relation("ApprovedTemplates", fields: [approvedByUserId], references: [id])
@@ -66,6 +71,7 @@ model Template {
   messages   Message[]
 
   @@index([status])
+  @@index([deletedAt])
   @@map("templates")
 }
 

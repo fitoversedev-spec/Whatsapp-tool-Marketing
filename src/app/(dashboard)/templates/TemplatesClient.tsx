@@ -18,6 +18,7 @@ type Template = {
   draftedByName: string;
   approvedByName: string | null;
   updatedAt: string;
+  deletedAt: string | null;
 };
 
 type HeaderFormat = "NONE" | "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
@@ -45,9 +46,11 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function TemplatesClient({
   currentUser,
+  showDeleted,
   templates,
 }: {
   currentUser: { role: "admin" | "sales" };
+  showDeleted: boolean;
   templates: Template[];
 }) {
   const router = useRouter();
@@ -67,6 +70,47 @@ export default function TemplatesClient({
       const err = await res.json().catch(() => ({}));
       toast.error(err.error ?? "Action failed");
     }
+  }
+
+  // Soft-delete the template. Hides from default view but preserves the row
+  // (and the underlying Meta template). Restorable from "Show deleted" view.
+  async function softDelete(id: string, name: string) {
+    if (!confirm(`Hide "${name}" from the template list?\n\nThe template will remain on Meta. You can restore it from the "Show deleted" view.`)) {
+      return;
+    }
+    const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success(`"${name}" hidden`);
+      router.refresh();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Delete failed");
+    }
+  }
+
+  async function restore(id: string, name: string) {
+    const res = await fetch(`/api/templates/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "restore" }),
+    });
+    if (res.ok) {
+      toast.success(`"${name}" restored`);
+      router.refresh();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Restore failed");
+    }
+  }
+
+  function toggleShowDeleted() {
+    const url = new URL(window.location.href);
+    if (showDeleted) {
+      url.searchParams.delete("showDeleted");
+    } else {
+      url.searchParams.set("showDeleted", "1");
+    }
+    router.push(url.pathname + url.search);
   }
 
   // Manual reconciliation with Meta. Normally the
@@ -125,7 +169,7 @@ export default function TemplatesClient({
       />
 
       <div className="p-4 sm:p-6 lg:p-8">
-        <div className="flex gap-2 mb-4 sm:mb-6 overflow-x-auto pb-1 -mx-1 px-1">
+        <div className="flex gap-2 mb-4 sm:mb-6 overflow-x-auto pb-1 -mx-1 px-1 items-center">
           {["all", "draft", "pending_admin", "submitted", "approved", "rejected"].map((s) => (
             <button
               key={s}
@@ -139,6 +183,19 @@ export default function TemplatesClient({
               {s.replace("_", " ")}
             </button>
           ))}
+          {currentUser.role === "admin" && (
+            <button
+              onClick={toggleShowDeleted}
+              className={`shrink-0 ml-2 px-3 py-1.5 rounded-lg text-sm font-medium transition border ${
+                showDeleted
+                  ? "bg-red-100 border-red-300 text-red-800"
+                  : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+              }`}
+              title="Toggle visibility of soft-deleted templates"
+            >
+              {showDeleted ? "✓ Showing deleted" : "Show deleted"}
+            </button>
+          )}
         </div>
 
         {filtered.length === 0 ? (
@@ -148,7 +205,14 @@ export default function TemplatesClient({
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
             {filtered.map((t) => (
-              <div key={t.id} className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-4 sm:p-5">
+              <div
+                key={t.id}
+                className={`border rounded-xl sm:rounded-2xl p-4 sm:p-5 ${
+                  t.deletedAt
+                    ? "bg-slate-50 border-slate-300 opacity-75"
+                    : "bg-white border-slate-200"
+                }`}
+              >
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="min-w-0">
                     <div className="font-semibold text-slate-900 truncate">{t.name}</div>
@@ -156,13 +220,20 @@ export default function TemplatesClient({
                       {t.category} · {t.language}
                     </div>
                   </div>
-                  <span
-                    className={`shrink-0 inline-block px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap ${
-                      STATUS_COLORS[t.status] ?? "bg-slate-100"
-                    }`}
-                  >
-                    {t.status.replace("_", " ")}
-                  </span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span
+                      className={`inline-block px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap ${
+                        STATUS_COLORS[t.status] ?? "bg-slate-100"
+                      }`}
+                    >
+                      {t.status.replace("_", " ")}
+                    </span>
+                    {t.deletedAt && (
+                      <span className="inline-block px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap bg-slate-700 text-white">
+                        Deleted
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <TemplateHeaderPreview header={t.header} />
                 <div className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 mb-3 whitespace-pre-wrap font-mono text-xs break-words">
@@ -179,7 +250,7 @@ export default function TemplatesClient({
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-slate-500">
                   <div>by {t.draftedByName}</div>
                   <div className="flex gap-2 flex-wrap">
-                    {t.status === "draft" && (
+                    {!t.deletedAt && t.status === "draft" && (
                       <button
                         onClick={() => act(t.id, "submit_for_review")}
                         className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 rounded text-slate-700 font-medium"
@@ -187,12 +258,30 @@ export default function TemplatesClient({
                         Submit for review
                       </button>
                     )}
-                    {t.status === "pending_admin" && currentUser.role === "admin" && (
+                    {!t.deletedAt && t.status === "pending_admin" && currentUser.role === "admin" && (
                       <button
                         onClick={() => act(t.id, "submit_to_meta")}
                         className="px-3 py-1.5 bg-wa-green hover:bg-wa-green/90 active:bg-wa-green/80 text-white rounded font-medium"
                       >
                         Submit to Meta
+                      </button>
+                    )}
+                    {!t.deletedAt && currentUser.role === "admin" && (
+                      <button
+                        onClick={() => softDelete(t.id, t.name)}
+                        className="px-3 py-1.5 bg-white border border-red-200 hover:bg-red-50 active:bg-red-100 rounded text-red-700 font-medium"
+                        title="Hide this template from the list (Meta-side template not affected)"
+                      >
+                        Delete
+                      </button>
+                    )}
+                    {t.deletedAt && currentUser.role === "admin" && (
+                      <button
+                        onClick={() => restore(t.id, t.name)}
+                        className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 active:bg-slate-200 rounded text-slate-700 font-medium"
+                        title="Bring this template back into the active list"
+                      >
+                        Restore
                       </button>
                     )}
                   </div>

@@ -74,7 +74,9 @@ export async function POST() {
   }
 
   const dbTemplates = await prisma.template.findMany({
-    where: { metaTemplateId: { not: null } },
+    // Skip soft-deleted rows — admin chose to hide them, sync shouldn't
+    // re-touch their status (which would surface them again).
+    where: { metaTemplateId: { not: null }, deletedAt: null },
   });
 
   type ChangeRow = {

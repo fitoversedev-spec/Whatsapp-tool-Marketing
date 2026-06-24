@@ -8,6 +8,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   const tpl = await prisma.template.findUnique({ where: { id: params.id } });
   if (!tpl) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (tpl.deletedAt) return NextResponse.json({ error: "Template is deleted; restore it first" }, { status: 422 });
   if (tpl.status !== "draft") {
     return NextResponse.json({ error: "Only draft templates can be submitted for review" }, { status: 422 });
   }

@@ -92,6 +92,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   const tpl = await prisma.template.findUnique({ where: { id: params.id } });
   if (!tpl) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (tpl.deletedAt) {
+    return NextResponse.json({ error: "Template is deleted; restore it first" }, { status: 422 });
+  }
   if (tpl.status !== "pending_admin") {
     return NextResponse.json(
       { error: "Only pending_admin templates can be submitted" },

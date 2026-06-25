@@ -215,6 +215,20 @@ async function dispatchQueued(
   ctx: { templateId: string; senderUserId: string }
 ) {
   while (true) {
+    // Honor pause requests between chunks. The /pause endpoint sets
+    // pauseRequestedAt; here we observe it and write pausedAt + flip status.
+    const status = await prisma.broadcast.findUnique({
+      where: { id: broadcastId },
+      select: { pauseRequestedAt: true },
+    });
+    if (status?.pauseRequestedAt) {
+      await prisma.broadcast.update({
+        where: { id: broadcastId },
+        data: { status: "paused", pausedAt: new Date() },
+      });
+      return;
+    }
+
     const batch = await prisma.broadcastRecipient.findMany({
       where: { broadcastId, status: "queued" },
       take: CHUNK_SIZE,

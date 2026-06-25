@@ -58,6 +58,65 @@ export async function sendText(args: { to: string; body: string }): Promise<{ wa
   return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
 }
 
+// Send any media type via a publicly accessible URL. mediaType drives both
+// the Meta payload shape and which extra fields (filename for documents,
+// caption for image/video/document) are included.
+export async function sendMedia(args: {
+  to: string;
+  mediaType: "image" | "video" | "audio" | "document";
+  url: string;
+  caption?: string;
+  filename?: string; // recommended for documents
+}): Promise<{ waMessageId: string }> {
+  const mediaPayload: Record<string, unknown> = { link: args.url };
+  if (args.caption && args.mediaType !== "audio") mediaPayload.caption = args.caption;
+  if (args.mediaType === "document" && args.filename) mediaPayload.filename = args.filename;
+
+  const res = await axios.post(
+    messagesUrl(),
+    {
+      messaging_product: "whatsapp",
+      to: args.to,
+      type: args.mediaType,
+      [args.mediaType]: mediaPayload,
+    },
+    { headers: await authHeaders() }
+  );
+  return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
+}
+
+// Download an inbound media file. Meta gives us a media_id in the webhook;
+// we exchange it for a short-lived signed URL (step 1), then fetch the
+// bytes with the access token (step 2). Caller decides where to persist.
+export async function fetchInboundMedia(mediaId: string): Promise<{
+  bytes: Buffer;
+  mimeType: string;
+  fileName: string;
+}> {
+  const token = await getMetaAccessToken();
+  const metaRes = await axios.get(
+    `https://graph.facebook.com/${API_VERSION}/${mediaId}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const url: string = metaRes.data?.url;
+  const mimeType: string = metaRes.data?.mime_type ?? "application/octet-stream";
+  if (!url) throw new Error("Meta media metadata missing url");
+
+  const fileRes = await axios.get<ArrayBuffer>(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    responseType: "arraybuffer",
+  });
+
+  const fileName =
+    metaRes.data?.file_name ||
+    `inbound-${mediaId}.${mimeType.split("/")[1] ?? "bin"}`;
+  return {
+    bytes: Buffer.from(fileRes.data),
+    mimeType,
+    fileName,
+  };
+}
+
 export async function listTemplates() {
   const res = await axios.get(wabaTemplatesUrl(), {
     headers: await authHeaders(),

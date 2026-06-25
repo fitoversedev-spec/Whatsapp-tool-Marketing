@@ -41,7 +41,10 @@ export async function GET(req: NextRequest) {
         { createdAt: "desc" },
       ],
       take: 100,
-      include: { assignedTo: { select: { name: true } } },
+      include: {
+        assignedTo: { select: { name: true } },
+        labels: { include: { label: true } },
+      },
     });
   } else {
     conversations = await prisma.conversation.findMany({
@@ -52,7 +55,10 @@ export async function GET(req: NextRequest) {
         { createdAt: "desc" },
       ],
       take: 100,
-      include: { assignedTo: { select: { name: true } } },
+      include: {
+        assignedTo: { select: { name: true } },
+        labels: { include: { label: true } },
+      },
     });
   }
 
@@ -67,6 +73,12 @@ export async function GET(req: NextRequest) {
       lastOutboundAt: c.lastOutboundAt?.toISOString() ?? null,
       unreadCount: c.unreadCount,
       status: c.status,
+      labelIds: c.labels.map((l) => l.label.id),
+      labels: c.labels.map((l) => ({
+        id: l.label.id,
+        name: l.label.name,
+        color: l.label.color,
+      })),
     })),
   });
 }

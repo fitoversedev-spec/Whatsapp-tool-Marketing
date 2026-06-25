@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, FormEvent, ChangeEvent } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, FormEvent, ChangeEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import TagPicker from "@/components/TagPicker";
+import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import { analyzeFile, Detection } from "@/lib/file-analysis";
 import * as XLSX from "xlsx";
+import BulkActionBar from "./BulkActionBar";
 
 const ROLE_META: Record<Detection["role"], { label: string; icon: string }> = {
   phone: { label: "Phone", icon: "📞" },
@@ -19,6 +23,7 @@ const CONFIDENCE_DOT: Record<string, string> = {
   low: "bg-slate-400",
 };
 
+type ContactTag = { id: string; name: string; color: string };
 type Contact = {
   id: string;
   phone: string;
@@ -26,6 +31,8 @@ type Contact = {
   allowCampaign: boolean;
   fields: Record<string, string>;
   createdAt: string;
+  tagIds: string[];
+  tags: ContactTag[];
 };
 
 function ConsentBadge({ allowed }: { allowed: boolean }) {
@@ -44,13 +51,22 @@ export default function ContactsClient({
   initialContacts,
   total,
   fieldKeys,
+  allTags,
+  activeTagFilter,
 }: {
   initialContacts: Contact[];
   total: number;
   fieldKeys: string[];
+  allTags: ContactTag[];
+  activeTagFilter: string | null;
 }) {
   const toast = useToast();
+  const router = useRouter();
+  const urlParams = useSearchParams();
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
+  const [tagFilter, setTagFilter] = useState<string | null>(activeTagFilter);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const allTagsMap = useMemo(() => new Map(allTags.map((t) => [t.id, t])), [allTags]);
   // poolTotal = unfiltered count of every contact in the pool (header).
   // filteredCount = how many match the current search/filter (shown alongside when active).
   const [poolTotal, setPoolTotal] = useState(total);
@@ -123,6 +139,12 @@ export default function ContactsClient({
         }
         action={
           <div className="flex gap-2 w-full sm:w-auto">
+            <a
+              href="/contacts/duplicates"
+              className="hidden sm:inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 self-center px-2"
+            >
+              🔍 Find duplicates
+            </a>
             <button
               onClick={() => setShowAdd(true)}
               className="flex-1 sm:flex-none border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium px-4 py-2 rounded-lg transition"
@@ -150,6 +172,25 @@ export default function ContactsClient({
             className="flex-1 px-3 py-2 rounded-lg border border-slate-300 focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none text-sm"
           />
           <select
+            value={tagFilter ?? ""}
+            onChange={(e) => {
+              const v = e.target.value || null;
+              setTagFilter(v);
+              const params = new URLSearchParams(urlParams.toString());
+              if (v) params.set("tag", v);
+              else params.delete("tag");
+              router.push(`/contacts${params.toString() ? `?${params}` : ""}`);
+            }}
+            className="px-3 py-2 rounded-lg border border-slate-300 focus:border-wa-green outline-none text-sm bg-white"
+          >
+            <option value="">All tags</option>
+            {allTags.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <select
             value={filterField}
             onChange={(e) => {
               setFilterField(e.target.value);
@@ -173,6 +214,20 @@ export default function ContactsClient({
             />
           )}
         </div>
+
+        {/* Bulk-action bar (sticky when items selected) */}
+        {selectedIds.size > 0 && (
+          <BulkActionBar
+            count={selectedIds.size}
+            selectedIds={Array.from(selectedIds)}
+            allTags={allTags}
+            onClear={() => setSelectedIds(new Set())}
+            onApplied={() => {
+              setSelectedIds(new Set());
+              router.refresh();
+            }}
+          />
+        )}
 
         {contacts.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-center text-slate-500">
@@ -227,8 +282,24 @@ export default function ContactsClient({
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                     <tr>
+                      <th className="px-3 py-3 w-8 text-left">
+                        <input
+                          type="checkbox"
+                          checked={contacts.length > 0 && contacts.every((c) => selectedIds.has(c.id))}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedIds(new Set(contacts.map((c) => c.id)));
+                            } else {
+                              setSelectedIds(new Set());
+                            }
+                          }}
+                          className="rounded"
+                          aria-label="Select all"
+                        />
+                      </th>
                       <th className="px-4 py-3 text-left">Name</th>
                       <th className="px-4 py-3 text-left">Phone</th>
+                      <th className="px-4 py-3 text-left">Tags</th>
                       <th className="px-4 py-3 text-left">Campaign</th>
                       {keys.map((k) => (
                         <th key={k} className="px-4 py-3 text-left">
@@ -240,11 +311,46 @@ export default function ContactsClient({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {contacts.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-50">
+                      <tr key={c.id} className={`hover:bg-slate-50 ${selectedIds.has(c.id) ? "bg-wa-green/5" : ""}`}>
+                        <td className="px-3 py-2.5">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(c.id)}
+                            onChange={(e) => {
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(c.id);
+                                else next.delete(c.id);
+                                return next;
+                              });
+                            }}
+                            className="rounded"
+                            aria-label={`Select ${c.name ?? c.phone}`}
+                          />
+                        </td>
                         <td className="px-4 py-2.5 font-medium text-slate-900">
                           {c.name || <span className="text-slate-400">(no name)</span>}
                         </td>
                         <td className="px-4 py-2.5 text-slate-600 font-mono text-xs">+{c.phone}</td>
+                        <td className="px-4 py-2.5">
+                          {c.tags.length === 0 ? (
+                            <span className="text-slate-300 text-xs">—</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {c.tags.map((t) => {
+                                const col = TAG_COLOR_CLASSES[t.color] ?? TAG_COLOR_CLASSES.slate;
+                                return (
+                                  <span
+                                    key={t.id}
+                                    className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-medium ${col.bg} ${col.text}`}
+                                  >
+                                    {t.name}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-2.5">
                           <ConsentBadge allowed={c.allowCampaign} />
                         </td>

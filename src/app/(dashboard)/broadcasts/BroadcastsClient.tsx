@@ -19,6 +19,7 @@ type Broadcast = {
   failed: number;
   createdByName: string;
   createdAt: string;
+  scheduledAt: string | null;
 };
 
 type Template = { id: string; name: string; language: string; body: string };
@@ -28,6 +29,7 @@ type ContactFilter = { field: string; condition: "equals" | "contains" | "starts
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700",
+  scheduled: "bg-amber-100 text-amber-800",
   running: "bg-blue-100 text-blue-800",
   completed: "bg-green-100 text-green-800",
   failed: "bg-red-100 text-red-800",
@@ -80,13 +82,25 @@ export default function BroadcastsClient({
                       <div className="font-semibold text-slate-900 truncate">{b.name}</div>
                       <div className="text-xs text-slate-500 mt-0.5">{b.templateName}</div>
                     </div>
-                    <span
-                      className={`shrink-0 inline-block px-2 py-1 rounded-md text-[10px] font-semibold uppercase ${
-                        STATUS_COLORS[b.status] ?? "bg-slate-100"
-                      }`}
-                    >
-                      {b.status}
-                    </span>
+                    <div className="text-right shrink-0">
+                      <span
+                        className={`inline-block px-2 py-1 rounded-md text-[10px] font-semibold uppercase ${
+                          STATUS_COLORS[b.status] ?? "bg-slate-100"
+                        }`}
+                      >
+                        {b.status}
+                      </span>
+                      {b.status === "scheduled" && b.scheduledAt && (
+                        <div className="text-[10px] text-amber-700 mt-1">
+                          {new Date(b.scheduledAt).toLocaleString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-4 gap-2 mt-3 pt-3 border-t border-slate-100 text-center">
                     <Stat label="Sent" value={`${b.sent}/${b.total}`} />
@@ -136,6 +150,16 @@ export default function BroadcastsClient({
                           >
                             {b.status}
                           </span>
+                          {b.status === "scheduled" && b.scheduledAt && (
+                            <div className="text-[10px] text-amber-700 mt-1">
+                              {new Date(b.scheduledAt).toLocaleString("en-IN", {
+                                day: "numeric",
+                                month: "short",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right text-slate-700">
                           {b.sent} / {b.total}
@@ -228,6 +252,10 @@ function BroadcastComposer({
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+
+  // Scheduling state — "now" sends immediately, "later" requires a datetime.
+  const [sendMode, setSendMode] = useState<"now" | "later">("now");
+  const [scheduledAt, setScheduledAt] = useState("");
 
   // Load saved-contact field keys for the filter + variable dropdowns
   useEffect(() => {
@@ -346,9 +374,23 @@ function BroadcastComposer({
   async function launch(e: FormEvent) {
     e.preventDefault();
     if (!preview) { toast.error("Preview first"); return; }
+
+    // Scheduling validation
+    if (sendMode === "later") {
+      if (!scheduledAt) { toast.error("Pick a schedule time"); return; }
+      const target = new Date(scheduledAt);
+      if (target.getTime() - Date.now() < 2 * 60 * 1000) {
+        toast.error("Schedule must be at least 2 minutes in the future");
+        return;
+      }
+    }
+
     setBusy(true);
 
     const payload: any = { name, templateId, sourceType: source };
+    if (sendMode === "later" && scheduledAt) {
+      payload.scheduledAt = new Date(scheduledAt).toISOString();
+    }
 
     if (source === "contacts") {
       payload.variableMapping = { "1": contactVar1 };
@@ -377,8 +419,19 @@ function BroadcastComposer({
     setBusy(false);
     const data = await res.json();
     if (!res.ok) { toast.error(data.error ?? "Launch failed"); return; }
-    await fetch(`/api/broadcasts/${data.broadcast.id}/launch`, { method: "POST" });
-    toast.success(`Broadcast launched to ${preview.willSend} contacts`);
+
+    if (sendMode === "later") {
+      const when = new Date(scheduledAt).toLocaleString("en-IN", {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      toast.success(`Scheduled for ${when} · ${preview.willSend} contacts`);
+    } else {
+      await fetch(`/api/broadcasts/${data.broadcast.id}/launch`, { method: "POST" });
+      toast.success(`Broadcast launched to ${preview.willSend} contacts`);
+    }
     onLaunched();
   }
 
@@ -797,6 +850,55 @@ function BroadcastComposer({
               )}
             </div>
           )}
+
+          {/* Send timing */}
+          {preview && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                When to send
+              </label>
+              <div className="flex rounded-lg border border-slate-300 overflow-hidden w-fit mb-2">
+                <button
+                  type="button"
+                  onClick={() => setSendMode("now")}
+                  className={`px-4 py-2 text-sm font-medium transition ${
+                    sendMode === "now" ? "bg-wa-green text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  ⚡ Send now
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSendMode("later")}
+                  className={`px-4 py-2 text-sm font-medium transition border-l border-slate-300 ${
+                    sendMode === "later" ? "bg-wa-green text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  📅 Schedule
+                </button>
+              </div>
+              {sendMode === "later" && (
+                <div className="space-y-2">
+                  <input
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={(e) => setScheduledAt(e.target.value)}
+                    min={(() => {
+                      const d = new Date(Date.now() + 5 * 60 * 1000);
+                      const pad = (n: number) => String(n).padStart(2, "0");
+                      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                    })()}
+                    className="input"
+                  />
+                  <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                    ⚠ On Vercel Hobby plan, scheduled broadcasts may fire up to 1 hour later than the
+                    selected time. Active dashboard tabs trigger an on-load check that catches due
+                    broadcasts faster.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -810,10 +912,16 @@ function BroadcastComposer({
           </button>
           <button
             type="submit"
-            disabled={busy || !preview}
+            disabled={busy || !preview || (sendMode === "later" && !scheduledAt)}
             className="order-1 sm:order-2 bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-5 py-2.5 rounded-lg"
           >
-            {busy ? "Launching…" : `Launch (${preview?.willSend ?? 0} contacts)`}
+            {busy
+              ? sendMode === "later"
+                ? "Scheduling…"
+                : "Launching…"
+              : sendMode === "later"
+                ? `Schedule (${preview?.willSend ?? 0} contacts)`
+                : `Launch (${preview?.willSend ?? 0} contacts)`}
           </button>
         </div>
 

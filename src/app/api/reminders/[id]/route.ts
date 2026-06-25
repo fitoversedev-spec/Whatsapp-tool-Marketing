@@ -1,0 +1,67 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+const patchSchema = z.object({
+  message: z.string().min(1).max(500).optional(),
+  dueAt: z.string().datetime().optional(),
+  completed: z.boolean().optional(),
+});
+
+async function loadOwn(id: string, userId: string) {
+  const r = await prisma.reminder.findUnique({ where: { id } });
+  if (!r) return { error: "not_found" as const, status: 404 };
+  if (r.ownerUserId !== userId) return { error: "forbidden" as const, status: 403 };
+  return { reminder: r };
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const res = await loadOwn(params.id, user.id);
+  if ("error" in res) return NextResponse.json({ error: res.error }, { status: res.status });
+
+  const body = await req.json().catch(() => null);
+  const parsed = patchSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
+
+  const data: Record<string, unknown> = {};
+  if (parsed.data.message !== undefined) data.message = parsed.data.message;
+  if (parsed.data.dueAt !== undefined) {
+    data.dueAt = new Date(parsed.data.dueAt);
+    data.notifiedAt = null; // reset notification when rescheduled
+  }
+  if (parsed.data.completed !== undefined) {
+    data.completedAt = parsed.data.completed ? new Date() : null;
+  }
+
+  const updated = await prisma.reminder.update({
+    where: { id: params.id },
+    data,
+  });
+
+  return NextResponse.json({
+    reminder: {
+      id: updated.id,
+      conversationId: updated.conversationId,
+      message: updated.message,
+      dueAt: updated.dueAt.toISOString(),
+      completedAt: updated.completedAt?.toISOString() ?? null,
+      notifiedAt: updated.notifiedAt?.toISOString() ?? null,
+      createdAt: updated.createdAt.toISOString(),
+    },
+  });
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const res = await loadOwn(params.id, user.id);
+  if ("error" in res) return NextResponse.json({ error: res.error }, { status: res.status });
+
+  await prisma.reminder.delete({ where: { id: params.id } });
+  return NextResponse.json({ ok: true });
+}

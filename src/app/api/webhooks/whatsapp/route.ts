@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyMetaSignature, isOptOutMessage } from "@/lib/webhook";
+import { fetchInboundMedia } from "@/lib/whatsapp";
+import { categorize, uploadToBlob } from "@/lib/media";
 
 // Meta requires GET for verification handshake
 export async function GET(req: NextRequest) {
@@ -158,14 +160,62 @@ async function handleInboundMessage(msg: any, profileName?: string) {
     },
   });
 
+  // Media handling. For each media type Meta sends the media_id in the
+  // type-named object (e.g. msg.image.id). We download bytes, push to
+  // Vercel Blob, and persist the resulting URL + metadata so the inbox
+  // can render the preview without round-tripping to Meta on every load.
+  const mediaTypes = ["image", "video", "audio", "document", "sticker"] as const;
+  let mediaFields: {
+    mediaUrl?: string;
+    mediaMimeType?: string;
+    mediaFileName?: string;
+    mediaSize?: number;
+  } = {};
+  let normalizedType = type;
+  if (mediaTypes.includes(type as any)) {
+    const mediaId = msg[type]?.id;
+    const claimedFileName = msg[type]?.filename;
+    if (mediaId) {
+      try {
+        const fetched = await fetchInboundMedia(mediaId);
+        const uploaded = await uploadToBlob({
+          bytes: fetched.bytes,
+          fileName: claimedFileName ?? fetched.fileName,
+          mimeType: fetched.mimeType,
+          folder: "inbound",
+        });
+        mediaFields = {
+          mediaUrl: uploaded.url,
+          mediaMimeType: fetched.mimeType,
+          mediaFileName: claimedFileName ?? fetched.fileName,
+          mediaSize: fetched.bytes.length,
+        };
+      } catch (err) {
+        console.error("[webhook] inbound media fetch failed", mediaId, err);
+        // Don't drop the message — store it without media so the user at
+        // least sees "received a file" with the caption.
+      }
+    }
+    // Map sticker → image so the UI's image preview path handles it.
+    if (type === "sticker") normalizedType = "image";
+  }
+
+  // Map normalizedType to one of our supported enum values.
+  const storedType = (
+    ["text", "image", "document", "video", "audio"].includes(normalizedType)
+      ? normalizedType
+      : "text"
+  ) as "text" | "image" | "document" | "video" | "audio";
+
   await prisma.message.create({
     data: {
       conversationId: convo.id,
       direction: "inbound",
-      type: (["text", "image", "document", "video", "audio"].includes(type) ? type : "text") as any,
+      type: storedType,
       body: body ?? null,
       waMessageId,
       status: "delivered",
+      ...mediaFields,
     },
   });
 

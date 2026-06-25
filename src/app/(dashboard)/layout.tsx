@@ -1,8 +1,10 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/Sidebar";
+import CronTick from "@/components/CronTick";
 import axios from "axios";
 import { getMetaAccessToken } from "@/lib/token-manager";
+import { endOfDayIST } from "@/lib/time";
 
 async function checkTokenValid(): Promise<boolean> {
   const token = await getMetaAccessToken();
@@ -38,6 +40,32 @@ export default async function DashboardLayout({ children }: { children: React.Re
     tokenExpired = !(await checkTokenValid());
   }
 
+  // Unread conversation count — scoped to user's visible conversations.
+  // Admin sees all; sales sees own + unassigned (matches inbox filter).
+  const unreadWhere =
+    user.role === "admin"
+      ? { unreadCount: { gt: 0 } }
+      : {
+          unreadCount: { gt: 0 },
+          OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }],
+        };
+  const unreadAgg = await prisma.conversation.aggregate({
+    where: unreadWhere,
+    _sum: { unreadCount: true },
+  });
+  const unreadCount = unreadAgg._sum.unreadCount ?? 0;
+
+  // Today's reminder count — overdue + due before end-of-IST-day, excluding
+  // completed. Using IST end-of-day matches the /reminders page filter and
+  // prevents off-by-a-day badges on Vercel (UTC server).
+  const reminderCount = await prisma.reminder.count({
+    where: {
+      ownerUserId: user.id,
+      completedAt: null,
+      dueAt: { lte: endOfDayIST(new Date()) },
+    },
+  });
+
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50">
       <Sidebar
@@ -47,9 +75,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
           role: user.role as "admin" | "sales",
         }}
         pendingCount={pendingCount}
+        unreadCount={unreadCount}
+        reminderCount={reminderCount}
         tokenExpired={tokenExpired}
       />
       <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
+      <CronTick />
     </div>
   );
 }

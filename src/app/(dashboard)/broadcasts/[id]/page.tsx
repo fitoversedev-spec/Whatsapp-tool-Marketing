@@ -4,10 +4,13 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import RecipientsTable from "./RecipientsTable";
+import BroadcastControls from "./BroadcastControls";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700",
+  scheduled: "bg-amber-100 text-amber-800",
   running: "bg-blue-100 text-blue-800",
+  paused: "bg-orange-100 text-orange-800",
   completed: "bg-green-100 text-green-800",
   failed: "bg-red-100 text-red-800",
 };
@@ -70,15 +73,21 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Status + counters */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <span
-              className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wide ${
-                STATUS_COLORS[broadcast.status] ?? "bg-slate-100"
-              }`}
-            >
-              {broadcast.status}
-            </span>
+          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span
+                className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wide ${
+                  STATUS_COLORS[broadcast.status] ?? "bg-slate-100"
+                }`}
+              >
+                {broadcast.status}
+              </span>
+              <BroadcastControls broadcastId={broadcast.id} status={broadcast.status} />
+            </div>
             <div className="text-xs text-slate-500 text-right">
+              {broadcast.scheduledAt && broadcast.status === "scheduled" && (
+                <div>Scheduled: {new Date(broadcast.scheduledAt).toLocaleString("en-IN")}</div>
+              )}
               {broadcast.launchedAt && (
                 <div>Launched: {new Date(broadcast.launchedAt).toLocaleString()}</div>
               )}

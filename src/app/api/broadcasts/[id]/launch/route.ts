@@ -29,7 +29,11 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   if (user.role !== "admin" && b.createdByUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  if (b.status !== "draft") return NextResponse.json({ error: `Already ${b.status}` }, { status: 422 });
+  // Allow launching from "draft" (normal) or "scheduled" (manual override —
+  // force-fire a scheduled broadcast without waiting for the cron sweep).
+  if (b.status !== "draft" && b.status !== "scheduled") {
+    return NextResponse.json({ error: `Already ${b.status}` }, { status: 422 });
+  }
 
   try {
     await runBroadcast(params.id);

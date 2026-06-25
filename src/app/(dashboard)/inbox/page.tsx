@@ -20,6 +20,7 @@ export default async function InboxPage() {
     take: 100,
     include: {
       assignedTo: { select: { name: true } },
+      labels: { include: { label: true } },
     },
   });
 
@@ -36,6 +37,12 @@ export default async function InboxPage() {
         lastOutboundAt: c.lastOutboundAt?.toISOString() ?? null,
         unreadCount: c.unreadCount,
         status: c.status,
+        labelIds: c.labels.map((l) => l.label.id),
+        labels: c.labels.map((l) => ({
+          id: l.label.id,
+          name: l.label.name,
+          color: l.label.color,
+        })),
       }))}
     />
   );

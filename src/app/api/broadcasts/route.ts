@@ -23,6 +23,9 @@ const schema = z.object({
   nameColumn: z.string().optional(),
   variableMapping: z.record(z.string(), z.string()),
   filterRules: z.array(filterRuleSchema).optional().default([]),
+  // ISO timestamp. When present and in the future, broadcast is saved in
+  // "scheduled" status and waits for the cron sweep to launch it.
+  scheduledAt: z.string().datetime().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -49,6 +52,28 @@ export async function POST(req: NextRequest) {
 
   const sheetId = parsed.data.sheetUrl ? parseSheetId(parsed.data.sheetUrl) : null;
 
+  // Schedule validation. Must be at least 2 minutes in the future to avoid
+  // race with the immediate-launch path; capped at 90 days out.
+  let scheduledAt: Date | null = null;
+  if (parsed.data.scheduledAt) {
+    const candidate = new Date(parsed.data.scheduledAt);
+    const minFuture = new Date(Date.now() + 2 * 60 * 1000);
+    const maxFuture = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    if (candidate < minFuture) {
+      return NextResponse.json(
+        { error: "Scheduled time must be at least 2 minutes in the future" },
+        { status: 422 }
+      );
+    }
+    if (candidate > maxFuture) {
+      return NextResponse.json(
+        { error: "Scheduled time must be within 90 days" },
+        { status: 422 }
+      );
+    }
+    scheduledAt = candidate;
+  }
+
   const broadcast = await prisma.broadcast.create({
     data: {
       name: parsed.data.name,
@@ -64,10 +89,17 @@ export async function POST(req: NextRequest) {
         variables: parsed.data.variableMapping,
         filterRules: (parsed.data.filterRules ?? []).filter((r) => (r.column || r.field || "").trim()),
       }),
-      status: "draft",
+      status: scheduledAt ? "scheduled" : "draft",
+      scheduledAt,
       createdByUserId: user.id,
     },
   });
 
-  return NextResponse.json({ broadcast: { id: broadcast.id, status: broadcast.status } });
+  return NextResponse.json({
+    broadcast: {
+      id: broadcast.id,
+      status: broadcast.status,
+      scheduledAt: broadcast.scheduledAt?.toISOString() ?? null,
+    },
+  });
 }

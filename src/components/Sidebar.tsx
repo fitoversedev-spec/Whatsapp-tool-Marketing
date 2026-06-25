@@ -3,31 +3,87 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { setFaviconBadge } from "@/lib/favicon";
+import ThemeToggle from "./ThemeToggle";
 
 type Props = {
   user: { name: string; email: string; role: "admin" | "sales" };
   pendingCount?: number;
+  unreadCount?: number;
+  reminderCount?: number;
   tokenExpired?: boolean;
 };
 
 const NAV = [
-  { href: "/inbox", label: "Inbox", icon: "💬" },
+  { href: "/inbox", label: "Inbox", icon: "💬", badgeKey: "unread" as const },
+  { href: "/search", label: "Search", icon: "🔍" },
   { href: "/contacts", label: "Contacts", icon: "📒" },
+  { href: "/tags", label: "Tags", icon: "🏷️" },
   { href: "/templates", label: "Templates", icon: "📝" },
   { href: "/broadcasts", label: "Broadcasts", icon: "📣" },
+  { href: "/pipeline", label: "Pipeline", icon: "🎯" },
+  { href: "/analytics", label: "Analytics", icon: "📊" },
+  { href: "/media", label: "Media", icon: "📎" },
+  { href: "/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
   { href: "/connection", label: "Connection", icon: "🔌", adminOnly: true },
   { href: "/users", label: "Users", icon: "👥", adminOnly: true, badgeKey: "pending" as const },
 ];
 
-export default function Sidebar({ user, pendingCount = 0, tokenExpired = false }: Props) {
+export default function Sidebar({
+  user,
+  pendingCount = 0,
+  unreadCount: unreadInitial = 0,
+  reminderCount: reminderInitial = 0,
+  tokenExpired = false,
+}: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(unreadInitial);
+  const [reminderCount, setReminderCount] = useState(reminderInitial);
 
   // Close drawer on route change
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
+
+  // Live-poll unread + reminder counts every 15s. Pauses when tab is hidden.
+  useEffect(() => {
+    let cancelled = false;
+    async function refresh() {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const res = await fetch("/api/unread/count");
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setUnreadCount(data.unread ?? 0);
+        setReminderCount(data.reminders ?? 0);
+      } catch {
+        // ignore transient network errors
+      }
+    }
+    refresh();
+    const timer = setInterval(refresh, 15000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+
+  // Sync browser tab title + favicon when unread count changes.
+  useEffect(() => {
+    const baseTitle = "WhatsApp Tool";
+    if (unreadCount > 0) {
+      document.title = `(${unreadCount > 99 ? "99+" : unreadCount}) ${baseTitle}`;
+      setFaviconBadge(true);
+    } else {
+      document.title = baseTitle;
+      setFaviconBadge(false);
+    }
+  }, [unreadCount]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -104,7 +160,20 @@ export default function Sidebar({ user, pendingCount = 0, tokenExpired = false }
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const active = pathname.startsWith(item.href);
-            const badge = item.badgeKey === "pending" && pendingCount > 0 ? pendingCount : 0;
+            const badge =
+              item.badgeKey === "pending"
+                ? pendingCount
+                : item.badgeKey === "unread"
+                  ? unreadCount
+                  : item.badgeKey === "reminders"
+                    ? reminderCount
+                    : 0;
+            const badgeColor =
+              item.badgeKey === "unread"
+                ? "bg-red-500"
+                : item.badgeKey === "reminders"
+                  ? "bg-orange-500"
+                  : "bg-amber-500";
             return (
               <Link
                 key={item.href}
@@ -118,8 +187,10 @@ export default function Sidebar({ user, pendingCount = 0, tokenExpired = false }
                 <span className="text-base">{item.icon}</span>
                 <span className="flex-1">{item.label}</span>
                 {badge > 0 && (
-                  <span className="inline-block bg-amber-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
-                    {badge}
+                  <span
+                    className={`inline-block ${badgeColor} text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none`}
+                  >
+                    {badge > 99 ? "99+" : badge}
                   </span>
                 )}
               </Link>
@@ -166,6 +237,9 @@ export default function Sidebar({ user, pendingCount = 0, tokenExpired = false }
           >
             Sign out
           </button>
+          <div className="px-1 pt-2">
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
     </>

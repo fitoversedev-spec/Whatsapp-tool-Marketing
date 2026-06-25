@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useRef, useMemo, FormEvent } from "react";
 import { useToast } from "@/components/Toast";
+import NotesPanel from "./NotesPanel";
+import RemindersPanel from "./RemindersPanel";
+import LabelPicker from "@/components/LabelPicker";
+import { TAG_COLOR_CLASSES } from "@/lib/tags";
+import MediaPreview from "@/components/MediaPreview";
 
+type ConversationLabel = { id: string; name: string; color: string };
 type Conversation = {
   id: string;
   contactPhone: string;
@@ -13,6 +19,8 @@ type Conversation = {
   lastOutboundAt: string | null;
   unreadCount: number;
   status: string;
+  labelIds: string[];
+  labels: ConversationLabel[];
 };
 
 type Message = {
@@ -20,6 +28,10 @@ type Message = {
   direction: "inbound" | "outbound";
   type: string;
   body: string | null;
+  mediaUrl?: string | null;
+  mediaMimeType?: string | null;
+  mediaFileName?: string | null;
+  mediaSize?: number | null;
   status: string;
   createdAt: string;
   sentByName?: string | null;
@@ -45,6 +57,8 @@ export default function InboxClient({
   const [statusFilter, setStatusFilter] = useState<"open" | "closed" | "all">("open");
   const [showReassign, setShowReassign] = useState(false);
   const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>([]);
+  const [showNotes, setShowNotes] = useState(false);
+  const [showReminders, setShowReminders] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
   // Filter: status + search (phone/name client-side; message content is a separate server call below)
@@ -132,6 +146,43 @@ export default function InboxClient({
       .then((r) => (r.ok ? r.json() : { users: [] }))
       .then((data) => setAssignableUsers(data.users ?? []));
   }, [currentUser.role]);
+
+  async function sendMedia(file: File, caption: string) {
+    if (!selected) return;
+    setSending(true);
+    try {
+      // Step 1: upload to Vercel Blob via /api/media/upload
+      const fd = new FormData();
+      fd.append("file", file);
+      const up = await fetch("/api/media/upload", { method: "POST", body: fd });
+      if (!up.ok) {
+        const e = await up.json().catch(() => ({}));
+        toast.error(e.error ?? "Upload failed");
+        return;
+      }
+      const { media } = await up.json();
+
+      // Step 2: send message with mediaId
+      const res = await fetch(`/api/conversations/${selected}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaId: media.id, caption: caption.trim() || undefined }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessages((prev) => [...prev, data.message]);
+        setReply("");
+      } else {
+        const e = await res.json().catch(() => ({}));
+        if (res.status === 422) setWithinWindow(false);
+        toast.error(e.error ?? "Send failed");
+      }
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -258,6 +309,21 @@ export default function InboxClient({
                     </span>
                   )}
                 </div>
+                {c.labels.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {c.labels.map((l) => {
+                      const col = TAG_COLOR_CLASSES[l.color] ?? TAG_COLOR_CLASSES.slate;
+                      return (
+                        <span
+                          key={l.id}
+                          className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-medium ${col.bg} ${col.text}`}
+                        >
+                          {l.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
                 {c.assignedToName && (
                   <div className="text-xs text-slate-400 mt-1 truncate">→ {c.assignedToName}</div>
                 )}
@@ -301,8 +367,47 @@ export default function InboxClient({
                     <span className="text-slate-400">· assigned to {current.assignedToName}</span>
                   )}
                 </div>
+                <div className="mt-1.5">
+                  <LabelPicker
+                    conversationId={current.id}
+                    selectedIds={current.labelIds}
+                    onChange={(ids) => {
+                      // Optimistically update local state so labels rerender
+                      // immediately; the picker also persists to the server.
+                      setConversations((prev) =>
+                        prev.map((c) =>
+                          c.id === current.id ? { ...c, labelIds: ids } : c
+                        )
+                      );
+                    }}
+                  />
+                </div>
               </div>
               <div className="flex items-center gap-1 shrink-0 relative">
+                <button
+                  onClick={() => {
+                    setShowNotes((v) => !v);
+                    setShowReminders(false);
+                  }}
+                  className={`px-2.5 py-1.5 text-xs rounded-md font-medium ${
+                    showNotes ? "bg-amber-100 text-amber-800" : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                  title="Notes"
+                >
+                  📝<span className="hidden sm:inline ml-1">Notes</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowReminders((v) => !v);
+                    setShowNotes(false);
+                  }}
+                  className={`px-2.5 py-1.5 text-xs rounded-md font-medium ${
+                    showReminders ? "bg-orange-100 text-orange-800" : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                  title="Reminders"
+                >
+                  ⏰<span className="hidden sm:inline ml-1">Reminders</span>
+                </button>
                 {currentUser.role === "admin" && (
                   <>
                     <button
@@ -367,7 +472,19 @@ export default function InboxClient({
                       m.direction === "outbound" ? "bg-wa-light" : "bg-white border border-slate-200"
                     }`}
                   >
-                    <div className="text-sm text-slate-900 whitespace-pre-wrap break-words">{m.body}</div>
+                    {m.mediaUrl && (
+                      <div className="mb-1">
+                        <MediaPreview
+                          url={m.mediaUrl}
+                          mimeType={m.mediaMimeType ?? null}
+                          fileName={m.mediaFileName}
+                          size={m.mediaSize}
+                        />
+                      </div>
+                    )}
+                    {m.body && (
+                      <div className="text-sm text-slate-900 whitespace-pre-wrap break-words">{m.body}</div>
+                    )}
                     <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
                       <span>{new Date(m.createdAt).toLocaleString()}</span>
                       {m.direction === "outbound" && (
@@ -390,6 +507,32 @@ export default function InboxClient({
 
             <form onSubmit={send} className="border-t border-slate-200 bg-white p-3 sm:p-4 shrink-0">
               <div className="flex gap-2">
+                <label
+                  className={`shrink-0 self-center w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center cursor-pointer transition ${
+                    withinWindow && !sending && !isClosed
+                      ? "hover:border-wa-green hover:bg-slate-50 text-slate-600"
+                      : "opacity-40 cursor-not-allowed text-slate-400"
+                  }`}
+                  title="Attach file"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" />
+                  </svg>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/*"
+                    disabled={!withinWindow || sending || isClosed}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        sendMedia(f, reply);
+                        // Reset input so the same file can be re-picked
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                </label>
                 <input
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
@@ -397,7 +540,7 @@ export default function InboxClient({
                     isClosed
                       ? "Reopen to reply"
                       : withinWindow
-                      ? "Type a reply…"
+                      ? "Type a reply… (or attach a file)"
                       : "24h window closed"
                   }
                   disabled={!withinWindow || sending || isClosed}
@@ -419,6 +562,23 @@ export default function InboxClient({
           </div>
         )}
       </div>
+
+      {current && (
+        <>
+          <NotesPanel
+            conversationId={current.id}
+            currentUser={{ id: currentUser.id, role: currentUser.role }}
+            open={showNotes}
+            onClose={() => setShowNotes(false)}
+          />
+          <RemindersPanel
+            conversationId={current.id}
+            contactLabel={current.contactName ?? "+" + current.contactPhone}
+            open={showReminders}
+            onClose={() => setShowReminders(false)}
+          />
+        </>
+      )}
     </div>
   );
 }

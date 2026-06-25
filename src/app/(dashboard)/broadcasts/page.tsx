@@ -37,6 +37,7 @@ export default async function BroadcastsPage() {
         failed: b.failed,
         createdByName: b.createdBy.name,
         createdAt: b.createdAt.toISOString(),
+        scheduledAt: b.scheduledAt?.toISOString() ?? null,
       }))}
       approvedTemplates={approvedTemplates}
     />

@@ -17,9 +17,16 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, parseInt(sp.get("page") ?? "1", 10));
   const pageSize = 50;
 
+  const tagFilter = (sp.get("tag") ?? "").trim() || null;
+
   // Pull all contacts (pool is small for an internal tool) and filter in memory —
   // keeps JSON field filtering simple and consistent with the broadcast composer.
-  const all = await prisma.contact.findMany({ orderBy: { createdAt: "desc" } });
+  // Tag filter is applied at the DB level (cheaper than fetching everything).
+  const all = await prisma.contact.findMany({
+    orderBy: { createdAt: "desc" },
+    where: tagFilter ? { tags: { some: { tagId: tagFilter } } } : {},
+    include: { tags: { include: { tag: true } } },
+  });
 
   let filtered = all.map((c) => ({
     id: c.id,
@@ -28,6 +35,8 @@ export async function GET(req: NextRequest) {
     allowCampaign: c.allowCampaign,
     fields: parseFields(c.fields),
     createdAt: c.createdAt.toISOString(),
+    tagIds: c.tags.map((ct) => ct.tag.id),
+    tags: c.tags.map((ct) => ({ id: ct.tag.id, name: ct.tag.name, color: ct.tag.color })),
   }));
 
   if (search) {

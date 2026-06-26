@@ -7,6 +7,7 @@ import RemindersPanel from "./RemindersPanel";
 import LabelPicker from "@/components/LabelPicker";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import MediaPreview from "@/components/MediaPreview";
+import QuoteWizard from "@/app/(dashboard)/quotations/QuoteWizard";
 
 type ConversationLabel = { id: string; name: string; color: string };
 type Conversation = {
@@ -59,6 +60,7 @@ export default function InboxClient({
   const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>([]);
   const [showNotes, setShowNotes] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
+  const [showQuote, setShowQuote] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
   // Filter: status + search (phone/name client-side; message content is a separate server call below)
@@ -408,6 +410,13 @@ export default function InboxClient({
                 >
                   ⏰<span className="hidden sm:inline ml-1">Reminders</span>
                 </button>
+                <button
+                  onClick={() => setShowQuote(true)}
+                  className="px-2.5 py-1.5 text-xs rounded-md font-medium text-slate-600 hover:bg-slate-100"
+                  title="Generate Quote"
+                >
+                  📄<span className="hidden sm:inline ml-1">Quote</span>
+                </button>
                 {currentUser.role === "admin" && (
                   <>
                     <button
@@ -576,6 +585,16 @@ export default function InboxClient({
             contactLabel={current.contactName ?? "+" + current.contactPhone}
             open={showReminders}
             onClose={() => setShowReminders(false)}
+          />
+          <QuoteWizard
+            open={showQuote}
+            onClose={() => setShowQuote(false)}
+            onComplete={() => setShowQuote(false)}
+            prefill={{
+              customerName: current.contactName ?? "+" + current.contactPhone,
+              contactPhone: current.contactPhone,
+              conversationId: current.id,
+            }}
           />
         </>
       )}

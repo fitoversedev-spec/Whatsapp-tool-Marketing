@@ -23,6 +23,7 @@ const NAV = [
   { href: "/broadcasts", label: "Broadcasts", icon: "📣" },
   { href: "/pipeline", label: "Pipeline", icon: "🎯" },
   { href: "/analytics", label: "Analytics", icon: "📊" },
+  { href: "/quotations", label: "Quotations", icon: "📄" },
   { href: "/media", label: "Media", icon: "📎" },
   { href: "/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
   { href: "/connection", label: "Connection", icon: "🔌", adminOnly: true },

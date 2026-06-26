@@ -18,6 +18,10 @@ const nextConfig = {
     // list (which contains recharts since 14.x). Without this override
     // recharts gets barrel-optimized and we hit the OneDrive race.
     optimizePackageImports: [],
+    // pdf-lib is pure JS with no native deps or runtime file reads — no
+    // special handling needed. (We previously had @react-pdf/renderer here
+    // but switched to pdf-lib because react-pdf's internal dynamic
+    // imports race with OneDrive's file lock on Windows.)
   },
 
   webpack: (config, { dev }) => {

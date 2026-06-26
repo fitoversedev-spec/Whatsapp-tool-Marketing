@@ -16,6 +16,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import PageHeader from "@/components/PageHeader";
+import ContactDetailDrawer from "@/components/ContactDetailDrawer";
 import { colorFor, daysSince, type PipelineStage } from "@/lib/pipeline";
 
 type Card = {
@@ -62,6 +63,10 @@ export default function PipelineClient({
   const [search, setSearch] = useState("");
   const [closeout, setCloseout] = useState<CloseoutPrompt | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Drawer state — opens on click of a pipeline card. Drag is distinct (5px
+  // activation constraint on the PointerSensor), so click doesn't fire when
+  // the user is dragging.
+  const [drawerCardId, setDrawerCardId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -224,6 +229,7 @@ export default function PipelineClient({
                   stage={s}
                   cards={cardsByStage.get(s.id) ?? []}
                   totals={totalsByStage.get(s.id) ?? { count: 0, value: 0 }}
+                  onCardClick={setDrawerCardId}
                 />
               ))}
             </div>
@@ -247,6 +253,13 @@ export default function PipelineClient({
           }}
         />
       )}
+
+      <ContactDetailDrawer
+        conversationId={drawerCardId}
+        open={drawerCardId !== null}
+        onClose={() => setDrawerCardId(null)}
+        onAction={() => router.refresh()}
+      />
     </>
   );
 }
@@ -316,10 +329,12 @@ function KanbanColumn({
   stage,
   cards,
   totals,
+  onCardClick,
 }: {
   stage: PipelineStage;
   cards: Card[];
   totals: { count: number; value: number };
+  onCardClick?: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const c = colorFor(stage.color);
@@ -346,7 +361,11 @@ function KanbanColumn({
             </div>
           )}
           {cards.map((card) => (
-            <DraggableCard key={card.id} card={card} />
+            <DraggableCard
+              key={card.id}
+              card={card}
+              onClick={() => onCardClick?.(card.id)}
+            />
           ))}
         </div>
       </div>
@@ -354,7 +373,15 @@ function KanbanColumn({
   );
 }
 
-function DraggableCard({ card, dragging = false }: { card: Card; dragging?: boolean }) {
+function DraggableCard({
+  card,
+  dragging = false,
+  onClick,
+}: {
+  card: Card;
+  dragging?: boolean;
+  onClick?: () => void;
+}) {
   const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({
     id: card.id,
   });
@@ -364,12 +391,22 @@ function DraggableCard({ card, dragging = false }: { card: Card; dragging?: bool
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
+  // Click-vs-drag: dnd-kit's PointerSensor has activationConstraint distance:5,
+  // so a true click (no movement) doesn't trigger drag — the click event still
+  // bubbles. We open the drawer on click; drag handles stage moves.
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
+      onClick={(e) => {
+        // Don't open drawer during a drag — defensive in case pointerup races
+        if (isDragging) return;
+        // Stop propagation so nested links could still control their behavior
+        e.stopPropagation();
+        onClick?.();
+      }}
       className={`bg-white rounded-lg border border-slate-200 p-3 shadow-sm cursor-grab active:cursor-grabbing select-none ${
         isDragging && !dragging ? "opacity-30" : ""
       } ${dragging ? "shadow-lg ring-2 ring-wa-green/40" : "hover:border-slate-300 hover:shadow"}`}
@@ -401,13 +438,7 @@ function DraggableCard({ card, dragging = false }: { card: Card; dragging?: bool
               👤 {card.assignedToName}
             </span>
           )}
-          <Link
-            href={`/inbox?conversation=${card.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="text-wa-dark hover:underline"
-          >
-            Open →
-          </Link>
+          <span className="text-slate-400 italic">click for details</span>
         </div>
       </div>
     </div>

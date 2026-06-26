@@ -42,6 +42,7 @@ model User {
   reminders            Reminder[]
   pipelineStageChanges PipelineStageHistory[]
   uploadedMedia        Media[]
+  quotations           Quotation[]
 
   @@map("users")
 }
@@ -108,6 +109,7 @@ model Conversation {
   reminders       Reminder[]
   stageHistory    PipelineStageHistory[]
   labels          ConversationToLabel[]
+  quotations      Quotation[]
 
   @@index([assignedToUserId])
   @@index([status])
@@ -353,6 +355,48 @@ model ConversationToLabel {
   @@id([conversationId, labelId])
   @@index([labelId])
   @@map("conversation_to_labels")
+}
+
+// Sales quotations. Each row stores a snapshot of line items + totals at
+// the time of creation, so changing the rate sheet later doesn't retro-
+// actively alter prices customers have already seen. PDF is rendered on
+// demand (and cached at pdfUrl after first send).
+//
+// Numbering is sequential per calendar year, format "FIT-QT-YYYY-NNN".
+// Status flow: draft → sent → (viewed | accepted | expired).
+model Quotation {
+  id              String    @id @default(uuid())
+  number          String    @unique
+  customerName    String    @map("customer_name")
+  sport           String    @default("football")
+  lengthFt        Int       @map("length_ft")
+  widthFt         Int       @map("width_ft")
+  // JSON snapshot — array of { id, name, description, areaSqFt, ratePerSqFt,
+  //   gstPercent, total, included }. Description is user-editable per quote.
+  lineItems       String    @map("line_items")
+  subtotal        Decimal   @db.Decimal(12, 2)
+  gstAmount       Decimal   @db.Decimal(12, 2) @map("gst_amount")
+  grandTotal      Decimal   @db.Decimal(12, 2) @map("grand_total")
+  notes           String?
+  pdfUrl          String?   @map("pdf_url")
+  status          String    @default("draft")
+  quoteDate       DateTime  @map("quote_date")
+  validityDays    Int       @default(30) @map("validity_days")
+  sentAt          DateTime? @map("sent_at")
+  conversationId  String?   @map("conversation_id")
+  contactPhone    String?   @map("contact_phone")
+  createdByUserId String    @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  createdBy    User          @relation(fields: [createdByUserId], references: [id])
+
+  @@index([status])
+  @@index([conversationId])
+  @@index([contactPhone])
+  @@index([createdAt])
+  @@map("quotations")
 }
 
 // Centralized media library. Every file upload goes through here so we can

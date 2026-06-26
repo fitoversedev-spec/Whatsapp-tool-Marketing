@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { setFaviconBadge } from "@/lib/favicon";
 import ThemeToggle from "./ThemeToggle";
+import AllToolsPanel from "./AllToolsPanel";
 
 type Props = {
   user: { name: string; email: string; role: "admin" | "sales" };
@@ -14,20 +15,16 @@ type Props = {
   tokenExpired?: boolean;
 };
 
-const NAV = [
-  { href: "/inbox", label: "Inbox", icon: "💬", badgeKey: "unread" as const },
+// Primary nav — the 6 most-used items, always visible in the sidebar.
+// Everything else lives in the All Tools popover (see AllToolsPanel.tsx
+// for the full categorized list).
+const PRIMARY_NAV = [
   { href: "/search", label: "Search", icon: "🔍" },
+  { href: "/inbox", label: "Inbox", icon: "💬", badgeKey: "unread" as const },
   { href: "/contacts", label: "Contacts", icon: "📒" },
-  { href: "/tags", label: "Tags", icon: "🏷️" },
-  { href: "/templates", label: "Templates", icon: "📝" },
   { href: "/broadcasts", label: "Broadcasts", icon: "📣" },
-  { href: "/pipeline", label: "Pipeline", icon: "🎯" },
-  { href: "/analytics", label: "Analytics", icon: "📊" },
-  { href: "/quotations", label: "Quotations", icon: "📄" },
-  { href: "/media", label: "Media", icon: "📎" },
   { href: "/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
-  { href: "/connection", label: "Connection", icon: "🔌", adminOnly: true },
-  { href: "/users", label: "Users", icon: "👥", adminOnly: true, badgeKey: "pending" as const },
+  { href: "/pipeline", label: "Pipeline", icon: "🎯" },
 ];
 
 export default function Sidebar({
@@ -42,10 +39,12 @@ export default function Sidebar({
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(unreadInitial);
   const [reminderCount, setReminderCount] = useState(reminderInitial);
+  const [allToolsOpen, setAllToolsOpen] = useState(false);
 
-  // Close drawer on route change
+  // Close drawer + All Tools panel on route change
   useEffect(() => {
     setOpen(false);
+    setAllToolsOpen(false);
   }, [pathname]);
 
   // Live-poll unread + reminder counts every 15s. Pauses when tab is hidden.
@@ -91,8 +90,23 @@ export default function Sidebar({
     router.push("/login");
   }
 
-  const navItems = NAV.filter((item) => !item.adminOnly || user.role === "admin");
-  const currentLabel = navItems.find((n) => pathname.startsWith(n.href))?.label ?? "WhatsApp Tool";
+  // Primary nav is shown directly in the sidebar; "All Tools" reveals the rest.
+  // For the mobile top-bar title we want to find the current page across BOTH
+  // primary and all-tools, so the title stays meaningful even when the user
+  // is on a less-frequent page (e.g. Templates) reached via All Tools.
+  const ALL_PAGES = [
+    ...PRIMARY_NAV,
+    { href: "/templates", label: "Templates" },
+    { href: "/tags", label: "Tags" },
+    { href: "/quotations", label: "Quotations" },
+    { href: "/analytics", label: "Analytics" },
+    { href: "/media", label: "Media library" },
+    { href: "/settings/quotation-rates", label: "Quotation rates" },
+    { href: "/connection", label: "Connection" },
+    { href: "/users", label: "Users" },
+  ];
+  const currentLabel =
+    ALL_PAGES.find((n) => pathname.startsWith(n.href))?.label ?? "WhatsApp Tool";
 
   return (
     <>
@@ -159,22 +173,16 @@ export default function Sidebar({
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {PRIMARY_NAV.map((item) => {
             const active = pathname.startsWith(item.href);
             const badge =
-              item.badgeKey === "pending"
-                ? pendingCount
-                : item.badgeKey === "unread"
-                  ? unreadCount
-                  : item.badgeKey === "reminders"
-                    ? reminderCount
-                    : 0;
-            const badgeColor =
               item.badgeKey === "unread"
-                ? "bg-red-500"
+                ? unreadCount
                 : item.badgeKey === "reminders"
-                  ? "bg-orange-500"
-                  : "bg-amber-500";
+                  ? reminderCount
+                  : 0;
+            const badgeColor =
+              item.badgeKey === "unread" ? "bg-red-500" : "bg-orange-500";
             return (
               <Link
                 key={item.href}
@@ -197,6 +205,42 @@ export default function Sidebar({
               </Link>
             );
           })}
+
+          {/* Divider before All Tools */}
+          <div className="my-2 border-t border-slate-200" />
+
+          {/* All Tools trigger — opens the categorized popover */}
+          <button
+            type="button"
+            data-all-tools-trigger
+            onClick={() => setAllToolsOpen((v) => !v)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+              allToolsOpen
+                ? "bg-wa-green/10 text-wa-dark"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100"
+            }`}
+          >
+            <span className="text-base">🔲</span>
+            <span className="flex-1 text-left">All Tools</span>
+            {pendingCount > 0 && user.role === "admin" && (
+              <span className="inline-block bg-amber-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
+                {pendingCount}
+              </span>
+            )}
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${allToolsOpen ? "rotate-90" : ""}`}
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
         </nav>
 
         {/* Token expiry warning — visible to admin on all pages */}
@@ -243,6 +287,13 @@ export default function Sidebar({
           </div>
         </div>
       </aside>
+
+      <AllToolsPanel
+        open={allToolsOpen}
+        onClose={() => setAllToolsOpen(false)}
+        userRole={user.role}
+        pendingCount={pendingCount}
+      />
     </>
   );
 }

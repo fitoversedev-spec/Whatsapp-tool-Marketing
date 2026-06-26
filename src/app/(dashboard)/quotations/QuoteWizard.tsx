@@ -16,7 +16,7 @@ type RateSheetItem = {
   id: string;
   name: string;
   description: string;
-  areaMode: "plot" | "wrap" | "per_piece";
+  areaMode: "plot" | "wrap" | "per_piece" | "perimeter";
   defaultRate: number;
   gstPercent: number;
   wrapHeightFt?: number;
@@ -48,8 +48,9 @@ type Props = {
 
 const SPORTS = [
   { id: "football", label: "Football", enabled: true },
-  { id: "basketball", label: "Basketball", enabled: false },
-  { id: "pickleball", label: "Pickleball", enabled: false },
+  { id: "basketball", label: "Basketball", enabled: true },
+  { id: "multisport", label: "Multisport", enabled: true },
+  { id: "pickleball", label: "Pickleball", enabled: true },
   { id: "cricket", label: "Cricket", enabled: false },
   { id: "tennis", label: "Tennis", enabled: false },
 ];
@@ -93,11 +94,11 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Load rate sheet when entering Step 2
+  // Load rate sheet when entering Step 2. Re-fetches if sport changed.
   useEffect(() => {
     if (step !== 2) return;
     setLoadingRates(true);
-    fetch("/api/quotations/rates")
+    fetch(`/api/quotations/rates?sport=${encodeURIComponent(sport)}`)
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((data: { items: RateSheetItem[] }) => {
         setRateSheet(data.items ?? []);
@@ -108,7 +109,9 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
               ? lengthFt * widthFt
               : r.areaMode === "wrap"
                 ? (lengthFt + widthFt) * 2 * (r.wrapHeightFt ?? 35) + lengthFt * widthFt
-                : 0;
+                : r.areaMode === "perimeter"
+                  ? (lengthFt + widthFt) * 2
+                  : 0;
           return {
             id: r.id,
             name: r.name,
@@ -156,7 +159,10 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
 
   function step1Valid(): boolean {
     return (
-      customerName.trim().length > 0 && lengthFt > 0 && widthFt > 0 && sport === "football"
+      customerName.trim().length > 0 &&
+      lengthFt > 0 &&
+      widthFt > 0 &&
+      ["football", "basketball", "multisport", "pickleball"].includes(sport)
     );
   }
 

@@ -3,6 +3,7 @@
 // Area resolution per item type:
 //   "plot"      → length × width
 //   "wrap"      → (perimeter × wrapHeightFt) + (length × width)   ← walls + roof
+//   "perimeter" → (length + width) × 2                            ← running feet
 //   "per_piece" → quantity (caller supplies via override)
 //
 // GST is per-item (some items are 5%, some 18%); we sum tax separately so
@@ -39,6 +40,8 @@ export function computeAreaForItem(
       const topArea = lengthFt * widthFt;
       return wallArea + topArea;
     }
+    case "perimeter":
+      return (lengthFt + widthFt) * 2;
     case "per_piece":
       return pieceQty;
   }

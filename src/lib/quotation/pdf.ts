@@ -303,9 +303,27 @@ function drawHeader(ctx: Ctx, _customerName: string, logoImage: PDFImage | null)
   ctx.y += 60;
 }
 
+// Map sport → human title shown on the PDF cover. Each sport has its own
+// turnkey nomenclature (turf vs court construction vs multisport package).
+// Falls back to a generic "Sports Infrastructure" wording for unknown sports.
+function titleForSport(sport: string): string {
+  switch (sport) {
+    case "football":
+      return "Quotation for Football Turf Turnkey Solutions";
+    case "basketball":
+      return "Quotation for Basketball Court Construction";
+    case "multisport":
+      return "Quotation for Multisport Turnkey Solutions";
+    case "pickleball":
+      return "Quotation for Pickleball Court Construction";
+    default:
+      return `Quotation for ${sport.charAt(0).toUpperCase() + sport.slice(1)} Sports Infrastructure`;
+  }
+}
+
 function drawTitle(ctx: Ctx, sport: string) {
   space(ctx, 4);
-  const t = `Quotation for ${sport.charAt(0).toUpperCase() + sport.slice(1)} Turf Turnkey Solutions`;
+  const t = titleForSport(sport);
   drawText(ctx, t, {
     x: MARGIN,
     size: 16,
@@ -314,8 +332,10 @@ function drawTitle(ctx: Ctx, sport: string) {
     maxWidth: CONTENT_W,
     color: COL.accent,
   });
-  // Decorative underline centered under the title
+  // Decorative underline centered under the title (sized to the wrapped
+  // result; titles longer than the content area wrap to two lines)
   const titleWidth = safeWidth(ctx.bold, t, 16);
+  void titleWidth; // keep for backwards-compat reference
   const lineY = yFromTop(ctx.y);
   const lineW = Math.min(titleWidth + 40, CONTENT_W - 80);
   const lineX = (PAGE_W - lineW) / 2;

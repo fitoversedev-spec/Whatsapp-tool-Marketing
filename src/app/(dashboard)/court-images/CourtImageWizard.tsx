@@ -112,11 +112,35 @@ export default function CourtImageWizard({
   const [pngBlobUrl, setPngBlobUrl] = useState<string | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [sending, setSending] = useState(false);
-  // 2D vs 3D preview tab in Step 3. The user picks which one to send.
-  const [previewMode, setPreviewMode] = useState<"2d" | "3d">("2d");
+  // Which preview tab is currently visible in Step 3. The user can flip
+  // between them freely to compare; what actually gets sent is controlled
+  // by the `formats` checkboxes below — not by the active tab.
+  const [previewMode, setPreviewMode] = useState<"2d" | "3d-image" | "3d-video">("2d");
   const [view3d, setView3d] = useState<CourtView>("orbit");
   const [preview3dSize, setPreview3dSize] = useState({ width: 800, height: 500 });
   const preview3dContainerRef = useRef<HTMLDivElement>(null);
+
+  // What to send. Multiple checkboxes — each selected format ends up as
+  // its own WhatsApp message to the customer in this order: 2D → 3D image
+  // → 3D video. Caption is attached to the first.
+  const [sendFormats, setSendFormats] = useState<{
+    "2d": boolean;
+    "3d-image": boolean;
+    "3d-video": boolean;
+  }>({ "2d": true, "3d-image": false, "3d-video": false });
+
+  // 3D video state — populated when the user clicks "Generate video".
+  // We keep the Blob around for upload + a data URL for inline preview.
+  const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+  const [videoDataUrl, setVideoDataUrl] = useState<string | null>(null);
+  const [generatingVideo, setGeneratingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  // Cached blob URLs of each format so PATCH only re-uploads what changed.
+  const [uploadedUrls, setUploadedUrls] = useState<{
+    "2d"?: string;
+    "3d-image"?: string;
+    "3d-video"?: string;
+  }>({});
 
   const canvasRef = useRef<CourtCanvasHandle | null>(null);
   const canvas3dRef = useRef<CourtCanvas3DHandle | null>(null);
@@ -243,6 +267,11 @@ export default function CourtImageWizard({
     }
     setPngDataUrl2D(dataUrl);
     setPngDataUrl3D(null);
+    setVideoBlob(null);
+    setVideoDataUrl(null);
+    setVideoProgress(0);
+    setUploadedUrls({});
+    setSendFormats({ "2d": true, "3d-image": false, "3d-video": false });
     setPreviewMode("2d");
     setStep(3);
   }
@@ -254,6 +283,36 @@ export default function CourtImageWizard({
     const data = canvas3dRef.current?.toDataURL(2);
     if (data) setPngDataUrl3D(data);
     return data;
+  }
+
+  async function generate3DVideo() {
+    if (generatingVideo) return;
+    if (!canvas3dRef.current) {
+      toast.error("Open the 3D tab first so the scene mounts");
+      return;
+    }
+    setGeneratingVideo(true);
+    setVideoProgress(0);
+    try {
+      const blob = await canvas3dRef.current.recordOrbitMP4({
+        durationSec: 6,
+        fps: 30,
+        onProgress: (f) => setVideoProgress(f),
+      });
+      if (!blob) {
+        toast.error("Could not record video — try Chrome or Edge");
+        return;
+      }
+      setVideoBlob(blob);
+      setVideoDataUrl(URL.createObjectURL(blob));
+      // Reset the uploaded URL for video — next save will re-upload.
+      setUploadedUrls((u) => ({ ...u, "3d-video": undefined }));
+      toast.success("Video ready — toggle the checkbox to send it");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Video recording failed");
+    } finally {
+      setGeneratingVideo(false);
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -366,60 +425,100 @@ export default function CourtImageWizard({
     return data.media.url as string;
   }
 
-  async function saveDraft(): Promise<{ id: string; imageUrl: string } | null> {
-    if (!layout) return null;
-    // Pick the data URL matching whichever tab the user picked. For 3D we
-    // re-capture right before upload to make sure the framing they see is
-    // what we send.
-    let activePng: string | null = null;
-    if (previewMode === "3d") {
-      activePng = capture3D() ?? pngDataUrl3D;
-    } else {
-      activePng = pngDataUrl2D;
+  // Upload an MP4 video blob to the same endpoint. The media API auto-
+  // categorises by mimeType so video bookkeeping mirrors images.
+  async function uploadVideo(blob: Blob): Promise<string> {
+    const form = new FormData();
+    form.append(
+      "file",
+      new File([blob], `court-design-orbit-${Date.now()}.mp4`, { type: "video/mp4" })
+    );
+    const res = await fetch("/api/media/upload", { method: "POST", body: form });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error ?? "Video upload failed");
     }
-    if (!activePng) {
-      toast.error("Preview not ready — try toggling the tab again");
+    const data = await res.json();
+    return data.media.url as string;
+  }
+
+  // Uploads each picked-and-not-yet-uploaded format. Returns the URL map.
+  async function uploadSelectedFormats(): Promise<{
+    "2d"?: string;
+    "3d-image"?: string;
+    "3d-video"?: string;
+  }> {
+    const next: typeof uploadedUrls = { ...uploadedUrls };
+
+    if (sendFormats["2d"] && !next["2d"]) {
+      if (!pngDataUrl2D) throw new Error("2D preview missing — re-open the wizard");
+      next["2d"] = await uploadPng(pngDataUrl2D);
+    }
+    if (sendFormats["3d-image"]) {
+      const data = capture3D() ?? pngDataUrl3D;
+      if (!data) throw new Error("3D image preview missing — open the 3D tab first");
+      next["3d-image"] = await uploadPng(data);
+    }
+    if (sendFormats["3d-video"]) {
+      if (!videoBlob)
+        throw new Error("3D video not generated — click Generate first");
+      if (!next["3d-video"]) {
+        next["3d-video"] = await uploadVideo(videoBlob);
+      }
+    }
+    setUploadedUrls(next);
+    return next;
+  }
+
+  async function saveDraft(): Promise<{
+    id: string;
+    urls: { "2d"?: string; "3d-image"?: string; "3d-video"?: string };
+  } | null> {
+    if (!layout) return null;
+    const anySelected =
+      sendFormats["2d"] || sendFormats["3d-image"] || sendFormats["3d-video"];
+    if (!anySelected) {
+      toast.error("Pick at least one format to send");
       return null;
     }
     setSavingDraft(true);
     try {
-      // Always upload fresh — pngBlobUrl is stale once the user toggles
-      // between 2D/3D or edits anything upstream.
-      const imageUrl = await uploadPng(activePng);
-      setPngBlobUrl(imageUrl);
+      const urls = await uploadSelectedFormats();
+      // The primary imageUrl is whichever image was uploaded first — used
+      // for inbox-mirror display + list-page thumbnail. Video can't act as
+      // the thumbnail, so we prefer image URLs.
+      const imageUrl =
+        urls["2d"] ?? urls["3d-image"] ?? null;
+      setPngBlobUrl(imageUrl ?? null);
+
+      const payload = {
+        customerName,
+        layout,
+        imageUrl,
+        image2dUrl: urls["2d"] ?? null,
+        image3dUrl: urls["3d-image"] ?? null,
+        video3dUrl: urls["3d-video"] ?? null,
+        caption: caption.trim() || null,
+        contactPhone: contactPhone.trim() || null,
+        conversationId: prefill?.conversationId ?? null,
+      };
 
       if (draftId) {
-        // Update existing
         const res = await fetch(`/api/court-images/${draftId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            customerName,
-            layout,
-            imageUrl,
-            caption: caption.trim() || null,
-            contactPhone: contactPhone.trim() || null,
-            conversationId: prefill?.conversationId ?? null,
-          }),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) {
           const e = await res.json().catch(() => ({}));
           throw new Error(e.error ?? "Save failed");
         }
-        return { id: draftId, imageUrl };
+        return { id: draftId, urls };
       } else {
-        // Create
         const res = await fetch(`/api/court-images`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            customerName,
-            layout,
-            imageUrl,
-            caption: caption.trim() || null,
-            contactPhone: contactPhone.trim() || null,
-            conversationId: prefill?.conversationId ?? null,
-          }),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) {
           const e = await res.json().catch(() => ({}));
@@ -427,7 +526,7 @@ export default function CourtImageWizard({
         }
         const data = await res.json();
         setDraftId(data.courtImage.id);
-        return { id: data.courtImage.id, imageUrl };
+        return { id: data.courtImage.id, urls };
       }
     } finally {
       setSavingDraft(false);
@@ -452,18 +551,29 @@ export default function CourtImageWizard({
       toast.error("Enter a customer phone first");
       return;
     }
+    const formats = (
+      ["2d", "3d-image", "3d-video"] as const
+    ).filter((f) => sendFormats[f]);
+    if (formats.length === 0) {
+      toast.error("Pick at least one format to send");
+      return;
+    }
     setSending(true);
     try {
       const result = await saveDraft();
       if (!result) throw new Error("Could not save before sending");
       const res = await fetch(`/api/court-images/${result.id}/send`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formats }),
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error(e.message ?? e.error ?? "Send failed");
       }
-      toast.success(`Design sent to ${contactPhone}`);
+      toast.success(
+        `${formats.length === 1 ? "Design" : `${formats.length} formats`} sent to ${contactPhone}`
+      );
       onComplete({ courtImageId: result.id, sent: true });
       onClose();
     } catch (err) {
@@ -618,6 +728,13 @@ export default function CourtImageWizard({
               preview3dContainerRef={preview3dContainerRef}
               preview3dSize={preview3dSize}
               Renderer3D={CourtCanvas3D}
+              sendFormats={sendFormats}
+              setSendFormats={setSendFormats}
+              videoDataUrl={videoDataUrl}
+              hasVideo={!!videoBlob}
+              generatingVideo={generatingVideo}
+              videoProgress={videoProgress}
+              onGenerateVideo={generate3DVideo}
             />
           )}
         </div>
@@ -668,10 +785,20 @@ export default function CourtImageWizard({
                 <button
                   type="button"
                   onClick={handleSend}
-                  disabled={sending || savingDraft || !contactPhone.trim()}
+                  disabled={
+                    sending ||
+                    savingDraft ||
+                    !contactPhone.trim() ||
+                    selectedFormatCount(sendFormats) === 0 ||
+                    (sendFormats["3d-video"] && !videoBlob)
+                  }
                   className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-5 py-2 rounded-lg text-sm disabled:opacity-50"
                 >
-                  {sending ? "Sending…" : "📤 Send to WhatsApp"}
+                  {sending
+                    ? "Sending…"
+                    : selectedFormatCount(sendFormats) === 1
+                      ? "📤 Send to WhatsApp"
+                      : `📤 Send ${selectedFormatCount(sendFormats)} items`}
                 </button>
               </>
             )}
@@ -954,10 +1081,17 @@ function Step3({
   preview3dContainerRef,
   preview3dSize,
   Renderer3D,
+  sendFormats,
+  setSendFormats,
+  videoDataUrl,
+  hasVideo,
+  generatingVideo,
+  videoProgress,
+  onGenerateVideo,
 }: {
   layout: CourtLayout | null;
-  previewMode: "2d" | "3d";
-  setPreviewMode: (v: "2d" | "3d") => void;
+  previewMode: "2d" | "3d-image" | "3d-video";
+  setPreviewMode: (v: "2d" | "3d-image" | "3d-video") => void;
   pngDataUrl2D: string | null;
   view3d: CourtView;
   setView3d: (v: CourtView) => void;
@@ -976,38 +1110,57 @@ function Step3({
     handleRef?: React.MutableRefObject<CourtCanvas3DHandle | null>;
     view?: CourtView;
   }>;
+  sendFormats: { "2d": boolean; "3d-image": boolean; "3d-video": boolean };
+  setSendFormats: (
+    v: { "2d": boolean; "3d-image": boolean; "3d-video": boolean }
+  ) => void;
+  videoDataUrl: string | null;
+  hasVideo: boolean;
+  generatingVideo: boolean;
+  videoProgress: number;
+  onGenerateVideo: () => void;
 }) {
+  const total = selectedFormatCount(sendFormats);
+
+  function toggleFormat(k: "2d" | "3d-image" | "3d-video") {
+    setSendFormats({ ...sendFormats, [k]: !sendFormats[k] });
+  }
+
+  // The 3D image and 3D video tabs both need the 3D scene mounted so the
+  // recorder + snapshot handles are available. We keep the 3D renderer
+  // mounted whenever either tab is active.
+  const needs3DMount = previewMode === "3d-image" || previewMode === "3d-video";
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] h-full overflow-hidden">
       <div className="bg-slate-900 flex flex-col">
-        {/* 2D / 3D toggle */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800">
+        {/* Preview tab bar */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 flex-wrap">
           <div className="inline-flex bg-slate-800 rounded-lg p-0.5">
-            <button
-              type="button"
-              onClick={() => setPreviewMode("2d")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
-                previewMode === "2d"
-                  ? "bg-white text-slate-900"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              2D plan
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreviewMode("3d")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
-                previewMode === "3d"
-                  ? "bg-white text-slate-900"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              3D render
-            </button>
+            {(
+              [
+                { id: "2d" as const, label: "2D plan" },
+                { id: "3d-image" as const, label: "3D image" },
+                { id: "3d-video" as const, label: "3D video" },
+              ]
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setPreviewMode(t.id)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
+                  previewMode === t.id
+                    ? "bg-white text-slate-900"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
-          {/* 3D view-preset buttons appear only in 3D mode */}
-          {previewMode === "3d" && (
+          {/* 3D view-preset buttons (3D image tab only — for video the
+              camera path is auto-orbit). */}
+          {previewMode === "3d-image" && (
             <div className="inline-flex bg-slate-800 rounded-lg p-0.5 text-[11px]">
               {(["orbit", "top", "iso", "side"] as CourtView[]).map((v) => (
                 <button
@@ -1026,38 +1179,101 @@ function Step3({
             </div>
           )}
           <div className="text-[11px] text-slate-500 ml-auto">
-            {previewMode === "2d"
-              ? "Flat plan view — fast, works everywhere"
-              : "Drag to rotate, scroll to zoom — captured at send"}
+            {previewMode === "2d" && "Flat plan view — fast, works everywhere"}
+            {previewMode === "3d-image" &&
+              "Drag to rotate, scroll to zoom — captured at send"}
+            {previewMode === "3d-video" &&
+              "6-second auto-orbit MP4 — auto-plays in WhatsApp"}
           </div>
         </div>
         {/* Preview area */}
-        {previewMode === "2d" ? (
-          <div className="flex-1 overflow-auto p-6 flex items-center justify-center">
-            {pngDataUrl2D ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={pngDataUrl2D}
-                alt="Court design preview"
-                className="max-w-full max-h-full object-contain shadow-2xl rounded-lg bg-white"
+        <div className="flex-1 relative">
+          {previewMode === "2d" && (
+            <div className="absolute inset-0 overflow-auto p-6 flex items-center justify-center">
+              {pngDataUrl2D ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={pngDataUrl2D}
+                  alt="Court design preview"
+                  className="max-w-full max-h-full object-contain shadow-2xl rounded-lg bg-white"
+                />
+              ) : (
+                <div className="text-sm text-slate-300">Generating preview…</div>
+              )}
+            </div>
+          )}
+
+          {/* 3D scene — kept mounted for both image + video tabs so the
+              recorder + snapshot handle are ready, but visually hidden
+              for the video tab if a recorded video exists to preview. */}
+          {needs3DMount && (
+            <div
+              ref={preview3dContainerRef}
+              className={`absolute inset-0 min-h-[360px] ${
+                previewMode === "3d-video" && videoDataUrl ? "invisible" : ""
+              }`}
+            >
+              {layout &&
+                preview3dSize.width > 0 &&
+                preview3dSize.height > 0 && (
+                  <Renderer3D
+                    layout={layout}
+                    canvasWidth={preview3dSize.width}
+                    canvasHeight={preview3dSize.height}
+                    handleRef={canvas3dRef}
+                    view={previewMode === "3d-image" ? view3d : "orbit"}
+                  />
+                )}
+            </div>
+          )}
+
+          {/* Video preview overlay on the 3D video tab */}
+          {previewMode === "3d-video" && videoDataUrl && (
+            <div className="absolute inset-0 bg-black flex items-center justify-center p-4">
+              <video
+                key={videoDataUrl}
+                src={videoDataUrl}
+                controls
+                autoPlay
+                loop
+                playsInline
+                className="max-w-full max-h-full rounded-lg shadow-2xl"
               />
-            ) : (
-              <div className="text-sm text-slate-300">Generating preview…</div>
+            </div>
+          )}
+        </div>
+        {/* Video tab footer — generate button + progress */}
+        {previewMode === "3d-video" && (
+          <div className="px-4 py-3 border-t border-slate-800 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onGenerateVideo}
+              disabled={generatingVideo}
+              className="bg-wa-green hover:bg-wa-green/90 text-white text-xs font-medium px-3 py-1.5 rounded-md disabled:opacity-50"
+            >
+              {generatingVideo
+                ? `Recording… ${Math.round(videoProgress * 100)}%`
+                : hasVideo
+                  ? "Re-record"
+                  : "🎬 Generate orbit video"}
+            </button>
+            {generatingVideo && (
+              <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-wa-green transition-all"
+                  style={{ width: `${videoProgress * 100}%` }}
+                />
+              </div>
             )}
-          </div>
-        ) : (
-          <div
-            ref={preview3dContainerRef}
-            className="flex-1 relative min-h-[360px]"
-          >
-            {layout && preview3dSize.width > 0 && preview3dSize.height > 0 && (
-              <Renderer3D
-                layout={layout}
-                canvasWidth={preview3dSize.width}
-                canvasHeight={preview3dSize.height}
-                handleRef={canvas3dRef}
-                view={view3d}
-              />
+            {hasVideo && !generatingVideo && (
+              <div className="text-[11px] text-emerald-400">
+                ✓ Video ready — toggle the checkbox to send it
+              </div>
+            )}
+            {!hasVideo && !generatingVideo && (
+              <div className="text-[11px] text-slate-500">
+                Records a 6-second auto-orbit. Takes ~10s.
+              </div>
             )}
           </div>
         )}
@@ -1078,6 +1294,44 @@ function Step3({
             />
           </label>
         </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 mb-2">
+            What to send <span className="text-xs font-normal text-slate-500">({total} selected)</span>
+          </h3>
+          <div className="space-y-1.5">
+            <FormatCheckbox
+              checked={sendFormats["2d"]}
+              onChange={() => toggleFormat("2d")}
+              label="2D plan"
+              hint="Flat technical drawing with dimensions"
+            />
+            <FormatCheckbox
+              checked={sendFormats["3d-image"]}
+              onChange={() => toggleFormat("3d-image")}
+              label="3D image"
+              hint="Hero snapshot of the 3D scene"
+            />
+            <FormatCheckbox
+              checked={sendFormats["3d-video"]}
+              onChange={() => {
+                if (!hasVideo && !sendFormats["3d-video"]) {
+                  // turning ON — auto-jump to the video tab so they can generate
+                  setPreviewMode("3d-video");
+                }
+                toggleFormat("3d-video");
+              }}
+              label="3D video"
+              hint={
+                hasVideo
+                  ? "6-second auto-orbit MP4 — ready"
+                  : "Open the 3D video tab and click Generate first"
+              }
+              disabled={!hasVideo}
+            />
+          </div>
+        </div>
+
         <div>
           <h3 className="text-sm font-semibold text-slate-900 mb-2">Caption</h3>
           <textarea
@@ -1087,15 +1341,61 @@ function Step3({
             placeholder={`Here's the court design for ${customerName}.\n\nLet me know if anything needs to change.`}
             className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 resize-none"
           />
+          <div className="text-[11px] text-slate-500 mt-1">
+            Caption is attached to the first item sent.
+          </div>
         </div>
         <div className="text-xs text-slate-500 bg-blue-50 border border-blue-200 rounded p-2.5 leading-relaxed">
-          💡 Whichever tab is active when you click <strong>Send</strong> is
-          what the customer receives — switch between 2D and 3D before
-          sending to send either.
+          💡 Each checked format is sent as its own WhatsApp message in the
+          order 2D → 3D image → 3D video. Pick any combination.
         </div>
       </div>
     </div>
   );
+}
+
+function FormatCheckbox({
+  checked,
+  onChange,
+  label,
+  hint,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+  hint: string;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      className={`flex items-start gap-2.5 p-2 rounded-md border cursor-pointer transition ${
+        checked
+          ? "border-wa-green bg-wa-green/5"
+          : "border-slate-200 bg-white hover:border-slate-300"
+      } ${disabled && !checked ? "opacity-50 cursor-not-allowed" : ""}`}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => !disabled && onChange()}
+        disabled={disabled && !checked}
+        className="mt-0.5 accent-wa-green"
+      />
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-slate-900 leading-tight">{label}</div>
+        <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{hint}</div>
+      </div>
+    </label>
+  );
+}
+
+function selectedFormatCount(s: {
+  "2d": boolean;
+  "3d-image": boolean;
+  "3d-video": boolean;
+}): number {
+  return (s["2d"] ? 1 : 0) + (s["3d-image"] ? 1 : 0) + (s["3d-video"] ? 1 : 0);
 }
 
 // ─────────────────────────────────────────────────────────────────────

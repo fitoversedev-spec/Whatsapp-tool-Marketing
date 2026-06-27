@@ -444,7 +444,14 @@ model CourtImage {
   layout          String
   // PNG exported from the canvas + uploaded to Vercel Blob.
   // Null until the user saves/sends; re-saved if they edit.
+  // imageUrl is the "primary" — set to whichever format was sent first,
+  // for inbox mirror compatibility. Format-specific URLs below track all
+  // the variants the user generated so a single design can be re-sent as
+  // 2D plan + 3D snapshot + 3D orbit video in any combination.
   imageUrl        String?   @map("image_url")
+  image2dUrl      String?   @map("image_2d_url")
+  image3dUrl      String?   @map("image_3d_url")
+  video3dUrl      String?   @map("video_3d_url")
   caption         String?
   status          String    @default("draft")
   conversationId  String?   @map("conversation_id")

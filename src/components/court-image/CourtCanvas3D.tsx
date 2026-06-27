@@ -44,6 +44,16 @@ import { aSideProps } from "@/lib/court-image/schema";
 
 export type CourtCanvas3DHandle = {
   toDataURL: (pixelRatio?: number) => string | null;
+  // Records a 360° auto-orbit of the camera around the court and returns
+  // an MP4 H.264 blob suitable for WhatsApp Cloud API. Uses WebCodecs +
+  // mp4-muxer in-browser so we don't need ffmpeg.wasm. Calls onProgress
+  // with a 0..1 fraction as frames encode so the wizard can show a bar.
+  // Returns null on unsupported browsers or if the scene hasn't mounted.
+  recordOrbitMP4: (options?: {
+    durationSec?: number;
+    fps?: number;
+    onProgress?: (fraction: number) => void;
+  }) => Promise<Blob | null>;
 };
 
 export type CourtView = "orbit" | "top" | "iso" | "side";
@@ -72,6 +82,10 @@ export default function CourtCanvas3D({
   // Holds all dynamically built layout objects so we can dispose + rebuild
   // them when the layout JSON changes without recreating the scene.
   const courtGroupRef = useRef<THREE.Group | null>(null);
+  // Keep the latest layout in a ref so the imperative MP4 recorder reads
+  // up-to-date plot dimensions without needing to re-install the handle.
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
 
   // ───────────────────────────────────────────────
   //  One-time scene setup
@@ -271,6 +285,112 @@ export default function CourtCanvas3D({
         // (preserveDrawingBuffer + sync render = always-fresh capture).
         renderer.render(scene, camera);
         return renderer.domElement.toDataURL("image/png");
+      },
+      async recordOrbitMP4(options) {
+        const renderer = rendererRef.current;
+        const scene = sceneRef.current;
+        const camera = cameraRef.current;
+        const controls = controlsRef.current;
+        const currentLayout = layoutRef.current;
+        if (!renderer || !scene || !camera) return null;
+        // WebCodecs is the modern path. Firefox doesn't ship VideoEncoder
+        // by default, but Chrome/Edge (the desktop sales workflow) do.
+        if (typeof window.VideoEncoder === "undefined") {
+          throw new Error(
+            "Your browser doesn't support video encoding. Use Chrome or Edge to generate 3D videos."
+          );
+        }
+        const duration = options?.durationSec ?? 6;
+        const fps = options?.fps ?? 30;
+        const totalFrames = Math.round(duration * fps);
+
+        // Pause the live render loop + auto-orbit so our manual orbit owns
+        // the camera for the recording window. Restored in finally below.
+        const prevAutoRotate = controls?.autoRotate ?? false;
+        if (controls) {
+          controls.autoRotate = false;
+          controls.enabled = false;
+        }
+        cancelAnimationFrame(animationIdRef.current);
+
+        const canvas = renderer.domElement;
+        const width = canvas.width;
+        const height = canvas.height;
+        // Even dimensions required for H.264 — round down if needed.
+        const w = width - (width % 2);
+        const h = height - (height % 2);
+
+        const { Muxer, ArrayBufferTarget } = await import("mp4-muxer");
+        const muxer = new Muxer({
+          target: new ArrayBufferTarget(),
+          video: { codec: "avc", width: w, height: h },
+          fastStart: "in-memory",
+        });
+
+        let encoderError: unknown = null;
+        const encoder = new window.VideoEncoder({
+          output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+          error: (e) => {
+            encoderError = e;
+          },
+        });
+        encoder.configure({
+          codec: "avc1.42E01E", // H.264 Baseline profile, level 3.0
+          width: w,
+          height: h,
+          bitrate: 3_000_000,
+          framerate: fps,
+        });
+
+        // Orbit at a comfortable radius — derived from plot extents so
+        // small plots get a closer pass and large plots stay framed.
+        const plotL = currentLayout.plot.lengthFt;
+        const plotW = currentLayout.plot.widthFt;
+        const radius = Math.max(plotL, plotW) * 1.1;
+        const targetY = 0;
+
+        try {
+          for (let i = 0; i < totalFrames; i++) {
+            if (encoderError) throw encoderError;
+            const t = i / totalFrames;
+            const angle = t * Math.PI * 2;
+            camera.position.x = Math.sin(angle) * radius;
+            camera.position.z = Math.cos(angle) * radius;
+            camera.position.y = radius * 0.55;
+            camera.lookAt(0, targetY, 0);
+            renderer.render(scene, camera);
+
+            const frame = new window.VideoFrame(canvas, {
+              timestamp: (i * 1_000_000) / fps,
+              duration: 1_000_000 / fps,
+            });
+            // Force keyframes every second so seeking + thumbnails are
+            // reasonable in WhatsApp's player.
+            encoder.encode(frame, { keyFrame: i % fps === 0 });
+            frame.close();
+            if (options?.onProgress) options.onProgress((i + 1) / totalFrames);
+            // Yield to the browser occasionally so the encoder backlog
+            // can drain and the UI thread stays alive.
+            if (i % 5 === 4) await new Promise((r) => setTimeout(r, 0));
+          }
+          await encoder.flush();
+          muxer.finalize();
+          if (encoderError) throw encoderError;
+          return new Blob([muxer.target.buffer], { type: "video/mp4" });
+        } finally {
+          // Resume the normal animation loop + restore controls regardless
+          // of whether the recording succeeded.
+          if (controls) {
+            controls.enabled = true;
+            controls.autoRotate = prevAutoRotate;
+          }
+          const tick = () => {
+            animationIdRef.current = requestAnimationFrame(tick);
+            if (controlsRef.current) controlsRef.current.update();
+            rendererRef.current?.render(sceneRef.current!, cameraRef.current!);
+          };
+          tick();
+        }
       },
     };
     return () => {

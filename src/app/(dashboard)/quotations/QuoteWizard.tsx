@@ -173,27 +173,69 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/quotations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerName: customerName.trim(),
-          sport,
-          lengthFt,
-          widthFt,
-          lineItems,
-          notes: notes.trim() || undefined,
-          quoteDate: new Date(quoteDate + "T12:00:00").toISOString(),
-          validityDays,
-          conversationId: prefill?.conversationId ?? null,
-          contactPhone: prefill?.contactPhone ?? null,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error ?? "Failed to create draft");
+      let res: Response;
+      try {
+        res = await fetch("/api/quotations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customerName: customerName.trim(),
+            sport,
+            lengthFt,
+            widthFt,
+            lineItems,
+            notes: notes.trim() || undefined,
+            quoteDate: new Date(quoteDate + "T12:00:00").toISOString(),
+            validityDays,
+            conversationId: prefill?.conversationId ?? null,
+            contactPhone: prefill?.contactPhone ?? null,
+          }),
+        });
+      } catch (err) {
+        // Network failure / CORS / aborted request — fetch never resolved
+        // so there's no response object to inspect. Surface it instead of
+        // letting the button silently re-enable.
+        toast.error(
+          "Network error reaching the server. Check your internet and try again."
+        );
+        console.error("[QuoteWizard] fetch /api/quotations threw", err);
         return;
       }
+
+      // Try to parse the response body as JSON. If the server returned an
+      // HTML error page (Vercel 502, Cloudflare block, etc.), .json()
+      // throws — capture the raw text instead so we can surface a useful
+      // message rather than silently failing.
+      let data: { quotation?: { id: string; number: string }; error?: string } | null = null;
+      let rawText: string | null = null;
+      try {
+        const cloned = res.clone();
+        data = await res.json();
+        // also keep raw in case we need it for debugging
+        rawText = await cloned.text().catch(() => null);
+      } catch {
+        rawText = await res.text().catch(() => null);
+      }
+
+      if (!res.ok || !data?.quotation) {
+        // Status-aware error so the user gets something actionable.
+        const generic =
+          res.status === 401
+            ? "Session expired — please sign in again."
+            : res.status === 413
+              ? "Quotation too large to save."
+              : res.status >= 500
+                ? `Server error (${res.status}). The team has been notified.`
+                : `Could not create draft (${res.status}).`;
+        const message = data?.error ?? rawText?.slice(0, 200) ?? generic;
+        toast.error(message);
+        console.error("[QuoteWizard] /api/quotations failed", {
+          status: res.status,
+          body: rawText,
+        });
+        return;
+      }
+
       setDraftId(data.quotation.id);
       setDraftNumber(data.quotation.number);
       setStep(3);

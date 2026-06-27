@@ -120,35 +120,60 @@ export async function POST(req: NextRequest) {
   // Compute totals server-side from the line items (don't trust client math).
   const totals = recompute(parsed.data.lineItems as QuoteLineItem[]);
 
-  // Generate sequential number per year.
   const year = new Date(parsed.data.quoteDate).getFullYear();
-  const startOfYear = new Date(Date.UTC(year, 0, 1));
-  const endOfYear = new Date(Date.UTC(year + 1, 0, 1));
-  const countThisYear = await prisma.quotation.count({
-    where: { createdAt: { gte: startOfYear, lt: endOfYear } },
-  });
-  const number = buildQuotationNumber(year, countThisYear);
 
-  const quotation = await prisma.quotation.create({
-    data: {
-      number,
-      customerName: parsed.data.customerName,
-      sport: parsed.data.sport,
-      lengthFt: parsed.data.lengthFt,
-      widthFt: parsed.data.widthFt,
-      lineItems: JSON.stringify(parsed.data.lineItems),
-      subtotal: totals.subtotal,
-      gstAmount: totals.gstAmount,
-      grandTotal: totals.grandTotal,
-      notes: parsed.data.notes ?? null,
-      quoteDate: new Date(parsed.data.quoteDate),
-      validityDays: parsed.data.validityDays,
-      conversationId: parsed.data.conversationId ?? null,
-      contactPhone: parsed.data.contactPhone ?? null,
-      createdByUserId: user.id,
-      status: "draft",
-    },
-  });
+  // Sequential quotation number per calendar year. Originally we just
+  // used count() + 1, but that collides as soon as ANY row gets deleted
+  // (count drops below the highest existing seq) or two users create at
+  // the same time. Read the highest existing FIT-QT-YYYY-NNN for the
+  // year and pick max + 1 instead — and if the unique constraint still
+  // trips (genuine race), bump and retry.
+  let quotation;
+  let lastError: unknown = null;
+  let nextSeq = await nextSequenceForYear(year);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      quotation = await prisma.quotation.create({
+        data: {
+          number: buildQuotationNumber(year, nextSeq - 1),
+          customerName: parsed.data.customerName,
+          sport: parsed.data.sport,
+          lengthFt: parsed.data.lengthFt,
+          widthFt: parsed.data.widthFt,
+          lineItems: JSON.stringify(parsed.data.lineItems),
+          subtotal: totals.subtotal,
+          gstAmount: totals.gstAmount,
+          grandTotal: totals.grandTotal,
+          notes: parsed.data.notes ?? null,
+          quoteDate: new Date(parsed.data.quoteDate),
+          validityDays: parsed.data.validityDays,
+          conversationId: parsed.data.conversationId ?? null,
+          contactPhone: parsed.data.contactPhone ?? null,
+          createdByUserId: user.id,
+          status: "draft",
+        },
+      });
+      break;
+    } catch (err) {
+      lastError = err;
+      // P2002 = unique constraint failure. Only retry that one; bubble
+      // everything else immediately so unrelated bugs aren't masked.
+      const code = (err as { code?: string })?.code;
+      if (code !== "P2002") throw err;
+      nextSeq += 1;
+    }
+  }
+
+  if (!quotation) {
+    console.error("[quotations] number collision after retries", lastError);
+    return NextResponse.json(
+      {
+        error:
+          "Could not assign a unique quote number after retries. Try again in a moment.",
+      },
+      { status: 503 }
+    );
+  }
 
   return NextResponse.json({
     quotation: {
@@ -158,4 +183,21 @@ export async function POST(req: NextRequest) {
       grandTotal: quotation.grandTotal.toString(),
     },
   });
+}
+
+// Find the next sequential number for a given calendar year by parsing
+// the highest existing FIT-QT-YYYY-NNN row. Returns 1 if no quotations
+// exist yet that year.
+async function nextSequenceForYear(year: number): Promise<number> {
+  const prefix = `FIT-QT-${year}-`;
+  const latest = await prisma.quotation.findFirst({
+    where: { number: { startsWith: prefix } },
+    orderBy: { number: "desc" },
+    select: { number: true },
+  });
+  if (!latest) return 1;
+  const seqStr = latest.number.slice(prefix.length);
+  const seq = parseInt(seqStr, 10);
+  if (!Number.isFinite(seq)) return 1;
+  return seq + 1;
 }

@@ -98,29 +98,49 @@ export async function POST(req: NextRequest) {
   }
 
   const year = new Date().getFullYear();
-  const startOfYear = new Date(Date.UTC(year, 0, 1));
-  const endOfYear = new Date(Date.UTC(year + 1, 0, 1));
-  const countThisYear = await prisma.courtImage.count({
-    where: { createdAt: { gte: startOfYear, lt: endOfYear } },
-  });
-  const number = buildCourtImageNumber(year, countThisYear);
-
-  const row = await prisma.courtImage.create({
-    data: {
-      number,
-      customerName: parsed.data.customerName,
-      layout: JSON.stringify(parsed.data.layout),
-      imageUrl: parsed.data.imageUrl ?? null,
-      image2dUrl: parsed.data.image2dUrl ?? null,
-      image3dUrl: parsed.data.image3dUrl ?? null,
-      video3dUrl: parsed.data.video3dUrl ?? null,
-      caption: parsed.data.caption ?? null,
-      conversationId: parsed.data.conversationId ?? null,
-      contactPhone: parsed.data.contactPhone ?? null,
-      createdByUserId: user.id,
-      status: "draft",
-    },
-  });
+  // Same fix as the quotations route — derive next sequential number
+  // from the highest existing FIT-CIM-YYYY-NNN row and retry on the
+  // unique-constraint race. count()+1 collides as soon as any row gets
+  // deleted, which is exactly the symptom prod was hitting.
+  let row;
+  let lastError: unknown = null;
+  let nextSeq = await nextCourtImageSeq(year);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      row = await prisma.courtImage.create({
+        data: {
+          number: buildCourtImageNumber(year, nextSeq - 1),
+          customerName: parsed.data.customerName,
+          layout: JSON.stringify(parsed.data.layout),
+          imageUrl: parsed.data.imageUrl ?? null,
+          image2dUrl: parsed.data.image2dUrl ?? null,
+          image3dUrl: parsed.data.image3dUrl ?? null,
+          video3dUrl: parsed.data.video3dUrl ?? null,
+          caption: parsed.data.caption ?? null,
+          conversationId: parsed.data.conversationId ?? null,
+          contactPhone: parsed.data.contactPhone ?? null,
+          createdByUserId: user.id,
+          status: "draft",
+        },
+      });
+      break;
+    } catch (err) {
+      lastError = err;
+      const code = (err as { code?: string })?.code;
+      if (code !== "P2002") throw err;
+      nextSeq += 1;
+    }
+  }
+  if (!row) {
+    console.error("[court-images] number collision after retries", lastError);
+    return NextResponse.json(
+      {
+        error:
+          "Could not assign a unique design number after retries. Try again in a moment.",
+      },
+      { status: 503 }
+    );
+  }
 
   return NextResponse.json({
     courtImage: {
@@ -138,4 +158,21 @@ function safeSports(layoutJson: string): string[] {
   } catch {
     return [];
   }
+}
+
+// Find the next sequential number for a given calendar year by parsing
+// the highest existing FIT-CIM-YYYY-NNN row. Returns 1 if no rows exist
+// yet that year.
+async function nextCourtImageSeq(year: number): Promise<number> {
+  const prefix = `FIT-CIM-${year}-`;
+  const latest = await prisma.courtImage.findFirst({
+    where: { number: { startsWith: prefix } },
+    orderBy: { number: "desc" },
+    select: { number: true },
+  });
+  if (!latest) return 1;
+  const seqStr = latest.number.slice(prefix.length);
+  const seq = parseInt(seqStr, 10);
+  if (!Number.isFinite(seq)) return 1;
+  return seq + 1;
 }

@@ -358,6 +358,18 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   const elements: Element[] = [];
   let z = 1;
 
+  // Plots come in any shape (60×130, 80×60, 100×60, …). Court sports
+  // are naturally LANDSCAPE — length always >= width. To avoid stretching
+  // a football pitch into a tall thin rectangle when the user enters a
+  // portrait plot (width > length), we orient every full-court element
+  // along the plot's LONG side. The element's `width` always tracks the
+  // long side; `rotation: 90` is applied when the plot is portrait so
+  // the visible footprint still fills the plot correctly.
+  const isPortrait = plot.widthFt > plot.lengthFt;
+  const longFt = Math.max(plot.lengthFt, plot.widthFt);
+  const shortFt = Math.min(plot.lengthFt, plot.widthFt);
+  const baseRotation = isPortrait ? 90 : 0;
+
   // Largest sport renders on the bottom of the stack. Football and the
   // other full-court sports compete for "base"; cricket is always an
   // overlay so it sits on top.
@@ -374,38 +386,45 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       type: "football-field",
       x: cx,
       y: cy,
-      rotation: 0,
-      width: plot.lengthFt,
-      height: plot.widthFt,
+      rotation: baseRotation,
+      width: longFt,
+      height: shortFt,
       aSide,
       z: z++,
     });
   }
 
   if (hasBasketball && !hasFootball) {
-    // Solo basketball: fill the plot
-    const courtW = plot.lengthFt;
-    const courtH = plot.widthFt;
+    // Solo basketball: fill the plot, using same long-side orientation
+    // as football so portrait plots don't squash the court markings.
+    const courtW = longFt;
+    const courtH = shortFt;
     elements.push({
       id: newId("basketball"),
       type: "basketball-court",
       x: cx,
       y: cy,
-      rotation: 0,
+      rotation: baseRotation,
       width: courtW,
       height: courtH,
       halfCourt: config.basketball?.halfCourt ?? false,
       z: z++,
     });
     // Auto-add hoops flanking each end of the court so sales doesn't have
-    // to remember to drop them in manually.
-    for (const dir of config.basketball?.halfCourt ? [1] : [-1, 1]) {
+    // to remember to drop them in manually. Hoop offsets need to follow
+    // the same rotation as the court so they line up with each end-line.
+    const hoopOffsets = config.basketball?.halfCourt ? [1] : [-1, 1];
+    for (const dir of hoopOffsets) {
+      // Position the hoop along the court's long axis. When portrait we
+      // rotated the court 90°, so the long axis points along Y in plot
+      // space; otherwise along X.
+      const offset = (dir * courtW) / 2 - dir * 2;
       elements.push({
         id: newId("hoop"),
         type: "basketball-hoop",
-        x: cx + (dir * courtW) / 2 - dir * 2,
-        y: cy,
-        rotation: dir < 0 ? 0 : 180,
+        x: isPortrait ? cx : cx + offset,
+        y: isPortrait ? cy + offset : cy,
+        rotation: baseRotation + (dir < 0 ? 0 : 180),
         poleHeightFt: 10,
         backboardWidthFt: 6,
         z: z + 20,
@@ -413,15 +432,19 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     }
     z += 30;
   } else if (hasBasketball && hasFootball) {
-    // Stacked with football — inset a smaller basketball court in one corner.
-    const w = Math.min(50, plot.lengthFt * 0.45);
-    const h = Math.min(94, plot.widthFt * 0.45);
+    // Stacked with football — inset a smaller half-court in one corner.
+    // Size + position derived from long/short so portrait plots get a
+    // landscape-oriented inset, not a squished portrait one.
+    const w = Math.min(50, longFt * 0.45);
+    const h = Math.min(47, shortFt * 0.45);
+    const offsetLong = longFt * 0.2;
+    const offsetShort = shortFt * 0.2;
     elements.push({
       id: newId("basketball"),
       type: "basketball-court",
-      x: cx - plot.lengthFt * 0.2,
-      y: cy + plot.widthFt * 0.2,
-      rotation: 0,
+      x: isPortrait ? cx + offsetShort : cx - offsetLong,
+      y: isPortrait ? cy + offsetLong : cy + offsetShort,
+      rotation: baseRotation,
       width: w,
       height: h,
       halfCourt: true,
@@ -430,17 +453,19 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   }
 
   if (hasPickleball) {
-    const doubles = config.pickleball?.doubles ?? true;
-    const w = doubles ? 44 : 44;
-    const h = doubles ? 20 : 20;
+    // Pickleball is regulation 44 × 20 ft. Always landscape; rotate the
+    // whole court on portrait plots so it doesn't get clipped or
+    // unexpectedly squished into the short side.
+    const w = 44;
+    const h = 20;
     elements.push({
       id: newId("pickleball"),
       type: "pickleball-court",
       x: cx,
       y: cy,
-      rotation: 0,
-      width: Math.min(w, plot.lengthFt * 0.9),
-      height: Math.min(h, plot.widthFt * 0.9),
+      rotation: baseRotation,
+      width: Math.min(w, longFt * 0.9),
+      height: Math.min(h, shortFt * 0.9),
       z: z++,
     });
   }
@@ -454,9 +479,9 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       sport: "multisport",
       x: cx,
       y: cy,
-      rotation: 0,
-      width: plot.lengthFt,
-      height: plot.widthFt,
+      rotation: baseRotation,
+      width: longFt,
+      height: shortFt,
       z: z++,
     });
   }
@@ -464,7 +489,11 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   if (hasCricket) {
     const pitchLengthFt = config.cricket?.pitchLengthFt ?? 66; // 22 yd default
     const pitchWidthFt = config.cricket?.pitchWidthFt ?? 10;
-    const orientation = config.cricket?.orientation ?? "horizontal";
+    // Default orientation follows the plot's long axis so the pitch
+    // doesn't get clipped on portrait plots. The user can still flip it
+    // explicitly via the wizard config.
+    const defaultOrientation = isPortrait ? "vertical" : "horizontal";
+    const orientation = config.cricket?.orientation ?? defaultOrientation;
     const rotation = orientation === "vertical" ? 90 : 0;
     elements.push({
       id: newId("cricket"),

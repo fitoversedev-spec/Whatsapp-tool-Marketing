@@ -395,9 +395,12 @@ export default function CourtImageWizard({
   //  Save + send (Step 3)
   // ─────────────────────────────────────────────
 
-  // Resize observer for the 3D preview container in Step 3.
+  // Resize observer for the 3D preview container in Step 3 — runs whenever
+  // either 3D tab is active (image OR video), since both mount the same
+  // Three.js renderer.
   useEffect(() => {
-    if (step !== 3 || previewMode !== "3d") return;
+    if (step !== 3) return;
+    if (previewMode !== "3d-image" && previewMode !== "3d-video") return;
     const el = preview3dContainerRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {

@@ -39,6 +39,9 @@ import type {
   AnnotationElement,
   CustomRectElement,
   CustomLineElement,
+  FenceRectElement,
+  DugoutElement,
+  BasketballHoopElement,
 } from "@/lib/court-image/schema";
 import { aSideProps } from "@/lib/court-image/schema";
 
@@ -86,6 +89,29 @@ export default function CourtCanvas3D({
   // up-to-date plot dimensions without needing to re-install the handle.
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
+  // Pre-load the watermark image so toDataURL/recordOrbitMP4 can
+  // composite it onto the captured frame synchronously. Three.js renders
+  // to WebGL; we copy that to a 2D canvas, draw the logo on top, and
+  // export from there. This keeps the watermark out of the live 3D scene
+  // (which would warp around the camera) while still baking it into the
+  // sent media.
+  const watermarkImgRef = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    const url = layout.style.watermarkUrl;
+    if (!url) {
+      watermarkImgRef.current = null;
+      return;
+    }
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      watermarkImgRef.current = img;
+    };
+    img.src = url;
+    return () => {
+      img.onload = null;
+    };
+  }, [layout.style.watermarkUrl]);
 
   // ───────────────────────────────────────────────
   //  One-time scene setup
@@ -284,7 +310,12 @@ export default function CourtCanvas3D({
         // Render one fresh frame before reading so the snapshot is current
         // (preserveDrawingBuffer + sync render = always-fresh capture).
         renderer.render(scene, camera);
-        return renderer.domElement.toDataURL("image/png");
+        const wmImg = watermarkImgRef.current;
+        const wmOpacity = layoutRef.current.style.watermarkOpacity ?? 0.9;
+        if (!wmImg) {
+          return renderer.domElement.toDataURL("image/png");
+        }
+        return compositeWithWatermark(renderer.domElement, wmImg, wmOpacity);
       },
       async recordOrbitMP4(options) {
         const renderer = rendererRef.current;
@@ -327,6 +358,19 @@ export default function CourtCanvas3D({
           fastStart: "in-memory",
         });
 
+        // Build the watermark composite canvas once if a logo is set, so
+        // we don't allocate one per frame. The encoder reads this canvas
+        // each frame instead of the raw WebGL canvas so the watermark is
+        // baked into every output frame.
+        const wmImg = watermarkImgRef.current;
+        const wmOpacity = layoutRef.current.style.watermarkOpacity ?? 0.9;
+        const composite = wmImg ? document.createElement("canvas") : null;
+        const compositeCtx = composite ? composite.getContext("2d") : null;
+        if (composite && compositeCtx) {
+          composite.width = w;
+          composite.height = h;
+        }
+
         let encoderError: unknown = null;
         const encoder = new window.VideoEncoder({
           output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
@@ -360,7 +404,16 @@ export default function CourtCanvas3D({
             camera.lookAt(0, targetY, 0);
             renderer.render(scene, camera);
 
-            const frame = new window.VideoFrame(canvas, {
+            // When a watermark is set, draw the WebGL canvas → 2D composite
+            // and overlay the logo. The encoder then takes the composite
+            // canvas as its source.
+            let sourceCanvas: HTMLCanvasElement = canvas;
+            if (composite && compositeCtx && wmImg) {
+              compositeCtx.drawImage(canvas, 0, 0, w, h);
+              drawWatermarkOn(compositeCtx, wmImg, w, h, wmOpacity);
+              sourceCanvas = composite;
+            }
+            const frame = new window.VideoFrame(sourceCanvas, {
               timestamp: (i * 1_000_000) / fps,
               duration: 1_000_000 / fps,
             });
@@ -437,6 +490,12 @@ function buildElement(el: Element, layout: CourtLayout, yOffset: number): THREE.
       return makeCustomRect(el, yOffset);
     case "custom-line":
       return makeCustomLine(el, yOffset);
+    case "fence-rect":
+      return makeFenceRect(el);
+    case "dugout":
+      return makeDugout(el);
+    case "basketball-hoop":
+      return makeBasketballHoop(el);
   }
 }
 
@@ -611,6 +670,230 @@ function makeCustomLine(el: CustomLineElement, yOffset: number): THREE.Object3D 
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = yOffset + 0.02;
   return mesh;
+}
+
+function makeFenceRect(el: FenceRectElement): THREE.Object3D {
+  // Four vertical mesh walls around the perimeter. The mesh is a thin
+  // translucent texture so depth shines through — reads as chain-link.
+  const group = new THREE.Group();
+  const color = parseColor(el.color ?? "#94a3b8");
+  const matMesh = new THREE.MeshBasicMaterial({
+    map: fenceMeshTexture(color),
+    transparent: true,
+    opacity: 0.85,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  // Posts at the corners
+  const postMat = new THREE.MeshPhongMaterial({ color });
+  const postGeo = new THREE.CylinderGeometry(0.18, 0.18, el.heightFt, 8);
+  const corners: Array<[number, number]> = [
+    [-el.width / 2, -el.height / 2],
+    [el.width / 2, -el.height / 2],
+    [-el.width / 2, el.height / 2],
+    [el.width / 2, el.height / 2],
+  ];
+  corners.forEach(([px, py]) => {
+    const post = new THREE.Mesh(postGeo, postMat);
+    post.position.set(px, el.heightFt / 2, py);
+    post.castShadow = true;
+    group.add(post);
+  });
+  // Each wall is one mesh plane. Skip the centre of the gate edge so
+  // there's a visible opening.
+  const gateGap = el.hasGate ? Math.min(8, Math.max(el.width, el.height) * 0.12) : 0;
+  const edgeKey = el.gateEdge ?? "south";
+
+  function pushWall(
+    edge: "north" | "south" | "east" | "west",
+    spanFt: number,
+    placeFn: (offsetFromCenter: number, length: number) => THREE.Vector3
+  ) {
+    // If this is the gate edge, leave a gap centred on the wall.
+    if (edge === edgeKey && el.hasGate && spanFt > gateGap + 2) {
+      const sideLen = (spanFt - gateGap) / 2;
+      [-1, 1].forEach((dir) => {
+        const offset = dir * (gateGap / 2 + sideLen / 2);
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(sideLen, el.heightFt), matMesh);
+        mesh.position.copy(placeFn(offset, sideLen));
+        mesh.rotation.y = edge === "east" || edge === "west" ? Math.PI / 2 : 0;
+        group.add(mesh);
+      });
+    } else {
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(spanFt, el.heightFt), matMesh);
+      mesh.position.copy(placeFn(0, spanFt));
+      mesh.rotation.y = edge === "east" || edge === "west" ? Math.PI / 2 : 0;
+      group.add(mesh);
+    }
+  }
+  pushWall("north", el.width, (off) => new THREE.Vector3(off, el.heightFt / 2, -el.height / 2));
+  pushWall("south", el.width, (off) => new THREE.Vector3(off, el.heightFt / 2, el.height / 2));
+  pushWall("east", el.height, (off) => new THREE.Vector3(el.width / 2, el.heightFt / 2, off));
+  pushWall("west", el.height, (off) => new THREE.Vector3(-el.width / 2, el.heightFt / 2, off));
+  return group;
+}
+
+function makeDugout(el: DugoutElement): THREE.Object3D {
+  // A box with a slightly tilted roof. The "open side" faces +X by
+  // default (parent rotation handles re-orientation in the wizard).
+  const group = new THREE.Group();
+  const baseH = 4; // ft tall walls
+  const roofH = 1.5;
+  const wallMat = new THREE.MeshPhongMaterial({ color: parseColor(el.benchColor ?? "#cbd5e1") });
+  const roofMat = new THREE.MeshPhongMaterial({ color: parseColor(el.roofColor ?? "#475569") });
+  // Floor
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(el.width, el.height), wallMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = 0.03;
+  group.add(floor);
+  // Back wall
+  const backH = baseH;
+  const back = new THREE.Mesh(new THREE.BoxGeometry(el.width, backH, 0.4), wallMat);
+  back.position.set(0, backH / 2, -el.height / 2);
+  back.castShadow = true;
+  group.add(back);
+  // Side walls (shorter so the open side is taller)
+  [-1, 1].forEach((sideDir) => {
+    const side = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, baseH * 0.85, el.height),
+      wallMat
+    );
+    side.position.set((sideDir * el.width) / 2, (baseH * 0.85) / 2, 0);
+    side.castShadow = true;
+    group.add(side);
+  });
+  // Bench (a chunky low platform along the back wall)
+  const benchH = 1.2;
+  const benchDepth = Math.min(2, el.height * 0.45);
+  const bench = new THREE.Mesh(
+    new THREE.BoxGeometry(el.width - 0.6, benchH, benchDepth),
+    new THREE.MeshPhongMaterial({ color: parseColor("#94a3b8") })
+  );
+  bench.position.set(0, benchH / 2 + 0.05, -el.height / 2 + benchDepth / 2 + 0.3);
+  bench.castShadow = true;
+  group.add(bench);
+  // Roof — tilts down towards the open side so rain runs off
+  const roof = new THREE.Mesh(
+    new THREE.BoxGeometry(el.width + 0.8, 0.3, el.height + 0.8),
+    roofMat
+  );
+  roof.position.set(0, baseH + roofH / 2, 0);
+  roof.rotation.x = -0.15; // slight tilt
+  roof.castShadow = true;
+  group.add(roof);
+  // Open-side orientation — rotate the whole dugout so the opening faces
+  // the requested direction.
+  const openRotY: Record<DugoutElement["openSide"], number> = {
+    north: Math.PI,
+    south: 0,
+    east: -Math.PI / 2,
+    west: Math.PI / 2,
+  };
+  group.rotation.y = openRotY[el.openSide];
+  return group;
+}
+
+function makeBasketballHoop(el: BasketballHoopElement): THREE.Object3D {
+  const group = new THREE.Group();
+  const poleMat = new THREE.MeshPhongMaterial({
+    color: parseColor(el.color ?? "#0f172a"),
+    shininess: 40,
+  });
+  const rimMat = new THREE.MeshBasicMaterial({
+    color: parseColor(el.rimColor ?? "#ef4444"),
+  });
+  // Pole — vertical cylinder behind the backboard
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.25, 0.3, el.poleHeightFt, 12),
+    poleMat
+  );
+  pole.position.set(0, el.poleHeightFt / 2, 0);
+  pole.castShadow = true;
+  group.add(pole);
+  // Arm extending forward to hold the backboard
+  const armLen = 2;
+  const arm = new THREE.Mesh(
+    new THREE.BoxGeometry(0.25, 0.25, armLen),
+    poleMat
+  );
+  arm.position.set(0, el.poleHeightFt - 0.5, armLen / 2);
+  arm.castShadow = true;
+  group.add(arm);
+  // Backboard — white rectangle with a colored target box
+  const bbW = el.backboardWidthFt;
+  const bbH = bbW * 0.6;
+  const bb = new THREE.Mesh(
+    new THREE.BoxGeometry(bbW, bbH, 0.1),
+    new THREE.MeshPhongMaterial({ color: 0xfafafa })
+  );
+  bb.position.set(0, el.poleHeightFt - 0.5, armLen);
+  bb.castShadow = true;
+  group.add(bb);
+  // Target square outline on the backboard
+  const target = new THREE.Mesh(
+    new THREE.PlaneGeometry(bbW * 0.3, bbH * 0.4),
+    new THREE.MeshBasicMaterial({
+      color: 0xff5555,
+      transparent: true,
+      opacity: 0.25,
+    })
+  );
+  target.position.set(0, el.poleHeightFt - 0.7, armLen + 0.06);
+  group.add(target);
+  // Rim — a torus in front of the backboard
+  const rimR = 0.75;
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(rimR, 0.08, 8, 24),
+    rimMat
+  );
+  rim.position.set(0, el.poleHeightFt - 1.2, armLen + rimR);
+  rim.rotation.x = Math.PI / 2;
+  rim.castShadow = true;
+  group.add(rim);
+  // Net (translucent)
+  const netMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.4,
+    side: THREE.DoubleSide,
+  });
+  const net = new THREE.Mesh(
+    new THREE.CylinderGeometry(rimR * 0.8, rimR * 0.3, 1, 12, 1, true),
+    netMat
+  );
+  net.position.set(0, el.poleHeightFt - 1.7, armLen + rimR);
+  group.add(net);
+  return group;
+}
+
+// Generates a chain-link mesh-pattern texture for fence walls.
+function fenceMeshTexture(color: number): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext("2d")!;
+  ctx.clearRect(0, 0, c.width, c.height);
+  const hex = "#" + color.toString(16).padStart(6, "0");
+  ctx.strokeStyle = hex;
+  ctx.lineWidth = 1.5;
+  const step = 16;
+  ctx.globalAlpha = 0.9;
+  for (let i = -c.width; i < c.width * 2; i += step) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i + c.height, c.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(i, c.height);
+    ctx.lineTo(i + c.height, 0);
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(8, 2);
+  tex.anisotropy = 4;
+  return tex;
 }
 
 function buildPostsAndCrossbar(widthFt: number, heightFt: number, depthFt: number): THREE.Group {
@@ -965,6 +1248,54 @@ function parseAlpha(input: string): number {
   if (!m) return 1;
   const parts = m[1].split(",").map((p) => parseFloat(p.trim()));
   return parts.length === 4 ? parts[3] : 1;
+}
+
+// Composites the WebGL canvas onto a 2D canvas, overlays the watermark in
+// the bottom-right corner, and returns the result as a PNG dataURL.
+function compositeWithWatermark(
+  webgl: HTMLCanvasElement,
+  wmImg: HTMLImageElement,
+  opacity: number
+): string {
+  const composite = document.createElement("canvas");
+  composite.width = webgl.width;
+  composite.height = webgl.height;
+  const ctx = composite.getContext("2d")!;
+  ctx.drawImage(webgl, 0, 0);
+  drawWatermarkOn(ctx, wmImg, webgl.width, webgl.height, opacity);
+  return composite.toDataURL("image/png");
+}
+
+// Bottom-right watermark on a 2D canvas context — same placement +
+// pill-background style as the 2D Konva canvas so 2D and 3D exports look
+// branded identically.
+function drawWatermarkOn(
+  ctx: CanvasRenderingContext2D,
+  wmImg: HTMLImageElement,
+  cw: number,
+  ch: number,
+  opacity: number
+) {
+  const targetW = Math.min(220, cw * 0.16);
+  const targetH = (wmImg.naturalHeight / wmImg.naturalWidth) * targetW;
+  const margin = Math.max(14, cw * 0.015);
+  const padding = Math.max(8, cw * 0.008);
+  const pillX = cw - targetW - margin - padding * 2;
+  const pillY = ch - targetH - margin - padding * 2;
+  const pillW = targetW + padding * 2;
+  const pillH = targetH + padding * 2;
+  // White rounded pill behind the logo for legibility
+  ctx.save();
+  ctx.globalAlpha = opacity * 0.78;
+  roundRect(ctx, pillX, pillY, pillW, pillH, 6);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.restore();
+  // Logo itself
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.drawImage(wmImg, pillX + padding, pillY + padding, targetW, targetH);
+  ctx.restore();
 }
 
 function roundRect(

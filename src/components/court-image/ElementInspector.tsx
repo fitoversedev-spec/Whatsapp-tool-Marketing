@@ -18,6 +18,9 @@ import type {
   PickleballCourtElement,
   NetElement,
   GenericCourtElement,
+  FenceRectElement,
+  DugoutElement,
+  BasketballHoopElement,
 } from "@/lib/court-image/schema";
 
 type Props = {
@@ -149,6 +152,15 @@ export default function ElementInspector({
       )}
       {element.type === "custom-rect" && (
         <CustomRectFields element={element} onUpdate={onUpdate} />
+      )}
+      {element.type === "fence-rect" && (
+        <FenceRectFields element={element} onUpdate={onUpdate} />
+      )}
+      {element.type === "dugout" && (
+        <DugoutFields element={element} onUpdate={onUpdate} />
+      )}
+      {element.type === "basketball-hoop" && (
+        <BasketballHoopFields element={element} onUpdate={onUpdate} />
       )}
     </div>
   );
@@ -726,5 +738,174 @@ function labelFor(el: Element): string {
       return "Line";
     case "custom-rect":
       return "Rectangle";
+    case "fence-rect":
+      return "Fence";
+    case "dugout":
+      return "Dugout";
+    case "basketball-hoop":
+      return "Basketball hoop";
   }
+}
+
+function FenceRectFields({
+  element,
+  onUpdate,
+}: {
+  element: FenceRectElement;
+  onUpdate: (p: Partial<FenceRectElement>) => void;
+}) {
+  return (
+    <>
+      <Section label="Fence size">
+        <div className="grid grid-cols-3 gap-2">
+          <NumberInput
+            label="Length (ft)"
+            value={element.width}
+            onChange={(v) => onUpdate({ width: v })}
+          />
+          <NumberInput
+            label="Width (ft)"
+            value={element.height}
+            onChange={(v) => onUpdate({ height: v })}
+          />
+          <NumberInput
+            label="Height (ft)"
+            value={element.heightFt}
+            onChange={(v) => onUpdate({ heightFt: v })}
+          />
+        </div>
+        <ColorInput
+          label="Color"
+          value={element.color ?? "#94a3b8"}
+          onChange={(v) => onUpdate({ color: v })}
+        />
+      </Section>
+      <Section label="Gate">
+        <label className="flex items-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={!!element.hasGate}
+            onChange={(e) => onUpdate({ hasGate: e.target.checked })}
+          />
+          Has gate / opening
+        </label>
+        {element.hasGate && (
+          <div>
+            <Label>Gate side</Label>
+            <div className="grid grid-cols-4 gap-1">
+              {(["north", "south", "east", "west"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onUpdate({ gateEdge: s })}
+                  className={`px-2 py-1 text-xs rounded border capitalize ${
+                    element.gateEdge === s
+                      ? "border-wa-green bg-wa-green/10 text-wa-dark"
+                      : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </Section>
+    </>
+  );
+}
+
+function DugoutFields({
+  element,
+  onUpdate,
+}: {
+  element: DugoutElement;
+  onUpdate: (p: Partial<DugoutElement>) => void;
+}) {
+  return (
+    <>
+      <Section label="Dugout size">
+        <div className="grid grid-cols-2 gap-2">
+          <NumberInput
+            label="Length (ft)"
+            value={element.width}
+            onChange={(v) => onUpdate({ width: v })}
+          />
+          <NumberInput
+            label="Depth (ft)"
+            value={element.height}
+            onChange={(v) => onUpdate({ height: v })}
+          />
+        </div>
+        <div>
+          <Label>Open side (faces field)</Label>
+          <div className="grid grid-cols-4 gap-1">
+            {(["north", "south", "east", "west"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => onUpdate({ openSide: s })}
+                className={`px-2 py-1 text-xs rounded border capitalize ${
+                  element.openSide === s
+                    ? "border-wa-green bg-wa-green/10 text-wa-dark"
+                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      </Section>
+      <Section label="Colors">
+        <ColorInput
+          label="Roof"
+          value={element.roofColor ?? "#475569"}
+          onChange={(v) => onUpdate({ roofColor: v })}
+        />
+        <ColorInput
+          label="Bench"
+          value={element.benchColor ?? "#cbd5e1"}
+          onChange={(v) => onUpdate({ benchColor: v })}
+        />
+      </Section>
+    </>
+  );
+}
+
+function BasketballHoopFields({
+  element,
+  onUpdate,
+}: {
+  element: BasketballHoopElement;
+  onUpdate: (p: Partial<BasketballHoopElement>) => void;
+}) {
+  return (
+    <>
+      <Section label="Hoop">
+        <NumberInput
+          label="Pole height (ft)"
+          value={element.poleHeightFt}
+          onChange={(v) => onUpdate({ poleHeightFt: v })}
+        />
+        <NumberInput
+          label="Backboard width (ft)"
+          value={element.backboardWidthFt}
+          onChange={(v) => onUpdate({ backboardWidthFt: v })}
+        />
+      </Section>
+      <Section label="Colors">
+        <ColorInput
+          label="Pole / backboard"
+          value={element.color ?? "#0f172a"}
+          onChange={(v) => onUpdate({ color: v })}
+        />
+        <ColorInput
+          label="Rim"
+          value={element.rimColor ?? "#ef4444"}
+          onChange={(v) => onUpdate({ rimColor: v })}
+        />
+      </Section>
+    </>
+  );
 }

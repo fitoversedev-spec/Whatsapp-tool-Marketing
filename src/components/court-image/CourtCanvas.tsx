@@ -10,7 +10,7 @@
 // Renderer dispatch is inline (switch on element.type) rather than a
 // per-shape file so the schema + canvas stay easy to read together.
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import {
   Stage,
@@ -22,6 +22,7 @@ import {
   Line,
   Circle,
   Arc,
+  Image as KonvaImage,
 } from "react-konva";
 import Konva from "konva";
 import type {
@@ -37,6 +38,9 @@ import type {
   AnnotationElement,
   CustomLineElement,
   CustomRectElement,
+  FenceRectElement,
+  DugoutElement,
+  BasketballHoopElement,
 } from "@/lib/court-image/schema";
 import { aSideProps } from "@/lib/court-image/schema";
 
@@ -247,6 +251,19 @@ export default function CourtCanvas({
         ))}
       </Layer>
 
+      {/* Watermark layer — bottom-right corner, on top of every element so
+          it's always visible in the export. */}
+      {layout.style.watermarkUrl && (
+        <Layer listening={false}>
+          <Watermark
+            url={layout.style.watermarkUrl}
+            opacity={layout.style.watermarkOpacity ?? 0.9}
+            canvasWidth={canvasWidth}
+            canvasHeight={canvasHeight}
+          />
+        </Layer>
+      )}
+
       {/* Transformer layer — drawn on top so handles are always clickable */}
       <Layer>
         {!readOnly && (
@@ -416,6 +433,24 @@ function ElementShape({
           <CustomRectShape el={element} pxPerFt={pxPerFt} />
         </Group>
       );
+    case "fence-rect":
+      return (
+        <Group {...commonGroupProps}>
+          <FenceRectShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
+    case "dugout":
+      return (
+        <Group {...commonGroupProps}>
+          <DugoutShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
+    case "basketball-hoop":
+      return (
+        <Group {...commonGroupProps}>
+          <BasketballHoopShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
   }
 }
 
@@ -434,8 +469,16 @@ function applyScaleToDimensions(
     case "pickleball-court":
     case "generic-court":
     case "custom-rect":
+    case "fence-rect":
+    case "dugout":
       (patch as Partial<typeof element>).width = element.width * scaleX;
       (patch as Partial<typeof element>).height = element.height * scaleY;
+      break;
+    case "basketball-hoop":
+      (patch as Partial<BasketballHoopElement>).backboardWidthFt =
+        element.backboardWidthFt * scaleX;
+      (patch as Partial<BasketballHoopElement>).poleHeightFt =
+        element.poleHeightFt * scaleY;
       break;
     case "cricket-pitch":
       (patch as Partial<CricketPitchElement>).pitchLengthFt = element.pitchLengthFt * scaleX;
@@ -943,6 +986,282 @@ function CustomRectShape({ el, pxPerFt }: { el: CustomRectElement; pxPerFt: numb
       stroke={el.stroke ?? "#0f172a"}
       strokeWidth={el.strokeWidth ?? 2}
     />
+  );
+}
+
+function FenceRectShape({ el, pxPerFt }: { el: FenceRectElement; pxPerFt: number }) {
+  const w = el.width * pxPerFt;
+  const h = el.height * pxPerFt;
+  const color = el.color ?? "#94a3b8";
+  // Diagonal cross-hatch to read as chain-link in 2D. Spacing scales with
+  // the fence size so the pattern stays legible at any zoom.
+  const step = Math.max(6, Math.min(w, h) * 0.04);
+  const lines: JSX.Element[] = [];
+  for (let i = -h; i < w + h; i += step) {
+    lines.push(
+      <Line
+        key={`a${i}`}
+        points={[-w / 2 + i, -h / 2, -w / 2 + i + h, h / 2]}
+        stroke={color}
+        strokeWidth={1}
+        opacity={0.55}
+      />
+    );
+    lines.push(
+      <Line
+        key={`b${i}`}
+        points={[-w / 2 + i, h / 2, -w / 2 + i + h, -h / 2]}
+        stroke={color}
+        strokeWidth={1}
+        opacity={0.55}
+      />
+    );
+  }
+  // Mask the cross-hatch to inside the rectangle by drawing a clipped
+  // group. Konva's clipFunc gives us a fast rectangular clip.
+  const gateGap = Math.min(Math.max(w, h) * 0.12, 30);
+  return (
+    <>
+      <Group
+        clipX={-w / 2}
+        clipY={-h / 2}
+        clipWidth={w}
+        clipHeight={h}
+      >
+        {lines}
+      </Group>
+      {/* Outer rectangle, with the gate edge broken in the middle to
+          suggest an opening. */}
+      <FenceOutline
+        w={w}
+        h={h}
+        color={color}
+        gateGap={el.hasGate ? gateGap : 0}
+        gateEdge={el.gateEdge ?? "south"}
+      />
+    </>
+  );
+}
+
+function FenceOutline({
+  w,
+  h,
+  color,
+  gateGap,
+  gateEdge,
+}: {
+  w: number;
+  h: number;
+  color: string;
+  gateGap: number;
+  gateEdge: "top" | "bottom" | "left" | "right" | "north" | "south" | "east" | "west";
+}) {
+  // Translate the plot-space gate direction names to canvas edges. The
+  // 2D canvas has y growing downward, so "north" on the plot (towards
+  // top of canvas) is the TOP edge here, "south" is the BOTTOM edge.
+  const e =
+    gateEdge === "north" ? "top" :
+    gateEdge === "south" ? "bottom" :
+    gateEdge === "east" ? "right" :
+    gateEdge === "west" ? "left" :
+    gateEdge;
+  const half = gateGap / 2;
+  const segs: Array<[number, number, number, number]> = [];
+  // Build four edges; on the gate edge we leave a centred gap.
+  if (e === "top") {
+    segs.push([-w / 2, -h / 2, -half, -h / 2]);
+    segs.push([half, -h / 2, w / 2, -h / 2]);
+  } else {
+    segs.push([-w / 2, -h / 2, w / 2, -h / 2]);
+  }
+  if (e === "bottom") {
+    segs.push([-w / 2, h / 2, -half, h / 2]);
+    segs.push([half, h / 2, w / 2, h / 2]);
+  } else {
+    segs.push([-w / 2, h / 2, w / 2, h / 2]);
+  }
+  if (e === "left") {
+    segs.push([-w / 2, -h / 2, -w / 2, -half]);
+    segs.push([-w / 2, half, -w / 2, h / 2]);
+  } else {
+    segs.push([-w / 2, -h / 2, -w / 2, h / 2]);
+  }
+  if (e === "right") {
+    segs.push([w / 2, -h / 2, w / 2, -half]);
+    segs.push([w / 2, half, w / 2, h / 2]);
+  } else {
+    segs.push([w / 2, -h / 2, w / 2, h / 2]);
+  }
+  return (
+    <>
+      {segs.map(([x1, y1, x2, y2], i) => (
+        <Line
+          key={i}
+          points={[x1, y1, x2, y2]}
+          stroke={color}
+          strokeWidth={2.5}
+          lineCap="round"
+        />
+      ))}
+    </>
+  );
+}
+
+function DugoutShape({ el, pxPerFt }: { el: DugoutElement; pxPerFt: number }) {
+  const w = el.width * pxPerFt;
+  const h = el.height * pxPerFt;
+  const roof = el.roofColor ?? "#475569";
+  const bench = el.benchColor ?? "#cbd5e1";
+  // Open side rendered as a thinner edge so the customer can tell which
+  // way the dugout faces.
+  const openEdge =
+    el.openSide === "north" ? "top" :
+    el.openSide === "south" ? "bottom" :
+    el.openSide === "east" ? "right" :
+    "left";
+  const wallThickness = Math.max(2, Math.min(w, h) * 0.08);
+  return (
+    <>
+      {/* Roof + bench fill */}
+      <Rect
+        x={-w / 2}
+        y={-h / 2}
+        width={w}
+        height={h}
+        fill={roof}
+        cornerRadius={2}
+      />
+      {/* Bench seat strip — runs along the closed (back) side */}
+      <Rect
+        x={
+          openEdge === "right"
+            ? -w / 2 + wallThickness
+            : openEdge === "left"
+              ? w / 2 - wallThickness - h * 0.35
+              : -w / 2 + w * 0.2
+        }
+        y={
+          openEdge === "bottom"
+            ? -h / 2 + wallThickness
+            : openEdge === "top"
+              ? h / 2 - wallThickness - h * 0.35
+              : -h / 2 + wallThickness
+        }
+        width={
+          openEdge === "left" || openEdge === "right" ? h * 0.35 : w * 0.6
+        }
+        height={
+          openEdge === "left" || openEdge === "right" ? h - wallThickness * 2 : h * 0.35
+        }
+        fill={bench}
+        cornerRadius={1}
+      />
+      {/* Open side marker — a slim line where the opening is, so users
+          can spot orientation at a glance. */}
+      <Line
+        points={
+          openEdge === "top"
+            ? [-w / 2 + 2, -h / 2, w / 2 - 2, -h / 2]
+            : openEdge === "bottom"
+              ? [-w / 2 + 2, h / 2, w / 2 - 2, h / 2]
+              : openEdge === "left"
+                ? [-w / 2, -h / 2 + 2, -w / 2, h / 2 - 2]
+                : [w / 2, -h / 2 + 2, w / 2, h / 2 - 2]
+        }
+        stroke="#ffffff"
+        strokeWidth={2.5}
+        dash={[4, 3]}
+      />
+    </>
+  );
+}
+
+// Bottom-right watermark. Loads the image once and scales it to ~14% of
+// the canvas width so it's visible without dominating the design.
+function Watermark({
+  url,
+  opacity,
+  canvasWidth,
+  canvasHeight,
+}: {
+  url: string;
+  opacity: number;
+  canvasWidth: number;
+  canvasHeight: number;
+}) {
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  useEffect(() => {
+    const i = new window.Image();
+    i.crossOrigin = "anonymous";
+    i.onload = () => setImg(i);
+    i.src = url;
+    return () => {
+      i.onload = null;
+    };
+  }, [url]);
+  if (!img) return null;
+  const targetW = Math.min(180, canvasWidth * 0.14);
+  const targetH = (img.naturalHeight / img.naturalWidth) * targetW;
+  const margin = 14;
+  return (
+    <>
+      {/* Subtle white pill behind the logo for legibility on dark grass */}
+      <Rect
+        x={canvasWidth - targetW - margin * 2}
+        y={canvasHeight - targetH - margin * 2}
+        width={targetW + margin}
+        height={targetH + margin}
+        fill="rgba(255,255,255,0.78)"
+        cornerRadius={6}
+        opacity={opacity}
+      />
+      <KonvaImage
+        image={img}
+        x={canvasWidth - targetW - margin * 1.5}
+        y={canvasHeight - targetH - margin * 1.5}
+        width={targetW}
+        height={targetH}
+        opacity={opacity}
+      />
+    </>
+  );
+}
+
+function BasketballHoopShape({
+  el,
+  pxPerFt,
+}: {
+  el: BasketballHoopElement;
+  pxPerFt: number;
+}) {
+  // In top-down 2D, draw the backboard as a short bar with the rim circle
+  // peeking out on one side. The pole is a small dot at the back.
+  const backboardW = el.backboardWidthFt * pxPerFt;
+  const color = el.color ?? "#0f172a";
+  const rimColor = el.rimColor ?? "#ef4444";
+  const rimR = Math.max(4, backboardW * 0.13);
+  return (
+    <>
+      {/* Backboard */}
+      <Rect
+        x={-backboardW / 2}
+        y={-2}
+        width={backboardW}
+        height={4}
+        fill={color}
+      />
+      {/* Pole base — behind the backboard */}
+      <Circle x={0} y={-6} radius={3} fill={color} />
+      {/* Rim — in front of the backboard */}
+      <Circle
+        x={0}
+        y={rimR + 4}
+        radius={rimR}
+        stroke={rimColor}
+        strokeWidth={2}
+        fill="rgba(239,68,68,0.15)"
+      />
+    </>
   );
 }
 

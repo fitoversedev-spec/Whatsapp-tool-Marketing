@@ -169,6 +169,49 @@ export type CustomRectElement = CommonElementFields & {
   strokeWidth?: number;
 };
 
+// Chain-link / mesh fence drawn as a rectangle outline. In 2D the rect
+// shows with a hatched mesh fill; in 3D it becomes a translucent vertical
+// mesh wall around the perimeter at `heightFt` height.
+export type FenceRectElement = CommonElementFields & {
+  type: "fence-rect";
+  width: number;
+  height: number;
+  heightFt: number;
+  color?: string;
+  hasGate?: boolean;
+  // Which edge the gate sits on. The renderer just leaves a gap in the
+  // mesh at the centre of that edge — small visual detail that reads as
+  // an entrance.
+  gateEdge?: "top" | "bottom" | "left" | "right";
+};
+
+// Player dugout / bench shelter. Sized for ~10ft × 6ft by default. 2D
+// shows a small rect with the bench facing the field. 3D is a low box +
+// slanted roof.
+export type DugoutElement = CommonElementFields & {
+  type: "dugout";
+  width: number;
+  height: number;
+  // Direction the open side faces. "north" means the opening points to
+  // +Y in plot-space (towards the top of the canvas).
+  openSide: "north" | "south" | "east" | "west";
+  roofColor?: string;
+  benchColor?: string;
+};
+
+// Standalone basketball hoop — pole + arm + backboard + rim. Placed
+// independently of the basketball court so the user can stack one on a
+// driveway, place two flanking a futsal pitch, etc.
+export type BasketballHoopElement = CommonElementFields & {
+  type: "basketball-hoop";
+  // The rim sits on this side of the pole; rotation handles re-orientation
+  // but the model is asymmetric so we keep the natural side baked in.
+  poleHeightFt: number;
+  backboardWidthFt: number;
+  color?: string;
+  rimColor?: string;
+};
+
 export type Element =
   | FootballFieldElement
   | CricketPitchElement
@@ -179,7 +222,10 @@ export type Element =
   | NetElement
   | AnnotationElement
   | CustomLineElement
-  | CustomRectElement;
+  | CustomRectElement
+  | FenceRectElement
+  | DugoutElement
+  | BasketballHoopElement;
 
 export type Style = {
   // Background outside the court (the "earth" around the plot edge).
@@ -210,6 +256,11 @@ export const DEFAULT_STYLE: Style = {
   pickleballSurfaceColor: "#3e7fb7",
   grassStripes: true,
   showDimensions: true,
+  // Fitoverse-branded layouts ship with the logo composited into the
+  // bottom-right of every exported image / video. The user can clear
+  // watermarkUrl in the wizard to remove it.
+  watermarkUrl: "/quotation-assets/image1.png",
+  watermarkOpacity: 0.9,
 };
 
 export type CourtLayout = {
@@ -333,17 +384,34 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
 
   if (hasBasketball && !hasFootball) {
     // Solo basketball: fill the plot
+    const courtW = plot.lengthFt;
+    const courtH = plot.widthFt;
     elements.push({
       id: newId("basketball"),
       type: "basketball-court",
       x: cx,
       y: cy,
       rotation: 0,
-      width: plot.lengthFt,
-      height: plot.widthFt,
+      width: courtW,
+      height: courtH,
       halfCourt: config.basketball?.halfCourt ?? false,
       z: z++,
     });
+    // Auto-add hoops flanking each end of the court so sales doesn't have
+    // to remember to drop them in manually.
+    for (const dir of config.basketball?.halfCourt ? [1] : [-1, 1]) {
+      elements.push({
+        id: newId("hoop"),
+        type: "basketball-hoop",
+        x: cx + (dir * courtW) / 2 - dir * 2,
+        y: cy,
+        rotation: dir < 0 ? 0 : 180,
+        poleHeightFt: 10,
+        backboardWidthFt: 6,
+        z: z + 20,
+      });
+    }
+    z += 30;
   } else if (hasBasketball && hasFootball) {
     // Stacked with football — inset a smaller basketball court in one corner.
     const w = Math.min(50, plot.lengthFt * 0.45);
@@ -509,5 +577,53 @@ export function newCustomRect(plot: Plot): CustomRectElement {
     stroke: "#0f172a",
     strokeWidth: 2,
     z: 150,
+  };
+}
+
+export function newFenceRect(plot: Plot): FenceRectElement {
+  return {
+    id: newId("fence"),
+    type: "fence-rect",
+    x: plot.lengthFt / 2,
+    y: plot.widthFt / 2,
+    rotation: 0,
+    width: plot.lengthFt * 0.95,
+    height: plot.widthFt * 0.95,
+    heightFt: 10,
+    color: "#94a3b8",
+    hasGate: true,
+    gateEdge: "south",
+    z: 5,
+  };
+}
+
+export function newDugout(plot: Plot): DugoutElement {
+  return {
+    id: newId("dugout"),
+    type: "dugout",
+    x: plot.lengthFt / 2,
+    y: plot.widthFt / 2,
+    rotation: 0,
+    width: Math.min(12, plot.lengthFt * 0.15),
+    height: Math.min(5, plot.widthFt * 0.08),
+    openSide: "north",
+    roofColor: "#475569",
+    benchColor: "#cbd5e1",
+    z: 40,
+  };
+}
+
+export function newBasketballHoop(plot: Plot): BasketballHoopElement {
+  return {
+    id: newId("hoop"),
+    type: "basketball-hoop",
+    x: plot.lengthFt / 2,
+    y: plot.widthFt / 2,
+    rotation: 0,
+    poleHeightFt: 10,
+    backboardWidthFt: 6,
+    color: "#0f172a",
+    rimColor: "#ef4444",
+    z: 50,
   };
 }

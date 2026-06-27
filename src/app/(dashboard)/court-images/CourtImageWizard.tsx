@@ -17,9 +17,12 @@ import type { CourtCanvas3DHandle, CourtView } from "@/components/court-image/Co
 import {
   buildInitialLayout,
   newAnnotation,
+  newBasketballHoop,
   newCricketPitch,
   newCustomLine,
   newCustomRect,
+  newDugout,
+  newFenceRect,
   newGoalPost,
   SPORT_LABEL,
   type CourtLayout,
@@ -367,7 +370,17 @@ export default function CourtImageWizard({
     });
   }
 
-  function addElement(kind: "cricket" | "annotation" | "line" | "rect" | "goal-post") {
+  function addElement(
+    kind:
+      | "cricket"
+      | "annotation"
+      | "line"
+      | "rect"
+      | "goal-post"
+      | "fence"
+      | "dugout"
+      | "hoop"
+  ) {
     if (!layout) return;
     let newEl: Element;
     switch (kind) {
@@ -386,9 +399,32 @@ export default function CourtImageWizard({
       case "goal-post":
         newEl = newGoalPost(layout.plot);
         break;
+      case "fence":
+        newEl = newFenceRect(layout.plot);
+        break;
+      case "dugout":
+        newEl = newDugout(layout.plot);
+        break;
+      case "hoop":
+        newEl = newBasketballHoop(layout.plot);
+        break;
     }
     setLayout((prev) => (prev ? { ...prev, elements: [...prev.elements, newEl] } : prev));
     setSelectedId(newEl.id);
+  }
+
+  function toggleWatermark() {
+    setLayout((prev) => {
+      if (!prev) return prev;
+      const currentlyOn = !!prev.style.watermarkUrl;
+      return {
+        ...prev,
+        style: {
+          ...prev.style,
+          watermarkUrl: currentlyOn ? undefined : "/quotation-assets/image1.png",
+        },
+      };
+    });
   }
 
   // ─────────────────────────────────────────────
@@ -669,10 +705,32 @@ export default function CourtImageWizard({
                   <div className="grid grid-cols-2 gap-1.5">
                     <AddBtn label="Cricket pitch" onClick={() => addElement("cricket")} />
                     <AddBtn label="Goal post" onClick={() => addElement("goal-post")} />
+                    <AddBtn label="Basketball hoop" onClick={() => addElement("hoop")} />
+                    <AddBtn label="Fence outline" onClick={() => addElement("fence")} />
+                    <AddBtn label="Dugout" onClick={() => addElement("dugout")} />
                     <AddBtn label="Label" onClick={() => addElement("annotation")} />
                     <AddBtn label="Line / arrow" onClick={() => addElement("line")} />
                     <AddBtn label="Rectangle" onClick={() => addElement("rect")} />
                   </div>
+                </div>
+
+                {/* Watermark toggle — Fitoverse logo composited into the
+                    bottom-right of both 2D + 3D renders. On by default. */}
+                <div className="border-t border-slate-200 pt-4">
+                  <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!layout.style.watermarkUrl}
+                      onChange={toggleWatermark}
+                      className="accent-wa-green"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium">Fitoverse logo watermark</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        Bottom-right of 2D + 3D + video
+                      </div>
+                    </div>
+                  </label>
                 </div>
 
                 {selectedElement && (
@@ -1522,6 +1580,12 @@ function shortLabel(el: Element): string {
       return "Line";
     case "custom-rect":
       return "Rectangle";
+    case "fence-rect":
+      return "Fence outline";
+    case "dugout":
+      return "Dugout";
+    case "basketball-hoop":
+      return "Hoop";
   }
 }
 

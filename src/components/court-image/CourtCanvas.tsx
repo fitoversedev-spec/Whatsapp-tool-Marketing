@@ -1054,17 +1054,16 @@ function FenceOutline({
   h: number;
   color: string;
   gateGap: number;
-  gateEdge: "top" | "bottom" | "left" | "right" | "north" | "south" | "east" | "west";
+  gateEdge: "north" | "south" | "east" | "west";
 }) {
   // Translate the plot-space gate direction names to canvas edges. The
   // 2D canvas has y growing downward, so "north" on the plot (towards
   // top of canvas) is the TOP edge here, "south" is the BOTTOM edge.
-  const e =
+  const e: "top" | "bottom" | "left" | "right" =
     gateEdge === "north" ? "top" :
     gateEdge === "south" ? "bottom" :
     gateEdge === "east" ? "right" :
-    gateEdge === "west" ? "left" :
-    gateEdge;
+    "left";
   const half = gateGap / 2;
   const segs: Array<[number, number, number, number]> = [];
   // Build four edges; on the gate edge we leave a centred gap.

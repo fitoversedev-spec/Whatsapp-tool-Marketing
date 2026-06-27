@@ -179,10 +179,10 @@ export type FenceRectElement = CommonElementFields & {
   heightFt: number;
   color?: string;
   hasGate?: boolean;
-  // Which edge the gate sits on. The renderer just leaves a gap in the
-  // mesh at the centre of that edge — small visual detail that reads as
-  // an entrance.
-  gateEdge?: "top" | "bottom" | "left" | "right";
+  // Which edge the gate sits on. Compass names so the 2D and 3D
+  // renderers share one orientation system. The renderer leaves a gap
+  // in the mesh at the centre of that edge — reads as an entrance.
+  gateEdge?: "north" | "south" | "east" | "west";
 };
 
 // Player dugout / bench shelter. Sized for ~10ft × 6ft by default. 2D

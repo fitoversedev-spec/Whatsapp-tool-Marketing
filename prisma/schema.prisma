@@ -43,6 +43,7 @@ model User {
   pipelineStageChanges PipelineStageHistory[]
   uploadedMedia        Media[]
   quotations           Quotation[]
+  courtImages          CourtImage[]
 
   @@map("users")
 }
@@ -110,6 +111,7 @@ model Conversation {
   stageHistory    PipelineStageHistory[]
   labels          ConversationToLabel[]
   quotations      Quotation[]
+  courtImages     CourtImage[]
 
   @@index([assignedToUserId])
   @@index([status])
@@ -423,4 +425,41 @@ model Media {
   @@index([category])
   @@index([uploadedByUserId])
   @@map("media")
+}
+
+// Court layout designs — visual 2D editable canvas that exports a PNG sent
+// to the customer over WhatsApp. The full editable layout (sports, plot,
+// element positions/sizes/rotations/colors, annotations) is stored as JSON
+// so sales can re-open the design, tweak it, and re-render. The same
+// schema feeds a future 3D renderer without remodeling.
+//
+// Numbering: "FIT-CIM-YYYY-NNN" sequential per calendar year.
+// Status flow: draft -> sent.
+model CourtImage {
+  id              String    @id @default(uuid())
+  number          String    @unique
+  customerName    String    @map("customer_name")
+  // JSON snapshot of the CourtLayout — see src/lib/court-image/schema.ts.
+  // Shape: { plot, sports, elements: [...], style }.
+  layout          String
+  // PNG exported from the canvas + uploaded to Vercel Blob.
+  // Null until the user saves/sends; re-saved if they edit.
+  imageUrl        String?   @map("image_url")
+  caption         String?
+  status          String    @default("draft")
+  conversationId  String?   @map("conversation_id")
+  contactPhone    String?   @map("contact_phone")
+  createdByUserId String    @map("created_by_user_id")
+  sentAt          DateTime? @map("sent_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  createdBy    User          @relation(fields: [createdByUserId], references: [id])
+
+  @@index([status])
+  @@index([conversationId])
+  @@index([contactPhone])
+  @@index([createdAt])
+  @@map("court_images")
 }

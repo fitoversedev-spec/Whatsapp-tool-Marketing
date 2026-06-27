@@ -46,6 +46,12 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         description: "Generate and track customer quotes",
       },
       {
+        href: "/court-images",
+        label: "Court Designer",
+        icon: "🎨",
+        description: "Draw editable 2D layouts, send as WhatsApp image",
+      },
+      {
         href: "/analytics",
         label: "Analytics",
         icon: "📊",
@@ -102,6 +108,10 @@ type Props = {
   onClose: () => void;
   userRole: "admin" | "sales";
   pendingCount: number;
+  // Pixel offset from the left edge of the viewport for desktop anchoring.
+  // Tracks the current sidebar width (252 expanded, 76 collapsed) so the
+  // popover stays flush against the sidebar regardless of collapsed state.
+  anchorOffset?: number;
 };
 
 export default function AllToolsPanel({
@@ -109,6 +119,7 @@ export default function AllToolsPanel({
   onClose,
   userRole,
   pendingCount,
+  anchorOffset = 260,
 }: Props) {
   const pathname = usePathname();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -156,10 +167,16 @@ export default function AllToolsPanel({
 
       <div
         ref={panelRef}
+        style={{
+          // Apply desktop left-anchor inline so it follows the live
+          // collapsed/expanded sidebar width — Tailwind arbitrary classes
+          // are static, but this needs to be dynamic per render.
+          ["--all-tools-left" as never]: `${anchorOffset}px`,
+        }}
         className={`
           fixed z-[60] bg-white shadow-2xl border border-slate-200
           inset-x-4 top-20 bottom-4 max-h-[80vh] overflow-y-auto rounded-2xl
-          lg:inset-auto lg:top-4 lg:bottom-4 lg:left-[260px] lg:w-[520px] lg:max-h-[calc(100vh-2rem)]
+          lg:inset-auto lg:top-4 lg:bottom-4 lg:left-[var(--all-tools-left)] lg:w-[520px] lg:max-h-[calc(100vh-2rem)]
         `}
       >
         {/* Header */}

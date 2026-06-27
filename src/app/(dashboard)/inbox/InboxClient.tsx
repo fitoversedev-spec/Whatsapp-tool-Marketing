@@ -8,6 +8,7 @@ import LabelPicker from "@/components/LabelPicker";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import MediaPreview from "@/components/MediaPreview";
 import QuoteWizard from "@/app/(dashboard)/quotations/QuoteWizard";
+import CourtImageWizard from "@/app/(dashboard)/court-images/CourtImageWizard";
 
 type ConversationLabel = { id: string; name: string; color: string };
 type Conversation = {
@@ -61,6 +62,7 @@ export default function InboxClient({
   const [showNotes, setShowNotes] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
   const [showQuote, setShowQuote] = useState(false);
+  const [showCourtDesign, setShowCourtDesign] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
   // Filter: status + search (phone/name client-side; message content is a separate server call below)
@@ -417,6 +419,13 @@ export default function InboxClient({
                 >
                   📄<span className="hidden sm:inline ml-1">Quote</span>
                 </button>
+                <button
+                  onClick={() => setShowCourtDesign(true)}
+                  className="px-2.5 py-1.5 text-xs rounded-md font-medium text-slate-600 hover:bg-slate-100"
+                  title="Design court layout"
+                >
+                  🎨<span className="hidden sm:inline ml-1">Design</span>
+                </button>
                 {currentUser.role === "admin" && (
                   <>
                     <button
@@ -590,6 +599,16 @@ export default function InboxClient({
             open={showQuote}
             onClose={() => setShowQuote(false)}
             onComplete={() => setShowQuote(false)}
+            prefill={{
+              customerName: current.contactName ?? "+" + current.contactPhone,
+              contactPhone: current.contactPhone,
+              conversationId: current.id,
+            }}
+          />
+          <CourtImageWizard
+            open={showCourtDesign}
+            onClose={() => setShowCourtDesign(false)}
+            onComplete={() => setShowCourtDesign(false)}
             prefill={{
               customerName: current.contactName ?? "+" + current.contactPhone,
               contactPhone: current.contactPhone,

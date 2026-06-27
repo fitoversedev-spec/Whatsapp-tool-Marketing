@@ -25,6 +25,16 @@ const nextConfig = {
   },
 
   webpack: (config, { dev }) => {
+    // Konva's UMD bundle has an opt-in import of the native `canvas` package
+    // for headless Node rendering. We never want that on the server — the
+    // editor is wrapped in next/dynamic({ ssr: false }) — so externalise the
+    // `canvas` module name so webpack leaves it as an unresolved runtime
+    // require (which never executes).
+    config.externals = [
+      ...(config.externals ?? []),
+      { canvas: "commonjs canvas" },
+    ];
+
     if (dev) {
       // Persistent pack-file cache lives under .next/cache/webpack and is
       // the prime victim of OneDrive locks. Memory cache loses nothing

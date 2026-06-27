@@ -40,6 +40,32 @@ export default function Sidebar({
   const [unreadCount, setUnreadCount] = useState(unreadInitial);
   const [reminderCount, setReminderCount] = useState(reminderInitial);
   const [allToolsOpen, setAllToolsOpen] = useState(false);
+  // Collapsed sidebar (desktop only — mobile already uses a drawer).
+  // Persisted in localStorage so the user's preference survives reloads.
+  // Default expanded; flips to collapsed only after we read storage on mount
+  // to avoid a flicker for users who prefer collapsed.
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("ccd_sidebar_collapsed");
+    if (stored === "true") setCollapsed(true);
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("ccd_sidebar_collapsed", String(next));
+      } catch {
+        /* localStorage might be blocked — ignore */
+      }
+      // Force-close the All Tools popover when collapsing; expanded the
+      // popover anchors off the right edge of the sidebar and would be
+      // misaligned for the first paint after collapse.
+      if (next) setAllToolsOpen(false);
+      return next;
+    });
+  }
 
   // Close drawer + All Tools panel on route change
   useEffect(() => {
@@ -99,6 +125,7 @@ export default function Sidebar({
     { href: "/templates", label: "Templates" },
     { href: "/tags", label: "Tags" },
     { href: "/quotations", label: "Quotations" },
+    { href: "/court-images", label: "Court Designer" },
     { href: "/analytics", label: "Analytics" },
     { href: "/media", label: "Media library" },
     { href: "/settings/quotation-rates", label: "Quotation rates" },
@@ -144,22 +171,29 @@ export default function Sidebar({
       <aside
         className={`
           fixed lg:sticky inset-y-0 left-0 top-0 z-50 lg:z-auto
-          w-64 lg:w-60 h-screen lg:h-screen shrink-0
+          w-64 h-screen lg:h-screen shrink-0
           bg-white border-r border-slate-200 flex flex-col
-          transform transition-transform duration-200 ease-out
+          transform transition-[width,transform] duration-200 ease-out
           ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          ${collapsed ? "lg:w-[68px]" : "lg:w-60"}
         `}
       >
-        <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-wa-green text-white flex items-center justify-center font-bold">
+        <div
+          className={`
+            border-b border-slate-200 flex items-center
+            ${collapsed ? "lg:p-3 lg:justify-center p-5 justify-between" : "p-5 justify-between"}
+          `}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-wa-green text-white flex items-center justify-center font-bold shrink-0">
               W
             </div>
-            <div>
+            <div className={collapsed ? "lg:hidden" : ""}>
               <div className="font-semibold text-slate-900 leading-tight">WhatsApp</div>
               <div className="text-xs text-slate-500">Marketing Tool</div>
             </div>
           </div>
+          {/* Mobile close button */}
           <button
             aria-label="Close menu"
             onClick={() => setOpen(false)}
@@ -168,6 +202,21 @@ export default function Sidebar({
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+          {/* Desktop collapse toggle — chevron flips based on state */}
+          <button
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={toggleCollapsed}
+            className={`
+              hidden lg:flex items-center justify-center p-1.5 rounded-lg
+              text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition
+              ${collapsed ? "absolute -right-3 top-7 bg-white border border-slate-200 shadow-sm w-6 h-6 z-10" : ""}
+            `}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              {collapsed ? <polyline points="9 18 15 12 9 6" /> : <polyline points="15 18 9 12 15 6" />}
             </svg>
           </button>
         </div>
@@ -187,17 +236,37 @@ export default function Sidebar({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                title={collapsed ? item.label : undefined}
+                className={`relative flex items-center gap-3 rounded-lg text-sm font-medium transition ${
+                  collapsed ? "lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5" : "px-3 py-2.5"
+                } ${
                   active
                     ? "bg-wa-green/10 text-wa-dark"
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100"
                 }`}
               >
-                <span className="text-base">{item.icon}</span>
-                <span className="flex-1">{item.label}</span>
-                {badge > 0 && (
+                <span className="text-base shrink-0 relative">
+                  {item.icon}
+                  {/* When collapsed, badge becomes a small dot overlay on the icon */}
+                  {collapsed && badge > 0 && (
+                    <span
+                      className={`hidden lg:block absolute -top-1 -right-1 ${badgeColor} w-2.5 h-2.5 rounded-full ring-2 ring-white`}
+                      aria-label={`${badge} pending`}
+                    />
+                  )}
+                </span>
+                <span className={`flex-1 ${collapsed ? "lg:hidden" : ""}`}>{item.label}</span>
+                {!collapsed && badge > 0 && (
                   <span
                     className={`inline-block ${badgeColor} text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none`}
+                  >
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+                {/* Mobile drawer always shows badge as bubble (mobile never collapses) */}
+                {collapsed && badge > 0 && (
+                  <span
+                    className={`lg:hidden inline-block ${badgeColor} text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none ml-auto`}
                   >
                     {badge > 99 ? "99+" : badge}
                   </span>
@@ -213,76 +282,132 @@ export default function Sidebar({
           <button
             type="button"
             data-all-tools-trigger
+            title={collapsed ? "All Tools" : undefined}
             onClick={() => setAllToolsOpen((v) => !v)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+            className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition ${
+              collapsed ? "lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5" : "px-3 py-2.5"
+            } ${
               allToolsOpen
                 ? "bg-wa-green/10 text-wa-dark"
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100"
             }`}
           >
-            <span className="text-base">🔲</span>
-            <span className="flex-1 text-left">All Tools</span>
-            {pendingCount > 0 && user.role === "admin" && (
+            <span className="text-base shrink-0 relative">
+              🔲
+              {collapsed && pendingCount > 0 && user.role === "admin" && (
+                <span className="hidden lg:block absolute -top-1 -right-1 bg-amber-500 w-2.5 h-2.5 rounded-full ring-2 ring-white" />
+              )}
+            </span>
+            <span className={`flex-1 text-left ${collapsed ? "lg:hidden" : ""}`}>All Tools</span>
+            {!collapsed && pendingCount > 0 && user.role === "admin" && (
               <span className="inline-block bg-amber-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
                 {pendingCount}
               </span>
             )}
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`transition-transform ${allToolsOpen ? "rotate-90" : ""}`}
-            >
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
+            {!collapsed && (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`transition-transform ${allToolsOpen ? "rotate-90" : ""}`}
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            )}
           </button>
         </nav>
 
-        {/* Token expiry warning — visible to admin on all pages */}
+        {/* Token expiry warning — visible to admin on all pages.
+            When collapsed, render as a tiny lock icon so the user is still
+            alerted without breaking the slim layout. */}
         {tokenExpired && (
           <Link
             href="/connection"
-            className="mx-3 mb-2 flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 hover:bg-red-100 transition"
+            title={collapsed ? "Token expired — click to fix" : undefined}
+            className={`mx-3 mb-2 flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 hover:bg-red-100 transition ${
+              collapsed ? "lg:justify-center lg:px-2 lg:py-2 px-3 py-2.5" : "px-3 py-2.5"
+            }`}
           >
             <span className="text-base shrink-0">🔑</span>
-            <div>
+            <div className={collapsed ? "lg:hidden" : ""}>
               <div className="text-xs font-bold text-red-800 leading-tight">Token Expired</div>
               <div className="text-[10px] text-red-700 mt-0.5 leading-tight">Messages cannot be sent. Click to fix →</div>
             </div>
           </Link>
         )}
 
-        <div className="p-3 border-t border-slate-200">
+        <div className={`border-t border-slate-200 ${collapsed ? "lg:p-2 p-3" : "p-3"}`}>
           <Link
             href="/profile"
-            className={`block px-3 py-2 rounded-lg transition ${
+            title={collapsed ? `${user.name} (${user.role})` : undefined}
+            className={`block rounded-lg transition ${
+              collapsed ? "lg:px-1 lg:py-2 px-3 py-2" : "px-3 py-2"
+            } ${
               pathname.startsWith("/profile") ? "bg-slate-100" : "hover:bg-slate-50"
             }`}
           >
-            <div className="text-sm font-medium text-slate-900 truncate">{user.name}</div>
-            <div className="text-xs text-slate-500 truncate">{user.email}</div>
-            <div className="text-xs mt-0.5">
-              <span
-                className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
-                  user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
-                }`}
-              >
-                {user.role}
-              </span>
-            </div>
+            {collapsed ? (
+              <>
+                {/* Collapsed: just initials avatar centered */}
+                <div className="hidden lg:flex items-center justify-center">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-xs ${
+                      user.role === "admin"
+                        ? "bg-purple-100 text-purple-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    {initials(user.name)}
+                  </div>
+                </div>
+                {/* Mobile drawer keeps the full block */}
+                <div className="lg:hidden">
+                  <div className="text-sm font-medium text-slate-900 truncate">{user.name}</div>
+                  <div className="text-xs text-slate-500 truncate">{user.email}</div>
+                  <div className="text-xs mt-0.5">
+                    <span
+                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
+                        user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                      }`}
+                    >
+                      {user.role}
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-sm font-medium text-slate-900 truncate">{user.name}</div>
+                <div className="text-xs text-slate-500 truncate">{user.email}</div>
+                <div className="text-xs mt-0.5">
+                  <span
+                    className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
+                      user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    {user.role}
+                  </span>
+                </div>
+              </>
+            )}
           </Link>
           <button
             onClick={logout}
-            className="w-full text-left px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 rounded-lg transition"
+            title={collapsed ? "Sign out" : undefined}
+            className={`w-full text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 rounded-lg transition ${
+              collapsed ? "lg:flex lg:items-center lg:justify-center lg:px-2 lg:py-2 px-3 py-2.5 text-left" : "px-3 py-2.5 text-left"
+            }`}
           >
-            Sign out
+            <span className={collapsed ? "lg:inline hidden text-base" : "hidden"}>⏻</span>
+            <span className={collapsed ? "lg:hidden" : ""}>Sign out</span>
           </button>
-          <div className="px-1 pt-2">
+          {/* Theme toggle — hide on collapsed desktop to save vertical space */}
+          <div className={`px-1 pt-2 ${collapsed ? "lg:hidden" : ""}`}>
             <ThemeToggle />
           </div>
         </div>
@@ -293,7 +418,17 @@ export default function Sidebar({
         onClose={() => setAllToolsOpen(false)}
         userRole={user.role}
         pendingCount={pendingCount}
+        anchorOffset={collapsed ? 76 : 252}
       />
     </>
   );
+}
+
+// First letter of first + last name (e.g. "Vignesh Manikandan" → "VM").
+// Single-word names just use the first character.
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }

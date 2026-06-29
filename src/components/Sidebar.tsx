@@ -128,6 +128,7 @@ export default function Sidebar({
     { href: "/court-images", label: "Court Designer" },
     { href: "/portfolio", label: "Portfolio" },
     { href: "/analytics", label: "Analytics" },
+    { href: "/team", label: "Team Performance" },
     { href: "/media", label: "Media library" },
     { href: "/settings/quotation-rates", label: "Quotation rates" },
     { href: "/connection", label: "Connection" },

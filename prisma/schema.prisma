@@ -44,6 +44,7 @@ model User {
   uploadedMedia        Media[]
   quotations           Quotation[]
   courtImages          CourtImage[]
+  portfolioProjects    PortfolioProject[]
 
   @@map("users")
 }
@@ -469,4 +470,52 @@ model CourtImage {
   @@index([contactPhone])
   @@index([createdAt])
   @@map("court_images")
+}
+
+// Past Fitoverse builds. When a customer asks "what football turfs have
+// you done?", sales pulls a sport-filtered slice of these into a
+// catalogue PDF + hero photos and sends it on WhatsApp.
+//
+// `featured` controls inclusion in the catalogue PDF (so admin can curate
+// which builds best represent the brand) without deleting older rows.
+// `archived` hides from the default listing without breaking external
+// references (the sport catalogue PDF that's already been sent to a
+// customer keeps working even if the project is archived later).
+model PortfolioProject {
+  id               String    @id @default(uuid())
+  customerName     String    @map("customer_name")
+  location         String?
+  sport            String
+  completionDate   DateTime? @map("completion_date")
+  plotLengthFt     Int?      @map("plot_length_ft")
+  plotWidthFt      Int?      @map("plot_width_ft")
+  surfaceType      String?   @map("surface_type")
+  surfaceGrade     String?   @map("surface_grade")
+  // Admin-only display field; never sent to customers. Used internally
+  // for catalogue tier hints (entry / standard / premium).
+  totalCostInr     Decimal?  @db.Decimal(12, 2) @map("total_cost_inr")
+  shortDescription String?   @map("short_description")
+  // JSON array of { url, caption?: string }. Hero photo is rendered
+  // separately on the catalogue cover; gallery shows on the project
+  // page + PDF "past projects" section.
+  photos           String    @default("[]")
+  heroPhotoUrl     String?   @map("hero_photo_url")
+  videoUrl         String?   @map("video_url")
+  // Free-form JSON for sport-specific specs (e.g. turf brand,
+  // a-side preset, pitch length) — surfaces in the catalogue PDF.
+  specs            String    @default("{}")
+  // Comma-separated for simple search
+  tags             String    @default("")
+  featured         Boolean   @default(false)
+  archived         Boolean   @default(false)
+  createdByUserId  String    @map("created_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  createdBy User @relation(fields: [createdByUserId], references: [id])
+
+  @@index([sport])
+  @@index([featured])
+  @@index([archived])
+  @@map("portfolio_projects")
 }

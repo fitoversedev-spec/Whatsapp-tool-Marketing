@@ -126,6 +126,7 @@ export default function Sidebar({
     { href: "/tags", label: "Tags" },
     { href: "/quotations", label: "Quotations" },
     { href: "/court-images", label: "Court Designer" },
+    { href: "/portfolio", label: "Portfolio" },
     { href: "/analytics", label: "Analytics" },
     { href: "/media", label: "Media library" },
     { href: "/settings/quotation-rates", label: "Quotation rates" },

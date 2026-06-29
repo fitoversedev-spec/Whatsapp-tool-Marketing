@@ -52,6 +52,12 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         description: "Draw editable 2D layouts, send as WhatsApp image",
       },
       {
+        href: "/portfolio",
+        label: "Portfolio",
+        icon: "📘",
+        description: "Past Fitoverse builds + per-sport catalogue PDFs",
+      },
+      {
         href: "/analytics",
         label: "Analytics",
         icon: "📊",

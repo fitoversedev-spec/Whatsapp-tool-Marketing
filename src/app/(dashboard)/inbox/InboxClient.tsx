@@ -9,6 +9,7 @@ import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import MediaPreview from "@/components/MediaPreview";
 import QuoteWizard from "@/app/(dashboard)/quotations/QuoteWizard";
 import CourtImageWizard from "@/app/(dashboard)/court-images/CourtImageWizard";
+import SendCatalogueWizard from "@/components/catalogue/SendCatalogueWizard";
 
 type ConversationLabel = { id: string; name: string; color: string };
 type Conversation = {
@@ -63,6 +64,7 @@ export default function InboxClient({
   const [showReminders, setShowReminders] = useState(false);
   const [showQuote, setShowQuote] = useState(false);
   const [showCourtDesign, setShowCourtDesign] = useState(false);
+  const [showCatalogue, setShowCatalogue] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
   // Filter: status + search (phone/name client-side; message content is a separate server call below)
@@ -426,6 +428,13 @@ export default function InboxClient({
                 >
                   🎨<span className="hidden sm:inline ml-1">Design</span>
                 </button>
+                <button
+                  onClick={() => setShowCatalogue(true)}
+                  className="px-2.5 py-1.5 text-xs rounded-md font-medium text-slate-600 hover:bg-slate-100"
+                  title="Send sport catalogue + past projects"
+                >
+                  📘<span className="hidden sm:inline ml-1">Catalogue</span>
+                </button>
                 {currentUser.role === "admin" && (
                   <>
                     <button
@@ -609,6 +618,16 @@ export default function InboxClient({
             open={showCourtDesign}
             onClose={() => setShowCourtDesign(false)}
             onComplete={() => setShowCourtDesign(false)}
+            prefill={{
+              customerName: current.contactName ?? "+" + current.contactPhone,
+              contactPhone: current.contactPhone,
+              conversationId: current.id,
+            }}
+          />
+          <SendCatalogueWizard
+            open={showCatalogue}
+            onClose={() => setShowCatalogue(false)}
+            onComplete={() => setShowCatalogue(false)}
             prefill={{
               customerName: current.contactName ?? "+" + current.contactPhone,
               contactPhone: current.contactPhone,

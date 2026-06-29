@@ -1,6 +1,9 @@
-// Generate + serve a sport-specific catalogue PDF. Reads featured
-// portfolio projects from the DB and inlines their hero photos.
-// Inline-disposed so the wizard preview iframe renders it.
+// Generate + serve a sport-specific catalogue PDF. If an uploaded
+// Fitoverse-authored catalogue PDF has been registered for this sport
+// (Setting key `catalogue_<sport>_url`), redirect to it directly so the
+// customer sees the polished marketing PDF instead of the auto-rendered
+// one. Otherwise fall back to the auto generator (which inlines featured
+// portfolio projects).
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
@@ -17,6 +20,15 @@ export async function GET(_req: NextRequest, { params }: { params: { sport: stri
 
   const meta = getSportMeta(params.sport);
   if (!meta) return new NextResponse("unknown sport", { status: 404 });
+
+  // Override: if admin has uploaded a real catalogue PDF for this sport,
+  // serve that instead of running the auto-generator.
+  const override = await prisma.setting.findUnique({
+    where: { key: `catalogue_${params.sport}_url` },
+  });
+  if (override?.value) {
+    return NextResponse.redirect(override.value, { status: 302 });
+  }
 
   const featured = await prisma.portfolioProject.findMany({
     where: { sport: params.sport, featured: true, archived: false },

@@ -29,6 +29,7 @@ import {
   type Element,
   type Sport,
 } from "@/lib/court-image/schema";
+import { presetsForSports, type CourtPreset } from "@/lib/court-image/sport-standards";
 
 // Konva is client-only. SSR will throw "window is undefined" if we let
 // Next.js include react-konva in the server bundle.
@@ -969,6 +970,13 @@ function Step1(props: {
             />
           </label>
         </div>
+        <DimensionPresets
+          sports={selectedSports}
+          onPick={(p) => {
+            setLengthFt(Math.round(p.lengthFt));
+            setWidthFt(Math.round(p.widthFt));
+          }}
+        />
       </section>
 
       <section>
@@ -1599,4 +1607,77 @@ function AddBtn({ label, onClick }: { label: string; onClick: () => void }) {
       + {label}
     </button>
   );
+}
+
+// Quick-pick international standard dimension chips. Appears after the
+// Length/Width inputs and updates them when clicked. Filtered to the
+// selected sport(s) so sales sees only relevant presets (e.g. picking
+// "Basketball" surfaces both NBA + FIBA variants).
+function DimensionPresets({
+  sports,
+  onPick,
+}: {
+  sports: Sport[];
+  onPick: (p: CourtPreset) => void;
+}) {
+  const presets = useMemo(
+    () => presetsForSports(sports as string[]),
+    [sports]
+  );
+  if (presets.length === 0) return null;
+
+  // Group by variant ("NBA" / "FIBA") if any preset has one, otherwise
+  // render a single flat row.
+  const variants = Array.from(
+    new Set(presets.map((p) => p.variant ?? "default"))
+  );
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+        International standards — click to apply
+      </div>
+      {variants.map((v) => (
+        <div key={v}>
+          {v !== "default" && (
+            <div className="text-[10px] font-bold text-slate-600 uppercase mb-1">
+              {v}
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+            {presets
+              .filter((p) => (p.variant ?? "default") === v)
+              .map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => onPick(p)}
+                  className="text-left px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded hover:border-wa-green hover:bg-wa-green/5 transition"
+                >
+                  <div className="font-medium text-slate-900 leading-tight">
+                    {stripVariantPrefix(p.label, v)}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {Math.round(p.lengthFt)} × {Math.round(p.widthFt)} ft · {p.areaSqFt.toLocaleString("en-IN")} sqft
+                  </div>
+                  {p.hint && (
+                    <div className="text-[9px] text-slate-400 mt-0.5 italic">
+                      {p.hint}
+                    </div>
+                  )}
+                </button>
+              ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Trims "NBA " / "FIBA " prefix from labels when we're already showing a
+// section header for the variant — avoids "NBA / NBA Play Area" stutter.
+function stripVariantPrefix(label: string, variant: string): string {
+  if (variant === "default") return label;
+  const prefix = variant + " ";
+  return label.startsWith(prefix) ? label.slice(prefix.length) : label;
 }

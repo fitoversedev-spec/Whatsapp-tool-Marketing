@@ -117,9 +117,9 @@ export default function SendCatalogueWizard({
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {step === 1 && (
-            <div className="p-6 sm:p-8 max-w-2xl mx-auto space-y-5">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 max-w-2xl w-full mx-auto space-y-5">
               <section>
                 <h3 className="text-sm font-semibold text-slate-900 mb-2">Sport</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

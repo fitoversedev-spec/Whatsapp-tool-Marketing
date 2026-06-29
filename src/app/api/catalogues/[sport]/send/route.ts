@@ -55,39 +55,49 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
     take: 6,
   });
 
-  // 1. Render PDF + upload to blob
+  // 1. Get the PDF URL. Prefer the admin-uploaded catalogue PDF
+  //    (Setting key catalogue_<sport>_url) — that's the polished
+  //    Fitoverse-authored marketing PDF. Fall back to auto-rendered if
+  //    no upload exists for this sport.
   let pdfUrl: string;
   const fileName = `fitoverse-${params.sport}-catalogue.pdf`;
-  try {
-    const projects: FeaturedProject[] = featured.map((p) => ({
-      customerName: p.customerName,
-      location: p.location,
-      completionDate: p.completionDate,
-      plotLengthFt: p.plotLengthFt,
-      plotWidthFt: p.plotWidthFt,
-      surfaceType: p.surfaceType,
-      surfaceGrade: p.surfaceGrade,
-      shortDescription: p.shortDescription,
-      heroPhotoUrl: p.heroPhotoUrl,
-    }));
-    const pdfBuffer = await renderCatalogue(params.sport as SportKey, projects);
-    const uploaded = await uploadToBlob({
-      bytes: pdfBuffer,
-      fileName,
-      mimeType: "application/pdf",
-      folder: "catalogues",
-    });
-    pdfUrl = uploaded.url;
-  } catch (err) {
-    console.error("[catalogue/send] PDF render/upload failed", err);
-    return NextResponse.json(
-      {
-        error:
-          "Failed to render catalogue PDF: " +
-          (err instanceof Error ? err.message : String(err)),
-      },
-      { status: 500 }
-    );
+  const override = await prisma.setting.findUnique({
+    where: { key: `catalogue_${params.sport}_url` },
+  });
+  if (override?.value) {
+    pdfUrl = override.value;
+  } else {
+    try {
+      const projects: FeaturedProject[] = featured.map((p) => ({
+        customerName: p.customerName,
+        location: p.location,
+        completionDate: p.completionDate,
+        plotLengthFt: p.plotLengthFt,
+        plotWidthFt: p.plotWidthFt,
+        surfaceType: p.surfaceType,
+        surfaceGrade: p.surfaceGrade,
+        shortDescription: p.shortDescription,
+        heroPhotoUrl: p.heroPhotoUrl,
+      }));
+      const pdfBuffer = await renderCatalogue(params.sport as SportKey, projects);
+      const uploaded = await uploadToBlob({
+        bytes: pdfBuffer,
+        fileName,
+        mimeType: "application/pdf",
+        folder: "catalogues",
+      });
+      pdfUrl = uploaded.url;
+    } catch (err) {
+      console.error("[catalogue/send] PDF render/upload failed", err);
+      return NextResponse.json(
+        {
+          error:
+            "Failed to render catalogue PDF: " +
+            (err instanceof Error ? err.message : String(err)),
+        },
+        { status: 500 }
+      );
+    }
   }
 
   // 2. Send PDF over WhatsApp (with caption on the first message)

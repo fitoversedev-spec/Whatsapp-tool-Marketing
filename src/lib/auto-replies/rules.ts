@@ -43,7 +43,10 @@ const GREETING_RULE: AutoReplyRule = {
   responseType: "text",
   responseBody:
     "Welcome to Fitoverse. We are a sports infrastructure company that builds community through sports. We construct football turfs, cricket grounds, basketball and tennis courts, badminton halls, and multi sport facilities. What are you looking to build? Please reply with the sport you are interested in and your plot size, and our team will get back to you within 24 hours.",
-  cooldownHours: 24,
+  // Short enough that a returning customer greeted the next day gets a
+  // fresh welcome; long enough that we don't spam someone who says
+  // "hi", "hii", "hey" in quick succession.
+  cooldownHours: 3,
 };
 
 // L1 — Office location + Google Maps. Fires when any location-intent
@@ -69,7 +72,10 @@ const LOCATION_RULE: AutoReplyRule = {
   responseType: "text",
   responseBody:
     "Fitoverse office address: Ground Floor, Divya Towers, Fort Main Rd, Shevapet, Salem, Tamil Nadu 636001. Google Maps location: https://www.google.com/maps/dir//Fitoverse+Pvt.+Ltd.+(Sports+construction+and+Fitness+Management),+Ground+Floor,+Divya+Towers,+Fort+Main+Rd,+Shevapet,+Salem,+Tamil+Nadu+636001/@11.6686848,78.1221888,13z/data=!4m8!4m7!1m0!1m5!1m1!1s0x3babefb810000001:0x8899513f25af074f!2m2!1d78.1519248!2d11.6538017?entry=ttu&g_ep=EgoyMDI2MDYyOC4wIKXMDSoASAFQAw%3D%3D. Our team is available Monday to Saturday, 9am to 8pm.",
-  cooldownHours: 24,
+  // Short — a lead often asks address, then directions, then the map
+  // link separately for a driver. 2h lets those all through while still
+  // stopping obvious duplicate triggers.
+  cooldownHours: 2,
 };
 
 // Order matters — first match wins. Location is more specific than the

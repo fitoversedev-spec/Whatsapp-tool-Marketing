@@ -59,7 +59,7 @@ const SPORTS = [
 
 export default function QuoteWizard({ open, onClose, onComplete, prefill }: Props) {
   const toast = useToast();
-  const { unit } = useUserUnit();
+  const { unit, setUnit } = useUserUnit();
   const [step, setStep] = useState(1);
 
   // Step 1 state
@@ -370,9 +370,37 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Plot dimensions *
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Plot dimensions *
+                  </label>
+                  {/* Inline unit toggle. Persists to the user's profile
+                      so every wizard + PDF respects it going forward. */}
+                  <div className="inline-flex bg-slate-100 rounded-md p-0.5 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setUnit("ft")}
+                      className={`px-2.5 py-1 rounded font-medium transition ${
+                        unit === "ft"
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      ft
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUnit("m")}
+                      className={`px-2.5 py-1 rounded font-medium transition ${
+                        unit === "m"
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      m
+                    </button>
+                  </div>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1.5">
                     <input

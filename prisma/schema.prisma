@@ -117,6 +117,7 @@ model Conversation {
   labels          ConversationToLabel[]
   quotations      Quotation[]
   courtImages     CourtImage[]
+  autoReplyLogs   AutoReplyLog[]
 
   @@index([assignedToUserId])
   @@index([status])
@@ -434,6 +435,26 @@ model Media {
   @@index([category])
   @@index([uploadedByUserId])
   @@map("media")
+}
+
+// Audit log for auto-reply rule firings. Every time a rule fires we
+// record which rule + which contact + when so the dispatcher can honour
+// per-contact cooldowns (don't spam the customer with the same greeting
+// twice in 24 hours) and admin has visibility into what the bot sent.
+model AutoReplyLog {
+  id             String   @id @default(uuid())
+  ruleId         String   @map("rule_id")
+  conversationId String   @map("conversation_id")
+  contactPhone   String   @map("contact_phone")
+  triggeredBy    String?  @map("triggered_by")
+  waMessageId    String?  @map("wa_message_id")
+  firedAt        DateTime @default(now()) @map("fired_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, contactPhone, firedAt])
+  @@index([conversationId])
+  @@map("auto_reply_logs")
 }
 
 // Court layout designs — visual 2D editable canvas that exports a PNG sent

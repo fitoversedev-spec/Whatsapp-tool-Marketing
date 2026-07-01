@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyMetaSignature, isOptOutMessage } from "@/lib/webhook";
 import { fetchInboundMedia } from "@/lib/whatsapp";
 import { categorize, uploadToBlob } from "@/lib/media";
+import { dispatchAutoReply } from "@/lib/auto-replies/dispatch";
 
 // Meta requires GET for verification handshake
 export async function GET(req: NextRequest) {
@@ -226,6 +227,21 @@ async function handleInboundMessage(msg: any, profileName?: string) {
       create: { phoneE164: from, reason: "stop_reply" },
       update: { optedOutAt: new Date(), reason: "stop_reply" },
     });
+    // Don't auto-reply on the same message that opts them out — that
+    // would be perverse. Return early.
+    return;
+  }
+
+  // Auto-reply dispatcher. Fires on plain text messages only (media
+  // captions can be misleading). Dispatcher handles its own opt-out +
+  // cooldown checks and silent-fails on any error so a bug here can't
+  // break the webhook contract with Meta.
+  if (type === "text" && body) {
+    dispatchAutoReply({
+      conversationId: convo.id,
+      contactPhone: from,
+      inboundBody: body,
+    }).catch((err) => console.error("[webhook] auto-reply dispatch threw", err));
   }
 }
 

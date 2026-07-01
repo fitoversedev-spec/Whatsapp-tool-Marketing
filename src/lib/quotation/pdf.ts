@@ -368,7 +368,9 @@ function drawInfoGrid(
     { label: "TO", value: customerName, col: 0, row: 1 },
     {
       label: "PLOT DIMENSIONS",
-      value: `${lengthFt} × ${widthFt} ft = ${inr(lengthFt * widthFt)} sq.ft`,
+      // Dual-unit display (Option C — customer PDFs always show both
+      // ft + m so no conversion needed on their side).
+      value: `${lengthFt} × ${widthFt} ft (${(lengthFt * 0.3048).toFixed(1)} × ${(widthFt * 0.3048).toFixed(1)} m) = ${inr(lengthFt * widthFt)} sq.ft (${inr(Math.round(lengthFt * widthFt * 0.0929))} m²)`,
       col: 1,
       row: 1,
     },

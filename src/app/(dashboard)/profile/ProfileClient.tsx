@@ -8,17 +8,46 @@ import { useToast } from "@/components/Toast";
 export default function ProfileClient({
   user,
 }: {
-  user: { name: string; email: string; role: "admin" | "sales" };
+  user: {
+    name: string;
+    email: string;
+    role: "admin" | "sales";
+    preferredUnit: "ft" | "m";
+  };
 }) {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState(user.name);
   const [savingName, setSavingName] = useState(false);
 
+  const [preferredUnit, setPreferredUnit] = useState<"ft" | "m">(user.preferredUnit);
+  const [savingUnit, setSavingUnit] = useState(false);
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+
+  async function saveUnit(unit: "ft" | "m") {
+    if (unit === preferredUnit) return;
+    setSavingUnit(true);
+    setPreferredUnit(unit);
+    const res = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preferredUnit: unit }),
+    });
+    setSavingUnit(false);
+    if (res.ok) {
+      toast.success(`Unit set to ${unit === "ft" ? "feet" : "meters"}`);
+      // Reload so any open wizards / server-rendered dims re-fetch the
+      // fresh preference from /api/auth/me on next mount.
+      router.refresh();
+    } else {
+      setPreferredUnit(user.preferredUnit);
+      toast.error("Failed to update unit");
+    }
+  }
 
   async function saveName(e: FormEvent) {
     e.preventDefault();
@@ -106,6 +135,46 @@ export default function ProfileClient({
             </button>
           </div>
         </form>
+
+        {/* Preferred dimension unit */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">
+              Preferred dimension unit
+            </h2>
+            <p className="text-xs text-slate-500">
+              Applies to Court Designer, quotation line items, and portfolio
+              dimensions. Exported PDFs always show both units for the
+              customer regardless of your choice.
+            </p>
+          </div>
+          <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
+            <button
+              type="button"
+              onClick={() => saveUnit("ft")}
+              disabled={savingUnit}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                preferredUnit === "ft"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Feet (ft)
+            </button>
+            <button
+              type="button"
+              onClick={() => saveUnit("m")}
+              disabled={savingUnit}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                preferredUnit === "m"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Meters (m)
+            </button>
+          </div>
+        </div>
 
         {/* Change password */}
         <form

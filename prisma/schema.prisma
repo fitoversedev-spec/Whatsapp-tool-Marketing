@@ -31,6 +31,10 @@ model User {
   rejectionReason String?   @map("rejection_reason")
   isActive        Boolean   @default(true) @map("is_active")
   deletedAt       DateTime? @map("deleted_at")
+  // Preferred dimension unit for the app's forms + inline labels.
+  // Values: "ft" (default, Indian market) | "m" (meters).
+  // PDF/exported outputs always show both units regardless (Option C).
+  preferredUnit   String    @default("ft") @map("preferred_unit")
   createdAt       DateTime  @default(now()) @map("created_at")
 
   draftedTemplates     Template[]             @relation("DraftedTemplates")

@@ -11,6 +11,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/Toast";
+import { useUserUnit } from "@/lib/units/useUserUnit";
+import { toFeet, toUnit } from "@/lib/units";
 
 type RateSheetItem = {
   id: string;
@@ -57,6 +59,7 @@ const SPORTS = [
 
 export default function QuoteWizard({ open, onClose, onComplete, prefill }: Props) {
   const toast = useToast();
+  const { unit } = useUserUnit();
   const [step, setStep] = useState(1);
 
   // Step 1 state
@@ -64,6 +67,9 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
   const [sport, setSport] = useState("football");
   const [lengthFt, setLengthFt] = useState(60);
   const [widthFt, setWidthFt] = useState(100);
+  // User's preferred unit view of the dimensions; storage always feet.
+  const displayLen = unit === "ft" ? lengthFt : Number(toUnit(lengthFt, unit).toFixed(1));
+  const displayWid = unit === "ft" ? widthFt : Number(toUnit(widthFt, unit).toFixed(1));
   const [quoteDate, setQuoteDate] = useState(new Date().toISOString().slice(0, 10));
   const [validityDays, setValidityDays] = useState(30);
   const [notes, setNotes] = useState("");
@@ -364,25 +370,37 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                     <input
                       type="number"
                       min={1}
-                      value={lengthFt}
-                      onChange={(e) => setLengthFt(parseInt(e.target.value) || 0)}
+                      step={unit === "m" ? 0.1 : 1}
+                      value={displayLen}
+                      onChange={(e) =>
+                        setLengthFt(
+                          Math.round(toFeet(parseFloat(e.target.value) || 0, unit))
+                        )
+                      }
                       className="w-20 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
                     />
-                    <span className="text-sm text-slate-500">ft</span>
+                    <span className="text-sm text-slate-500">{unit}</span>
                   </div>
                   <span className="text-slate-400">×</span>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
                       min={1}
-                      value={widthFt}
-                      onChange={(e) => setWidthFt(parseInt(e.target.value) || 0)}
+                      step={unit === "m" ? 0.1 : 1}
+                      value={displayWid}
+                      onChange={(e) =>
+                        setWidthFt(
+                          Math.round(toFeet(parseFloat(e.target.value) || 0, unit))
+                        )
+                      }
                       className="w-20 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
                     />
-                    <span className="text-sm text-slate-500">ft</span>
+                    <span className="text-sm text-slate-500">{unit}</span>
                   </div>
                   <span className="text-sm font-medium text-slate-700 ml-2">
-                    = {(lengthFt * widthFt).toLocaleString("en-IN")} sq.ft
+                    {unit === "ft"
+                      ? `= ${(lengthFt * widthFt).toLocaleString("en-IN")} sq.ft`
+                      : `= ${Math.round(lengthFt * widthFt * 0.0929).toLocaleString("en-IN")} m² (${(lengthFt * widthFt).toLocaleString("en-IN")} sq.ft)`}
                   </span>
                 </div>
               </div>

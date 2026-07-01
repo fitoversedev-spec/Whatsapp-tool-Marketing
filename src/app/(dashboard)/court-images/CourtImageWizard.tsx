@@ -30,6 +30,8 @@ import {
   type Sport,
 } from "@/lib/court-image/schema";
 import { presetsForSports, type CourtPreset } from "@/lib/court-image/sport-standards";
+import { useUserUnit } from "@/lib/units/useUserUnit";
+import { toFeet, toUnit, FT_TO_M } from "@/lib/units";
 
 // Konva is client-only. SSR will throw "window is undefined" if we let
 // Next.js include react-konva in the server bundle.
@@ -895,6 +897,7 @@ function Step1(props: {
   basketballHalfCourt: boolean;
   setBasketballHalfCourt: (v: boolean) => void;
 }) {
+  const { unit } = useUserUnit();
   const {
     customerName,
     setCustomerName,
@@ -928,6 +931,11 @@ function Step1(props: {
   const showCricketConfig = selectedSports.includes("cricket");
   const showBasketballConfig = selectedSports.includes("basketball");
 
+  // Display values are the user-facing unit; storage stays in feet.
+  // Rounded to 1 decimal for meters, 0 for feet.
+  const displayLen = unit === "ft" ? lengthFt : Number(toUnit(lengthFt, unit).toFixed(1));
+  const displayWid = unit === "ft" ? widthFt : Number(toUnit(widthFt, unit).toFixed(1));
+
   return (
     <div className="p-6 sm:p-8 overflow-y-auto h-full max-w-3xl mx-auto space-y-6">
       <section>
@@ -941,37 +949,56 @@ function Step1(props: {
       </section>
 
       <section>
-        <h3 className="text-sm font-semibold text-slate-900 mb-3">Plot dimensions</h3>
+        <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+          Plot dimensions
+          <span className="text-[10px] font-normal px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded uppercase tracking-wide">
+            {unit}
+          </span>
+        </h3>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-[11px] text-slate-500 uppercase tracking-wide">
-              Length (ft)
+              Length ({unit})
             </span>
             <input
               type="number"
-              min={10}
-              max={500}
-              value={lengthFt}
-              onChange={(e) => setLengthFt(parseFloat(e.target.value) || 0)}
+              min={unit === "m" ? 3 : 10}
+              max={unit === "m" ? 150 : 500}
+              step={unit === "m" ? 0.1 : 1}
+              value={displayLen}
+              onChange={(e) => {
+                const raw = parseFloat(e.target.value) || 0;
+                setLengthFt(toFeet(raw, unit));
+              }}
               className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
             />
           </label>
           <label className="block">
             <span className="text-[11px] text-slate-500 uppercase tracking-wide">
-              Width (ft)
+              Width ({unit})
             </span>
             <input
               type="number"
-              min={10}
-              max={500}
-              value={widthFt}
-              onChange={(e) => setWidthFt(parseFloat(e.target.value) || 0)}
+              min={unit === "m" ? 3 : 10}
+              max={unit === "m" ? 150 : 500}
+              step={unit === "m" ? 0.1 : 1}
+              value={displayWid}
+              onChange={(e) => {
+                const raw = parseFloat(e.target.value) || 0;
+                setWidthFt(toFeet(raw, unit));
+              }}
               className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
             />
           </label>
         </div>
+        {unit === "m" && (
+          <div className="text-[10px] text-slate-500 mt-1">
+            = {Math.round(lengthFt)} × {Math.round(widthFt)} ft (canonical)
+          </div>
+        )}
         <DimensionPresets
           sports={selectedSports}
+          unit={unit}
           onPick={(p) => {
             setLengthFt(Math.round(p.lengthFt));
             setWidthFt(Math.round(p.widthFt));
@@ -1612,12 +1639,15 @@ function AddBtn({ label, onClick }: { label: string; onClick: () => void }) {
 // Quick-pick international standard dimension chips. Appears after the
 // Length/Width inputs and updates them when clicked. Filtered to the
 // selected sport(s) so sales sees only relevant presets (e.g. picking
-// "Basketball" surfaces both NBA + FIBA variants).
+// "Basketball" surfaces both NBA + FIBA variants). Dimensions render
+// in the current user's preferred unit.
 function DimensionPresets({
   sports,
+  unit,
   onPick,
 }: {
   sports: Sport[];
+  unit: "ft" | "m";
   onPick: (p: CourtPreset) => void;
 }) {
   const presets = useMemo(
@@ -1658,7 +1688,9 @@ function DimensionPresets({
                     {stripVariantPrefix(p.label, v)}
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">
-                    {Math.round(p.lengthFt)} × {Math.round(p.widthFt)} ft · {p.areaSqFt.toLocaleString("en-IN")} sqft
+                    {unit === "ft"
+                      ? `${Math.round(p.lengthFt)} × ${Math.round(p.widthFt)} ft · ${p.areaSqFt.toLocaleString("en-IN")} sqft`
+                      : `${(p.lengthFt * FT_TO_M).toFixed(1)} × ${(p.widthFt * FT_TO_M).toFixed(1)} m · ${Math.round(p.areaSqFt * 0.0929).toLocaleString("en-IN")} m²`}
                   </div>
                   {p.hint && (
                     <div className="text-[9px] text-slate-400 mt-0.5 italic">

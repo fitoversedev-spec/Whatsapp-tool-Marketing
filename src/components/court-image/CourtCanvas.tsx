@@ -1297,10 +1297,13 @@ function PlotDimensions({
 
   // Top: horizontal dimension line above the plot.
   const topY = plotOriginY - offset;
-  const lengthLabel = `${plotLengthFt} ft`;
+  // Dual-unit dimension labels (Option C — every exported PNG shows both
+  // ft + m so customers never have to convert). Uses the international
+  // foot: 1 ft = 0.3048 m.
+  const lengthLabel = `${plotLengthFt} ft (${(plotLengthFt * 0.3048).toFixed(1)} m)`;
   // Left: vertical dimension line to the left of the plot.
   const leftX = plotOriginX - offset;
-  const widthLabel = `${plotWidthFt} ft`;
+  const widthLabel = `${plotWidthFt} ft (${(plotWidthFt * 0.3048).toFixed(1)} m)`;
 
   return (
     <>
@@ -1326,12 +1329,12 @@ function PlotDimensions({
         stroke={lineColor}
         strokeWidth={lineWidth}
       />
-      {/* Length text — centred on the line with a white pill behind it so
-          it's legible even when the dimension line crosses busy edges */}
+      {/* Length text — dual-unit "80 ft (24.4 m)". Pill widened to fit
+          both units without truncation. */}
       <Rect
-        x={plotOriginX + plotPxWidth / 2 - labelFontSize * 2}
+        x={plotOriginX + plotPxWidth / 2 - labelFontSize * 4}
         y={topY - labelFontSize * 0.75}
-        width={labelFontSize * 4}
+        width={labelFontSize * 8}
         height={labelFontSize * 1.4}
         fill="rgba(255,255,255,0.92)"
         cornerRadius={labelFontSize * 0.25}
@@ -1342,9 +1345,9 @@ function PlotDimensions({
         fontStyle="600"
         fontFamily="system-ui, -apple-system, sans-serif"
         fill={labelColor}
-        x={plotOriginX + plotPxWidth / 2 - labelFontSize * 2}
+        x={plotOriginX + plotPxWidth / 2 - labelFontSize * 4}
         y={topY - labelFontSize * 0.55}
-        width={labelFontSize * 4}
+        width={labelFontSize * 8}
         align="center"
       />
 
@@ -1369,12 +1372,13 @@ function PlotDimensions({
         stroke={lineColor}
         strokeWidth={lineWidth}
       />
-      {/* Width text — rotated 90° so it reads along the vertical line */}
+      {/* Width text — rotated 90° so it reads along the vertical line.
+          Pill widened for dual-unit "60 ft (18.3 m)". */}
       <Rect
         x={leftX - labelFontSize * 0.7}
-        y={plotOriginY + plotPxHeight / 2 - labelFontSize * 2}
+        y={plotOriginY + plotPxHeight / 2 - labelFontSize * 4}
         width={labelFontSize * 1.4}
-        height={labelFontSize * 4}
+        height={labelFontSize * 8}
         fill="rgba(255,255,255,0.92)"
         cornerRadius={labelFontSize * 0.25}
       />
@@ -1389,9 +1393,9 @@ function PlotDimensions({
         // Rotate text 90° counter-clockwise. With offset at (0,0) and
         // rotation -90, the text starts at the anchor and grows upward.
         rotation={-90}
-        offsetX={labelFontSize * 2}
+        offsetX={labelFontSize * 4}
         offsetY={labelFontSize * 0.55}
-        width={labelFontSize * 4}
+        width={labelFontSize * 8}
         align="center"
       />
     </>

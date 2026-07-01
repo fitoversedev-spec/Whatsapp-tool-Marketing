@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { renderCatalogue, type FeaturedProject } from "@/lib/catalogue/pdf";
 import { getSportMeta, type SportKey } from "@/lib/catalogue/sport-meta";
 import { uploadToBlob } from "@/lib/media";
-import { sendMedia, describeMetaError } from "@/lib/whatsapp";
+import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -100,23 +100,53 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
     }
   }
 
-  // 2. Send PDF over WhatsApp (with caption on the first message)
+  // 2. Send caption as a preceding text message (so the customer
+  //    actually SEES it — WhatsApp document captions are often hidden
+  //    below the file thumbnail), then the PDF without an inline
+  //    caption, then the follow-up hero photos.
   const baseCaption =
     caption?.trim() ||
     `Fitoverse ${meta.label} catalogue. Reply with your plot size + location and we will send a custom quote.`;
 
-  type Sent = { format: string; waMessageId: string; url: string };
+  type Sent = {
+    format: string;
+    waMessageId: string;
+    url: string | null;
+    type: "text" | "document" | "image";
+  };
   const sent: Sent[] = [];
+
+  if (baseCaption) {
+    try {
+      const t = await sendText({ to: contactPhone, body: baseCaption });
+      sent.push({
+        format: "caption",
+        waMessageId: t.waMessageId,
+        url: null,
+        type: "text",
+      });
+    } catch (err) {
+      const e = describeMetaError(err);
+      return NextResponse.json(
+        { error: `WhatsApp send failed (caption): ${e.message}`, code: e.code },
+        { status: 502 }
+      );
+    }
+  }
 
   try {
     const r = await sendMedia({
       to: contactPhone,
       mediaType: "document",
       url: pdfUrl,
-      caption: baseCaption,
       filename: fileName,
     });
-    sent.push({ format: "catalogue-pdf", waMessageId: r.waMessageId, url: pdfUrl });
+    sent.push({
+      format: "catalogue-pdf",
+      waMessageId: r.waMessageId,
+      url: pdfUrl,
+      type: "document",
+    });
   } catch (err) {
     const e = describeMetaError(err);
     return NextResponse.json(
@@ -142,6 +172,7 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
         format: `project-photo:${p.id}`,
         waMessageId: r.waMessageId,
         url: p.heroPhotoUrl,
+        type: "image",
       });
     } catch (err) {
       // Don't abort the whole send if one photo fails — the catalogue
@@ -156,19 +187,27 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
   // 4. Mirror everything into the linked conversation thread (if any)
   if (conversationId) {
     for (const s of sent) {
-      const isPdf = s.format === "catalogue-pdf";
+      const type = s.type;
       await prisma.message
         .create({
           data: {
             conversationId,
             direction: "outbound",
-            type: isPdf ? "document" : "image",
-            body: isPdf
-              ? `Catalogue: ${meta.label}`
-              : `Past project photo (${meta.label})`,
-            mediaUrl: s.url,
-            mediaMimeType: isPdf ? "application/pdf" : "image/jpeg",
-            mediaFileName: isPdf ? fileName : undefined,
+            type,
+            body:
+              type === "text"
+                ? baseCaption
+                : type === "document"
+                  ? `Catalogue: ${meta.label}`
+                  : `Past project photo (${meta.label})`,
+            mediaUrl: s.url ?? undefined,
+            mediaMimeType:
+              type === "text"
+                ? undefined
+                : type === "document"
+                  ? "application/pdf"
+                  : "image/jpeg",
+            mediaFileName: type === "document" ? fileName : undefined,
             waMessageId: s.waMessageId,
             status: "sent",
             sentByUserId: user.id,

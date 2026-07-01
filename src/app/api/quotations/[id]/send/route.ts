@@ -10,7 +10,14 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { renderQuotationPdf } from "@/lib/quotation/pdf";
 import { uploadToBlob } from "@/lib/media";
-import { sendMedia, describeMetaError } from "@/lib/whatsapp";
+import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
+import { z } from "zod";
+
+// Optional caption in the request body — overrides row.caption if
+// provided. Wizard sends this when the user typed a message in Step 3.
+const bodySchema = z.object({
+  caption: z.string().max(1024).nullable().optional(),
+});
 import type { QuoteLineItem } from "@/lib/quotation/calculator";
 
 export const runtime = "nodejs";
@@ -20,8 +27,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
+  const body = await req.json().catch(() => ({}));
+  const parsed = bodySchema.safeParse(body);
+  const bodyCaption = parsed.success ? parsed.data.caption : null;
+
   const q = await prisma.quotation.findUnique({ where: { id: params.id } });
   if (!q) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  // If a caption came in via the body (from the wizard), persist it so
+  // re-sends from the /quotations list use the same wording.
+  if (bodyCaption !== undefined && bodyCaption !== q.caption) {
+    await prisma.quotation.update({
+      where: { id: params.id },
+      data: { caption: bodyCaption },
+    });
+    q.caption = bodyCaption;
+  }
   if (user.role !== "admin" && q.createdByUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -68,14 +89,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
-  // 2. Send via WhatsApp as document
+  // 2. Send caption as a preceding text message (if provided) then the
+  //    PDF as a document. Splitting them fixes the "caption invisible"
+  //    quirk WhatsApp has with document-type captions — customers see
+  //    the intro text clearly, then the file below it.
+  const captionText =
+    q.caption?.trim() ||
+    `Quotation ${q.number} from Fitoverse — total ₹${Number(q.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  let captionMessageId: string | null = null;
   let waMessageId = "";
   try {
+    if (captionText) {
+      const t = await sendText({ to: q.contactPhone, body: captionText });
+      captionMessageId = t.waMessageId;
+    }
     const r = await sendMedia({
       to: q.contactPhone,
       mediaType: "document",
       url: pdfUrl,
-      caption: `Quotation ${q.number} from Fitoverse — total ₹${Number(q.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+      // No inline caption — the intro text message already delivered it.
       filename: fileName,
     });
     waMessageId = r.waMessageId;
@@ -98,6 +130,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   });
 
   if (q.conversationId) {
+    // Mirror the caption text (if sent) + the PDF into the inbox thread
+    // so the conversation shows both, matching what the customer sees.
+    if (captionMessageId) {
+      await prisma.message
+        .create({
+          data: {
+            conversationId: q.conversationId,
+            direction: "outbound",
+            type: "text",
+            body: captionText,
+            waMessageId: captionMessageId,
+            status: "sent",
+            sentByUserId: user.id,
+          },
+        })
+        .catch(() => null);
+    }
     await prisma.message
       .create({
         data: {

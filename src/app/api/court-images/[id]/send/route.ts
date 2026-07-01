@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { sendMedia, describeMetaError } from "@/lib/whatsapp";
+import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -99,23 +99,46 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const baseCaption =
-    row.caption ?? `Court design ${row.number} from Fitoverse — ${row.customerName}`;
+    row.caption?.trim() ||
+    `Court design ${row.number} from Fitoverse — ${row.customerName}`;
 
-  const sent: Array<{ format: string; waMessageId: string; url: string }> = [];
+  type Sent = {
+    format: string;
+    waMessageId: string;
+    url: string | null;
+    type: "image" | "video" | "text";
+  };
+  const sent: Sent[] = [];
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    // Only the first message carries the caption — matches what WhatsApp
-    // clients render visually.
-    const caption = i === 0 ? baseCaption : undefined;
+  // Send the caption as a preceding text message so WhatsApp displays
+  // it as a clear intro rather than hiding it under inline media.
+  if (baseCaption) {
+    try {
+      const t = await sendText({ to: row.contactPhone, body: baseCaption });
+      sent.push({ format: "caption", waMessageId: t.waMessageId, url: null, type: "text" });
+    } catch (err) {
+      const e = describeMetaError(err);
+      return NextResponse.json(
+        { error: `WhatsApp send failed on caption: ${e.message}`, code: e.code },
+        { status: 502 }
+      );
+    }
+  }
+
+  for (const item of items) {
     try {
       const r = await sendMedia({
         to: row.contactPhone,
         mediaType: item.mediaType,
         url: item.url,
-        caption,
+        // No inline caption — the intro text delivered it up-front.
       });
-      sent.push({ format: item.format, waMessageId: r.waMessageId, url: item.url });
+      sent.push({
+        format: item.format,
+        waMessageId: r.waMessageId,
+        url: item.url,
+        type: item.mediaType === "video" ? "video" : "image",
+      });
     } catch (err) {
       const e = describeMetaError(err);
       return NextResponse.json(
@@ -136,9 +159,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   if (row.conversationId) {
     // Mirror each sent item as its own inbox message so the thread shows
-    // exactly what the customer received.
+    // exactly what the customer received. Text-caption message first,
+    // then each media.
     for (const s of sent) {
-      const isVideo = s.format === "3d-video";
+      if (s.type === "text") {
+        await prisma.message
+          .create({
+            data: {
+              conversationId: row.conversationId,
+              direction: "outbound",
+              type: "text",
+              body: baseCaption,
+              waMessageId: s.waMessageId,
+              status: "sent",
+              sentByUserId: user.id,
+            },
+          })
+          .catch(() => null);
+        continue;
+      }
+      const isVideo = s.type === "video";
       await prisma.message
         .create({
           data: {
@@ -146,7 +186,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             direction: "outbound",
             type: isVideo ? "video" : "image",
             body: `Court design ${row.number} sent (${s.format})`,
-            mediaUrl: s.url,
+            mediaUrl: s.url ?? undefined,
             mediaMimeType: isVideo ? "video/mp4" : "image/png",
             mediaFileName: `${row.number}-${s.format}.${isVideo ? "mp4" : "png"}`,
             waMessageId: s.waMessageId,

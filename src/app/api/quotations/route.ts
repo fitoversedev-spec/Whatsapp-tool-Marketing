@@ -27,6 +27,9 @@ const createSchema = z.object({
   widthFt: z.number().int().min(1).max(10_000),
   lineItems: z.array(lineItemSchema).min(1),
   notes: z.string().max(4000).optional(),
+  // Customer-facing caption — sent as a text message BEFORE the PDF
+  // during /send so WhatsApp displays it clearly.
+  caption: z.string().max(1024).nullable().optional(),
   quoteDate: z.string().datetime(),
   validityDays: z.number().int().min(1).max(365).default(30),
   conversationId: z.string().uuid().nullable().optional(),
@@ -145,6 +148,7 @@ export async function POST(req: NextRequest) {
           gstAmount: totals.gstAmount,
           grandTotal: totals.grandTotal,
           notes: parsed.data.notes ?? null,
+          caption: parsed.data.caption ?? null,
           quoteDate: new Date(parsed.data.quoteDate),
           validityDays: parsed.data.validityDays,
           conversationId: parsed.data.conversationId ?? null,

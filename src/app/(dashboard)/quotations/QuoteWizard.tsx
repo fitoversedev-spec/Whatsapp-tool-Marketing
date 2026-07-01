@@ -83,6 +83,10 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftNumber, setDraftNumber] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Customer-facing caption. Sent as a preceding text message so
+  // WhatsApp displays it instead of hiding it under the document
+  // thumbnail. Empty = server uses default.
+  const [caption, setCaption] = useState("");
 
   // Reset state when modal opens fresh
   useEffect(() => {
@@ -260,7 +264,11 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/quotations/${draftId}/send`, { method: "POST" });
+      const res = await fetch(`/api/quotations/${draftId}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caption: caption.trim() || null }),
+      });
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.error ?? "Send failed");
@@ -604,12 +612,31 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                 ✓ Draft <strong>{draftNumber}</strong> created. Preview below — if everything looks
                 good, click <strong>Send to customer</strong>.
               </div>
-              <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50" style={{ height: "60vh" }}>
+              <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50" style={{ height: "50vh" }}>
                 <iframe
                   src={`/api/quotations/${draftId}/pdf`}
                   className="w-full h-full"
                   title="Quotation preview"
                 />
+              </div>
+              {/* Caption — sent as a text message BEFORE the PDF so the
+                  customer always sees it (WhatsApp hides document
+                  captions under the file thumbnail). */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                  Message to send with the PDF
+                </label>
+                <textarea
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  rows={3}
+                  placeholder={`Quotation ${draftNumber ?? ""} from Fitoverse — total ₹${totals.grandTotal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 resize-none"
+                />
+                <div className="text-[10px] text-slate-500 mt-1">
+                  Sent as its own message right before the PDF. Leave empty
+                  to use the default.
+                </div>
               </div>
               <div className="flex justify-between text-sm">
                 <button onClick={downloadDraftPdf} className="text-wa-dark hover:underline">

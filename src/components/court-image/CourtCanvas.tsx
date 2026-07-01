@@ -857,14 +857,43 @@ function GenericCourtShape({
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
-  const fill = el.surfaceColor ?? "#5a8a6c";
-  const line = el.lineColor ?? style.lineColor;
+  // Sport-appropriate default surface colour + line colour.
+  const defaultFill =
+    el.sport === "tennis"
+      ? "#5a8a6c"
+      : el.sport === "badminton"
+        ? "#3f6f4a"
+        : el.sport === "volleyball"
+          ? "#c97a4b"
+          : "#5a8a6c";
+  const fill = el.surfaceColor ?? defaultFill;
+  const line = el.lineColor ?? "#ffffff";
   const lineWidth = Math.max(1, Math.min(w, h) * 0.005);
+
   return (
     <>
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
+      {/* Outer boundary */}
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth} />
+      {/* Sport-specific line pattern */}
+      {el.sport === "tennis" && (
+        <TennisMarkings w={w} h={h} line={line} lineWidth={lineWidth} />
+      )}
+      {el.sport === "badminton" && (
+        <BadmintonMarkings w={w} h={h} line={line} lineWidth={lineWidth} />
+      )}
+      {el.sport === "volleyball" && (
+        <VolleyballMarkings w={w} h={h} line={line} lineWidth={lineWidth} />
+      )}
+      {el.sport !== "tennis" &&
+        el.sport !== "badminton" &&
+        el.sport !== "volleyball" && (
+          <Line
+            points={[0, -h / 2, 0, h / 2]}
+            stroke={line}
+            strokeWidth={lineWidth}
+          />
+        )}
       <Text
         x={-w / 2}
         y={-h / 2 - 14}
@@ -872,6 +901,78 @@ function GenericCourtShape({
         fontSize={Math.max(9, w * 0.025)}
         fill={line}
       />
+    </>
+  );
+}
+
+// Tennis court markings: net line (centre, along width), doubles +
+// singles sidelines, service courts + service line, T-shape at each end.
+function TennisMarkings({ w, h, line, lineWidth }: { w: number; h: number; line: string; lineWidth: number }) {
+  // Court proportions (from 78 × 36 regulation): singles sideline is
+  // 4.5 ft in from doubles (27 ft wide singles vs 36 ft doubles).
+  // Service line is 21 ft from net on each side.
+  const singlesInset = (4.5 / 36) * h;
+  const serviceLineOffset = (21 / 78) * w;
+  return (
+    <>
+      {/* Net line — vertical centre, thicker */}
+      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.4} />
+      {/* Singles sidelines */}
+      <Line points={[-w / 2, -h / 2 + singlesInset, w / 2, -h / 2 + singlesInset]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-w / 2, h / 2 - singlesInset, w / 2, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} />
+      {/* Service lines (both sides of net) */}
+      <Line points={[-serviceLineOffset, -h / 2 + singlesInset, -serviceLineOffset, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[serviceLineOffset, -h / 2 + singlesInset, serviceLineOffset, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} />
+      {/* Centre service line (between service line and net) */}
+      <Line points={[-serviceLineOffset, 0, serviceLineOffset, 0]} stroke={line} strokeWidth={lineWidth} />
+      {/* Centre mark on baseline */}
+      <Line points={[-w / 2, 0, -w / 2 + w * 0.02, 0]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[w / 2 - w * 0.02, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
+    </>
+  );
+}
+
+// Badminton court markings: net line (centre), doubles + singles side +
+// back lines, short + long service lines, centre service line.
+function BadmintonMarkings({ w, h, line, lineWidth }: { w: number; h: number; line: string; lineWidth: number }) {
+  // From regulation 44 × 20: singles sideline 1.5 ft in from doubles,
+  // short service line 6.5 ft from net, long service line for doubles
+  // 2.5 ft from back boundary.
+  const singlesInset = (1.5 / 20) * h;
+  const shortServiceOffset = (6.5 / 44) * w;
+  const longServiceInset = (2.5 / 44) * w;
+  return (
+    <>
+      {/* Net line */}
+      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.4} />
+      {/* Singles sidelines */}
+      <Line points={[-w / 2, -h / 2 + singlesInset, w / 2, -h / 2 + singlesInset]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-w / 2, h / 2 - singlesInset, w / 2, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} />
+      {/* Short service lines */}
+      <Line points={[-shortServiceOffset, -h / 2, -shortServiceOffset, h / 2]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[shortServiceOffset, -h / 2, shortServiceOffset, h / 2]} stroke={line} strokeWidth={lineWidth} />
+      {/* Long service (doubles) — inset from back boundary */}
+      <Line points={[-w / 2 + longServiceInset, -h / 2, -w / 2 + longServiceInset, h / 2]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[w / 2 - longServiceInset, -h / 2, w / 2 - longServiceInset, h / 2]} stroke={line} strokeWidth={lineWidth} />
+      {/* Centre service line (between short-service and back-boundary) */}
+      <Line points={[-shortServiceOffset, 0, -w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[shortServiceOffset, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
+    </>
+  );
+}
+
+// Volleyball court markings: net line, attack lines (10 ft from net on
+// each side).
+function VolleyballMarkings({ w, h, line, lineWidth }: { w: number; h: number; line: string; lineWidth: number }) {
+  // From regulation 59 × 30: attack line 10 ft from centre net.
+  const attackOffset = (10 / 59) * w;
+  return (
+    <>
+      {/* Net line — thicker */}
+      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.6} />
+      {/* Attack lines each side */}
+      <Line points={[-attackOffset, -h / 2, -attackOffset, h / 2]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[attackOffset, -h / 2, attackOffset, h / 2]} stroke={line} strokeWidth={lineWidth} />
     </>
   );
 }

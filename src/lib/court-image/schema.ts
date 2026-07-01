@@ -470,9 +470,56 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     });
   }
 
-  if (hasMultisport && !hasFootball && !hasBasketball && !hasPickleball) {
-    // Multisport surface — generic colored rectangle covering most of the
-    // plot, used as a base for stacked markings.
+  // Tennis / Badminton / Volleyball — each renders via generic-court
+  // with a sport-specific default size (regulation dims from
+  // sport-standards). A regulation net is dropped in at the centre.
+  // Multi-sport friendly: any combination of these can be picked and
+  // each gets its own element.
+  const netTargets: Array<{
+    sport: "tennis" | "badminton" | "volleyball";
+    width: number;
+    height: number;
+    netHeightFt: number;
+  }> = [];
+  if (sports.includes("tennis")) {
+    netTargets.push({ sport: "tennis", width: 78, height: 36, netHeightFt: 3.5 });
+  }
+  if (sports.includes("badminton")) {
+    netTargets.push({ sport: "badminton", width: 44, height: 20, netHeightFt: 5 });
+  }
+  if (sports.includes("volleyball")) {
+    netTargets.push({ sport: "volleyball", width: 59, height: 30, netHeightFt: 7.9 });
+  }
+  for (const t of netTargets) {
+    const w = Math.min(t.width, longFt * 0.9);
+    const h = Math.min(t.height, shortFt * 0.9);
+    elements.push({
+      id: newId(t.sport),
+      type: "generic-court",
+      sport: t.sport,
+      x: cx,
+      y: cy,
+      rotation: baseRotation,
+      width: w,
+      height: h,
+      z: z++,
+    });
+    elements.push({
+      id: newId(`${t.sport}-net`),
+      type: "net",
+      x: cx,
+      y: cy,
+      rotation: baseRotation,
+      widthFt: w,
+      heightFt: t.netHeightFt,
+      z: z++,
+    });
+  }
+
+  if (hasMultisport && !hasFootball && !hasBasketball && !hasPickleball && netTargets.length === 0) {
+    // Multisport surface (only when no other sport picked) — generic
+    // coloured rectangle covering most of the plot, used as a base for
+    // stacked markings.
     elements.push({
       id: newId("multisport"),
       type: "generic-court",

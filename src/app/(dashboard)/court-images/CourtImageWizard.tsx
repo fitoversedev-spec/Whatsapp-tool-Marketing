@@ -897,7 +897,7 @@ function Step1(props: {
   basketballHalfCourt: boolean;
   setBasketballHalfCourt: (v: boolean) => void;
 }) {
-  const { unit } = useUserUnit();
+  const { unit, setUnit } = useUserUnit();
   const {
     customerName,
     setCustomerName,
@@ -949,12 +949,37 @@ function Step1(props: {
       </section>
 
       <section>
-        <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
-          Plot dimensions
-          <span className="text-[10px] font-normal px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded uppercase tracking-wide">
-            {unit}
-          </span>
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-slate-900">Plot dimensions</h3>
+          {/* Inline unit toggle — persists to the user's profile
+              preference so every wizard + form respects it going forward.
+              Sales asked where to switch to meters; putting it here in
+              the wizard is more discoverable than the profile page. */}
+          <div className="inline-flex bg-slate-100 rounded-md p-0.5 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setUnit("ft")}
+              className={`px-2.5 py-1 rounded font-medium transition ${
+                unit === "ft"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              ft
+            </button>
+            <button
+              type="button"
+              onClick={() => setUnit("m")}
+              className={`px-2.5 py-1 rounded font-medium transition ${
+                unit === "m"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              m
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-[11px] text-slate-500 uppercase tracking-wide">

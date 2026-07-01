@@ -271,10 +271,13 @@ export default function CourtCanvas({
             ref={transformerRef}
             rotateEnabled={true}
             keepRatio={false}
-            boundBoxFunc={(_oldBox, newBox) => {
-              // Prevent collapsing an element to nothing.
-              if (Math.abs(newBox.width) < 12 || Math.abs(newBox.height) < 12) {
-                return _oldBox;
+            boundBoxFunc={(oldBox, newBox) => {
+              // Prevent collapsing an element to a truly degenerate box.
+              // Previously used a 12x12 minimum which blocked rotation on
+              // thin elements like Net (~8px tall) — dropping to 4x4 keeps
+              // the collapse guard but lets nets and lines rotate freely.
+              if (Math.abs(newBox.width) < 4 || Math.abs(newBox.height) < 4) {
+                return oldBox;
               }
               return newBox;
             }}

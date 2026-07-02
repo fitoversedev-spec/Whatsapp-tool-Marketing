@@ -26,6 +26,14 @@ type Template = { id: string; name: string; language: string; body: string };
 
 type FilterRule = { column: string; condition: "equals" | "contains" | "starts_with" | "not_empty"; value: string };
 type ContactFilter = { field: string; condition: "equals" | "contains" | "starts_with" | "not_empty"; value: string };
+type PickerContact = {
+  id: string;
+  phone: string;
+  name: string | null;
+  fields: Record<string, string>;
+  tags: { id: string; name: string; color: string }[];
+  allowCampaign: boolean;
+};
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700",
@@ -227,6 +235,13 @@ function BroadcastComposer({
   const [contactFilters, setContactFilters] = useState<ContactFilter[]>([]);
   const [contactVar1, setContactVar1] = useState("name");
 
+  // Pick-specific mode: hand-pick individual contacts instead of filtering.
+  const [contactMode, setContactMode] = useState<"filter" | "pick">("filter");
+  const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerContacts, setPickerContacts] = useState<PickerContact[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileRows, setFileRows] = useState<any[][] | null>(null);
@@ -267,6 +282,45 @@ function BroadcastComposer({
       })
       .catch(() => {});
   }, []);
+
+  // Debounced contact search for the "Pick specific" picker. Fires only
+  // when the picker is actually visible.
+  useEffect(() => {
+    if (source !== "contacts" || contactMode !== "pick") return;
+    setPickerLoading(true);
+    const t = setTimeout(() => {
+      const q = pickerSearch.trim();
+      const url = `/api/contacts?page=1${q ? `&search=${encodeURIComponent(q)}` : ""}`;
+      fetch(url)
+        .then((r) => (r.ok ? r.json() : { contacts: [] }))
+        .then((d) => setPickerContacts(d.contacts ?? []))
+        .catch(() => setPickerContacts([]))
+        .finally(() => setPickerLoading(false));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [source, contactMode, pickerSearch]);
+
+  function togglePicked(id: string) {
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setPreview(null);
+  }
+  function selectAllVisible() {
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      for (const c of pickerContacts) if (c.allowCampaign) next.add(c.id);
+      return next;
+    });
+    setPreview(null);
+  }
+  function clearAllPicked() {
+    setPickedIds(new Set());
+    setPreview(null);
+  }
 
   function addContactFilter() {
     setContactFilters((prev) => [...prev, { field: "", condition: "equals", value: "" }]);
@@ -330,12 +384,19 @@ function BroadcastComposer({
 
     // Saved Contacts source — preview against the contact pool
     if (source === "contacts") {
+      const pickList = contactMode === "pick" ? Array.from(pickedIds) : null;
+      if (pickList && pickList.length === 0) {
+        setBusy(false);
+        toast.error("Pick at least one contact");
+        return;
+      }
       const res = await fetch("/api/contacts/filter-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filterRules: contactFilters.filter((r) => r.field),
+          filterRules: pickList ? [] : contactFilters.filter((r) => r.field),
           variableMapping: { "1": contactVar1 },
+          selectedContactIds: pickList ?? undefined,
         }),
       });
       setBusy(false);
@@ -394,9 +455,14 @@ function BroadcastComposer({
 
     if (source === "contacts") {
       payload.variableMapping = { "1": contactVar1 };
-      payload.filterRules = contactFilters
-        .filter((r) => r.field)
-        .map((r) => ({ field: r.field, condition: r.condition, value: r.value }));
+      if (contactMode === "pick") {
+        payload.filterRules = [];
+        payload.selectedContactIds = Array.from(pickedIds);
+      } else {
+        payload.filterRules = contactFilters
+          .filter((r) => r.field)
+          .map((r) => ({ field: r.field, condition: r.condition, value: r.value }));
+      }
     } else {
       payload.phoneColumn = phoneColumn;
       payload.nameColumn = nameColumn;
@@ -730,8 +796,135 @@ function BroadcastComposer({
             </div>
           )}
 
+          {/* Mode toggle: filter-by-field vs pick-specific */}
+          {source === "contacts" && contactTotal > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                How to choose recipients
+              </label>
+              <div className="inline-flex bg-slate-100 rounded-md p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => { setContactMode("filter"); setPreview(null); }}
+                  className={`px-3 py-1.5 rounded font-medium transition ${
+                    contactMode === "filter"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Filter by field
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setContactMode("pick"); setPreview(null); }}
+                  className={`px-3 py-1.5 rounded font-medium transition ${
+                    contactMode === "pick"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Pick specific
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Pick specific contacts */}
+          {source === "contacts" && contactMode === "pick" && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Pick contacts
+                </label>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className={`font-semibold ${pickedIds.size > 0 ? "text-wa-green" : "text-slate-400"}`}>
+                    {pickedIds.size} selected
+                  </span>
+                  {pickedIds.size > 0 && (
+                    <button type="button" onClick={clearAllPicked} className="text-slate-500 hover:underline">
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+              <input
+                type="search"
+                value={pickerSearch}
+                onChange={(e) => setPickerSearch(e.target.value)}
+                placeholder="Search by name, phone, or field value (e.g. Salem)"
+                className="input mb-2"
+              />
+              <div className="border border-slate-200 rounded-lg max-h-72 overflow-y-auto divide-y divide-slate-100 bg-white">
+                {pickerLoading && (
+                  <div className="p-4 text-center text-xs text-slate-500">Loading…</div>
+                )}
+                {!pickerLoading && pickerContacts.length === 0 && (
+                  <div className="p-4 text-center text-xs text-slate-500">
+                    {pickerSearch ? "No matches. Try a different search." : "No contacts."}
+                  </div>
+                )}
+                {!pickerLoading && pickerContacts.map((c) => {
+                  const checked = pickedIds.has(c.id);
+                  const city = c.fields.location ?? c.fields.city ?? c.fields.City ?? "";
+                  return (
+                    <label
+                      key={c.id}
+                      className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition ${
+                        !c.allowCampaign
+                          ? "opacity-50 cursor-not-allowed"
+                          : checked
+                            ? "bg-wa-green/10"
+                            : "hover:bg-slate-50"
+                      }`}
+                      title={!c.allowCampaign ? "Consent not granted — cannot broadcast" : ""}
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={!c.allowCampaign}
+                        checked={checked}
+                        onChange={() => togglePicked(c.id)}
+                        className="rounded border-slate-300 text-wa-green focus:ring-wa-green"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-slate-900 truncate">
+                          {c.name || "(no name)"}
+                        </div>
+                        <div className="text-[11px] text-slate-500 truncate">
+                          +{c.phone}
+                          {city && <span className="ml-2 text-slate-400">· {city}</span>}
+                        </div>
+                      </div>
+                      {c.tags.length > 0 && (
+                        <div className="flex gap-1 shrink-0">
+                          {c.tags.slice(0, 2).map((t) => (
+                            <span
+                              key={t.id}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                              style={{ backgroundColor: `${t.color}22`, color: t.color }}
+                            >
+                              {t.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+              {!pickerLoading && pickerContacts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={selectAllVisible}
+                  className="mt-2 text-xs text-wa-green font-semibold hover:underline"
+                >
+                  + Select all {pickerContacts.length} visible
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Filter Rules — saved contacts (field-based) */}
-          {source === "contacts" && (
+          {source === "contacts" && contactMode === "filter" && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-medium text-slate-700">

@@ -109,6 +109,7 @@ export default function ContactTimelineClient({
       <PageHeader
         title={contact.name ?? "+" + contact.phone}
         description={contact.name ? `+${contact.phone}` : "No name on file"}
+        backHref="/contacts"
         action={
           conversation && (
             <Link

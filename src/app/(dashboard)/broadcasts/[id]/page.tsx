@@ -43,6 +43,7 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
       <PageHeader
         title={broadcast.name}
         description={`Template: ${broadcast.template.name} (${broadcast.template.language}) · by ${broadcast.createdBy.name}`}
+        backHref="/broadcasts"
         action={
           <div className="flex items-center gap-3">
             <a

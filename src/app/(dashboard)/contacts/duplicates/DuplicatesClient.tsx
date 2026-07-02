@@ -50,14 +50,7 @@ export default function DuplicatesClient({ groups }: { groups: Group[] }) {
       <PageHeader
         title="Duplicate contacts"
         description={`${groups.length} duplicate group${groups.length === 1 ? "" : "s"} found · pick the primary contact to keep, others will be merged into it`}
-        action={
-          <Link
-            href="/contacts"
-            className="inline-block text-sm text-slate-600 hover:text-slate-900"
-          >
-            ← All contacts
-          </Link>
-        }
+        backHref="/contacts"
       />
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-4">

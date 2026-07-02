@@ -51,6 +51,7 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
     nameColumn?: string | null;
     variables: Record<string, string>;
     filterRules?: FilterRule[];
+    selectedContactIds?: string[] | null;
   };
 
   const recipientCount = await prisma.broadcastRecipient.count({ where: { broadcastId } });
@@ -96,19 +97,32 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
 // ─── Source: Saved Contacts ─────────────────────────────────────────────────
 async function materialiseFromContacts(
   broadcastId: string,
-  mapping: { variables: Record<string, string>; filterRules?: FilterRule[] },
+  mapping: {
+    variables: Record<string, string>;
+    filterRules?: FilterRule[];
+    selectedContactIds?: string[] | null;
+  },
   optOuts: Set<string>
 ) {
   const rules = (mapping.filterRules ?? [])
     .map((r) => ({ field: r.field ?? r.column ?? "", condition: r.condition, value: r.value }))
     .filter((r) => r.field.trim()) as ContactFilterRule[];
 
-  const contacts = await prisma.contact.findMany();
+  const selectedIds = mapping.selectedContactIds?.length
+    ? mapping.selectedContactIds
+    : null;
+
+  // Pick mode: query only the picked IDs, skip filter rules. Consent +
+  // opt-out gates still apply (a hand-picked contact who's opted out
+  // still gets skipped).
+  const contacts = selectedIds
+    ? await prisma.contact.findMany({ where: { id: { in: selectedIds } } })
+    : await prisma.contact.findMany();
   const insertData: Array<{ broadcastId: string; phoneE164: string; name: string | null; variables: string }> = [];
 
   for (const c of contacts) {
     const fields = parseFields(c.fields);
-    if (!contactPassesFilters({ name: c.name, fields }, rules)) continue;
+    if (!selectedIds && !contactPassesFilters({ name: c.name, fields }, rules)) continue;
     if (!c.allowCampaign) continue; // consent gate — never message non-consenting contacts
     if (optOuts.has(c.phone)) continue;
     const variables: Record<string, string> = {};

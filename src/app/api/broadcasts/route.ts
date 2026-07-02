@@ -23,6 +23,10 @@ const schema = z.object({
   nameColumn: z.string().optional(),
   variableMapping: z.record(z.string(), z.string()),
   filterRules: z.array(filterRuleSchema).optional().default([]),
+  // When sourceType=contacts and this array is non-empty, the recipients
+  // are the picked contacts (filter rules ignored). Persisted inside the
+  // variableMapping JSON blob so sender.ts can read it back.
+  selectedContactIds: z.array(z.string().uuid()).optional(),
   // ISO timestamp. When present and in the future, broadcast is saved in
   // "scheduled" status and waits for the cron sweep to launch it.
   scheduledAt: z.string().datetime().optional(),
@@ -88,6 +92,7 @@ export async function POST(req: NextRequest) {
         nameColumn: parsed.data.nameColumn ?? null,
         variables: parsed.data.variableMapping,
         filterRules: (parsed.data.filterRules ?? []).filter((r) => (r.column || r.field || "").trim()),
+        selectedContactIds: parsed.data.selectedContactIds ?? null,
       }),
       status: scheduledAt ? "scheduled" : "draft",
       scheduledAt,

@@ -1,15 +1,16 @@
 // Auto-reply dispatcher. Called from the WhatsApp webhook after an
 // inbound message is stored. Runs the rule matcher, honours per-contact
-// cooldown, sends the response via sendText, logs the firing, and
-// mirrors the outbound message into the conversation thread so the
-// inbox shows the bot's reply.
+// cooldown, sends the response via sendText / sendMedia, logs the
+// firing, and mirrors the outbound message into the conversation
+// thread so the inbox shows the bot's reply.
 //
 // Silent-fail by design: any error here MUST NOT crash the webhook
 // (Meta will retry the whole webhook payload otherwise). All send /
 // DB / opt-out failures are caught + logged, never thrown up.
 
 import { prisma } from "@/lib/prisma";
-import { sendText } from "@/lib/whatsapp";
+import { sendText, sendMedia } from "@/lib/whatsapp";
+import { getSportMeta } from "@/lib/catalogue/sport-meta";
 import { matchAutoReplyRule } from "./rules";
 
 export type DispatchInput = {
@@ -58,12 +59,55 @@ export async function dispatchAutoReply(input: DispatchInput): Promise<DispatchR
     // send one extra message, not lose one.
   }
 
-  // Send + log + mirror. Wrap each step so partial failures don't
-  // break the whole pipeline.
+  const response = rule.buildResponse(inboundBody ?? "");
+
   let waMessageId: string;
+  let mirrorBody: string;
+  let mirrorType: "text" | "document" = "text";
+  let mirrorMediaUrl: string | null = null;
+
   try {
-    const r = await sendText({ to: contactPhone, body: rule.responseBody });
-    waMessageId = r.waMessageId;
+    if (response.type === "text") {
+      const r = await sendText({ to: contactPhone, body: response.body });
+      waMessageId = r.waMessageId;
+      mirrorBody = response.body;
+    } else {
+      // Catalogue response — look up the admin-uploaded PDF URL for
+      // this sport. If missing, fall back to a text so the customer
+      // isn't left hanging.
+      const setting = await prisma.setting.findUnique({
+        where: { key: `catalogue_${response.sport}_url` },
+      });
+      const pdfUrl = setting?.value ?? null;
+      if (!pdfUrl) {
+        const meta = getSportMeta(response.sport);
+        const fallback = `Thanks for asking. Our ${meta?.label ?? response.sport} catalogue is being finalised. The team will share it with you shortly.`;
+        const r = await sendText({ to: contactPhone, body: fallback });
+        waMessageId = r.waMessageId;
+        mirrorBody = fallback;
+      } else {
+        const meta = getSportMeta(response.sport);
+        const caption = `Fitoverse ${meta?.label ?? response.sport} catalogue. Reply with your plot size and location for a tailored quote.`;
+        const filename = `fitoverse-${response.sport}-catalogue.pdf`;
+        // WhatsApp media captions render unreliably on some clients —
+        // send the caption as text first, then the PDF. Same pattern
+        // the send-catalogue endpoint uses.
+        await sendText({ to: contactPhone, body: caption }).catch((err) =>
+          console.error("[auto-reply] caption text failed", err)
+        );
+        const r = await sendMedia({
+          to: contactPhone,
+          mediaType: "document",
+          url: pdfUrl,
+          caption,
+          filename,
+        });
+        waMessageId = r.waMessageId;
+        mirrorBody = `[Catalogue] ${filename}`;
+        mirrorType = "document";
+        mirrorMediaUrl = pdfUrl;
+      }
+    }
   } catch (err) {
     console.error("[auto-reply] send failed", rule.id, err);
     return { fired: false, reason: "send_failed" };
@@ -86,8 +130,9 @@ export async function dispatchAutoReply(input: DispatchInput): Promise<DispatchR
       data: {
         conversationId,
         direction: "outbound",
-        type: "text",
-        body: rule.responseBody,
+        type: mirrorType,
+        body: mirrorBody,
+        mediaUrl: mirrorMediaUrl,
         waMessageId,
         status: "sent",
       },

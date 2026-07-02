@@ -684,9 +684,13 @@ export default function CourtImageWizard({
           )}
 
           {step === 2 && layout && (
-            <div className="flex h-full">
-              {/* Left panel — layers + inspector + add */}
-              <div className="w-72 shrink-0 border-r border-slate-200 bg-slate-50 overflow-y-auto p-4 space-y-4">
+            // Stack vertically on mobile so the canvas gets the full width
+            // and dimension labels render at readable size. Desktop keeps
+            // the side-by-side layers panel + canvas split.
+            <div className="flex flex-col md:flex-row h-full">
+              {/* Left panel — layers + inspector + add. Shown below the
+                  canvas on mobile so the visual editor stays primary. */}
+              <div className="order-2 md:order-1 w-full md:w-72 md:shrink-0 md:border-r border-slate-200 bg-slate-50 overflow-y-auto p-4 space-y-4 max-h-[45vh] md:max-h-none">
                 <LayerList
                   elements={layout.elements}
                   selectedId={selectedId}
@@ -757,8 +761,9 @@ export default function CourtImageWizard({
                 )}
               </div>
 
-              {/* Right — canvas */}
-              <div className="flex-1 min-w-0 bg-slate-200 relative" ref={canvasContainerRef}>
+              {/* Right — canvas. On mobile shown above the controls so
+                  the design stays primary and dimension labels fit. */}
+              <div className="order-1 md:order-2 flex-1 min-w-0 min-h-[55vh] md:min-h-0 bg-slate-200 relative" ref={canvasContainerRef}>
                 <CourtCanvas
                   handleRef={canvasRef}
                   layout={layout}

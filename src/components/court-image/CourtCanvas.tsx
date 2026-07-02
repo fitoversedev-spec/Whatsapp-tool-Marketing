@@ -215,16 +215,6 @@ export default function CourtCanvas({
             plotWidthFt={layout.plot.widthFt}
           />
         )}
-        {layout.style.showDimensions !== false && (
-          <PlotDimensions
-            plotOriginX={plotOriginX}
-            plotOriginY={plotOriginY}
-            plotPxWidth={plotPxWidth}
-            plotPxHeight={plotPxHeight}
-            plotLengthFt={layout.plot.lengthFt}
-            plotWidthFt={layout.plot.widthFt}
-          />
-        )}
       </Layer>
 
       {/* Element layer — sorted by z so cricket pitch sits above football */}
@@ -250,6 +240,22 @@ export default function CourtCanvas({
           />
         ))}
       </Layer>
+
+      {/* Dimensions layer — drawn AFTER elements so the width/length
+          labels are never hidden by an oversized pitch or fence. Listening
+          disabled so labels don't intercept clicks meant for elements. */}
+      {layout.style.showDimensions !== false && (
+        <Layer listening={false}>
+          <PlotDimensions
+            plotOriginX={plotOriginX}
+            plotOriginY={plotOriginY}
+            plotPxWidth={plotPxWidth}
+            plotPxHeight={plotPxHeight}
+            plotLengthFt={layout.plot.lengthFt}
+            plotWidthFt={layout.plot.widthFt}
+          />
+        </Layer>
+      )}
 
       {/* Watermark layer — bottom-right corner, on top of every element so
           it's always visible in the export. */}

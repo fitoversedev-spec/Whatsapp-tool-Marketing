@@ -37,7 +37,185 @@ export type Plot = {
   // Plot dimensions in ft. length = horizontal, width = vertical.
   lengthFt: number;
   widthFt: number;
+  // Optional polygon boundary (non-standard mode). When set, the plot
+  // renders as this closed polygon instead of a rectangle. Coordinates
+  // are in plot space (feet), origin at bottom-left of the bounding
+  // box, going anticlockwise. lengthFt × widthFt still describes the
+  // bounding rectangle so scaling + dimension labels keep working.
+  polygon?: Array<{ x: number; y: number }>;
 };
+
+// Preset plot shape helpers — produce a polygon relative to a given
+// lengthFt × widthFt rectangle. All shapes stay INSIDE the bounding
+// rectangle so the existing scale + dimension labels don't need
+// special-case handling.
+export type PlotShape =
+  | { kind: "rect" }
+  | { kind: "cut-corner"; corner: "tl" | "tr" | "bl" | "br"; sizePct: number }
+  | { kind: "diagonal"; edge: "top" | "bottom"; slopePct: number }
+  | { kind: "l-shape"; corner: "tl" | "tr" | "bl" | "br"; wPct: number; hPct: number };
+
+// Build a polygon composed of multiple corner cuts. Cuts stack: sales
+// can click "Cut top-left" AND "Cut bottom-right" to get both notches.
+// sizePct defaults to 25 % — sensible for most trim requests.
+export function buildMultiCutPolygon(
+  lengthFt: number,
+  widthFt: number,
+  cuts: {
+    tl?: boolean;
+    tr?: boolean;
+    bl?: boolean;
+    br?: boolean;
+    sizePct?: number;
+  }
+): Array<{ x: number; y: number }> | undefined {
+  const anyCut = cuts.tl || cuts.tr || cuts.bl || cuts.br;
+  if (!anyCut) return undefined;
+  const L = lengthFt;
+  const W = widthFt;
+  const pct = (cuts.sizePct ?? 25) / 100;
+  const cx = pct * L;
+  const cy = pct * W;
+  const poly: Array<{ x: number; y: number }> = [];
+  // Traverse anticlockwise from the bottom-left corner, splitting
+  // each corner vertex into two if it's cut.
+  if (cuts.bl) {
+    poly.push({ x: cx, y: 0 });
+  } else {
+    poly.push({ x: 0, y: 0 });
+  }
+  if (cuts.br) {
+    poly.push({ x: L - cx, y: 0 });
+    poly.push({ x: L, y: cy });
+  } else {
+    poly.push({ x: L, y: 0 });
+  }
+  if (cuts.tr) {
+    poly.push({ x: L, y: W - cy });
+    poly.push({ x: L - cx, y: W });
+  } else {
+    poly.push({ x: L, y: W });
+  }
+  if (cuts.tl) {
+    poly.push({ x: cx, y: W });
+    poly.push({ x: 0, y: W - cy });
+  } else {
+    poly.push({ x: 0, y: W });
+  }
+  if (cuts.bl) {
+    poly.push({ x: 0, y: cy });
+  }
+  return poly;
+}
+
+export function buildPlotPolygon(
+  lengthFt: number,
+  widthFt: number,
+  shape: PlotShape
+): Array<{ x: number; y: number }> | undefined {
+  const L = lengthFt;
+  const W = widthFt;
+  if (shape.kind === "rect") return undefined;
+  if (shape.kind === "cut-corner") {
+    const cx = (shape.sizePct / 100) * L;
+    const cy = (shape.sizePct / 100) * W;
+    switch (shape.corner) {
+      case "bl":
+        return [
+          { x: cx, y: 0 },
+          { x: L, y: 0 },
+          { x: L, y: W },
+          { x: 0, y: W },
+          { x: 0, y: cy },
+        ];
+      case "br":
+        return [
+          { x: 0, y: 0 },
+          { x: L - cx, y: 0 },
+          { x: L, y: cy },
+          { x: L, y: W },
+          { x: 0, y: W },
+        ];
+      case "tr":
+        return [
+          { x: 0, y: 0 },
+          { x: L, y: 0 },
+          { x: L, y: W - cy },
+          { x: L - cx, y: W },
+          { x: 0, y: W },
+        ];
+      case "tl":
+        return [
+          { x: 0, y: 0 },
+          { x: L, y: 0 },
+          { x: L, y: W },
+          { x: cx, y: W },
+          { x: 0, y: W - cy },
+        ];
+    }
+  }
+  if (shape.kind === "diagonal") {
+    const dx = (shape.slopePct / 100) * L;
+    if (shape.edge === "top") {
+      return [
+        { x: 0, y: 0 },
+        { x: L, y: 0 },
+        { x: L - dx, y: W },
+        { x: dx, y: W },
+      ];
+    } else {
+      return [
+        { x: dx, y: 0 },
+        { x: L - dx, y: 0 },
+        { x: L, y: W },
+        { x: 0, y: W },
+      ];
+    }
+  }
+  if (shape.kind === "l-shape") {
+    const nx = (shape.wPct / 100) * L;
+    const ny = (shape.hPct / 100) * W;
+    switch (shape.corner) {
+      case "bl":
+        return [
+          { x: nx, y: 0 },
+          { x: L, y: 0 },
+          { x: L, y: W },
+          { x: 0, y: W },
+          { x: 0, y: ny },
+          { x: nx, y: ny },
+        ];
+      case "br":
+        return [
+          { x: 0, y: 0 },
+          { x: L - nx, y: 0 },
+          { x: L - nx, y: ny },
+          { x: L, y: ny },
+          { x: L, y: W },
+          { x: 0, y: W },
+        ];
+      case "tr":
+        return [
+          { x: 0, y: 0 },
+          { x: L, y: 0 },
+          { x: L, y: W - ny },
+          { x: L - nx, y: W - ny },
+          { x: L - nx, y: W },
+          { x: 0, y: W },
+        ];
+      case "tl":
+        return [
+          { x: 0, y: 0 },
+          { x: L, y: 0 },
+          { x: L, y: W },
+          { x: nx, y: W },
+          { x: nx, y: W - ny },
+          { x: 0, y: W - ny },
+        ];
+    }
+  }
+  return undefined;
+}
 
 // Discriminated union — `type` drives renderer behavior.
 // Common fields (x, y, rotation, locked) live on every element via the
@@ -227,6 +405,182 @@ export type Element =
   | DugoutElement
   | BasketballHoopElement;
 
+// Surface finishes used inside the plot footprint.
+//   plain          — earth-coloured base (undecided material)
+//   ppe_tile_*     — interlocking PPE tiles laid on prepared sub-base.
+//                    Fitoverse sells these by the piece (30 × 30 cm
+//                    each), so the wizard shows a live tile-count pill.
+//   acrylic_*      — hard-court acrylic coating over a concrete slab.
+//                    Sold by the sqft, no tile count — just a solid
+//                    colour fill matching the coating.
+export type SurfaceFinish =
+  | "plain"
+  | "ppe_tile_red"
+  | "acrylic_blue"
+  | "acrylic_green"
+  | "turf_40mm"
+  | "turf_50mm"
+  | "pvc_sports";
+
+export const SURFACE_LABEL: Record<SurfaceFinish, string> = {
+  plain: "Plain earth",
+  ppe_tile_red: "PPE tile — red",
+  acrylic_blue: "Acrylic — blue",
+  acrylic_green: "Acrylic — green",
+  turf_40mm: "Artificial grass — 40 mm",
+  turf_50mm: "Artificial grass — 50 mm",
+  pvc_sports: "PVC sports flooring",
+};
+
+// URL served by Next.js from /public for surfaces that render with a
+// photograph in the sample callout. Acrylic surfaces have no image
+// (solid colour). Drop /images/tiles/pvc-sports.jpg into public/ when
+// the PVC sample photo is provided and it'll show automatically.
+export const SURFACE_IMAGE_URL: Partial<Record<SurfaceFinish, string>> = {
+  ppe_tile_red: "/images/tiles/red-ppe-tile.jpg",
+  pvc_sports: "/images/tiles/pvc-sports.jpg",
+};
+
+// Turf finishes are laid as alternating light + dark rolls (mowed
+// stripe effect). Each finish has TWO photographs — one per shade —
+// shown together in the callout so the customer sees exactly which
+// two tones will be used.
+export const TURF_IMAGE_URLS: Partial<Record<SurfaceFinish, { light: string; dark: string }>> = {
+  turf_40mm: {
+    light: "/images/tiles/40 mm light green.jpg",
+    dark: "/images/tiles/40 mm dark green.jpg",
+  },
+  turf_50mm: {
+    light: "/images/tiles/50mm light green.webp",
+    dark: "/images/tiles/50 mm dark green1.webp",
+  },
+};
+
+// Solid fill colour for surfaces that don't use a photograph — the
+// PlotSurface renderer paints the plot with this and the sample-tile
+// callout is skipped (acrylic is a coating, not tiles).
+export const SURFACE_SOLID_COLOR: Partial<Record<SurfaceFinish, string>> = {
+  acrylic_blue: "#265a9a",
+  acrylic_green: "#2f6d3a",
+  turf_40mm: "#2f8c3e",
+  turf_50mm: "#2f8c3e",
+  // Green — matches the PVC sports-floor sample photograph so the
+  // solid fallback colour stays coherent with the callout swatch even
+  // if the image fails to load.
+  pvc_sports: "#3ea867",
+};
+
+// Base stripe tones for turf. Rendered as alternating parallel stripes
+// across the field length, mimicking a real mowed pattern.
+export const TURF_STRIPE_COLORS: Partial<Record<SurfaceFinish, { light: string; dark: string }>> = {
+  turf_40mm: { light: "#3fa050", dark: "#256c30" },
+  turf_50mm: { light: "#3fa050", dark: "#256c30" },
+};
+
+// Which surfaces are counted as "tiled" (PPE tile family) vs a
+// solid-coat material. Drives the tile-count pill visibility and the
+// sample-tile callout in the design.
+export function isTiledSurface(surface: SurfaceFinish): boolean {
+  return surface === "ppe_tile_red";
+}
+
+export function isAcrylicSurface(surface: SurfaceFinish): boolean {
+  return surface === "acrylic_blue" || surface === "acrylic_green";
+}
+
+export function isTurfSurface(surface: SurfaceFinish): boolean {
+  return surface === "turf_40mm" || surface === "turf_50mm";
+}
+
+export function isPvcSurface(surface: SurfaceFinish): boolean {
+  return surface === "pvc_sports";
+}
+
+// PVC sports flooring is sold by the square metre. Rolls typically
+// come in 1.8 m wide × 20 m long; this helper returns total m² and a
+// suggested roll count so sales can quote off both.
+export const PVC_ROLL_WIDTH_M = 1.8;
+export const PVC_ROLL_LENGTH_M = 20;
+export function pvcRollCount(
+  plotLengthFt: number,
+  plotWidthFt: number
+): { totalSqM: number; rolls: number; runningMeters: number } {
+  const FT_PER_M = 3.281;
+  const lengthM = plotLengthFt / FT_PER_M;
+  const widthM = plotWidthFt / FT_PER_M;
+  const totalSqM = Math.round(lengthM * widthM);
+  const rolls = Math.ceil(widthM / PVC_ROLL_WIDTH_M);
+  const runningMeters = Math.round(rolls * lengthM);
+  return { totalSqM, rolls, runningMeters };
+}
+
+// Artificial-grass roll dimensions in metres. India market standard —
+// most suppliers ship 2 m wide × 25 m long rolls. If a different size
+// is used for a specific project, sales quotes off the raw roll-metres
+// number and adjusts.
+export const TURF_ROLL_WIDTH_M = 2;
+export const TURF_ROLL_LENGTH_M = 25;
+
+// Alternating light + dark stripes parallel to the field length. Each
+// stripe occupies one roll width (2 m). Half the stripes are light,
+// half dark — total meters per colour = (numStripes ÷ 2) × field length.
+export function turfRollMeters(
+  plotLengthFt: number,
+  plotWidthFt: number
+): {
+  stripes: number;
+  lightMeters: number;
+  darkMeters: number;
+  totalMeters: number;
+  lightRolls: number;
+  darkRolls: number;
+} {
+  const FT_PER_M = 3.281;
+  const lengthM = plotLengthFt / FT_PER_M;
+  const widthM = plotWidthFt / FT_PER_M;
+  const stripes = Math.ceil(widthM / TURF_ROLL_WIDTH_M);
+  const lightStripes = Math.ceil(stripes / 2);
+  const darkStripes = stripes - lightStripes;
+  const lightMeters = Math.round(lightStripes * lengthM);
+  const darkMeters = Math.round(darkStripes * lengthM);
+  return {
+    stripes,
+    lightMeters,
+    darkMeters,
+    totalMeters: lightMeters + darkMeters,
+    lightRolls: Math.ceil(lightMeters / TURF_ROLL_LENGTH_M),
+    darkRolls: Math.ceil(darkMeters / TURF_ROLL_LENGTH_M),
+  };
+}
+
+// Acrylic hard-court coating quantities. A regulation build-up is:
+//   1 × primer coat            (~ 4 sqft / L)
+//   2 × resurfacer coats       (~ 3 sqft / L each)
+//   2 × colour coats           (~ 5 sqft / L each)
+// Line paint is negligible and quoted separately.
+export function acrylicLitres(
+  areaSqFt: number
+): { primer: number; resurfacer: number; color: number; total: number } {
+  const primer = Math.ceil(areaSqFt / 4);
+  const resurfacer = Math.ceil((areaSqFt * 2) / 3);
+  const color = Math.ceil((areaSqFt * 2) / 5);
+  return { primer, resurfacer, color, total: primer + resurfacer + color };
+}
+
+// Real-world size of one PPE tile in feet (30 cm ≈ 0.984 ft).
+export const PPE_TILE_FT = 0.984;
+
+// Ceil-based tile count for a plot at 30 cm tile size. Sales quotes
+// off this. Ceiling because partial edges need a full tile anyway.
+export function ppeTileCount(
+  plotLengthFt: number,
+  plotWidthFt: number
+): { perLength: number; perWidth: number; total: number } {
+  const perLength = Math.ceil(plotLengthFt / PPE_TILE_FT);
+  const perWidth = Math.ceil(plotWidthFt / PPE_TILE_FT);
+  return { perLength, perWidth, total: perLength * perWidth };
+}
+
 export type Style = {
   // Background outside the court (the "earth" around the plot edge).
   groundColor: string;
@@ -242,6 +596,9 @@ export type Style = {
   // arrows + labels (e.g. "80 ft" along the top, "60 ft" along the side).
   // Customers asked for this so the exported image includes a sense of scale.
   showDimensions: boolean;
+  // Surface finish inside the plot footprint. Drives whether we paint a
+  // solid earth colour or tile a real PPE-tile photograph across the plot.
+  surface: SurfaceFinish;
   // Optional watermark (logo URL + opacity).
   watermarkUrl?: string;
   watermarkOpacity?: number;
@@ -256,6 +613,7 @@ export const DEFAULT_STYLE: Style = {
   pickleballSurfaceColor: "#3e7fb7",
   grassStripes: true,
   showDimensions: true,
+  surface: "plain",
   // Fitoverse-branded layouts ship with the logo composited into the
   // bottom-right of every exported image / video. The user can clear
   // watermarkUrl in the wizard to remove it.
@@ -381,24 +739,51 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
 
   if (hasFootball) {
     const aSide = config.football?.aSide ?? defaultASide(plot);
+    // FIFA playing areas centred inside the plot so the 2 m run-off
+    // (the safety zone the wizard's preset already reserves) shows as
+    // space around the pitch instead of the field bleeding into it.
+    //   5-a-side  : 40 × 20 m ≈ 131 × 66 ft
+    //   7-a-side  : 60 × 40 m ≈ 197 × 131 ft
+    //   11-a-side : 105 × 68 m ≈ 344 × 223 ft
+    const playSizes: Record<5 | 7 | 11, { l: number; w: number }> = {
+      5: { l: 131, w: 66 },
+      7: { l: 197, w: 131 },
+      11: { l: 344, w: 223 },
+    };
+    const ps = playSizes[aSide];
+    // If the plot is smaller than the FIFA playing area (custom small
+    // plot) fall back to plot-minus-margin so the pitch still fits.
+    const pitchL = Math.min(ps.l, longFt - 4);
+    const pitchW = Math.min(ps.w, shortFt - 4);
     elements.push({
       id: newId("football"),
       type: "football-field",
       x: cx,
       y: cy,
       rotation: baseRotation,
-      width: longFt,
-      height: shortFt,
+      width: pitchL,
+      height: pitchW,
       aSide,
       z: z++,
     });
   }
 
   if (hasBasketball && !hasFootball) {
-    // Solo basketball: fill the plot, using same long-side orientation
-    // as football so portrait plots don't squash the court markings.
-    const courtW = longFt;
-    const courtH = shortFt;
+    // Solo basketball: render the FIBA playing area (28 × 15 m ≈
+    // 91.86 × 49.21 ft) centred on the plot. The plot's extra space
+    // (2 m run-off on each side in the FIBA With Run-Off preset)
+    // shows as the required unobstructed peripheral zone around the
+    // markings. Half-court / 3x3 uses the smaller FIBA 3x3 playing
+    // area (15 × 11 m ≈ 49.21 × 36.09 ft).
+    const halfCourt = config.basketball?.halfCourt ?? false;
+    // Playing-area dimensions per FIBA rulebook.
+    const playLength = halfCourt ? 49.21 : 91.86;
+    const playWidth = halfCourt ? 36.09 : 49.21;
+    // If the plot is smaller than the playing area (custom small
+    // plot), cap the court at the plot's inner area minus a 2 ft
+    // margin so it still fits.
+    const courtW = Math.min(playLength, longFt - 4);
+    const courtH = Math.min(playWidth, shortFt - 4);
     elements.push({
       id: newId("basketball"),
       type: "basketball-court",
@@ -407,7 +792,7 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       rotation: baseRotation,
       width: courtW,
       height: courtH,
-      halfCourt: config.basketball?.halfCourt ?? false,
+      halfCourt,
       z: z++,
     });
     // Auto-add hoops flanking each end of the court so sales doesn't have
@@ -418,13 +803,23 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       // Position the hoop along the court's long axis. When portrait we
       // rotated the court 90°, so the long axis points along Y in plot
       // space; otherwise along X.
-      const offset = (dir * courtW) / 2 - dir * 2;
+      //
+      // Real FIBA basket-centre distance from the baseline is 1.575 m
+      // (≈ 5.17 ft). Placing the hoop element there so the backboard
+      // sits just behind the baseline and the rim overhangs into the
+      // court as it does on a real build.
+      const basketFromBaselineFt = 5.17;
+      const offset = (dir * courtW) / 2 - dir * basketFromBaselineFt;
+      // Hoop rim faces INTO the court. Konva-local rim is at +y (down
+      // on screen); rotating -90° maps +y onto +x (rim points RIGHT
+      // for the left basket), and 90° maps +y onto -x (rim points LEFT
+      // for the right basket). Both baskets end up pointing inward.
       elements.push({
         id: newId("hoop"),
         type: "basketball-hoop",
         x: isPortrait ? cx : cx + offset,
         y: isPortrait ? cy + offset : cy,
-        rotation: baseRotation + (dir < 0 ? 0 : 180),
+        rotation: baseRotation + (dir < 0 ? -90 : 90),
         poleHeightFt: 10,
         backboardWidthFt: 6,
         z: z + 20,
@@ -504,13 +899,18 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       height: h,
       z: z++,
     });
+    // The net runs PERPENDICULAR to the court's length (crossing the
+    // play direction), so its line spans the court's SHORT side (h).
+    // NetShape draws a horizontal line by default; rotate 90° so it
+    // becomes a vertical bar across the width, with posts at the
+    // top and bottom sidelines where they physically sit on court.
     elements.push({
       id: newId(`${t.sport}-net`),
       type: "net",
       x: cx,
       y: cy,
-      rotation: baseRotation,
-      widthFt: w,
+      rotation: baseRotation + 90,
+      widthFt: h,
       heightFt: t.netHeightFt,
       z: z++,
     });

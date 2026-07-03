@@ -42,7 +42,24 @@ import type {
   DugoutElement,
   BasketballHoopElement,
 } from "@/lib/court-image/schema";
-import { aSideProps } from "@/lib/court-image/schema";
+import {
+  aSideProps,
+  SURFACE_IMAGE_URL,
+  SURFACE_SOLID_COLOR,
+  TURF_IMAGE_URLS,
+  TURF_STRIPE_COLORS,
+  TURF_ROLL_WIDTH_M,
+  PPE_TILE_FT,
+  isTiledSurface,
+  isAcrylicSurface,
+  isTurfSurface,
+  isPvcSurface,
+  ppeTileCount,
+  acrylicLitres,
+  turfRollMeters,
+  pvcRollCount,
+  type SurfaceFinish,
+} from "@/lib/court-image/schema";
 
 export type CourtCanvasHandle = {
   // Exports the current canvas state to a PNG dataURL at the given pixel
@@ -89,21 +106,30 @@ export default function CourtCanvas({
 
   // Plot-to-canvas conversion. We compute a single scale so the plot fills
   // as much of the canvas as possible while preserving aspect ratio.
+  // Non-plain surfaces reserve extra space on the right for the material
+  // callout (sample photo/swatch + quantity) so the callout sits outside
+  // the court, not on top of it. Turf callouts show TWO photos stacked
+  // (light + dark) so they need more vertical room; reserved width is
+  // the same for all non-plain surfaces to keep the layout uniform.
+  const surfaceReservesRightSpace = layout.style.surface !== "plain";
   const { pxPerFt, plotOriginX, plotOriginY, plotPxWidth, plotPxHeight } = useMemo(() => {
     const margin = 28; // leave room for the ground border + dimension labels
-    const availW = canvasWidth - margin * 2;
+    const rightExtra = surfaceReservesRightSpace ? 140 : 0;
+    const availW = canvasWidth - margin * 2 - rightExtra;
     const availH = canvasHeight - margin * 2;
     const scale = Math.min(availW / layout.plot.lengthFt, availH / layout.plot.widthFt);
     const w = layout.plot.lengthFt * scale;
     const h = layout.plot.widthFt * scale;
     return {
       pxPerFt: scale,
-      plotOriginX: (canvasWidth - w) / 2,
+      // Centre the plot within its allotted (canvas − reserved right)
+      // area so the run-off + dimensions stay symmetric on the left.
+      plotOriginX: (canvasWidth - rightExtra - w) / 2,
       plotOriginY: (canvasHeight - h) / 2,
       plotPxWidth: w,
       plotPxHeight: h,
     };
-  }, [canvasWidth, canvasHeight, layout.plot.lengthFt, layout.plot.widthFt]);
+  }, [canvasWidth, canvasHeight, layout.plot.lengthFt, layout.plot.widthFt, surfaceReservesRightSpace]);
 
   // Convert plot coords (origin bottom-left) to Konva canvas coords (origin
   // top-left). Used everywhere we draw or read positions.
@@ -194,15 +220,20 @@ export default function CourtCanvas({
           fill={layout.style.groundColor}
         />
         {/* Plot footprint (the actual customer land) — drawn with a faint
-            border so even a blank plot is visible against the ground. */}
-        <Rect
-          x={plotOriginX}
-          y={plotOriginY}
-          width={plotPxWidth}
-          height={plotPxHeight}
-          fill="#caa477"
-          stroke="#7a5b32"
-          strokeWidth={1.5}
+            border so even a blank plot is visible against the ground.
+            When a tiled surface is picked (e.g. PPE tile), the plot is
+            filled with the tile photo repeated at real scale rather than
+            the default earth colour. */}
+        <PlotSurface
+          plotOriginX={plotOriginX}
+          plotOriginY={plotOriginY}
+          plotPxWidth={plotPxWidth}
+          plotPxHeight={plotPxHeight}
+          pxPerFt={pxPerFt}
+          surface={layout.style.surface}
+          plotLengthFt={layout.plot.lengthFt}
+          plotWidthFt={layout.plot.widthFt}
+          polygon={layout.plot.polygon}
         />
         {showGrid && (
           <GridLines
@@ -217,8 +248,29 @@ export default function CourtCanvas({
         )}
       </Layer>
 
-      {/* Element layer — sorted by z so cricket pitch sits above football */}
-      <Layer>
+      {/* Element layer — sorted by z so cricket pitch sits above football.
+          When a plot polygon is set (non-standard mode), the layer is
+          clipped to the polygon so elements can't spill into the cut
+          zones. In standard/rectangular mode there's no clip and
+          elements can be dragged freely up to the plot boundary. */}
+      <Layer
+        clipFunc={
+          layout.plot.polygon && layout.plot.polygon.length >= 3
+            ? (ctx: any) => {
+                const poly = layout.plot.polygon!;
+                ctx.beginPath();
+                for (let i = 0; i < poly.length; i++) {
+                  const p = poly[i];
+                  const cx = plotOriginX + p.x * pxPerFt;
+                  const cy = plotOriginY + (layout.plot.widthFt - p.y) * pxPerFt;
+                  if (i === 0) ctx.moveTo(cx, cy);
+                  else ctx.lineTo(cx, cy);
+                }
+                ctx.closePath();
+              }
+            : undefined
+        }
+      >
         {sortedElements.map((el) => (
           <ElementShape
             key={el.id}
@@ -776,13 +828,43 @@ function BasketballCourtShape({
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
-  const fill = el.surfaceColor ?? style.basketballSurfaceColor;
+  // When the plot has a tiled surface (PPE tile), skip the solid
+  // basketball fill so the tile pattern shows through. Markings still
+  // paint on top. Element-level overrides win when explicitly set.
+  const fill = el.surfaceColor
+    ?? (style.surface !== "plain" ? "transparent" : style.basketballSurfaceColor);
   const line = el.lineColor ?? "#fff5e6";
   const lineWidth = Math.max(1, Math.min(w, h) * 0.005);
-  const keyW = w * 0.18;
-  const keyH = h * 0.32;
-  const ftR = Math.min(w, h) * 0.07;
-  const threeR = Math.min(w, h) * 0.34;
+
+  // Ratios below are FIBA regulation — measured as fractions of the
+  // 28 × 15 m playing area. Because the court element is now sized to
+  // the playing area (not the full plot), these ratios render at real
+  // scale.
+  //
+  //   key       = 4.90 m × 4.90 m  →  0.175 w × 0.327 h
+  //   ft circle = 1.80 m radius     →  0.120 h
+  //   3-pt arc  = 6.75 m radius     →  0.450 h  (from basket centre)
+  //   basket    = 1.575 m from baseline → 0.056 w
+  //   backboard = 1.20 m from baseline, 1.80 m wide → 0.043 w, 0.120 h
+  //   no-charge = 1.25 m radius from basket → 0.083 h
+  //   corner 3  = straight lines 0.90 m from sideline → 0.060 h
+  const keyW = w * 0.175;
+  const keyH = h * 0.327;
+  const ftR = h * 0.12;
+  const centerR = h * 0.12;
+  const threeR = h * 0.45;
+  const basketOffset = w * 0.056;
+  const backboardOffset = w * 0.043;
+  const backboardHalfW = h * 0.06;
+  const noChargeR = h * 0.083;
+  const cornerOffset = h * 0.06;
+  // Straight portion of the 3-pt line: from baseline (dir*w/2) inward
+  // to where it meets the arc at y = h/2 - cornerOffset. Distance:
+  // sqrt(threeR² − (h/2 − cornerOffset)²) from the basket in the
+  // x direction.
+  const cornerY = h / 2 - cornerOffset;
+  const cornerArcDx = Math.sqrt(Math.max(0, threeR * threeR - cornerY * cornerY));
+
   return (
     <>
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
@@ -791,34 +873,119 @@ function BasketballCourtShape({
         <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth} />
       )}
       {!el.halfCourt && (
-        <Circle x={0} y={0} radius={Math.min(w, h) * 0.07} stroke={line} strokeWidth={lineWidth} />
+        <Circle x={0} y={0} radius={centerR} stroke={line} strokeWidth={lineWidth} />
       )}
 
-      {/* Two ends — key + free throw circle + 3 point arc */}
-      {(el.halfCourt ? [1] : [-1, 1]).map((dir) => (
-        <Group key={dir} x={(dir * w) / 2} y={0}>
-          <Rect
-            x={dir < 0 ? 0 : -keyW}
-            y={-keyH / 2}
-            width={keyW}
-            height={keyH}
-            stroke={line}
-            strokeWidth={lineWidth}
-          />
-          <Circle x={dir < 0 ? keyW : -keyW} y={0} radius={ftR} stroke={line} strokeWidth={lineWidth} />
-          {/* 3-point arc — half circle facing inward */}
-          <Arc
-            x={0}
-            y={0}
-            innerRadius={threeR}
-            outerRadius={threeR}
-            angle={180}
-            rotation={dir < 0 ? -90 : 90}
-            stroke={line}
-            strokeWidth={lineWidth}
-          />
-        </Group>
-      ))}
+      {/* Two ends — key + free throw circle + backboard + basket + no-charge + 3-pt line */}
+      {(el.halfCourt ? [1] : [-1, 1]).map((dir) => {
+        // Basket position (centre of the rim) — 1.575 m inside baseline.
+        const baselineX = (dir * w) / 2;
+        const basketX = baselineX - dir * basketOffset;
+        // Free-throw circle centre — at the top of the key (5.80 m from baseline).
+        const ftLineX = baselineX - dir * keyW;
+        // Backboard face — 1.20 m from baseline (in front of basket).
+        const backboardX = baselineX - dir * backboardOffset;
+        // Where the corner straight meets the arc — basketX ± cornerArcDx.
+        // Sign: for the LEFT baseline (dir=-1), corner segment runs right
+        // (positive dx from basket, since arc's inward side is +x). For
+        // RIGHT (dir=1), it runs left (negative dx).
+        const cornerArcX = basketX - dir * cornerArcDx;
+
+        // Angle of the corner arc endpoint (from basket, measured from
+        // positive x-axis on the LEFT side, negative x-axis on RIGHT).
+        // atan2(cornerY, cornerArcDx) gives the angle in radians.
+        const cornerAngleDeg = (Math.atan2(cornerY, cornerArcDx) * 180) / Math.PI;
+        // Konva Arc sweeps CLOCKWISE from `rotation` by `angle`. For
+        // the LEFT half, the arc opens to the right so rotation should
+        // start at the bottom endpoint and sweep upward through the
+        // rightmost point back to the top endpoint. For the RIGHT half
+        // it mirrors.
+        const arcRotation = dir < 0 ? -cornerAngleDeg : 180 - cornerAngleDeg;
+        const arcAngle = 2 * cornerAngleDeg;
+
+        return (
+          <Group key={dir}>
+            {/* Key (paint) — 4.90 × 4.90 m rectangle butted against the baseline */}
+            <Rect
+              x={dir < 0 ? baselineX : baselineX - keyW}
+              y={-keyH / 2}
+              width={keyW}
+              height={keyH}
+              stroke={line}
+              strokeWidth={lineWidth}
+            />
+
+            {/* Free-throw circle — centred on the top of the key */}
+            <Circle
+              x={ftLineX}
+              y={0}
+              radius={ftR}
+              stroke={line}
+              strokeWidth={lineWidth}
+            />
+
+            {/* Backboard — 1.80 m wide, drawn 1.20 m from baseline */}
+            <Line
+              points={[
+                backboardX,
+                -backboardHalfW,
+                backboardX,
+                backboardHalfW,
+              ]}
+              stroke={line}
+              strokeWidth={lineWidth * 2}
+            />
+
+            {/* Basket rim — small circle at the basket centre */}
+            <Circle
+              x={basketX}
+              y={0}
+              radius={Math.max(2, h * 0.015)}
+              stroke={line}
+              strokeWidth={lineWidth}
+            />
+
+            {/* No-charge semi-circle — 1.25 m radius around basket, open toward
+                the baseline (semicircle facing INTO the court) */}
+            <Arc
+              x={basketX}
+              y={0}
+              innerRadius={noChargeR}
+              outerRadius={noChargeR}
+              angle={180}
+              rotation={dir < 0 ? -90 : 90}
+              stroke={line}
+              strokeWidth={lineWidth}
+            />
+
+            {/* Corner 3-point straight segments — from baseline at
+                y = ±(h/2 − 0.9 m) inward to where they meet the arc */}
+            <Line
+              points={[baselineX, cornerY, cornerArcX, cornerY]}
+              stroke={line}
+              strokeWidth={lineWidth}
+            />
+            <Line
+              points={[baselineX, -cornerY, cornerArcX, -cornerY]}
+              stroke={line}
+              strokeWidth={lineWidth}
+            />
+
+            {/* 3-point arc — from top corner endpoint clockwise through the
+                far side of the arc back to the bottom corner endpoint */}
+            <Arc
+              x={basketX}
+              y={0}
+              innerRadius={threeR}
+              outerRadius={threeR}
+              angle={arcAngle}
+              rotation={arcRotation}
+              stroke={line}
+              strokeWidth={lineWidth}
+            />
+          </Group>
+        );
+      })}
     </>
   );
 }
@@ -1586,3 +1753,370 @@ function darken(hexOrRgb: string, amount: number): string {
   b = Math.max(0, Math.round(b * f));
   return `rgba(${r},${g},${b},${a})`;
 }
+
+// Plot footprint renderer. Behaviour by surface:
+//   plain          → tan earth-colour rect, brown border
+//   ppe_tile_*     → solid tile-colour base + a single highlighted
+//                    sample tile photograph so the customer sees the
+//                    real material. Tile count pill in the wizard
+//                    handles the material-quantity part.
+//   acrylic_*      → uniform solid colour matching the coating shade.
+//                    No sample tile (acrylic is a coating, not a tile).
+const TILE_SOLID_COLORS: Partial<Record<SurfaceFinish, string>> = {
+  ppe_tile_red: "#b93430",
+};
+// Visual size of the highlighted sample tile in plot feet. Real tiles
+// are 30 cm (~1 ft); the sample is enlarged so its texture is legible
+// on a 100-ft-wide court.
+const SAMPLE_TILE_FT = 6;
+
+function PlotSurface({
+  plotOriginX,
+  plotOriginY,
+  plotPxWidth,
+  plotPxHeight,
+  pxPerFt,
+  surface,
+  plotLengthFt,
+  plotWidthFt,
+  polygon,
+}: {
+  plotOriginX: number;
+  plotOriginY: number;
+  plotPxWidth: number;
+  plotPxHeight: number;
+  pxPerFt: number;
+  surface: SurfaceFinish;
+  plotLengthFt: number;
+  plotWidthFt: number;
+  // Optional polygon vertices in PLOT feet (origin bottom-left). When
+  // provided, the plot boundary renders as this closed polygon instead
+  // of a rectangle. Set from non-standard mode's shape picker.
+  polygon?: Array<{ x: number; y: number }>;
+}) {
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [turfLightImg, setTurfLightImg] = useState<HTMLImageElement | null>(null);
+  const [turfDarkImg, setTurfDarkImg] = useState<HTMLImageElement | null>(null);
+  const imageUrl = SURFACE_IMAGE_URL[surface];
+  const turfUrls = TURF_IMAGE_URLS[surface];
+
+  useEffect(() => {
+    if (!imageUrl) {
+      setImg(null);
+      return;
+    }
+    const el = new window.Image();
+    el.crossOrigin = "anonymous";
+    el.src = imageUrl;
+    el.onload = () => setImg(el);
+    return () => {
+      el.onload = null;
+    };
+  }, [imageUrl]);
+
+  useEffect(() => {
+    if (!turfUrls) {
+      setTurfLightImg(null);
+      setTurfDarkImg(null);
+      return;
+    }
+    const l = new window.Image();
+    l.crossOrigin = "anonymous";
+    l.src = turfUrls.light;
+    l.onload = () => setTurfLightImg(l);
+    const d = new window.Image();
+    d.crossOrigin = "anonymous";
+    d.src = turfUrls.dark;
+    d.onload = () => setTurfDarkImg(d);
+    return () => {
+      l.onload = null;
+      d.onload = null;
+    };
+  }, [turfUrls]);
+
+  // Convert polygon (plot feet, origin bottom-left, +y up) to canvas
+  // pixels (origin top-left, +y down). Return null if no polygon set —
+  // caller falls back to a rectangle.
+  const polygonFlat = useMemo<number[] | null>(() => {
+    if (!polygon || polygon.length < 3) return null;
+    const out: number[] = [];
+    for (const p of polygon) {
+      out.push(plotOriginX + p.x * pxPerFt);
+      // Flip Y so plot-space bottom-left becomes canvas bottom-left.
+      out.push(plotOriginY + (plotWidthFt - p.y) * pxPerFt);
+    }
+    return out;
+  }, [polygon, plotOriginX, plotOriginY, pxPerFt, plotWidthFt]);
+
+  if (surface === "plain") {
+    if (polygonFlat) {
+      return (
+        <Line
+          points={polygonFlat}
+          closed
+          fill="#caa477"
+          stroke="#7a5b32"
+          strokeWidth={1.5}
+        />
+      );
+    }
+    return (
+      <Rect
+        x={plotOriginX}
+        y={plotOriginY}
+        width={plotPxWidth}
+        height={plotPxHeight}
+        fill="#caa477"
+        stroke="#7a5b32"
+        strokeWidth={1.5}
+      />
+    );
+  }
+
+  const solidFill = TILE_SOLID_COLORS[surface] ?? SURFACE_SOLID_COLOR[surface] ?? "#caa477";
+  const tiled = isTiledSurface(surface);
+  const acrylic = isAcrylicSurface(surface);
+  const turf = isTurfSurface(surface);
+  const pvc = isPvcSurface(surface);
+  // Photo-callout family: any surface that has a sample photograph
+  // shown to the customer. PPE tile ships a photo; PVC will pick one up
+  // as soon as the image lands at /images/tiles/pvc-sports.jpg.
+  const hasSamplePhoto = tiled || pvc;
+  const labelFontSize = Math.max(11, Math.min(plotPxWidth, plotPxHeight) * 0.03);
+  // Callout sits OUTSIDE the plot in the reserved right-side area (the
+  // parent hook allocates ~140 px for it). Fixed-size box so the layout
+  // stays readable regardless of plot scale.
+  const calloutSize = 120;
+  const calloutGap = 12;
+  const sampleX = plotOriginX + plotPxWidth + calloutGap;
+  const sampleY = plotOriginY;
+  const samplePx = calloutSize;
+  const infoW = calloutSize;
+  const infoX = sampleX;
+  const infoLines = tiled
+    ? (() => {
+        const c = ppeTileCount(plotLengthFt, plotWidthFt);
+        return [
+          `${c.total.toLocaleString("en-IN")} PPE tiles`,
+          `${c.perLength} × ${c.perWidth} · 30 cm each`,
+        ];
+      })()
+    : acrylic
+      ? (() => {
+          const a = acrylicLitres(plotLengthFt * plotWidthFt);
+          return [
+            `${a.total.toLocaleString("en-IN")} L acrylic`,
+            `P ${a.primer} · R ${a.resurfacer} · C ${a.color}`,
+          ];
+        })()
+      : turf
+        ? (() => {
+            const r = turfRollMeters(plotLengthFt, plotWidthFt);
+            return [
+              `Light ${r.lightMeters.toLocaleString("en-IN")} m`,
+              `Dark  ${r.darkMeters.toLocaleString("en-IN")} m`,
+              `${r.stripes} stripes · 2 m rolls`,
+            ];
+          })()
+        : pvc
+          ? (() => {
+              const p = pvcRollCount(plotLengthFt, plotWidthFt);
+              return [
+                `${p.totalSqM.toLocaleString("en-IN")} m² PVC`,
+                `${p.rolls} rolls · 1.8 × 20 m`,
+              ];
+            })()
+          : [];
+  const infoH = labelFontSize * (infoLines.length * 1.6 + 0.8);
+
+  // Turf stripe geometry — 2 m wide stripes parallel to the field
+  // length, running across the plot width. Alternating light + dark.
+  const stripes = turf
+    ? (() => {
+        const FT_PER_M = 3.281;
+        const stripeFt = TURF_ROLL_WIDTH_M * FT_PER_M;
+        const stripePx = stripeFt * pxPerFt;
+        const count = Math.ceil(plotPxHeight / stripePx);
+        const cols = TURF_STRIPE_COLORS[surface] ?? { light: "#3fa050", dark: "#256c30" };
+        return Array.from({ length: count }, (_, i) => ({
+          y: plotOriginY + i * stripePx,
+          height: Math.min(stripePx, plotOriginY + plotPxHeight - (plotOriginY + i * stripePx)),
+          fill: i % 2 === 0 ? cols.light : cols.dark,
+        }));
+      })()
+    : null;
+
+  return (
+    <>
+      {/* Solid surface base — clean uniform playing area for PPE tile
+          and acrylic. For turf we draw alternating light + dark
+          stripes across the plot, matching a real mowed pattern. When
+          a polygon boundary is set (non-standard mode), the base is a
+          closed Line instead of Rect and the stripe overlay is
+          skipped (a polygon-clipped stripe is a later phase). */}
+      {polygonFlat ? (
+        <Line
+          points={polygonFlat}
+          closed
+          fill={solidFill}
+          stroke="#7a5b32"
+          strokeWidth={1.5}
+        />
+      ) : turf && stripes && polygonFlat ? (
+        // Turf on a polygon plot — draw the polygon fill first, then
+        // the stripe rects on top. Konva's Line closed=true masks the
+        // stripes because the polygon fill is drawn AFTER stripes when
+        // wrapped in a Group with clipFunc. Simpler here: fill polygon,
+        // then overlay stripes that get clipped by an SVG-style path.
+        <>
+          <Line
+            points={polygonFlat}
+            closed
+            fill={solidFill}
+            stroke="#7a5b32"
+            strokeWidth={1.5}
+          />
+          {stripes.map((s, i) => (
+            <Rect
+              key={i}
+              x={plotOriginX}
+              y={s.y}
+              width={plotPxWidth}
+              height={s.height}
+              fill={s.fill}
+              listening={false}
+              globalCompositeOperation="source-atop"
+            />
+          ))}
+          <Line
+            points={polygonFlat}
+            closed
+            stroke="#7a5b32"
+            strokeWidth={1.5}
+            listening={false}
+          />
+        </>
+      ) : turf && stripes ? (
+        <>
+          <Rect
+            x={plotOriginX}
+            y={plotOriginY}
+            width={plotPxWidth}
+            height={plotPxHeight}
+            fill={solidFill}
+            stroke="#7a5b32"
+            strokeWidth={1.5}
+          />
+          {stripes.map((s, i) => (
+            <Rect
+              key={i}
+              x={plotOriginX}
+              y={s.y}
+              width={plotPxWidth}
+              height={s.height}
+              fill={s.fill}
+              listening={false}
+            />
+          ))}
+          <Rect
+            x={plotOriginX}
+            y={plotOriginY}
+            width={plotPxWidth}
+            height={plotPxHeight}
+            stroke="#7a5b32"
+            strokeWidth={1.5}
+            listening={false}
+          />
+        </>
+      ) : (
+        <Rect
+          x={plotOriginX}
+          y={plotOriginY}
+          width={plotPxWidth}
+          height={plotPxHeight}
+          fill={solidFill}
+          stroke="#7a5b32"
+          strokeWidth={1.5}
+        />
+      )}
+
+      {/* Sample callout on the RIGHT side of the plot. Photo when we
+          have one (PPE tile, PVC), coloured swatch otherwise (acrylic,
+          PVC-before-photo). Below it: quantity required. */}
+      {hasSamplePhoto && img && (
+        <KonvaImage
+          image={img}
+          x={sampleX}
+          y={sampleY}
+          width={samplePx}
+          height={samplePx}
+        />
+      )}
+      {(acrylic || (pvc && !img)) && (
+        <Rect
+          x={sampleX}
+          y={sampleY}
+          width={samplePx}
+          height={samplePx}
+          fill={solidFill}
+        />
+      )}
+      {/* Turf callout — TWO photos stacked (light on top, dark below)
+          so the customer sees both roll colours. */}
+      {turf && turfLightImg && (
+        <KonvaImage
+          image={turfLightImg}
+          x={sampleX}
+          y={sampleY}
+          width={samplePx}
+          height={samplePx / 2 - 2}
+        />
+      )}
+      {turf && turfDarkImg && (
+        <KonvaImage
+          image={turfDarkImg}
+          x={sampleX}
+          y={sampleY + samplePx / 2 + 2}
+          width={samplePx}
+          height={samplePx / 2 - 2}
+        />
+      )}
+      {(tiled || acrylic || turf || pvc) && (
+        <Rect
+          x={sampleX}
+          y={sampleY}
+          width={samplePx}
+          height={samplePx}
+          stroke="#fbbf24"
+          strokeWidth={Math.max(1.5, samplePx * 0.02)}
+        />
+      )}
+      {(tiled || acrylic || turf || pvc) && infoLines.length > 0 && (
+        <>
+          <Rect
+            x={infoX}
+            y={sampleY + samplePx + 4}
+            width={infoW}
+            height={infoH}
+            fill="rgba(255,255,255,0.94)"
+            cornerRadius={4}
+          />
+          {infoLines.map((text, i) => (
+            <Text
+              key={i}
+              text={text}
+              x={infoX}
+              y={sampleY + samplePx + 4 + labelFontSize * (0.3 + i * 1.5)}
+              width={infoW}
+              fontSize={labelFontSize * (i === 0 ? 1.05 : 0.85)}
+              fontStyle={i === 0 ? "700" : "500"}
+              fill={i === 0 ? "#0f172a" : "#475569"}
+              align="center"
+            />
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+

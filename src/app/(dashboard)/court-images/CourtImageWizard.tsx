@@ -16,6 +16,8 @@ import type { CourtCanvasHandle } from "@/components/court-image/CourtCanvas";
 import type { CourtCanvas3DHandle, CourtView } from "@/components/court-image/CourtCanvas3D";
 import {
   buildInitialLayout,
+  buildPlotPolygon,
+  buildMultiCutPolygon,
   newAnnotation,
   newBasketballHoop,
   newCricketPitch,
@@ -30,6 +32,14 @@ import {
   type Sport,
 } from "@/lib/court-image/schema";
 import { presetsForSports, type CourtPreset } from "@/lib/court-image/sport-standards";
+import {
+  ppeTileCount,
+  isTiledSurface,
+  isTurfSurface,
+  isPvcSurface,
+  turfRollMeters,
+  pvcRollCount,
+} from "@/lib/court-image/schema";
 import { useUserUnit } from "@/lib/units/useUserUnit";
 import { toFeet, toUnit, FT_TO_M } from "@/lib/units";
 
@@ -104,10 +114,29 @@ export default function CourtImageWizard({
   const [cricketLengthCustom, setCricketLengthCustom] = useState(22);
   const [cricketOrientation, setCricketOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [basketballHalfCourt, setBasketballHalfCourt] = useState(false);
+  // Design mode: "standard" uses preset court dimensions per sport;
+  // "custom" (future) lets sales design a plot with non-standard
+  // shape (e.g. diagonal / irregular). Custom is a placeholder for
+  // now — pick standard until the free-form editor lands.
+  const [designMode, setDesignMode] = useState<"standard" | "custom">("standard");
+  // Flooring / surface chosen in Step 1 so the canvas opens with the
+  // customer's material already applied. Can still be changed on the
+  // Design step's surface picker.
+  const [initialSurface, setInitialSurface] = useState<"plain" | "ppe_tile_red" | "acrylic_blue" | "acrylic_green" | "turf_40mm" | "turf_50mm" | "pvc_sports">("plain");
 
   // Step 2 state
   const [layout, setLayout] = useState<CourtLayout | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Non-standard plot shape state. Corner cuts stack (multi-select),
+  // diagonals and L-shapes are exclusive presets that replace the whole
+  // polygon. `exclusiveShape === "rect"` with no active cuts = clean
+  // rectangle plot.
+  const [activeCorners, setActiveCorners] = useState<{
+    tl: boolean; tr: boolean; bl: boolean; br: boolean;
+  }>({ tl: false, tr: false, bl: false, br: false });
+  const [exclusiveShape, setExclusiveShape] = useState<
+    "rect" | "diag-top" | "diag-bot" | "l-tr" | "l-br"
+  >("rect");
 
   // Step 3 state
   const [caption, setCaption] = useState("");
@@ -259,6 +288,15 @@ export default function CourtImageWizard({
       },
       title: customerName,
     });
+    // Apply the flooring the user chose in Step 1. If nothing was
+    // picked (initialSurface === "plain"), fall back to the legacy
+    // solo-basketball default so the tile finish is applied without
+    // an extra click on the design step.
+    if (initialSurface !== "plain") {
+      initial.style = { ...initial.style, surface: initialSurface };
+    } else if (selectedSports.length === 1 && selectedSports[0] === "basketball") {
+      initial.style = { ...initial.style, surface: "ppe_tile_red" };
+    }
     setLayout(initial);
     setSelectedId(null);
     setStep(2);
@@ -414,6 +452,189 @@ export default function CourtImageWizard({
     }
     setLayout((prev) => (prev ? { ...prev, elements: [...prev.elements, newEl] } : prev));
     setSelectedId(newEl.id);
+  }
+
+  // Update the layout's polygon whenever the shape state changes.
+  function recomputePolygon(
+    corners: { tl: boolean; tr: boolean; bl: boolean; br: boolean },
+    exclusive: "rect" | "diag-top" | "diag-bot" | "l-tr" | "l-br"
+  ) {
+    setLayout((l) => {
+      if (!l) return l;
+      const L = l.plot.lengthFt;
+      const W = l.plot.widthFt;
+      let poly: Array<{ x: number; y: number }> | undefined;
+      if (exclusive === "diag-top")
+        poly = buildPlotPolygon(L, W, { kind: "diagonal", edge: "top", slopePct: 20 });
+      else if (exclusive === "diag-bot")
+        poly = buildPlotPolygon(L, W, { kind: "diagonal", edge: "bottom", slopePct: 20 });
+      else if (exclusive === "l-tr")
+        poly = buildPlotPolygon(L, W, { kind: "l-shape", corner: "tr", wPct: 40, hPct: 40 });
+      else if (exclusive === "l-br")
+        poly = buildPlotPolygon(L, W, { kind: "l-shape", corner: "br", wPct: 40, hPct: 40 });
+      else poly = buildMultiCutPolygon(L, W, { ...corners, sizePct: 25 });
+      return { ...l, plot: { ...l.plot, polygon: poly } };
+    });
+  }
+
+  function toggleCorner(corner: "tl" | "tr" | "bl" | "br") {
+    const next = { ...activeCorners, [corner]: !activeCorners[corner] };
+    setActiveCorners(next);
+    setExclusiveShape("rect");
+    recomputePolygon(next, "rect");
+  }
+
+  // Rotate the primary sport element in the layout by the given degrees.
+  // Applies to football / basketball / cricket-pitch / pickleball /
+  // generic-court elements — the shapes that define the court itself.
+  function rotatePrimaryCourt(deltaDeg: number) {
+    setLayout((l) => {
+      if (!l) return l;
+      const courtTypes = new Set([
+        "football-field",
+        "basketball-court",
+        "pickleball-court",
+        "generic-court",
+        "cricket-pitch",
+      ]);
+      return {
+        ...l,
+        elements: l.elements.map((el) =>
+          courtTypes.has(el.type)
+            ? { ...el, rotation: (el.rotation + deltaDeg) % 360 }
+            : el
+        ),
+      };
+    });
+  }
+
+  // Shrink the primary sport element(s) so they fit inside the plot
+  // polygon's bounding envelope. For symmetric diagonals / corner cuts
+  // we approximate a "safe rectangle" by clamping width × height to
+  // the narrowest cross-section. Rectangle plots reset to the sport's
+  // default playing-area size.
+  function fitCourtToPlotShape() {
+    setLayout((l) => {
+      if (!l) return l;
+      const poly = l.plot.polygon;
+      // Rectangle plot — nothing to fit around.
+      if (!poly || poly.length < 3) return l;
+      const L = l.plot.lengthFt;
+      const W = l.plot.widthFt;
+      // Find the narrowest horizontal + vertical slice through the
+      // polygon centre. That's a safe rectangle for the court element.
+      // For symmetric shapes this is exact; for asymmetric it's a
+      // reasonable lower bound.
+      const cx = L / 2;
+      const cy = W / 2;
+      // Rasterise the polygon boundary and find the largest inscribed
+      // axis-aligned rectangle centred on (cx, cy). Simple approach:
+      // sample rays in +/- x and +/- y directions and use the shortest
+      // distance to a polygon edge as the safe half-extent.
+      function safeExtent(dirX: number, dirY: number): number {
+        let t = 1e9;
+        for (let i = 0; i < poly!.length; i++) {
+          const p1 = poly![i];
+          const p2 = poly![(i + 1) % poly!.length];
+          // Ray from (cx,cy) in direction (dirX,dirY) intersect segment
+          // p1→p2. Skip parallel segments.
+          const rx = dirX;
+          const ry = dirY;
+          const sx = p2.x - p1.x;
+          const sy = p2.y - p1.y;
+          const denom = rx * sy - ry * sx;
+          if (Math.abs(denom) < 1e-6) continue;
+          const num1 = (p1.x - cx) * sy - (p1.y - cy) * sx;
+          const num2 = (p1.x - cx) * ry - (p1.y - cy) * rx;
+          const tt = num1 / denom;
+          const uu = num2 / denom;
+          if (tt >= 0 && uu >= 0 && uu <= 1 && tt < t) t = tt;
+        }
+        return t < 1e8 ? t : 0;
+      }
+      const halfW = Math.min(safeExtent(1, 0), safeExtent(-1, 0));
+      const halfH = Math.min(safeExtent(0, 1), safeExtent(0, -1));
+      const targetW = Math.max(halfW * 2 - 2, 10);
+      const targetH = Math.max(halfH * 2 - 2, 10);
+      const courtTypes = new Set([
+        "football-field",
+        "basketball-court",
+        "pickleball-court",
+        "generic-court",
+      ]);
+      // First pass — compute new dimensions for each court element so the
+      // Net element (second pass) can size to the resized court's width.
+      const resizedById: Record<string, { w: number; h: number }> = {};
+      const midElements = l.elements.map((el) => {
+        // For rotated courts (90° or 270°), swap the target axes so
+        // the court width still maps to the polygon's short side.
+        const rot = ((el.rotation % 360) + 360) % 360;
+        const swap = rot === 90 || rot === 270;
+        const w = swap ? targetH : targetW;
+        const h = swap ? targetW : targetH;
+        if (courtTypes.has(el.type)) {
+          const asAny = el as { width?: number; height?: number };
+          if (asAny.width == null || asAny.height == null) return el;
+          const ratio = asAny.width / asAny.height;
+          let nw = w;
+          let nh = w / ratio;
+          if (nh > h) {
+            nh = h;
+            nw = h * ratio;
+          }
+          resizedById[el.id] = { w: nw, h: nh };
+          return { ...el, x: cx, y: cy, width: nw, height: nh } as typeof el;
+        }
+        // Cricket pitch has pitchLengthFt / pitchWidthFt instead of
+        // width / height. Keep its native aspect ratio.
+        if (el.type === "cricket-pitch") {
+          const asAny = el as { pitchLengthFt: number; pitchWidthFt: number };
+          const ratio = asAny.pitchLengthFt / asAny.pitchWidthFt;
+          let nl = w;
+          let nw2 = w / ratio;
+          if (nw2 > h) {
+            nw2 = h;
+            nl = h * ratio;
+          }
+          return {
+            ...el,
+            x: cx,
+            y: cy,
+            pitchLengthFt: nl,
+            pitchWidthFt: nw2,
+          } as typeof el;
+        }
+        return el;
+      });
+      // Second pass — resize the Net element to match the resized court
+      // and re-centre it. The net's widthFt tracks the court's SHORT
+      // side (h) because we rotate the net 90° at layout time.
+      return {
+        ...l,
+        elements: midElements.map((el) => {
+          if (el.type !== "net") return el;
+          // Nets typically live near a court's centre; snap them to
+          // the plot centre and match the last resized court's h.
+          const anyResized = Object.values(resizedById)[0];
+          if (!anyResized) return { ...el, x: cx, y: cy };
+          return {
+            ...el,
+            x: cx,
+            y: cy,
+            widthFt: anyResized.h,
+          } as typeof el;
+        }),
+      };
+    });
+  }
+
+  function setExclusive(shape: "rect" | "diag-top" | "diag-bot" | "l-tr" | "l-br") {
+    // Exclusive shapes clear the corner cuts — they replace the whole
+    // polygon rather than compose.
+    const clearedCorners = { tl: false, tr: false, bl: false, br: false };
+    setActiveCorners(clearedCorners);
+    setExclusiveShape(shape);
+    recomputePolygon(clearedCorners, shape);
   }
 
   function toggleWatermark() {
@@ -680,6 +901,10 @@ export default function CourtImageWizard({
               setCricketOrientation={setCricketOrientation}
               basketballHalfCourt={basketballHalfCourt}
               setBasketballHalfCourt={setBasketballHalfCourt}
+              designMode={designMode}
+              setDesignMode={setDesignMode}
+              initialSurface={initialSurface}
+              setInitialSurface={setInitialSurface}
             />
           )}
 
@@ -719,6 +944,223 @@ export default function CourtImageWizard({
                     <AddBtn label="Line / arrow" onClick={() => addElement("line")} />
                     <AddBtn label="Rectangle" onClick={() => addElement("rect")} />
                   </div>
+                </div>
+
+                {/* Plot shape — only shown in non-standard (custom) mode.
+                    Corner cuts stack (checkboxes): sales can click Cut
+                    top-left AND Cut bottom-right to get both notches.
+                    Diagonal and L-shape presets are exclusive — they
+                    replace the whole polygon. Court elements are
+                    automatically clipped to the polygon so they don't
+                    spill into the cut zones. */}
+                {designMode === "custom" && (
+                  <div className="border-t border-slate-200 pt-4 space-y-2">
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                      Plot shape — corner cuts (multi-select)
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(
+                        [
+                          { key: "tl", label: "Cut top-left" },
+                          { key: "tr", label: "Cut top-right" },
+                          { key: "bl", label: "Cut bottom-left" },
+                          { key: "br", label: "Cut bottom-right" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => toggleCorner(opt.key)}
+                          className={`px-2 py-1.5 text-[11px] rounded border transition ${
+                            activeCorners[opt.key] && exclusiveShape === "rect"
+                              ? "bg-wa-green text-white border-wa-green"
+                              : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-2">
+                      Or pick one shape preset
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(
+                        [
+                          { key: "rect", label: "Rectangle (reset)" },
+                          { key: "diag-top", label: "Diagonal top" },
+                          { key: "diag-bot", label: "Diagonal bottom" },
+                          { key: "l-tr", label: "L-shape TR" },
+                          { key: "l-br", label: "L-shape BR" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => setExclusive(opt.key)}
+                          className={`px-2 py-1.5 text-[11px] rounded border transition ${
+                            exclusiveShape === opt.key &&
+                            !(activeCorners.tl || activeCorners.tr || activeCorners.bl || activeCorners.br)
+                              ? "bg-wa-green text-white border-wa-green"
+                              : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="text-[10px] text-slate-500 leading-relaxed">
+                      Corner cuts / diagonals default to 25 % of the plot
+                      edge. L-shape notches are 40 % × 40 %. Elements
+                      that spill past the polygon are automatically
+                      clipped.
+                    </div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-3">
+                      Court adjustments
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => rotatePrimaryCourt(90)}
+                        className="px-2 py-1.5 text-[11px] rounded border bg-white text-slate-700 border-slate-300 hover:border-slate-400"
+                      >
+                        Rotate 90°
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => rotatePrimaryCourt(45)}
+                        className="px-2 py-1.5 text-[11px] rounded border bg-white text-slate-700 border-slate-300 hover:border-slate-400"
+                      >
+                        Rotate 45°
+                      </button>
+                      <button
+                        type="button"
+                        onClick={fitCourtToPlotShape}
+                        className="col-span-2 px-2 py-1.5 text-[11px] rounded border bg-wa-green/10 text-wa-dark border-wa-green hover:bg-wa-green/20"
+                      >
+                        Fit court to plot shape
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-slate-500 leading-relaxed">
+                      Rotate the court to any angle, then click Fit to
+                      auto-shrink it inside the polygon (preserves the
+                      sport's aspect ratio).
+                    </div>
+                  </div>
+                )}
+
+                {/* Surface finish — plain earth vs a tiled PPE-tile
+                    photo. When ppe_tile_red is picked the tile count is
+                    computed from the plot size and shown so sales can
+                    quote materials without a separate calc. */}
+                <div className="border-t border-slate-200 pt-4 space-y-2">
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                    Surface finish
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        { id: "plain", label: "Plain" },
+                        { id: "ppe_tile_red", label: "PPE tile — Red" },
+                        { id: "acrylic_blue", label: "Acrylic — Blue" },
+                        { id: "acrylic_green", label: "Acrylic — Green" },
+                        { id: "turf_40mm", label: "Turf — 40 mm" },
+                        { id: "turf_50mm", label: "Turf — 50 mm" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() =>
+                          setLayout((l) =>
+                            l ? { ...l, style: { ...l.style, surface: opt.id } } : l
+                          )
+                        }
+                        className={`px-3 py-1.5 text-xs rounded-md border transition ${
+                          layout.style.surface === opt.id
+                            ? "bg-wa-green text-white border-wa-green"
+                            : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  {isTiledSurface(layout.style.surface) && (
+                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
+                      {(() => {
+                        const c = ppeTileCount(
+                          layout.plot.lengthFt,
+                          layout.plot.widthFt
+                        );
+                        return (
+                          <>
+                            <div className="font-medium">
+                              {c.total.toLocaleString("en-IN")} tiles required
+                            </div>
+                            <div className="text-slate-500">
+                              {c.perLength} × {c.perWidth} at 30 × 30 cm each
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  {(layout.style.surface === "acrylic_blue" ||
+                    layout.style.surface === "acrylic_green") && (
+                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
+                      <div className="font-medium">
+                        Acrylic hard-court coating
+                      </div>
+                      <div className="text-slate-500">
+                        Applied over a PCC slab · quoted by sq.ft (
+                        {(
+                          layout.plot.lengthFt * layout.plot.widthFt
+                        ).toLocaleString("en-IN")}{" "}
+                        sq.ft plot)
+                      </div>
+                    </div>
+                  )}
+                  {isTurfSurface(layout.style.surface) && (
+                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
+                      {(() => {
+                        const r = turfRollMeters(
+                          layout.plot.lengthFt,
+                          layout.plot.widthFt
+                        );
+                        return (
+                          <>
+                            <div className="font-medium">
+                              {r.totalMeters.toLocaleString("en-IN")} m turf roll required
+                            </div>
+                            <div className="text-slate-500">
+                              Light {r.lightMeters.toLocaleString("en-IN")} m + Dark {r.darkMeters.toLocaleString("en-IN")} m · {r.stripes} stripes · 2 m rolls
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  {isPvcSurface(layout.style.surface) && (
+                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
+                      {(() => {
+                        const p = pvcRollCount(
+                          layout.plot.lengthFt,
+                          layout.plot.widthFt
+                        );
+                        return (
+                          <>
+                            <div className="font-medium">
+                              {p.totalSqM.toLocaleString("en-IN")} m² PVC required
+                            </div>
+                            <div className="text-slate-500">
+                              {p.rolls} rolls · 1.8 m wide × 20 m long · {p.runningMeters.toLocaleString("en-IN")} running m
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
 
                 {/* Watermark toggle — Fitoverse logo composited into the
@@ -882,6 +1324,15 @@ export default function CourtImageWizard({
 //  Step 1 — sports + dimensions
 // ─────────────────────────────────────────────────────────────────────
 
+type Step1SurfaceOption =
+  | "plain"
+  | "ppe_tile_red"
+  | "acrylic_blue"
+  | "acrylic_green"
+  | "turf_40mm"
+  | "turf_50mm"
+  | "pvc_sports";
+
 function Step1(props: {
   customerName: string;
   setCustomerName: (v: string) => void;
@@ -901,6 +1352,10 @@ function Step1(props: {
   setCricketOrientation: (v: "horizontal" | "vertical") => void;
   basketballHalfCourt: boolean;
   setBasketballHalfCourt: (v: boolean) => void;
+  designMode: "standard" | "custom";
+  setDesignMode: (v: "standard" | "custom") => void;
+  initialSurface: Step1SurfaceOption;
+  setInitialSurface: (v: Step1SurfaceOption) => void;
 }) {
   const { unit, setUnit } = useUserUnit();
   const {
@@ -922,14 +1377,62 @@ function Step1(props: {
     setCricketOrientation,
     basketballHalfCourt,
     setBasketballHalfCourt,
+    designMode,
+    setDesignMode,
+    initialSurface,
+    setInitialSurface,
   } = props;
 
   function toggleSport(sport: Sport) {
-    setSelectedSports(
-      selectedSports.includes(sport)
-        ? selectedSports.filter((s) => s !== sport)
-        : [...selectedSports, sport]
-    );
+    const next = selectedSports.includes(sport)
+      ? selectedSports.filter((s) => s !== sport)
+      : [...selectedSports, sport];
+    setSelectedSports(next);
+    // Auto-apply the sport's canonical plot preset when it becomes the
+    // sole pick so sales doesn't have to hunt for the chip. All values
+    // are the playing area + safety run-off recommended by the
+    // governing body of that sport. In non-standard (custom) mode the
+    // sales team has typed their own plot dimensions — we skip the
+    // auto-preset so their input isn't clobbered.
+    if (designMode === "standard" && next.length === 1) {
+      switch (next[0]) {
+        case "basketball":
+          setLengthFt(105); // FIBA With Run-Off 32 × 19 m
+          setWidthFt(62);
+          setInitialSurface("ppe_tile_red");
+          break;
+        case "football":
+          setLengthFt(358); // FIFA 11-a-side 109 × 72 m
+          setWidthFt(236);
+          setInitialSurface("turf_40mm");
+          break;
+        case "pickleball":
+          setLengthFt(60); // IPA standard 30 × 60 ft
+          setWidthFt(30);
+          setInitialSurface("pvc_sports");
+          break;
+        case "volleyball":
+          setLengthFt(78); // FIVB 24 × 15 m (18 × 9 + 3 m free zone)
+          setWidthFt(49);
+          setInitialSurface("pvc_sports");
+          break;
+        case "tennis":
+          setLengthFt(120); // ITF 36.6 × 18.3 m recommended
+          setWidthFt(60);
+          setInitialSurface("acrylic_blue");
+          break;
+        case "badminton":
+          setLengthFt(57); // BWF 17.4 × 8.1 m
+          setWidthFt(27);
+          setInitialSurface("pvc_sports");
+          break;
+        case "cricket":
+          setLengthFt(105); // Practice net + pitch 32 × 4 m
+          setWidthFt(13);
+          setInitialSurface("turf_40mm");
+          break;
+      }
+    }
   }
 
   const showFootballConfig = selectedSports.includes("football");
@@ -943,6 +1446,61 @@ function Step1(props: {
 
   return (
     <div className="p-6 sm:p-8 overflow-y-auto h-full max-w-3xl mx-auto space-y-6">
+      {/* Design mode — standard preset court, or free-form custom
+          shape. Custom is a placeholder for now; the free-form editor
+          will land in a later release. */}
+      <section>
+        <h3 className="text-sm font-semibold text-slate-900 mb-3">
+          Court dimensions
+        </h3>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setDesignMode("standard")}
+            className={`px-4 py-3 rounded-lg border text-left transition ${
+              designMode === "standard"
+                ? "bg-wa-green/10 border-wa-green text-wa-dark"
+                : "bg-white border-slate-300 text-slate-700 hover:border-slate-400"
+            }`}
+          >
+            <div className="text-sm font-medium">Standard dimensions</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              Pre-set FIBA / regulation size per sport
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setDesignMode("custom")}
+            className={`px-4 py-3 rounded-lg border text-left transition ${
+              designMode === "custom"
+                ? "bg-wa-green/10 border-wa-green text-wa-dark"
+                : "bg-white border-slate-300 text-slate-700 hover:border-slate-400"
+            }`}
+          >
+            <div className="text-sm font-medium">Non-standard dimensions</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              Free-form design · custom plot shape
+            </div>
+          </button>
+        </div>
+      </section>
+
+      {designMode === "custom" && (
+        <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="text-sm font-semibold text-blue-900">
+            Free-form design
+          </div>
+          <div className="text-xs text-blue-800 mt-1 leading-relaxed">
+            Type your own plot dimensions below. In the design step you can
+            rotate the court diagonally, resize it to fit an irregular area,
+            or place multiple courts side by side. Sport-based auto-presets
+            are skipped so your typed dimensions are what opens on the canvas.
+          </div>
+        </section>
+      )}
+
+      {(
+        <>
       <section>
         <h3 className="text-sm font-semibold text-slate-900 mb-3">Customer</h3>
         <input
@@ -1026,14 +1584,10 @@ function Step1(props: {
             = {Math.round(lengthFt)} × {Math.round(widthFt)} ft (canonical)
           </div>
         )}
-        <DimensionPresets
-          sports={selectedSports}
-          unit={unit}
-          onPick={(p) => {
-            setLengthFt(Math.round(p.lengthFt));
-            setWidthFt(Math.round(p.widthFt));
-          }}
-        />
+        {/* Dimensions come from the sport-specific config below
+            (Football A-side, Basketball Full/Half, etc.) — there's no
+            separate "International Standards" preset chip strip so sales
+            doesn't get two places to make the same choice. */}
       </section>
 
       <section>
@@ -1075,7 +1629,19 @@ function Step1(props: {
                 <button
                   key={s}
                   type="button"
-                  onClick={() => setFootballASide(s as 5 | 7 | 11)}
+                  onClick={() => {
+                    setFootballASide(s as 5 | 7 | 11);
+                    // Auto-apply the FIFA plot dimensions (playing area
+                    // + 2 m run-off) so sales doesn't need to hunt for
+                    // the preset chip. Only when football is the ONLY
+                    // sport picked, to avoid clobbering a multi-sport
+                    // plot.
+                    if (selectedSports.length === 1 && selectedSports[0] === "football") {
+                      if (s === 5) { setLengthFt(144); setWidthFt(79); }
+                      else if (s === 7) { setLengthFt(210); setWidthFt(144); }
+                      else if (s === 11) { setLengthFt(358); setWidthFt(236); }
+                    }
+                  }}
                   className={`flex-1 px-3 py-2 text-sm rounded border ${
                     footballASide === s
                       ? "border-wa-green bg-wa-green/10 text-wa-dark"
@@ -1167,22 +1733,96 @@ function Step1(props: {
           <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
             Basketball config
           </h4>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={basketballHalfCourt}
-              onChange={(e) => setBasketballHalfCourt(e.target.checked)}
-            />
-            Half-court only (e.g. driveway / shorter plot)
-          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setBasketballHalfCourt(false);
+                if (selectedSports.length === 1 && selectedSports[0] === "basketball") {
+                  setLengthFt(105);
+                  setWidthFt(62);
+                }
+              }}
+              className={`px-3 py-1.5 text-xs rounded-md border transition ${
+                !basketballHalfCourt
+                  ? "bg-wa-green text-white border-wa-green"
+                  : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
+              }`}
+            >
+              Full court
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBasketballHalfCourt(true);
+                if (selectedSports.length === 1 && selectedSports[0] === "basketball") {
+                  setLengthFt(62);
+                  setWidthFt(49);
+                }
+              }}
+              className={`px-3 py-1.5 text-xs rounded-md border transition ${
+                basketballHalfCourt
+                  ? "bg-wa-green text-white border-wa-green"
+                  : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
+              }`}
+            >
+              Half court
+            </button>
+          </div>
+          <div className="text-[11px] text-slate-500">
+            {basketballHalfCourt
+              ? "FIBA 3x3 Olympic playing area is 15 × 11 m. Plot includes a 2 m safety run-off on all sides."
+              : "FIBA regulation playing area is 28 × 15 m. Plot includes a 2 m safety run-off on all sides."}
+          </div>
         </section>
       )}
+
+      {/* Flooring picker — chosen up-front so the Design step opens with
+          the customer's material already applied. Sales can still swap
+          it inside the Design step from the surface picker. */}
+      <section>
+        <h3 className="text-sm font-semibold text-slate-900 mb-3">
+          Flooring
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {(
+            [
+              { id: "plain", label: "Plain / undecided" },
+              { id: "ppe_tile_red", label: "PPE tile — Red" },
+              { id: "acrylic_blue", label: "Acrylic — Blue" },
+              { id: "acrylic_green", label: "Acrylic — Green" },
+              { id: "turf_40mm", label: "Turf — 40 mm" },
+              { id: "turf_50mm", label: "Turf — 50 mm" },
+              { id: "pvc_sports", label: "PVC sports floor" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setInitialSurface(opt.id)}
+              className={`px-3 py-2 text-xs rounded-md border transition text-left ${
+                initialSurface === opt.id
+                  ? "bg-wa-green/10 border-wa-green text-wa-dark font-medium"
+                  : "bg-white border-slate-300 text-slate-700 hover:border-slate-400"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <div className="text-[11px] text-slate-500 mt-2">
+          Material quantities (tile count / litres of acrylic) show on
+          the design once the canvas opens.
+        </div>
+      </section>
 
       <div className="text-xs text-slate-500 bg-blue-50 border border-blue-200 rounded-lg p-3 leading-relaxed">
         ℹ️ In the next step you can drag, resize and rotate everything — change the
         pitch position, swap colors, add labels, etc. Initial layout is just a
         starting point.
       </div>
+        </>
+      )}
     </div>
   );
 }

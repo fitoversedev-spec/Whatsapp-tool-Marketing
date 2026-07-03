@@ -24,250 +24,155 @@ export type CourtPreset = {
 };
 
 // Volleyball — Ebaco international standard
+// Volleyball — FIVB indoor. Playing court 18 × 9 m, free zone 3 m all
+// around (FIVB minimum). Total plot 24 × 15 m = 78 × 49 ft.
 const VOLLEYBALL: CourtPreset[] = [
   {
-    label: "Play Area (Doubles)",
-    lengthFt: 59,
-    widthFt: 29.6,
-    lengthMm: 18000,
-    widthMm: 9000,
-    areaSqFt: 1743,
-    hint: "Court only",
-  },
-  {
-    label: "With Run-Off",
-    lengthFt: 82,
-    widthFt: 42.6,
-    lengthMm: 25000,
-    widthMm: 12980,
-    areaSqFt: 3493,
-    hint: "Recommended for clubs / tournaments",
-  },
-  {
-    label: "Minimum Recommended",
-    lengthFt: 70,
-    widthFt: 36,
-    lengthMm: 21340,
-    widthMm: 10970,
-    areaSqFt: 2520,
-    hint: "10' length + 6' width margin",
+    label: "FIVB standard",
+    lengthFt: 78,
+    widthFt: 49,
+    lengthMm: 24000,
+    widthMm: 15000,
+    areaSqFt: 3822,
+    hint: "FIVB 18 × 9 m + 3 m free zone",
   },
 ];
 
 // Badminton
+// Badminton — BWF regulation. Playing court (doubles) 13.4 × 6.1 m.
+// Free zone: 2 m at ends + 1 m at sides = plot 17.4 × 8.1 m ≈ 57 × 27 ft.
 const BADMINTON: CourtPreset[] = [
   {
-    label: "Play Area (Doubles)",
-    lengthFt: 44,
-    widthFt: 20,
-    lengthMm: 13410,
-    widthMm: 6100,
-    areaSqFt: 880,
-    hint: "Court only",
-  },
-  {
-    label: "With Run-Off",
+    label: "BWF standard",
     lengthFt: 57,
-    widthFt: 33,
-    lengthMm: 17370,
-    widthMm: 10000,
-    areaSqFt: 1881,
-    hint: "Tournament-grade",
-  },
-  {
-    label: "Minimum Recommended",
-    lengthFt: 54,
-    widthFt: 30,
-    lengthMm: 16460,
-    widthMm: 9140,
-    areaSqFt: 1620,
+    widthFt: 27,
+    lengthMm: 17400,
+    widthMm: 8100,
+    areaSqFt: 1539,
+    hint: "BWF 13.4 × 6.1 m + free zone",
   },
 ];
 
-// Tennis
+// Tennis — ITF regulation. Playing court (doubles) 23.77 × 10.97 m.
+// Run-off: 6.4 m behind baselines + 3.66 m beyond sidelines
+// = plot 36.6 × 18.3 m ≈ 120 × 60 ft.
 const TENNIS: CourtPreset[] = [
   {
-    label: "Play Area (Doubles)",
-    lengthFt: 78,
-    widthFt: 36,
-    lengthMm: 23780,
-    widthMm: 10975,
-    areaSqFt: 2808,
-    hint: "Court only",
-  },
-  {
-    label: "With Run-Off",
+    label: "ITF standard",
     lengthFt: 120,
     widthFt: 60,
-    lengthMm: 36580,
-    widthMm: 18290,
+    lengthMm: 36600,
+    widthMm: 18300,
     areaSqFt: 7200,
-    hint: "Tournament with full clearance",
+    hint: "ITF 23.77 × 10.97 m + run-off",
   },
 ];
 
-// Basketball — NBA + FIBA variants
+// Basketball — the two options sales actually pitches. The full-court
+// variant covers a regulation FIBA build (28 × 15 m playing area with
+// 2 m run-off = 32 × 19 m plot); the half-court variant covers FIBA
+// 3x3 Olympic (15 × 11 m playing area with 2 m run-off = 19 × 15 m).
+// NBA + intermediate presets were dropped — the wizard's Full / Half
+// Court buttons are the primary picker; these chips just let sales
+// re-apply the two canonical plot sizes with one click.
 const BASKETBALL: CourtPreset[] = [
   {
-    label: "NBA Play Area",
-    variant: "NBA",
-    lengthFt: 94,
-    widthFt: 50,
-    lengthMm: 28650,
-    widthMm: 15240,
-    areaSqFt: 4700,
-    hint: "Pro standard",
-  },
-  {
-    label: "NBA With Run-Off",
-    variant: "NBA",
-    lengthFt: 114,
-    widthFt: 60,
-    lengthMm: 34750,
-    widthMm: 18290,
-    areaSqFt: 6840,
-    hint: "Tournament-grade",
-  },
-  {
-    label: "NBA Minimum Recommended",
-    variant: "NBA",
-    lengthFt: 100,
-    widthFt: 56,
-    lengthMm: 30480,
-    widthMm: 17000,
-    areaSqFt: 5600,
-    hint: "6' L / 8' W margin",
-  },
-  {
-    label: "FIBA Play Area",
+    label: "Full court",
     variant: "FIBA",
-    lengthFt: 91.84,
-    widthFt: 49.2,
-    lengthMm: 28000,
-    widthMm: 15000,
-    areaSqFt: 4520,
-    hint: "International standard",
-  },
-  {
-    label: "FIBA With Run-Off",
-    variant: "FIBA",
-    lengthFt: 104.9,
-    widthFt: 62.3,
+    lengthFt: 105,
+    widthFt: 62,
     lengthMm: 32000,
     widthMm: 19000,
-    areaSqFt: 6544,
+    areaSqFt: 6510,
+    hint: "FIBA 32 × 19 m · 2 m run-off",
   },
   {
-    label: "FIBA Minimum Recommended",
-    variant: "FIBA",
-    lengthFt: 98.4,
-    widthFt: 55.76,
-    lengthMm: 30000,
-    widthMm: 17000,
-    areaSqFt: 5489,
-    hint: "6.56' / 6.56' margin",
+    label: "Half court",
+    variant: "FIBA 3x3",
+    lengthFt: 62,
+    widthFt: 49,
+    lengthMm: 19000,
+    widthMm: 15000,
+    areaSqFt: 3038,
+    hint: "FIBA 3x3 Olympic · 2 m run-off",
   },
 ];
 
 // Football — common Indian-market builds, not on the Ebaco chart.
 // Kept here for parity so the wizard chip strip works for every sport.
+// FIFA-recognised playing areas + 2 m safety run-off on all sides.
+//   5-a-side  play 40 × 20 m → plot 44 × 24 m  ( 144 × 79 ft)
+//   7-a-side  play 60 × 40 m → plot 64 × 44 m  ( 210 × 144 ft)
+//   11-a-side play 105 × 68 m → plot 109 × 72 m ( 358 × 236 ft)
 const FOOTBALL: CourtPreset[] = [
   {
-    label: "5-a-side (compact)",
-    lengthFt: 100,
-    widthFt: 60,
-    lengthMm: 30480,
-    widthMm: 18290,
-    areaSqFt: 6000,
-    hint: "Box turf / fitness",
-  },
-  {
-    label: "5-a-side (standard)",
-    lengthFt: 130,
-    widthFt: 65,
-    lengthMm: 39620,
-    widthMm: 19810,
-    areaSqFt: 8450,
+    label: "5-a-side",
+    lengthFt: 144,
+    widthFt: 79,
+    lengthMm: 44000,
+    widthMm: 24000,
+    areaSqFt: 11376,
+    hint: "FIFA 40 × 20 m · 2 m run-off",
   },
   {
     label: "7-a-side",
-    lengthFt: 200,
-    widthFt: 130,
-    lengthMm: 60960,
-    widthMm: 39620,
-    areaSqFt: 26000,
-    hint: "Commercial rental",
+    lengthFt: 210,
+    widthFt: 144,
+    lengthMm: 64000,
+    widthMm: 44000,
+    areaSqFt: 30240,
+    hint: "FIFA 60 × 40 m · 2 m run-off",
   },
   {
-    label: "11-a-side (FIFA)",
-    lengthFt: 344,
-    widthFt: 223,
-    lengthMm: 104852,
-    widthMm: 67970,
-    areaSqFt: 76712,
-    hint: "Tournament grade",
+    label: "11-a-side",
+    lengthFt: 358,
+    widthFt: 236,
+    lengthMm: 109000,
+    widthMm: 72000,
+    areaSqFt: 84488,
+    hint: "FIFA 105 × 68 m regulation · 2 m run-off",
   },
 ];
 
 // Pickleball — USAPA singles + doubles + tournament
+// Pickleball — IPA / USAPA official. Playing court is 44 × 20 ft (same
+// for singles + doubles). We ship two plots: standard (30 × 60 ft, with
+// 5 ft safety on each side) and tournament (34 × 64 ft, 7 ft × 10 ft
+// safety), matching what IPA / USAPA recommend for competitive play.
 const PICKLEBALL: CourtPreset[] = [
   {
-    label: "Singles / Doubles",
-    lengthFt: 44,
-    widthFt: 20,
-    lengthMm: 13410,
-    widthMm: 6100,
-    areaSqFt: 880,
-    hint: "Court only",
-  },
-  {
-    label: "With Buffer",
+    label: "Standard court",
     lengthFt: 60,
     widthFt: 30,
     lengthMm: 18290,
     widthMm: 9144,
     areaSqFt: 1800,
-    hint: "Recommended",
+    hint: "IPA · 44 × 20 ft play + 5 ft safety zone",
   },
   {
-    label: "Tournament",
+    label: "Tournament court",
     lengthFt: 64,
     widthFt: 34,
     lengthMm: 19510,
     widthMm: 10360,
     areaSqFt: 2176,
-    hint: "Full run-off",
+    hint: "IPA tournament · full run-off",
   },
 ];
 
 // Cricket — pitch + boundary radius variants
+// Cricket — practice net + pitch. ICC / MCC regulation pitch is
+// 20.12 × 3.05 m (66 × 10 ft). Practice net area adds ~6 m of bowling
+// run-up + safety = 32 × 4 m plot (105 × 13 ft) with turf floor.
 const CRICKET: CourtPreset[] = [
   {
-    label: "Box cricket",
-    lengthFt: 80,
-    widthFt: 50,
-    lengthMm: 24380,
-    widthMm: 15240,
-    areaSqFt: 4000,
-    hint: "12 yd pitch enclosed",
-  },
-  {
-    label: "Junior ground",
-    lengthFt: 180,
-    widthFt: 180,
-    lengthMm: 54860,
-    widthMm: 54860,
-    areaSqFt: 32400,
-    hint: "22 yd pitch + 60m boundary",
-  },
-  {
-    label: "Club ground",
-    lengthFt: 240,
-    widthFt: 240,
-    lengthMm: 73150,
-    widthMm: 73150,
-    areaSqFt: 57600,
-    hint: "22 yd pitch + 75m boundary",
+    label: "Practice net + pitch",
+    lengthFt: 105,
+    widthFt: 13,
+    lengthMm: 32000,
+    widthMm: 4000,
+    areaSqFt: 1365,
+    hint: "ICC 20.12 m pitch + bowling run-up",
   },
 ];
 

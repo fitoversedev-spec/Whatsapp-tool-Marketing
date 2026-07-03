@@ -4,6 +4,7 @@ import { verifyMetaSignature, isOptOutMessage } from "@/lib/webhook";
 import { fetchInboundMedia } from "@/lib/whatsapp";
 import { categorize, uploadToBlob } from "@/lib/media";
 import { dispatchAutoReply } from "@/lib/auto-replies/dispatch";
+import { dispatchChatbot } from "@/lib/chatbot/dispatch";
 
 // Meta requires GET for verification handshake
 export async function GET(req: NextRequest) {
@@ -132,11 +133,27 @@ async function handleInboundMessage(msg: any, profileName?: string) {
   const from = msg.from as string;
   const waMessageId = msg.id as string;
   const type = msg.type as string;
+  // Interactive replies (button tap or list pick) come through as
+  // type=interactive with the picked option's id + title nested inside
+  // msg.interactive.{button_reply|list_reply}. We surface the id
+  // separately so the chatbot flow dispatcher can route on it, and mirror
+  // the human-readable title as the message body for the inbox view.
+  let interactiveReplyId: string | null = null;
+  if (type === "interactive") {
+    const br = msg.interactive?.button_reply;
+    const lr = msg.interactive?.list_reply;
+    if (br) interactiveReplyId = br.id ?? null;
+    else if (lr) interactiveReplyId = lr.id ?? null;
+  }
   const body =
     type === "text"
       ? msg.text?.body
       : type === "button"
       ? msg.button?.text
+      : type === "interactive"
+      ? (msg.interactive?.button_reply?.title ??
+        msg.interactive?.list_reply?.title ??
+        "")
       : (msg[type]?.caption ?? "");
 
   if (!from || !waMessageId) return;
@@ -232,11 +249,25 @@ async function handleInboundMessage(msg: any, profileName?: string) {
     return;
   }
 
-  // Auto-reply dispatcher. Fires on plain text messages only (media
-  // captions can be misleading). Dispatcher handles its own opt-out +
-  // cooldown checks and silent-fails on any error so a bug here can't
-  // break the webhook contract with Meta.
-  if (type === "text" && body) {
+  // Chatbot flow first — if a flow is active OR the inbound looks like
+  // a flow-starting greeting, the flow engine takes over exclusively.
+  // Only if the flow decides "not my message" do we fall through to the
+  // legacy auto-reply rules. Silent-fail so a bug can't crash the
+  // webhook contract with Meta.
+  const flowHandled = await dispatchChatbot({
+    conversationId: convo.id,
+    contactPhone: from,
+    inboundBody: body ?? "",
+    interactiveReplyId,
+  }).catch((err) => {
+    console.error("[webhook] chatbot dispatch threw", err);
+    return false;
+  });
+
+  // Legacy auto-reply dispatcher (L1 location, C1 catalogue, S1 sport,
+  // A1 after-hours). Skipped when the chatbot flow handled the message
+  // so we don't double-reply.
+  if (!flowHandled && type === "text" && body) {
     dispatchAutoReply({
       conversationId: convo.id,
       contactPhone: from,

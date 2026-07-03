@@ -54,27 +54,27 @@ model User {
 }
 
 model Template {
-  id                String    @id @default(uuid())
-  name              String
-  language          String
-  category          String
-  header            String?
-  body              String
-  footer            String?
-  buttons           String?
-  status            String    @default("draft")
-  metaTemplateId    String?   @unique @map("meta_template_id")
-  rejectionReason   String?   @map("rejection_reason")
-  draftedByUserId   String    @map("drafted_by_user_id")
-  approvedByUserId  String?   @map("approved_by_user_id")
-  submittedAt       DateTime? @map("submitted_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  id               String    @id @default(uuid())
+  name             String
+  language         String
+  category         String
+  header           String?
+  body             String
+  footer           String?
+  buttons          String?
+  status           String    @default("draft")
+  metaTemplateId   String?   @unique @map("meta_template_id")
+  rejectionReason  String?   @map("rejection_reason")
+  draftedByUserId  String    @map("drafted_by_user_id")
+  approvedByUserId String?   @map("approved_by_user_id")
+  submittedAt      DateTime? @map("submitted_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
   // Soft delete — when set, template is hidden from default list views
   // and excluded from the Broadcasts template picker. The Meta-side
   // template is NOT deleted; admin can restore from the "Show deleted"
   // filter on the Templates page.
-  deletedAt         DateTime? @map("deleted_at")
+  deletedAt        DateTime? @map("deleted_at")
 
   draftedBy  User        @relation("DraftedTemplates", fields: [draftedByUserId], references: [id])
   approvedBy User?       @relation("ApprovedTemplates", fields: [approvedByUserId], references: [id])
@@ -87,29 +87,29 @@ model Template {
 }
 
 model Conversation {
-  id                  String    @id @default(uuid())
-  contactPhone        String    @unique @map("contact_phone")
-  contactName         String?   @map("contact_name")
-  assignedToUserId    String?   @map("assigned_to_user_id")
-  originBroadcastId   String?   @map("origin_broadcast_id")
-  status              String    @default("open")
-  lastInboundAt       DateTime? @map("last_inbound_at")
-  lastOutboundAt      DateTime? @map("last_outbound_at")
-  unreadCount         Int       @default(0) @map("unread_count")
-  createdAt           DateTime  @default(now()) @map("created_at")
+  id                String    @id @default(uuid())
+  contactPhone      String    @unique @map("contact_phone")
+  contactName       String?   @map("contact_name")
+  assignedToUserId  String?   @map("assigned_to_user_id")
+  originBroadcastId String?   @map("origin_broadcast_id")
+  status            String    @default("open")
+  lastInboundAt     DateTime? @map("last_inbound_at")
+  lastOutboundAt    DateTime? @map("last_outbound_at")
+  unreadCount       Int       @default(0) @map("unread_count")
+  createdAt         DateTime  @default(now()) @map("created_at")
 
   // Pipeline / lead funnel fields. All nullable to keep migration zero-risk for
   // existing rows. pipelineStage default "new" applies to fresh inserts only;
   // existing rows get null and surface in the "Unsorted" column until a sales
   // user drags them to a stage.
-  pipelineStage    String?   @default("new") @map("pipeline_stage")
-  stageChangedAt   DateTime? @map("stage_changed_at")
-  dealValue        Decimal?  @db.Decimal(12, 2) @map("deal_value")
-  expectedCloseAt  DateTime? @map("expected_close_at")
-  lostReason       String?   @map("lost_reason")
+  pipelineStage   String?   @default("new") @map("pipeline_stage")
+  stageChangedAt  DateTime? @map("stage_changed_at")
+  dealValue       Decimal?  @map("deal_value") @db.Decimal(12, 2)
+  expectedCloseAt DateTime? @map("expected_close_at")
+  lostReason      String?   @map("lost_reason")
 
-  assignedTo      User?                 @relation("AssignedConversations", fields: [assignedToUserId], references: [id])
-  originBroadcast Broadcast?            @relation(fields: [originBroadcastId], references: [id])
+  assignedTo      User?                  @relation("AssignedConversations", fields: [assignedToUserId], references: [id])
+  originBroadcast Broadcast?             @relation(fields: [originBroadcastId], references: [id])
   messages        Message[]
   notes           ConversationNote[]
   reminders       Reminder[]
@@ -118,6 +118,8 @@ model Conversation {
   quotations      Quotation[]
   courtImages     CourtImage[]
   autoReplyLogs   AutoReplyLog[]
+  botFlow         ConversationFlow?
+  botLeads        BotLead[]
 
   @@index([assignedToUserId])
   @@index([status])
@@ -235,9 +237,9 @@ model BroadcastRecipient {
 }
 
 model OptOut {
-  phoneE164   String   @id @map("phone_e164")
-  optedOutAt  DateTime @default(now()) @map("opted_out_at")
-  reason      String
+  phoneE164  String   @id @map("phone_e164")
+  optedOutAt DateTime @default(now()) @map("opted_out_at")
+  reason     String
 
   @@map("opt_outs")
 }
@@ -383,8 +385,8 @@ model Quotation {
   //   gstPercent, total, included }. Description is user-editable per quote.
   lineItems       String    @map("line_items")
   subtotal        Decimal   @db.Decimal(12, 2)
-  gstAmount       Decimal   @db.Decimal(12, 2) @map("gst_amount")
-  grandTotal      Decimal   @db.Decimal(12, 2) @map("grand_total")
+  gstAmount       Decimal   @map("gst_amount") @db.Decimal(12, 2)
+  grandTotal      Decimal   @map("grand_total") @db.Decimal(12, 2)
   notes           String?
   // Optional customer-facing caption. When set, /send delivers it as a
   // text message immediately before the PDF so WhatsApp displays it as
@@ -457,6 +459,72 @@ model AutoReplyLog {
   @@map("auto_reply_logs")
 }
 
+// Chatbot state — a lightweight state machine per conversation. Drives
+// the multi-turn flow (Phase 0 menu → branch → data collection → end).
+// One row per conversation; deleted or ended after completion. 4-hour
+// timeout after last update — next inbound restarts from Phase 0.
+model ConversationFlow {
+  id             String    @id @default(uuid())
+  conversationId String    @unique @map("conversation_id")
+  // "turnkey_new" | "turnkey_maintenance" | "consultation" | "product" | null (menu shown, path not picked yet)
+  path           String?
+  // Step identifier from the code-side step registry (e.g. "menu",
+  // "p1a_name", "p1b_service", "p3_datetime", "done").
+  currentStep    String    @map("current_step")
+  // JSON of collected fields: {name, phone, location, landSize, sport,
+  // maintenanceType, preferredDateTime, ...}. Nullable until first field
+  // captured; overwritten on each step advance.
+  collectedData  String    @default("{}") @map("collected_data")
+  startedAt      DateTime  @default(now()) @map("started_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  endedAt        DateTime? @map("ended_at")
+  // "completed" | "off_script" | "timeout" | null (still active)
+  endReason      String?   @map("end_reason")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([currentStep])
+  @@index([updatedAt])
+  @@map("conversation_flows")
+}
+
+// Captured leads from the chatbot. One row per completed (or partially
+// completed off-script) flow. Sales sees these in a daily data-sheet at
+// /leads and moves them into the pipeline manually.
+model BotLead {
+  id                String    @id @default(uuid())
+  conversationId    String    @map("conversation_id")
+  contactPhone      String    @map("contact_phone")
+  contactName       String?   @map("contact_name")
+  // "turnkey_new" | "turnkey_maintenance" | "consultation" | "product"
+  path              String
+  location          String?
+  // For turnkey_new: land size (ft). For turnkey_maintenance: turf size.
+  sizeFt            Decimal?  @map("size_ft") @db.Decimal(10, 2)
+  // For turnkey_new
+  sport             String?
+  // For turnkey_maintenance
+  maintenanceType   String?   @map("maintenance_type")
+  // For product
+  productCategory   String?   @map("product_category")
+  // For consultation — ISO datetime string of preferred callback slot
+  preferredDateTime DateTime? @map("preferred_datetime")
+  // "new" | "in_progress" | "contacted" | "converted" | "lost"
+  status            String    @default("new")
+  assignedToUserId  String?   @map("assigned_to_user_id")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([path])
+  @@index([assignedToUserId])
+  @@index([conversationId])
+  @@map("bot_leads")
+}
+
 // Court layout designs — visual 2D editable canvas that exports a PNG sent
 // to the customer over WhatsApp. The full editable layout (sports, plot,
 // element positions/sizes/rotations/colors, annotations) is stored as JSON
@@ -522,7 +590,7 @@ model PortfolioProject {
   surfaceGrade     String?   @map("surface_grade")
   // Admin-only display field; never sent to customers. Used internally
   // for catalogue tier hints (entry / standard / premium).
-  totalCostInr     Decimal?  @db.Decimal(12, 2) @map("total_cost_inr")
+  totalCostInr     Decimal?  @map("total_cost_inr") @db.Decimal(12, 2)
   shortDescription String?   @map("short_description")
   // JSON array of { url, caption?: string }. Hero photo is rendered
   // separately on the catalogue cover; gallery shows on the project

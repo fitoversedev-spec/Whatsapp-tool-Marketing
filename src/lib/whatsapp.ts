@@ -85,6 +85,95 @@ export async function sendMedia(args: {
   return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
 }
 
+// Send an interactive button message. Up to 3 buttons. Each button has
+// an `id` we get back in the webhook as `interactive.button_reply.id`
+// so the flow dispatcher knows which option the customer tapped.
+// `title` is what the customer sees on the button (max 20 chars per
+// Meta's limits).
+export async function sendButtons(args: {
+  to: string;
+  body: string;
+  buttons: Array<{ id: string; title: string }>;
+  header?: string;
+  footer?: string;
+}): Promise<{ waMessageId: string }> {
+  if (args.buttons.length < 1 || args.buttons.length > 3) {
+    throw new Error("sendButtons requires 1-3 buttons");
+  }
+  const interactive: Record<string, unknown> = {
+    type: "button",
+    body: { text: args.body },
+    action: {
+      buttons: args.buttons.map((b) => ({
+        type: "reply",
+        reply: { id: b.id, title: b.title.slice(0, 20) },
+      })),
+    },
+  };
+  if (args.header) interactive.header = { type: "text", text: args.header };
+  if (args.footer) interactive.footer = { text: args.footer };
+  const res = await axios.post(
+    messagesUrl(),
+    {
+      messaging_product: "whatsapp",
+      to: args.to,
+      type: "interactive",
+      interactive,
+    },
+    { headers: await authHeaders() }
+  );
+  return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
+}
+
+// Send an interactive list message. Up to 10 rows total, grouped in
+// sections (also useful for categorising). Each row has an `id` we get
+// back in the webhook as `interactive.list_reply.id`. The `buttonText`
+// is what the customer taps to open the list (e.g. "See options").
+export async function sendList(args: {
+  to: string;
+  body: string;
+  buttonText: string;
+  sections: Array<{
+    title?: string;
+    rows: Array<{ id: string; title: string; description?: string }>;
+  }>;
+  header?: string;
+  footer?: string;
+}): Promise<{ waMessageId: string }> {
+  const totalRows = args.sections.reduce((n, s) => n + s.rows.length, 0);
+  if (totalRows < 1 || totalRows > 10) {
+    throw new Error("sendList requires 1-10 total rows");
+  }
+  const interactive: Record<string, unknown> = {
+    type: "list",
+    body: { text: args.body },
+    action: {
+      button: args.buttonText.slice(0, 20),
+      sections: args.sections.map((s) => ({
+        title: s.title,
+        rows: s.rows.map((r) => ({
+          id: r.id,
+          title: r.title.slice(0, 24),
+          description: r.description?.slice(0, 72),
+        })),
+      })),
+    },
+  };
+  if (args.header) interactive.header = { type: "text", text: args.header };
+  if (args.footer) interactive.footer = { text: args.footer };
+  const res = await axios.post(
+    messagesUrl(),
+    {
+      messaging_product: "whatsapp",
+      to: args.to,
+      type: "interactive",
+      interactive,
+    },
+    { headers: await authHeaders() }
+  );
+  return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
+}
+
 // Download an inbound media file. Meta gives us a media_id in the webhook;
 // we exchange it for a short-lived signed URL (step 1), then fetch the
 // bytes with the access token (step 2). Caller decides where to persist.

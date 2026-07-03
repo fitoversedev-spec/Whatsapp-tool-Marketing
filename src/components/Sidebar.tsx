@@ -25,6 +25,7 @@ const PRIMARY_NAV = [
   { href: "/broadcasts", label: "Broadcasts", icon: "📣" },
   { href: "/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
   { href: "/pipeline", label: "Pipeline", icon: "🎯" },
+  { href: "/leads", label: "Bot leads", icon: "🤖" },
 ];
 
 export default function Sidebar({

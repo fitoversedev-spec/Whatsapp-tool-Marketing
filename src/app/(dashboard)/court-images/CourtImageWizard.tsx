@@ -1444,6 +1444,30 @@ function Step1(props: {
   const displayLen = unit === "ft" ? lengthFt : Number(toUnit(lengthFt, unit).toFixed(1));
   const displayWid = unit === "ft" ? widthFt : Number(toUnit(widthFt, unit).toFixed(1));
 
+  // Two ways to enter plot dimensions in Standard mode:
+  //   "lw"    → Length × Breadth inputs (the original UX)
+  //   "total" → Total plot area in sq.ft, auto-split into L × W using
+  //             the selected sport's aspect ratio (Basketball 105:62 →
+  //             1.69, Football 358:236 → 1.52, etc.). Falls back to 3:2
+  //             when no sport is picked yet.
+  // Customer often knows "I have 7500 sq.ft" without a length/width.
+  const [entryMode, setEntryMode] = useState<"lw" | "total">("lw");
+  const [totalSqftInput, setTotalSqftInput] = useState<string>("");
+  const activeRatio =
+    lengthFt > 0 && widthFt > 0 ? lengthFt / widthFt : 1.5;
+  const firstSportLabel =
+    selectedSports.length > 0 ? SPORT_LABEL[selectedSports[0]] : null;
+
+  function applyTotalSqft(raw: string) {
+    setTotalSqftInput(raw);
+    const t = parseFloat(raw);
+    if (!isFinite(t) || t < 100) return;
+    const w = Math.sqrt(t / activeRatio);
+    const l = w * activeRatio;
+    setWidthFt(Math.max(3, Math.round(w)));
+    setLengthFt(Math.max(3, Math.round(l)));
+  }
+
   return (
     <div className="p-6 sm:p-8 overflow-y-auto h-full max-w-3xl mx-auto space-y-6">
       {/* Design mode — standard preset court, or free-form custom
@@ -1543,46 +1567,115 @@ function Step1(props: {
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-[11px] text-slate-500 uppercase tracking-wide">
-              Length ({unit})
-            </span>
-            <input
-              type="number"
-              min={unit === "m" ? 3 : 10}
-              max={unit === "m" ? 150 : 500}
-              step={unit === "m" ? 0.1 : 1}
-              value={displayLen}
-              onChange={(e) => {
-                const raw = parseFloat(e.target.value) || 0;
-                setLengthFt(toFeet(raw, unit));
-              }}
-              className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] text-slate-500 uppercase tracking-wide">
-              Width ({unit})
-            </span>
-            <input
-              type="number"
-              min={unit === "m" ? 3 : 10}
-              max={unit === "m" ? 150 : 500}
-              step={unit === "m" ? 0.1 : 1}
-              value={displayWid}
-              onChange={(e) => {
-                const raw = parseFloat(e.target.value) || 0;
-                setWidthFt(toFeet(raw, unit));
-              }}
-              className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
-            />
-          </label>
-        </div>
-        {unit === "m" && (
-          <div className="text-[10px] text-slate-500 mt-1">
-            = {Math.round(lengthFt)} × {Math.round(widthFt)} ft (canonical)
+        {/* Entry-method sub-toggle — pick Length × Breadth OR Total
+            area. Standard mode only; custom mode always uses free
+            L × W. */}
+        {designMode === "standard" && (
+          <div className="inline-flex bg-slate-100 rounded-md p-0.5 text-xs mb-3">
+            <button
+              type="button"
+              onClick={() => setEntryMode("lw")}
+              className={`px-3 py-1.5 rounded font-medium transition ${
+                entryMode === "lw"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Length × Breadth
+            </button>
+            <button
+              type="button"
+              onClick={() => setEntryMode("total")}
+              className={`px-3 py-1.5 rounded font-medium transition ${
+                entryMode === "total"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Total area
+            </button>
           </div>
+        )}
+
+        {entryMode === "total" && designMode === "standard" ? (
+          <div>
+            <label className="block">
+              <span className="text-[11px] text-slate-500 uppercase tracking-wide">
+                Total plot area (sq.ft)
+              </span>
+              <input
+                type="number"
+                min={100}
+                max={200000}
+                step={100}
+                value={totalSqftInput}
+                onChange={(e) => applyTotalSqft(e.target.value)}
+                placeholder="e.g. 7500"
+                className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+              />
+            </label>
+            <div className="text-[11px] text-slate-500 mt-2">
+              {totalSqftInput && parseFloat(totalSqftInput) >= 100 ? (
+                <>
+                  Split into{" "}
+                  <span className="font-medium text-slate-700">
+                    {lengthFt} × {widthFt} ft
+                  </span>{" "}
+                  {firstSportLabel
+                    ? `using ${firstSportLabel} aspect ratio`
+                    : "at 3:2 ratio — pick a sport for a smarter split"}
+                </>
+              ) : firstSportLabel ? (
+                <>Uses {firstSportLabel} aspect ratio to compute L × W.</>
+              ) : (
+                <>Pick a sport below for a smart split, or 3:2 is used.</>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-[11px] text-slate-500 uppercase tracking-wide">
+                  Length ({unit})
+                </span>
+                <input
+                  type="number"
+                  min={unit === "m" ? 3 : 10}
+                  max={unit === "m" ? 150 : 500}
+                  step={unit === "m" ? 0.1 : 1}
+                  value={displayLen}
+                  onChange={(e) => {
+                    const raw = parseFloat(e.target.value) || 0;
+                    setLengthFt(toFeet(raw, unit));
+                  }}
+                  className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] text-slate-500 uppercase tracking-wide">
+                  Width ({unit})
+                </span>
+                <input
+                  type="number"
+                  min={unit === "m" ? 3 : 10}
+                  max={unit === "m" ? 150 : 500}
+                  step={unit === "m" ? 0.1 : 1}
+                  value={displayWid}
+                  onChange={(e) => {
+                    const raw = parseFloat(e.target.value) || 0;
+                    setWidthFt(toFeet(raw, unit));
+                  }}
+                  className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                />
+              </label>
+            </div>
+            {unit === "m" && (
+              <div className="text-[10px] text-slate-500 mt-1">
+                = {Math.round(lengthFt)} × {Math.round(widthFt)} ft (canonical)
+              </div>
+            )}
+          </>
         )}
         {/* Dimensions come from the sport-specific config below
             (Football A-side, Basketball Full/Half, etc.) — there's no

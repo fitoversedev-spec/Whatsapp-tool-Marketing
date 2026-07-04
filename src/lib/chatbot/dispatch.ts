@@ -16,6 +16,8 @@ import {
   sendButtons,
   sendList,
   sendMedia,
+  sendProductCarousel,
+  type ProductCarouselCard,
 } from "@/lib/whatsapp";
 import { getSportMeta, type SportKey } from "@/lib/catalogue/sport-meta";
 import {
@@ -31,12 +33,24 @@ import {
 
 // How many products to send when the customer picks a sport. WhatsApp
 // media messages arrive one-per-second, so 5 is a good balance between
-// giving a real preview and not spamming.
+// giving a real preview and not spamming. Also matches the approved
+// carousel template's card count.
 const PRODUCTS_TO_SHOW = 5;
 
 // Cap on the description we tack onto each product image caption.
 // WhatsApp caption limit is 1024 chars; leave room for the header line.
 const CAPTION_BODY_LIMIT = 700;
+
+// Carousel template body variables have a lower character limit than
+// image captions. Meta rejects long bodies at approval time; keep the
+// description tight so the whole card reads at a glance.
+const CAROUSEL_DESC_LIMIT = 220;
+
+// Name of the approved carousel template. Set via env once Meta has
+// reviewed and approved fitoverse_product_carousel_v1 (see
+// scripts/submit-product-carousel-template.ts). While unset, the
+// chatbot falls back to sequential image messages.
+const CAROUSEL_TEMPLATE = process.env.PRODUCT_CAROUSEL_TEMPLATE ?? "";
 
 // 4-hour inactivity timeout: after that, next inbound restarts fresh.
 const FLOW_TIMEOUT_MS = 4 * 60 * 60 * 1000;
@@ -58,6 +72,22 @@ export async function dispatchChatbot(
   input: DispatchChatbotInput
 ): Promise<boolean> {
   const { conversationId, contactPhone, inboundBody, interactiveReplyId } = input;
+
+  // "I'm interested" tap on a product carousel card. The card button's
+  // payload was `product_interested:<productId>` at send time; that's
+  // what comes back as the interactive reply id. Handle it as a one-
+  // shot before any flow logic runs so it works even if the flow
+  // already ended (which it will — the flow closes right after the
+  // carousel is sent).
+  if (interactiveReplyId?.startsWith("product_interested:")) {
+    const productId = interactiveReplyId.slice(
+      "product_interested:".length,
+    );
+    await captureProductInterest(conversationId, contactPhone, productId).catch(
+      (err) => console.error("[chatbot] product interest capture failed", err),
+    );
+    return true;
+  }
 
   // Opt-out gate — never auto-message someone who's said STOP.
   try {
@@ -340,6 +370,42 @@ async function sendProductListing(
     return (await sendText({ to: contactPhone, body })).waMessageId;
   }
 
+  // Amazon-style horizontal carousel — one template message showing up
+  // to N cards the customer swipes through. Only used when we have
+  // exactly enough products AND the template has been approved by Meta
+  // (env-gated). Otherwise fall back to the sequential-image flow that
+  // shipped in the previous release.
+  if (CAROUSEL_TEMPLATE && products.length >= PRODUCTS_TO_SHOW) {
+    const cards: ProductCarouselCard[] = products
+      .slice(0, PRODUCTS_TO_SHOW)
+      .filter((p) => !!p.image_url)
+      .map((p) => ({
+        imageUrl: p.image_url!,
+        name: p.name.trim().slice(0, 60),
+        description: htmlToWhatsappText(p.description)
+          .replace(/\n+/g, " ")
+          .slice(0, CAROUSEL_DESC_LIMIT),
+        productId: p.id,
+      }));
+    if (cards.length === PRODUCTS_TO_SHOW) {
+      try {
+        const r = await sendProductCarousel({
+          to: contactPhone,
+          templateName: CAROUSEL_TEMPLATE,
+          sportLabel,
+          cards,
+        });
+        return r.waMessageId;
+      } catch (err) {
+        console.error(
+          "[chatbot] carousel send failed, falling back to sequential",
+          err,
+        );
+        // Fall through to the sequential path below.
+      }
+    }
+  }
+
   const intro = `Here are ${Math.min(PRODUCTS_TO_SHOW, products.length)} of our ${sportLabel} products. Tap any image to see more.`;
   await sendText({ to: contactPhone, body: intro }).catch((err) =>
     console.error("[chatbot] product intro failed", err),
@@ -511,6 +577,51 @@ async function finaliseFlow(
 // Very lenient — most customer date/time replies are natural language
 // ("Tomorrow 4pm"). We store the raw string in preferredDateTime as
 // text; this only fills the DateTime column if the string parses.
+// Customer tapped "I'm interested" on a carousel card. Look up the
+// product name for a friendlier lead row + reply, then write a BotLead
+// (path: product) with the productId in the productCategory column so
+// sales knows exactly which SKU. Silent-fail everywhere.
+async function captureProductInterest(
+  conversationId: string,
+  contactPhone: string,
+  productId: string,
+): Promise<void> {
+  // Best-effort product name lookup for a nicer thank-you and lead row.
+  // Import lazily so the chatbot doesn't hard-depend on MVPv2 at boot.
+  let productName = productId;
+  try {
+    const { getProduct } = await import("@/lib/mvpv2/products");
+    const p = await getProduct(productId);
+    if (p) productName = p.name.trim();
+  } catch (err) {
+    console.error("[chatbot] product name lookup failed", err);
+  }
+
+  await sendText({
+    to: contactPhone,
+    body: `Thanks for your interest in *${productName}*. Our team will contact you within 24 hours with pricing and next steps.`,
+  }).catch((err) => console.error("[chatbot] interest ack failed", err));
+
+  await prisma.botLead
+    .create({
+      data: {
+        conversationId,
+        contactPhone,
+        path: "product",
+        productCategory: productId,
+        notes: `Interested in ${productName}`,
+      },
+    })
+    .catch((err) => console.error("[chatbot] interest lead write failed", err));
+
+  await prisma.conversation
+    .update({
+      where: { id: conversationId },
+      data: { lastOutboundAt: new Date() },
+    })
+    .catch(() => null);
+}
+
 function parseMaybeDate(raw?: string): Date | null {
   if (!raw) return null;
   const t = Date.parse(raw);

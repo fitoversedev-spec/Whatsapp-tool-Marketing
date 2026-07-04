@@ -31,6 +31,10 @@ export type SendList = {
   kind: "list";
   body: string;
   buttonText: string;
+  // Optional plain-text message sent BEFORE the list widget so the
+  // customer gets a warm greeting/context first, then the picker.
+  // Used by the main menu step so the customer sees a proper welcome.
+  preText?: string;
   sections: Array<{
     title?: string;
     rows: Array<{ id: string; title: string; description?: string }>;
@@ -140,7 +144,9 @@ register({
   id: "menu",
   send: () => ({
     kind: "list",
-    body: "Welcome to Fitoverse! How can we help you today?",
+    preText:
+      "Welcome to Fitoverse — we build sports infrastructure across India. We construct football turfs, cricket grounds, basketball and tennis courts, badminton halls, pickleball, volleyball and multi-sport facilities.",
+    body: "How can we help you today? Please choose an option below.",
     buttonText: "Choose option",
     sections: [
       {
@@ -163,7 +169,7 @@ register({
           {
             id: "menu:product",
             title: "Product Listing",
-            description: "Sports materials info (specs, no pricing)",
+            description: "Browse our sports materials",
           },
         ],
       },

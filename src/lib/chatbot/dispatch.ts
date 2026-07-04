@@ -105,11 +105,24 @@ export async function dispatchChatbot(
   // No active flow — is this a greeting that should start one?
   if (!flow) {
     if (!isStartTrigger(inboundBody, interactiveReplyId)) return false;
-    flow = await prisma.conversationFlow.create({
-      data: {
+    // Upsert, not create — the ConversationFlow.conversationId column
+    // is @unique, so a customer who's completed or timed-out a previous
+    // flow already has a row. `create` would violate the constraint,
+    // silently fail the chatbot, and let the legacy G1 greeting fire.
+    flow = await prisma.conversationFlow.upsert({
+      where: { conversationId },
+      create: {
         conversationId,
         currentStep: "menu",
         collectedData: "{}",
+      },
+      update: {
+        currentStep: "menu",
+        collectedData: "{}",
+        path: null,
+        endedAt: null,
+        endReason: null,
+        startedAt: new Date(),
       },
     });
     // Fresh flow: enter the menu step immediately, no advance from the
@@ -281,6 +294,17 @@ async function sendResponse(
         })
       ).waMessageId;
     case "list":
+      // If the step supplied a preText (used by the menu step for the
+      // full Fitoverse welcome), send that as a plain text message
+      // FIRST so the customer sees the greeting, then the picker.
+      if (response.preText) {
+        await sendText({
+          to: contactPhone,
+          body: response.preText,
+        }).catch((err) =>
+          console.error("[chatbot] list preText failed", err),
+        );
+      }
       return (
         await sendList({
           to: contactPhone,
@@ -401,7 +425,7 @@ async function mirrorOutbound(
         .join(" ")}`;
       break;
     case "list":
-      body = `${response.body}\n\nOptions: ${response.sections
+      body = `${response.preText ? response.preText + "\n\n" : ""}${response.body}\n\nOptions: ${response.sections
         .flatMap((s) => s.rows)
         .map((r) => `[${r.title}]`)
         .join(" ")}`;

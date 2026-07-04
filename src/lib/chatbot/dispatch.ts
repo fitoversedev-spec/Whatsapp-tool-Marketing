@@ -19,10 +19,24 @@ import {
 } from "@/lib/whatsapp";
 import { getSportMeta, type SportKey } from "@/lib/catalogue/sport-meta";
 import {
+  listProductsBySport,
+  htmlToWhatsappText,
+  type MvpProduct,
+} from "@/lib/mvpv2/products";
+import {
   getStep,
   type CollectedData,
   type StepSend,
 } from "./steps";
+
+// How many products to send when the customer picks a sport. WhatsApp
+// media messages arrive one-per-second, so 5 is a good balance between
+// giving a real preview and not spamming.
+const PRODUCTS_TO_SHOW = 5;
+
+// Cap on the description we tack onto each product image caption.
+// WhatsApp caption limit is 1024 chars; leave room for the header line.
+const CAPTION_BODY_LIMIT = 700;
 
 // 4-hour inactivity timeout: after that, next inbound restarts fresh.
 const FLOW_TIMEOUT_MS = 4 * 60 * 60 * 1000;
@@ -214,7 +228,7 @@ async function enterStep(
     return;
   }
 
-  if (response.kind === "catalogue") {
+  if (response.kind === "catalogue" || response.kind === "product_listing") {
     // Auto-advance: this step has done its work, immediately move to
     // whatever step its advance returns (usually the "end" step).
     const result = step.advance({ data, inboundText: "", interactiveReplyId: null });
@@ -277,7 +291,60 @@ async function sendResponse(
       ).waMessageId;
     case "catalogue":
       return sendCatalogue(contactPhone, response.sport);
+    case "product_listing":
+      return sendProductListing(contactPhone, response.sport);
   }
+}
+
+async function sendProductListing(
+  contactPhone: string,
+  sport: SportKey,
+): Promise<string | null> {
+  const meta = getSportMeta(sport);
+  const sportLabel = meta?.label ?? sport;
+
+  let products: MvpProduct[] = [];
+  try {
+    products = await listProductsBySport(sport);
+  } catch (err) {
+    console.error("[chatbot] MVPv2 product fetch failed", sport, err);
+    // Fall through as if empty — MVPv2 down should not crash the flow.
+  }
+
+  if (products.length === 0) {
+    const body = `We're finalising our ${sportLabel} product range right now — our team will share the full catalogue with you within 24 hours. If you'd like a tailored quote, reply with your plot size and location.`;
+    return (await sendText({ to: contactPhone, body })).waMessageId;
+  }
+
+  const intro = `Here are ${Math.min(PRODUCTS_TO_SHOW, products.length)} of our ${sportLabel} products. Tap any image to see more.`;
+  await sendText({ to: contactPhone, body: intro }).catch((err) =>
+    console.error("[chatbot] product intro failed", err),
+  );
+
+  let lastWaId: string | null = null;
+  const toShow = products.slice(0, PRODUCTS_TO_SHOW);
+  for (let i = 0; i < toShow.length; i++) {
+    const p = toShow[i];
+    if (!p.image_url) continue;
+    const bodyText = htmlToWhatsappText(p.description).slice(
+      0,
+      CAPTION_BODY_LIMIT,
+    );
+    const caption = `*${i + 1}. ${p.name.trim()}*\n\n${bodyText}`.trim();
+    try {
+      const r = await sendMedia({
+        to: contactPhone,
+        mediaType: "image",
+        url: p.image_url,
+        caption,
+      });
+      lastWaId = r.waMessageId;
+    } catch (err) {
+      console.error("[chatbot] product image send failed", p.id, err);
+    }
+  }
+
+  return lastWaId;
 }
 
 async function sendCatalogue(
@@ -342,6 +409,9 @@ async function mirrorOutbound(
     case "catalogue":
       body = `[Catalogue] ${response.sport}`;
       type = "document";
+      break;
+    case "product_listing":
+      body = `[Product listing] ${response.sport}`;
       break;
   }
   await prisma.message

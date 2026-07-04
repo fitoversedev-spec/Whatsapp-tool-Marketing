@@ -37,12 +37,22 @@ export type SendList = {
   }>;
 };
 export type SendCatalogue = { kind: "catalogue"; sport: SportKey };
+// Fetch products for `sport` from MVPv2 at runtime and send them one
+// image-per-message. If MVPv2 has no products for that sport, fall back
+// to a "coming soon" text. Handled by dispatch, not the step's send().
+export type SendProductListing = { kind: "product_listing"; sport: SportKey };
 // End-of-flow: send one final text, mark flow completed, write BotLead.
 export type SendFinal = {
   kind: "final";
   body: string;
 };
-export type StepSend = SendText | SendButtons | SendList | SendCatalogue | SendFinal;
+export type StepSend =
+  | SendText
+  | SendButtons
+  | SendList
+  | SendCatalogue
+  | SendProductListing
+  | SendFinal;
 
 // ─── Result of processing an inbound reply ───────────────────────────
 
@@ -168,11 +178,7 @@ register({
       case "menu:consultation":
         return { next: "p3_name", dataPatch: {} };
       case "menu:product":
-        // Product Listing branch gated for later — send a soft handoff.
-        return {
-          next: "p2_placeholder",
-          dataPatch: {},
-        };
+        return { next: "p2_sport", dataPatch: {} };
       default:
         return OFF_SCRIPT_END;
     }
@@ -449,14 +455,58 @@ register({
   advance: () => ({ next: null, endReason: "completed" }),
 });
 
-// ─── PATH 2 — Product Listing (placeholder — data still coming) ──────
+// ─── PATH 2 — Product Listing ────────────────────────────────────────
+// Reads live from the MVPv2 sibling tool. When MVPv2 has products for
+// the sport, we send up to 5 with image + short description. When it
+// doesn't, we tell the customer we're finalising and their interest
+// still writes a BotLead so sales can follow up.
 
 register({
-  id: "p2_placeholder",
+  id: "p2_sport",
+  send: () => ({
+    kind: "list",
+    body: "Which sport are you interested in?",
+    buttonText: "Choose sport",
+    sections: [
+      {
+        rows: [
+          { id: "sport:football", title: "Football" },
+          { id: "sport:cricket", title: "Cricket" },
+          { id: "sport:basketball", title: "Basketball" },
+          { id: "sport:pickleball", title: "Pickleball" },
+          { id: "sport:badminton", title: "Badminton" },
+          { id: "sport:tennis", title: "Tennis" },
+          { id: "sport:volleyball", title: "Volleyball" },
+          { id: "sport:multisport", title: "Multisport" },
+        ],
+      },
+    ],
+  }),
+  advance: ({ interactiveReplyId }) => {
+    if (!interactiveReplyId?.startsWith("sport:")) return OFF_SCRIPT_END;
+    const sport = interactiveReplyId.slice("sport:".length);
+    return { next: "p2_send_products", dataPatch: { sport } };
+  },
+});
+
+// Auto-advance step (no inbound expected). dispatch reads the
+// product_listing response, fetches from MVPv2, sends the media
+// messages, then jumps straight to p2_end.
+register({
+  id: "p2_send_products",
+  send: (data) => ({
+    kind: "product_listing",
+    sport: (data.sport as SportKey) ?? "football",
+  }),
+  advance: () => ({ next: "p2_end" }),
+});
+
+register({
+  id: "p2_end",
   send: () => ({
     kind: "final",
     body:
-      "Thanks for your interest in Fitoverse products. Our sales team will contact you shortly with the full catalogue and pricing details.",
+      "We have noted your interest. Our team will share the full catalogue and pricing with you within 24 hours. If you already know your plot size and location, reply with them anytime and we'll prepare a tailored quote.",
   }),
   advance: () => ({ next: null, endReason: "completed" }),
 });

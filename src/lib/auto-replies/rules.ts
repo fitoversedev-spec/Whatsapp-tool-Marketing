@@ -8,7 +8,8 @@
 //   wholeMessage — regex against the entire trimmed body (bare
 //     "hi"/"football" — avoids misfiring on "Hi Rajesh")
 //   containsAny — any listed substring anywhere in the message
-//   customMatch — free-form (body + now); used by A1 (after-hours)
+//   customMatch — free-form (body + now); available for time-of-day
+//     rules but currently unused (after-hours moved to its own gate)
 //
 // Response shapes:
 //   text — plain sendText body
@@ -72,14 +73,6 @@ function detectSport(body: string): SportKey | null {
     if (re.test(lower)) return sport;
   }
   return null;
-}
-
-// IST hour in 24h. Compute from UTC + 5:30 rather than depending on
-// server locale (Vercel runs in UTC).
-function istHour(now: Date): number {
-  const utcMs = now.getTime();
-  const istMs = utcMs + (5 * 60 + 30) * 60 * 1000;
-  return new Date(istMs).getUTCHours();
 }
 
 // L1 — Office location + Google Maps.
@@ -178,33 +171,18 @@ const GREETING_RULE: AutoReplyRule = {
   cooldownHours: 3,
 };
 
-// A1 — After-hours fallback. Only fires when nothing above matched AND
-// current IST hour is outside 9am–8pm. Long cooldown so a lead
-// messaging at midnight doesn't get five identical acknowledgements.
-const AFTER_HOURS_RULE: AutoReplyRule = {
-  id: "after_hours",
-  name: "After-hours acknowledgement",
-  active: true,
-  customMatch: (_body, now) => {
-    const h = istHour(now);
-    return h < 9 || h >= 20;
-  },
-  buildResponse: () => ({
-    type: "text",
-    body: "Thanks for reaching out to Fitoverse. Our team is offline right now. We work Monday to Saturday, 9am to 8pm IST, and will get back to you first thing tomorrow morning.",
-  }),
-  cooldownHours: 12,
-};
+// Note: the A1 after-hours rule used to live here. It has been moved to
+// src/lib/auto-replies/after-hours-gate.ts, which runs at the top of
+// the webhook BEFORE the chatbot flow — so a fresh conversation at 3am
+// gets a single "team is offline" ack instead of the interactive menu.
 
 // Order matters — first match wins. Location, then catalogue (may
-// consume the sport), then bare sport, then greeting, then after-hours
-// as the final catch-all.
+// consume the sport), then bare sport, then greeting.
 export const AUTO_REPLY_RULES: AutoReplyRule[] = [
   LOCATION_RULE,
   CATALOGUE_RULE,
   SPORT_RULE,
   GREETING_RULE,
-  AFTER_HOURS_RULE,
 ];
 
 // Runs the rule list against an inbound message body. Returns the first

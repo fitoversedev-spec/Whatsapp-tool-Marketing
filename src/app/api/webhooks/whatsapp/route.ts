@@ -4,6 +4,7 @@ import { verifyMetaSignature, isOptOutMessage } from "@/lib/webhook";
 import { fetchInboundMedia } from "@/lib/whatsapp";
 import { categorize, uploadToBlob } from "@/lib/media";
 import { dispatchAutoReply } from "@/lib/auto-replies/dispatch";
+import { dispatchAfterHoursGate } from "@/lib/auto-replies/after-hours-gate";
 import { dispatchChatbot } from "@/lib/chatbot/dispatch";
 
 // Meta requires GET for verification handshake
@@ -249,6 +250,20 @@ async function handleInboundMessage(msg: any, profileName?: string) {
     return;
   }
 
+  // After-hours gate — outside 9am-8pm IST, on a fresh conversation,
+  // send a polite acknowledgement and short-circuit so we don't start
+  // a chatbot menu at 3am. Mid-flow taps and mid-conversation free text
+  // pass straight through (the gate returns false in those cases).
+  const gated = await dispatchAfterHoursGate({
+    conversationId: convo.id,
+    contactPhone: from,
+    hasInteractiveReply: !!interactiveReplyId,
+  }).catch((err) => {
+    console.error("[webhook] after-hours gate threw", err);
+    return false;
+  });
+  if (gated) return;
+
   // Chatbot flow first — if a flow is active OR the inbound looks like
   // a flow-starting greeting, the flow engine takes over exclusively.
   // Only if the flow decides "not my message" do we fall through to the
@@ -265,8 +280,8 @@ async function handleInboundMessage(msg: any, profileName?: string) {
   });
 
   // Legacy auto-reply dispatcher (L1 location, C1 catalogue, S1 sport,
-  // A1 after-hours). Skipped when the chatbot flow handled the message
-  // so we don't double-reply.
+  // G1 greeting). Skipped when the chatbot flow handled the message
+  // so we don't double-reply. After-hours has its own gate above.
   if (!flowHandled && type === "text" && body) {
     dispatchAutoReply({
       conversationId: convo.id,

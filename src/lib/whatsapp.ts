@@ -233,83 +233,44 @@ export async function submitTemplate(args: {
   return { id: res.data?.id ?? "", status: res.data?.status ?? "submitted" };
 }
 
-// Send a carousel-template message (Amazon-style horizontal swipe strip
-// of product cards, up to 10). Requires a template with a matching
-// number of CAROUSEL cards to be approved by Meta beforehand.
-//
-// The template must exist with:
-//   - 1 body variable {{1}} (used for the sport label at the top)
-//   - each card has an IMAGE header + 2 body variables (name, description)
-//     + a QUICK_REPLY button
-//
-// At send time we pass one dynamic hero image URL per card and one
-// payload string per button — the payload comes back in the webhook as
-// `interactive.button_reply.id`, so we prefix it with
-// `product_interested:` and append the product id.
-export type ProductCarouselCard = {
-  imageUrl: string;
-  name: string;
-  description: string;
-  productId: string;
-};
-
-export async function sendProductCarousel(args: {
+// Send an interactive button message with an IMAGE header. Same 1-3
+// button limit as sendButtons but the header shows a hero image the
+// customer sees above the body text — used by the chatbot's product
+// listing to render "one card per product" without needing a Meta-
+// approved template. Body text supports the same WhatsApp formatting
+// (*bold*, _italic_) as any other message. Buttons come back in the
+// webhook as `interactive.button_reply.id`, same as sendButtons.
+export async function sendImageButtons(args: {
   to: string;
-  templateName: string;
-  language?: string;
-  sportLabel: string;
-  cards: ProductCarouselCard[];
-  buttonText?: string; // template's approved button label — informational
+  imageUrl: string;
+  body: string;
+  buttons: Array<{ id: string; title: string }>;
+  footer?: string;
 }): Promise<{ waMessageId: string }> {
-  const language = args.language ?? "en";
+  if (args.buttons.length < 1 || args.buttons.length > 3) {
+    throw new Error("sendImageButtons requires 1-3 buttons");
+  }
+  const interactive: Record<string, unknown> = {
+    type: "button",
+    header: { type: "image", image: { link: args.imageUrl } },
+    body: { text: args.body.slice(0, 1024) },
+    action: {
+      buttons: args.buttons.map((b) => ({
+        type: "reply",
+        reply: { id: b.id, title: b.title.slice(0, 20) },
+      })),
+    },
+  };
+  if (args.footer) {
+    interactive.footer = { text: args.footer.slice(0, 60) };
+  }
   const res = await axios.post(
     messagesUrl(),
     {
       messaging_product: "whatsapp",
       to: args.to,
-      type: "template",
-      template: {
-        name: args.templateName,
-        language: { code: language },
-        components: [
-          {
-            type: "BODY",
-            parameters: [{ type: "text", text: args.sportLabel }],
-          },
-          {
-            type: "CAROUSEL",
-            cards: args.cards.map((c, i) => ({
-              card_index: i,
-              components: [
-                {
-                  type: "HEADER",
-                  parameters: [
-                    { type: "IMAGE", image: { link: c.imageUrl } },
-                  ],
-                },
-                {
-                  type: "BODY",
-                  parameters: [
-                    { type: "text", text: c.name },
-                    { type: "text", text: c.description },
-                  ],
-                },
-                {
-                  type: "BUTTON",
-                  sub_type: "QUICK_REPLY",
-                  index: 0,
-                  parameters: [
-                    {
-                      type: "PAYLOAD",
-                      payload: `product_interested:${c.productId}`,
-                    },
-                  ],
-                },
-              ],
-            })),
-          },
-        ],
-      },
+      type: "interactive",
+      interactive,
     },
     { headers: await authHeaders() },
   );

@@ -16,8 +16,7 @@ import {
   sendButtons,
   sendList,
   sendMedia,
-  sendProductCarousel,
-  type ProductCarouselCard,
+  sendImageButtons,
 } from "@/lib/whatsapp";
 import { getSportMeta, type SportKey } from "@/lib/catalogue/sport-meta";
 import {
@@ -31,26 +30,32 @@ import {
   type StepSend,
 } from "./steps";
 
-// How many products to send when the customer picks a sport. WhatsApp
-// media messages arrive one-per-second, so 5 is a good balance between
-// giving a real preview and not spamming. Also matches the approved
-// carousel template's card count.
+// How many products to send when the customer picks a sport. Each
+// product goes as one interactive message (image + short body + two
+// quick-reply buttons), which arrive ~1/sec. 5 is a good balance
+// between "real preview" and "not spammy".
 const PRODUCTS_TO_SHOW = 5;
 
-// Cap on the description we tack onto each product image caption.
-// WhatsApp caption limit is 1024 chars; leave room for the header line.
-const CAPTION_BODY_LIMIT = 700;
+// The short description shown in each product's interactive body.
+// WhatsApp interactive body limit is 1024 chars — we leave headroom
+// so the *name* line + description + product page URL all fit.
+const PRODUCT_SHORT_DESC_LIMIT = 500;
 
-// Carousel template body variables have a lower character limit than
-// image captions. Meta rejects long bodies at approval time; keep the
-// description tight so the whole card reads at a glance.
-const CAROUSEL_DESC_LIMIT = 220;
+// When the customer taps "Read more" we send the full description
+// as one or more text messages. WhatsApp text bodies cap at 4096
+// chars; we chunk on paragraph boundaries below.
+const PRODUCT_FULL_DESC_CHUNK = 3800;
 
-// Name of the approved carousel template. Set via env once Meta has
-// reviewed and approved fitoverse_product_carousel_v1 (see
-// scripts/submit-product-carousel-template.ts). While unset, the
-// chatbot falls back to sequential image messages.
-const CAROUSEL_TEMPLATE = process.env.PRODUCT_CAROUSEL_TEMPLATE ?? "";
+// MVPv2 web base for the "View full details on our site" link. The
+// per-product page is /products/<id>. Override via env if MVPv2 ever
+// moves off fitoverse.vercel.app.
+const MVPV2_WEB_URL = (
+  process.env.MVPV2_WEB_URL ?? "https://fitoverse.vercel.app"
+).replace(/\/$/, "");
+
+function productPageUrl(productId: string): string {
+  return `${MVPV2_WEB_URL}/products/${productId}`;
+}
 
 // 4-hour inactivity timeout: after that, next inbound restarts fresh.
 const FLOW_TIMEOUT_MS = 4 * 60 * 60 * 1000;
@@ -73,12 +78,18 @@ export async function dispatchChatbot(
 ): Promise<boolean> {
   const { conversationId, contactPhone, inboundBody, interactiveReplyId } = input;
 
-  // "I'm interested" tap on a product carousel card. The card button's
-  // payload was `product_interested:<productId>` at send time; that's
-  // what comes back as the interactive reply id. Handle it as a one-
-  // shot before any flow logic runs so it works even if the flow
-  // already ended (which it will — the flow closes right after the
-  // carousel is sent).
+  // Product listing button taps. The flow closes right after sending
+  // the products, so these arrive on a closed flow — handle them here
+  // BEFORE the flow lookup so they always work.
+  //   product_more:<id>       — customer wants the full description
+  //   product_interested:<id> — customer wants us to follow up (BotLead)
+  if (interactiveReplyId?.startsWith("product_more:")) {
+    const productId = interactiveReplyId.slice("product_more:".length);
+    await sendProductDetails(contactPhone, productId).catch((err) =>
+      console.error("[chatbot] product details send failed", err),
+    );
+    return true;
+  }
   if (interactiveReplyId?.startsWith("product_interested:")) {
     const productId = interactiveReplyId.slice(
       "product_interested:".length,
@@ -370,43 +381,7 @@ async function sendProductListing(
     return (await sendText({ to: contactPhone, body })).waMessageId;
   }
 
-  // Amazon-style horizontal carousel — one template message showing up
-  // to N cards the customer swipes through. Only used when we have
-  // exactly enough products AND the template has been approved by Meta
-  // (env-gated). Otherwise fall back to the sequential-image flow that
-  // shipped in the previous release.
-  if (CAROUSEL_TEMPLATE && products.length >= PRODUCTS_TO_SHOW) {
-    const cards: ProductCarouselCard[] = products
-      .slice(0, PRODUCTS_TO_SHOW)
-      .filter((p) => !!p.image_url)
-      .map((p) => ({
-        imageUrl: p.image_url!,
-        name: p.name.trim().slice(0, 60),
-        description: htmlToWhatsappText(p.description)
-          .replace(/\n+/g, " ")
-          .slice(0, CAROUSEL_DESC_LIMIT),
-        productId: p.id,
-      }));
-    if (cards.length === PRODUCTS_TO_SHOW) {
-      try {
-        const r = await sendProductCarousel({
-          to: contactPhone,
-          templateName: CAROUSEL_TEMPLATE,
-          sportLabel,
-          cards,
-        });
-        return r.waMessageId;
-      } catch (err) {
-        console.error(
-          "[chatbot] carousel send failed, falling back to sequential",
-          err,
-        );
-        // Fall through to the sequential path below.
-      }
-    }
-  }
-
-  const intro = `Here are ${Math.min(PRODUCTS_TO_SHOW, products.length)} of our ${sportLabel} products. Tap any image to see more.`;
+  const intro = `Here are ${Math.min(PRODUCTS_TO_SHOW, products.length)} of our ${sportLabel} products. Tap *Read more* under any card for full specs, or *Interested* to have our team follow up.`;
   await sendText({ to: contactPhone, body: intro }).catch((err) =>
     console.error("[chatbot] product intro failed", err),
   );
@@ -416,21 +391,45 @@ async function sendProductListing(
   for (let i = 0; i < toShow.length; i++) {
     const p = toShow[i];
     if (!p.image_url) continue;
-    const bodyText = htmlToWhatsappText(p.description).slice(
-      0,
-      CAPTION_BODY_LIMIT,
-    );
-    const caption = `*${i + 1}. ${p.name.trim()}*\n\n${bodyText}`.trim();
+    // Trim descriptions to fit inside the interactive body limit. Full
+    // spec lives behind the "Read more" button, so this preview only
+    // needs to hook the customer — the first paragraph is enough.
+    const short = htmlToWhatsappText(p.description)
+      .split(/\n{2,}/)[0]
+      .slice(0, PRODUCT_SHORT_DESC_LIMIT);
+    // Product page URL inline in the body so customers who prefer the
+    // full web experience can tap through directly. WhatsApp auto-
+    // linkifies http(s) URLs, so no markup needed.
+    const url = productPageUrl(p.id);
+    const body =
+      `*${i + 1}. ${p.name.trim()}*\n\n${short}\n\nFull specs: ${url}`.trim();
     try {
-      const r = await sendMedia({
+      const r = await sendImageButtons({
         to: contactPhone,
-        mediaType: "image",
-        url: p.image_url,
-        caption,
+        imageUrl: p.image_url,
+        body,
+        buttons: [
+          { id: `product_more:${p.id}`, title: "Read more" },
+          { id: `product_interested:${p.id}`, title: "Interested" },
+        ],
       });
       lastWaId = r.waMessageId;
     } catch (err) {
-      console.error("[chatbot] product image send failed", p.id, err);
+      // If the interactive send fails for any reason (e.g. WA rate-
+      // limit at Tier 250), fall back to a plain image with caption
+      // so the customer at least sees the product.
+      console.error("[chatbot] product interactive send failed", p.id, err);
+      try {
+        const r = await sendMedia({
+          to: contactPhone,
+          mediaType: "image",
+          url: p.image_url,
+          caption: body,
+        });
+        lastWaId = r.waMessageId;
+      } catch (err2) {
+        console.error("[chatbot] product image fallback failed", p.id, err2);
+      }
     }
   }
 
@@ -577,8 +576,80 @@ async function finaliseFlow(
 // Very lenient — most customer date/time replies are natural language
 // ("Tomorrow 4pm"). We store the raw string in preferredDateTime as
 // text; this only fills the DateTime column if the string parses.
-// Customer tapped "I'm interested" on a carousel card. Look up the
-// product name for a friendlier lead row + reply, then write a BotLead
+// Customer tapped "Read more" on a product card. Fetch the full record
+// from MVPv2 and send the description as text — WhatsApp text bodies
+// cap at 4096 chars so we chunk on paragraph boundaries if needed.
+// The MVPv2 web page URL is appended at the end for the full spec
+// table + gallery view.
+async function sendProductDetails(
+  contactPhone: string,
+  productId: string,
+): Promise<void> {
+  const { getProduct, specsToWhatsappBlock } = await import(
+    "@/lib/mvpv2/products"
+  );
+  const p = await getProduct(productId);
+  if (!p) {
+    await sendText({
+      to: contactPhone,
+      body: "Sorry, we couldn't load that product right now. Please try again in a moment or reply *hi* to see the menu.",
+    }).catch(() => null);
+    return;
+  }
+  const url = productPageUrl(p.id);
+  const specs = specsToWhatsappBlock(p.specs);
+  const fullDesc = htmlToWhatsappText(p.description);
+
+  const header = `*${p.name.trim()}*`;
+  const footer = `_View gallery + full spec sheet:_ ${url}`;
+
+  const bodyParts: string[] = [header];
+  if (fullDesc) bodyParts.push(fullDesc);
+  if (specs) bodyParts.push(specs);
+  bodyParts.push(footer);
+  const combined = bodyParts.join("\n\n");
+
+  // Chunk if the whole message exceeds WhatsApp's 4096-char text limit.
+  const chunks = chunkText(combined, PRODUCT_FULL_DESC_CHUNK);
+  for (const chunk of chunks) {
+    await sendText({ to: contactPhone, body: chunk }).catch((err) =>
+      console.error("[chatbot] product details chunk failed", err),
+    );
+  }
+}
+
+// Split a long string on paragraph boundaries so each piece is under
+// maxLen. Falls back to hard-splitting a paragraph that's itself too
+// long to fit on its own.
+function chunkText(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text];
+  const paragraphs = text.split(/\n{2,}/);
+  const chunks: string[] = [];
+  let buf = "";
+  for (const para of paragraphs) {
+    const joiner = buf ? "\n\n" : "";
+    if ((buf + joiner + para).length <= maxLen) {
+      buf += joiner + para;
+      continue;
+    }
+    if (buf) {
+      chunks.push(buf);
+      buf = "";
+    }
+    if (para.length <= maxLen) {
+      buf = para;
+    } else {
+      for (let i = 0; i < para.length; i += maxLen) {
+        chunks.push(para.slice(i, i + maxLen));
+      }
+    }
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
+// Customer tapped "Interested" on a product card. Look up the product
+// name for a friendlier lead row + reply, then write a BotLead
 // (path: product) with the productId in the productCategory column so
 // sales knows exactly which SKU. Silent-fail everywhere.
 async function captureProductInterest(
@@ -599,7 +670,7 @@ async function captureProductInterest(
 
   await sendText({
     to: contactPhone,
-    body: `Thanks for your interest in *${productName}*. Our team will contact you within 24 hours with pricing and next steps.`,
+    body: `Thanks for your interest in *${productName}*. Our team will contact you within 24 hours with pricing and next steps.\n\nFor reference: ${productPageUrl(productId)}`,
   }).catch((err) => console.error("[chatbot] interest ack failed", err));
 
   await prisma.botLead

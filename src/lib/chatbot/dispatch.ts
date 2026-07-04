@@ -85,8 +85,8 @@ export async function dispatchChatbot(
   //   product_interested:<id> — customer wants us to follow up (BotLead)
   if (interactiveReplyId?.startsWith("product_more:")) {
     const productId = interactiveReplyId.slice("product_more:".length);
-    await sendProductDetails(contactPhone, productId).catch((err) =>
-      console.error("[chatbot] product details send failed", err),
+    await sendProductDetails(contactPhone, productId, conversationId).catch(
+      (err) => console.error("[chatbot] product details send failed", err),
     );
     return true;
   }
@@ -258,7 +258,11 @@ async function enterStep(
   if (!step) return;
 
   const response = step.send(data);
-  const waMessageId = await sendResponse(contactPhone, response).catch((err) => {
+  const waMessageId = await sendResponse(
+    contactPhone,
+    response,
+    conversationId,
+  ).catch((err) => {
     console.error("[chatbot] send failed", stepId, err);
     return null;
   });
@@ -318,7 +322,8 @@ async function enterStep(
 
 async function sendResponse(
   contactPhone: string,
-  response: StepSend
+  response: StepSend,
+  conversationId: string,
 ): Promise<string | null> {
   switch (response.kind) {
     case "text":
@@ -357,13 +362,14 @@ async function sendResponse(
     case "catalogue":
       return sendCatalogue(contactPhone, response.sport);
     case "product_listing":
-      return sendProductListing(contactPhone, response.sport);
+      return sendProductListing(contactPhone, response.sport, conversationId);
   }
 }
 
 async function sendProductListing(
   contactPhone: string,
   sport: SportKey,
+  conversationId: string,
 ): Promise<string | null> {
   const meta = getSportMeta(sport);
   const sportLabel = meta?.label ?? sport;
@@ -378,13 +384,29 @@ async function sendProductListing(
 
   if (products.length === 0) {
     const body = `We're finalising our ${sportLabel} product range right now — our team will share the full catalogue with you within 24 hours. If you'd like a tailored quote, reply with your plot size and location.`;
-    return (await sendText({ to: contactPhone, body })).waMessageId;
+    const r = await sendText({ to: contactPhone, body });
+    await writeOutboundMessage(conversationId, {
+      type: "text",
+      body,
+      waMessageId: r.waMessageId,
+    });
+    return r.waMessageId;
   }
 
   const intro = `Here are ${Math.min(PRODUCTS_TO_SHOW, products.length)} of our ${sportLabel} products. Tap *Read more* under any card for full specs, or *Interested* to have our team follow up.`;
-  await sendText({ to: contactPhone, body: intro }).catch((err) =>
-    console.error("[chatbot] product intro failed", err),
+  const introRes = await sendText({ to: contactPhone, body: intro }).catch(
+    (err) => {
+      console.error("[chatbot] product intro failed", err);
+      return null;
+    },
   );
+  if (introRes) {
+    await writeOutboundMessage(conversationId, {
+      type: "text",
+      body: intro,
+      waMessageId: introRes.waMessageId,
+    });
+  }
 
   let lastWaId: string | null = null;
   const toShow = products.slice(0, PRODUCTS_TO_SHOW);
@@ -403,6 +425,9 @@ async function sendProductListing(
     const url = productPageUrl(p.id);
     const body =
       `*${i + 1}. ${p.name.trim()}*\n\n${short}\n\nFull specs: ${url}`.trim();
+    // What the inbox thread mirrors — same body + the button labels so
+    // sales can see the exact card the customer saw.
+    const mirrorBody = `${body}\n\nOptions: [Read more] [Interested]`;
     try {
       const r = await sendImageButtons({
         to: contactPhone,
@@ -414,6 +439,12 @@ async function sendProductListing(
         ],
       });
       lastWaId = r.waMessageId;
+      await writeOutboundMessage(conversationId, {
+        type: "image",
+        body: mirrorBody,
+        mediaUrl: p.image_url,
+        waMessageId: r.waMessageId,
+      });
     } catch (err) {
       // If the interactive send fails for any reason (e.g. WA rate-
       // limit at Tier 250), fall back to a plain image with caption
@@ -427,6 +458,12 @@ async function sendProductListing(
           caption: body,
         });
         lastWaId = r.waMessageId;
+        await writeOutboundMessage(conversationId, {
+          type: "image",
+          body,
+          mediaUrl: p.image_url,
+          waMessageId: r.waMessageId,
+        });
       } catch (err2) {
         console.error("[chatbot] product image fallback failed", p.id, err2);
       }
@@ -434,6 +471,43 @@ async function sendProductListing(
   }
 
   return lastWaId;
+}
+
+// Writes a single outbound Message row to the conversation thread so
+// sales sees the bot's side of the conversation in /inbox. Shared by
+// sendProductListing, sendProductDetails, and captureProductInterest
+// — each of those sends more than one WA message per invocation, so
+// the generic mirrorOutbound (one-call-one-row) can't handle them.
+async function writeOutboundMessage(
+  conversationId: string,
+  m: {
+    type: "text" | "image" | "document";
+    body: string;
+    mediaUrl?: string;
+    waMessageId: string | null;
+  },
+): Promise<void> {
+  await prisma.message
+    .create({
+      data: {
+        conversationId,
+        direction: "outbound",
+        type: m.type,
+        body: m.body,
+        mediaUrl: m.mediaUrl ?? null,
+        waMessageId: m.waMessageId,
+        status: "sent",
+      },
+    })
+    .catch((err) =>
+      console.error("[chatbot] outbound mirror write failed", err),
+    );
+  await prisma.conversation
+    .update({
+      where: { id: conversationId },
+      data: { lastOutboundAt: new Date() },
+    })
+    .catch(() => null);
 }
 
 async function sendCatalogue(
@@ -500,8 +574,10 @@ async function mirrorOutbound(
       type = "document";
       break;
     case "product_listing":
-      body = `[Product listing] ${response.sport}`;
-      break;
+      // sendProductListing writes one Message row per WA send (intro
+      // text + N product images), so the generic mirror here would
+      // double-log a summary line. Skip.
+      return;
   }
   await prisma.message
     .create({
@@ -584,16 +660,23 @@ async function finaliseFlow(
 async function sendProductDetails(
   contactPhone: string,
   productId: string,
+  conversationId: string,
 ): Promise<void> {
   const { getProduct, specsToWhatsappBlock } = await import(
     "@/lib/mvpv2/products"
   );
   const p = await getProduct(productId);
   if (!p) {
-    await sendText({
-      to: contactPhone,
-      body: "Sorry, we couldn't load that product right now. Please try again in a moment or reply *hi* to see the menu.",
-    }).catch(() => null);
+    const body =
+      "Sorry, we couldn't load that product right now. Please try again in a moment or reply *hi* to see the menu.";
+    const r = await sendText({ to: contactPhone, body }).catch(() => null);
+    if (r) {
+      await writeOutboundMessage(conversationId, {
+        type: "text",
+        body,
+        waMessageId: r.waMessageId,
+      });
+    }
     return;
   }
   const url = productPageUrl(p.id);
@@ -612,9 +695,19 @@ async function sendProductDetails(
   // Chunk if the whole message exceeds WhatsApp's 4096-char text limit.
   const chunks = chunkText(combined, PRODUCT_FULL_DESC_CHUNK);
   for (const chunk of chunks) {
-    await sendText({ to: contactPhone, body: chunk }).catch((err) =>
-      console.error("[chatbot] product details chunk failed", err),
+    const r = await sendText({ to: contactPhone, body: chunk }).catch(
+      (err) => {
+        console.error("[chatbot] product details chunk failed", err);
+        return null;
+      },
     );
+    if (r) {
+      await writeOutboundMessage(conversationId, {
+        type: "text",
+        body: chunk,
+        waMessageId: r.waMessageId,
+      });
+    }
   }
 }
 
@@ -668,10 +761,20 @@ async function captureProductInterest(
     console.error("[chatbot] product name lookup failed", err);
   }
 
-  await sendText({
-    to: contactPhone,
-    body: `Thanks for your interest in *${productName}*. Our team will contact you within 24 hours with pricing and next steps.\n\nFor reference: ${productPageUrl(productId)}`,
-  }).catch((err) => console.error("[chatbot] interest ack failed", err));
+  const ackBody = `Thanks for your interest in *${productName}*. Our team will contact you within 24 hours with pricing and next steps.\n\nFor reference: ${productPageUrl(productId)}`;
+  const ackRes = await sendText({ to: contactPhone, body: ackBody }).catch(
+    (err) => {
+      console.error("[chatbot] interest ack failed", err);
+      return null;
+    },
+  );
+  if (ackRes) {
+    await writeOutboundMessage(conversationId, {
+      type: "text",
+      body: ackBody,
+      waMessageId: ackRes.waMessageId,
+    });
+  }
 
   await prisma.botLead
     .create({
@@ -684,13 +787,6 @@ async function captureProductInterest(
       },
     })
     .catch((err) => console.error("[chatbot] interest lead write failed", err));
-
-  await prisma.conversation
-    .update({
-      where: { id: conversationId },
-      data: { lastOutboundAt: new Date() },
-    })
-    .catch(() => null);
 }
 
 function parseMaybeDate(raw?: string): Date | null {

@@ -525,7 +525,9 @@ export const GROUND_FINISH_COLOR: Record<
 export function resolveGroundColor(
   finish: "sand" | "concrete" | "grass" | undefined,
   fallback: string,
+  override?: string,
 ): string {
+  if (override) return override;
   if (!finish) return fallback;
   return GROUND_FINISH_COLOR[finish];
 }
@@ -691,6 +693,17 @@ export type Style = {
   // that match the customer's real construction site photo or brand
   // palette. Leave undefined to use the auto shade.
   runOffColorOverride?: string;
+  // Optional custom hex colour that replaces the plot's SURFACE fill
+  // (the un-darkened, non-run-off part). Useful when the customer
+  // wants a specific brand colour that isn't in the acrylic /
+  // ppe / turf / pvc presets. When undefined, the surface renders
+  // with its stock colour.
+  surfaceColorOverride?: string;
+  // Optional custom hex colour for the GROUND (area outside the plot
+  // footprint). Overrides the groundFinish dropdown when set — lets
+  // sales pick any exact ground tone rather than sand / concrete /
+  // grass.
+  groundColorOverride?: string;
   // Optional watermark (logo URL + opacity).
   watermarkUrl?: string;
   watermarkOpacity?: number;

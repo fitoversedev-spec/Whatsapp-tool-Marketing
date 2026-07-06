@@ -240,6 +240,7 @@ export default function CourtCanvas({
           fill={resolveGroundColor(
             layout.style.groundFinish,
             layout.style.groundColor,
+            layout.style.groundColorOverride,
           )}
         />
         {/* Plot footprint (the actual customer land) — drawn with a faint
@@ -259,6 +260,7 @@ export default function CourtCanvas({
           polygon={layout.plot.polygon}
           runOffTone={layout.style.runOffTone}
           runOffColorOverride={layout.style.runOffColorOverride}
+          surfaceColorOverride={layout.style.surfaceColorOverride}
         />
         {showGrid && (
           <GridLines
@@ -1969,6 +1971,7 @@ function PlotSurface({
   polygon,
   runOffTone,
   runOffColorOverride,
+  surfaceColorOverride,
 }: {
   plotOriginX: number;
   plotOriginY: number;
@@ -1992,6 +1995,10 @@ function PlotSurface({
   // auto-derived shade. Set from the wizard's colour picker so sales /
   // admin can match a real construction photo or brand palette.
   runOffColorOverride?: string;
+  // Explicit surface colour override (any hex). Replaces the
+  // built-in SURFACE_SOLID_COLOR / TILE_SOLID_COLORS lookup so sales
+  // can dial in a specific brand colour that isn't in the presets.
+  surfaceColorOverride?: string;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [turfLightImg, setTurfLightImg] = useState<HTMLImageElement | null>(null);
@@ -2072,8 +2079,14 @@ function PlotSurface({
     );
   }
 
+  // Explicit hex override wins over the preset lookup. Lets sales
+  // paint the plot any colour without needing us to add a new surface
+  // preset for every brand tone.
   const solidFillBase =
-    TILE_SOLID_COLORS[surface] ?? SURFACE_SOLID_COLOR[surface] ?? "#caa477";
+    surfaceColorOverride ??
+    TILE_SOLID_COLORS[surface] ??
+    SURFACE_SOLID_COLOR[surface] ??
+    "#caa477";
   // Darken plot fill when run-off distinction is requested. The sport
   // court shapes below still paint the FULL solidFillBase colour inside
   // their playing-area rectangle, so the result is a two-tone: darker

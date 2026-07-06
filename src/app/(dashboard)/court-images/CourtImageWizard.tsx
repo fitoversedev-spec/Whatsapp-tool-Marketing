@@ -1241,6 +1241,10 @@ export default function CourtImageWizard({
                                       style: {
                                         ...l.style,
                                         groundFinish: opt.id,
+                                        // Clear any custom override
+                                        // when a preset is chosen so
+                                        // the preset actually applies.
+                                        groundColorOverride: undefined,
                                       },
                                     }
                                   : l,
@@ -1256,6 +1260,131 @@ export default function CourtImageWizard({
                           </button>
                         );
                       })}
+                    </div>
+                    {/* Custom hex — override the preset with an exact
+                        colour when the customer wants a specific
+                        outdoor tone. */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="color"
+                        value={layout.style.groundColorOverride ?? "#9c845b"}
+                        onChange={(e) =>
+                          setLayout((l) =>
+                            l
+                              ? {
+                                  ...l,
+                                  style: {
+                                    ...l.style,
+                                    groundColorOverride: e.target.value,
+                                  },
+                                }
+                              : l,
+                          )
+                        }
+                        className="w-8 h-8 rounded border border-slate-300 cursor-pointer bg-white"
+                        title="Ground colour override"
+                      />
+                      <input
+                        type="text"
+                        value={layout.style.groundColorOverride ?? ""}
+                        placeholder="Custom hex (any colour)"
+                        onChange={(e) => {
+                          const v = e.target.value.trim();
+                          setLayout((l) =>
+                            l
+                              ? {
+                                  ...l,
+                                  style: {
+                                    ...l.style,
+                                    groundColorOverride:
+                                      v.length === 0 ? undefined : v,
+                                  },
+                                }
+                              : l,
+                          );
+                        }}
+                        className="flex-1 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Surface colour override — paints the plot in ANY
+                      hex the customer picks, no need for us to add a
+                      new acrylic / ppe preset. Overrides the built-in
+                      SURFACE_SOLID_COLOR lookup for the chosen finish. */}
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                      Surface colour override
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={
+                          layout.style.surfaceColorOverride ?? "#1E60A8"
+                        }
+                        onChange={(e) =>
+                          setLayout((l) =>
+                            l
+                              ? {
+                                  ...l,
+                                  style: {
+                                    ...l.style,
+                                    surfaceColorOverride: e.target.value,
+                                  },
+                                }
+                              : l,
+                          )
+                        }
+                        className="w-8 h-8 rounded border border-slate-300 cursor-pointer bg-white"
+                        title="Surface colour override"
+                      />
+                      <input
+                        type="text"
+                        value={layout.style.surfaceColorOverride ?? ""}
+                        placeholder="Custom hex (paints the plot)"
+                        onChange={(e) => {
+                          const v = e.target.value.trim();
+                          setLayout((l) =>
+                            l
+                              ? {
+                                  ...l,
+                                  style: {
+                                    ...l.style,
+                                    surfaceColorOverride:
+                                      v.length === 0 ? undefined : v,
+                                  },
+                                }
+                              : l,
+                          );
+                        }}
+                        className="flex-1 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                      />
+                      {layout.style.surfaceColorOverride && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLayout((l) =>
+                              l
+                                ? {
+                                    ...l,
+                                    style: {
+                                      ...l.style,
+                                      surfaceColorOverride: undefined,
+                                    },
+                                  }
+                                : l,
+                            )
+                          }
+                          className="text-[10.5px] text-slate-500 hover:text-slate-700 underline"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-[10.5px] text-slate-500 mt-1.5 leading-snug">
+                      Overrides the finish's preset colour with any hex.
+                      Leave blank to use the built-in acrylic / turf /
+                      PPE / PVC tones.
                     </div>
                   </div>
 

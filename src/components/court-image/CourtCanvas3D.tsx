@@ -529,6 +529,39 @@ function makeHighlightZone(
     side: THREE.DoubleSide,
   });
   const shape = el.shape ?? "rect";
+  if (
+    shape === "ring" &&
+    el.holeW != null &&
+    el.holeH != null &&
+    el.holeCx != null &&
+    el.holeCy != null
+  ) {
+    // Plot-sized plane with a rectangular hole cut out (the court).
+    // THREE.Shape supports holes natively.
+    const outer = new THREE.Shape();
+    const W2 = el.width / 2;
+    const H2 = el.height / 2;
+    outer.moveTo(-W2, -H2);
+    outer.lineTo(W2, -H2);
+    outer.lineTo(W2, H2);
+    outer.lineTo(-W2, H2);
+    outer.closePath();
+    const hole = new THREE.Path();
+    const hw = el.holeW / 2;
+    const hh = el.holeH / 2;
+    const hx = el.holeCx;
+    const hy = el.holeCy;
+    hole.moveTo(hx - hw, hy - hh);
+    hole.lineTo(hx + hw, hy - hh);
+    hole.lineTo(hx + hw, hy + hh);
+    hole.lineTo(hx - hw, hy + hh);
+    hole.closePath();
+    outer.holes.push(hole);
+    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(outer), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = yOffset + 0.05;
+    return mesh;
+  }
   if (shape === "arc-right" || shape === "arc-left") {
     // Semi-circle geometry via THREE.Shape. el.width = radius X,
     // el.height = full diameter Y. Konva 2D draws the arc opening in

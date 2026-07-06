@@ -367,10 +367,18 @@ export type HighlightZoneElement = CommonElementFields & {
   preset?: string;
   // Shape of the zone. "rect" (default) = plain rectangle centred on
   // the element origin. "arc-right" = semi-circle pie slice with
-  // diameter along Y and arc extending +X. "arc-left" = mirror. Used
-  // by presets like basketball 3-point area where a rectangle
-  // extends beyond the actual arc.
-  shape?: "rect" | "arc-right" | "arc-left";
+  // diameter along Y and arc extending +X. "arc-left" = mirror.
+  // "ring" = the rectangle MINUS an inner cutout (holeW/holeH at
+  // holeCx/holeCy) — used to highlight the run-off area around a
+  // court without covering the court itself.
+  shape?: "rect" | "arc-right" | "arc-left" | "ring";
+  // Inner cutout for shape="ring", in the zone's LOCAL feet (offset
+  // from the zone centre). Captured from the primary court's bounds at
+  // creation time.
+  holeCx?: number;
+  holeCy?: number;
+  holeW?: number;
+  holeH?: number;
 };
 
 // Chain-link / mesh fence drawn as a rectangle outline. In 2D the rect
@@ -1461,15 +1469,19 @@ export function highlightZoneFromPreset(
   };
 }
 
-// "Highlight the run-off area" — a zone the size of the whole plot
-// centred at plot centre. Sits at a low z-index (below courts), so
-// visually it shows only the ring around the primary court and
-// under the surface / grid overlay. Sales gets one-click filling of
-// the non-playing area without needing to drag a rectangle.
-export function newRunOffHighlightZone(plot: Plot): HighlightZoneElement {
-  return {
+// "Highlight the run-off area" — a plot-sized zone with the primary
+// court cut out, so only the ring around the court (the non-playing
+// run-off area) is tinted. Pass the primary court's bounds so we can
+// compute the cutout. Without a court it falls back to a plain plot-
+// sized rectangle. Captured at creation — if the court is later moved
+// or resized, re-add the run-off highlight to refresh the cutout.
+export function newRunOffHighlightZone(
+  plot: Plot,
+  court?: { x: number; y: number; width: number; height: number },
+): HighlightZoneElement {
+  const base = {
     id: newId("highlight"),
-    type: "highlight-zone",
+    type: "highlight-zone" as const,
     x: plot.lengthFt / 2,
     y: plot.widthFt / 2,
     rotation: 0,
@@ -1477,11 +1489,19 @@ export function newRunOffHighlightZone(plot: Plot): HighlightZoneElement {
     height: plot.widthFt,
     fill: "rgba(255, 193, 7, 0.35)",
     preset: "run-off",
-    shape: "rect",
-    // z: 4 so it sits below the primary sport court (which is z: 5+
-    // via newId's counter) — the court covers the middle, highlight
-    // fills only the run-off ring visually.
-    z: 4,
+    z: 6,
+  };
+  if (!court) {
+    return { ...base, shape: "rect" };
+  }
+  return {
+    ...base,
+    shape: "ring",
+    // Hole centre relative to the zone centre (plot centre).
+    holeCx: court.x - plot.lengthFt / 2,
+    holeCy: court.y - plot.widthFt / 2,
+    holeW: court.width,
+    holeH: court.height,
   };
 }
 

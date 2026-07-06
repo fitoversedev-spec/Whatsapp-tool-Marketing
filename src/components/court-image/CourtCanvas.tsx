@@ -1477,6 +1477,52 @@ function HighlightZoneShape({
   if (shape === "arc-left") {
     return <Path data={arcLeftPath(w, h)} fill={el.fill} listening={true} />;
   }
+  if (
+    shape === "ring" &&
+    el.holeW != null &&
+    el.holeH != null &&
+    el.holeCx != null &&
+    el.holeCy != null
+  ) {
+    // Rectangle minus an inner cutout, drawn as 4 strips (top, bottom,
+    // left, right) around the hole. Reliable across renderers vs an
+    // even-odd fill. All values in canvas px, origin at zone centre.
+    const hw = el.holeW * pxPerFt;
+    const hh = el.holeH * pxPerFt;
+    const hx = el.holeCx * pxPerFt;
+    const hy = el.holeCy * pxPerFt;
+    const holeTop = hy - hh / 2;
+    const holeBot = hy + hh / 2;
+    const holeLeft = hx - hw / 2;
+    const holeRight = hx + hw / 2;
+    const strips = [
+      // Top strip — full width, above the hole.
+      { x: -w / 2, y: -h / 2, width: w, height: holeTop - -h / 2 },
+      // Bottom strip — full width, below the hole.
+      { x: -w / 2, y: holeBot, width: w, height: h / 2 - holeBot },
+      // Left strip — between hole top/bottom, left of hole.
+      { x: -w / 2, y: holeTop, width: holeLeft - -w / 2, height: hh },
+      // Right strip — between hole top/bottom, right of hole.
+      { x: holeRight, y: holeTop, width: w / 2 - holeRight, height: hh },
+    ];
+    return (
+      <>
+        {strips.map((s, i) =>
+          s.width > 0.5 && s.height > 0.5 ? (
+            <Rect
+              key={i}
+              x={s.x}
+              y={s.y}
+              width={s.width}
+              height={s.height}
+              fill={el.fill}
+              listening={true}
+            />
+          ) : null,
+        )}
+      </>
+    );
+  }
   // No stroke — reads as a tinted zone rather than a boxed rectangle.
   return (
     <Rect

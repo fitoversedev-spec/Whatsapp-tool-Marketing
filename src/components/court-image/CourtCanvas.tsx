@@ -241,6 +241,7 @@ export default function CourtCanvas({
           plotWidthFt={layout.plot.widthFt}
           polygon={layout.plot.polygon}
           runOffTone={layout.style.runOffTone}
+          runOffColorOverride={layout.style.runOffColorOverride}
         />
         {showGrid && (
           <GridLines
@@ -1799,6 +1800,7 @@ function PlotSurface({
   plotWidthFt,
   polygon,
   runOffTone,
+  runOffColorOverride,
 }: {
   plotOriginX: number;
   plotOriginY: number;
@@ -1818,6 +1820,10 @@ function PlotSurface({
   // etc.) reads as a distinct playing area. undefined/"off" preserves
   // legacy single-shade rendering.
   runOffTone?: "off" | "subtle" | "distinct";
+  // Explicit run-off colour override — takes precedence over the
+  // auto-derived shade. Set from the wizard's colour picker so sales /
+  // admin can match a real construction photo or brand palette.
+  runOffColorOverride?: string;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [turfLightImg, setTurfLightImg] = useState<HTMLImageElement | null>(null);
@@ -1904,7 +1910,10 @@ function PlotSurface({
   // court shapes below still paint the FULL solidFillBase colour inside
   // their playing-area rectangle, so the result is a two-tone: darker
   // ring around the court (run-off zone), full colour inside (playing).
-  const solidFill = shadeHexColor(solidFillBase, runOffFactor(runOffTone));
+  // An explicit runOffColorOverride wins over the derived shade.
+  const solidFill =
+    runOffColorOverride ??
+    shadeHexColor(solidFillBase, runOffFactor(runOffTone));
   const tiled = isTiledSurface(surface);
   const acrylic = isAcrylicSurface(surface);
   const turf = isTurfSurface(surface);
@@ -1924,7 +1933,13 @@ function PlotSurface({
   const samplePx = calloutSize;
   const infoW = calloutSize;
   const infoX = sampleX;
-  const infoLines = tiled
+  // Plot dimensions in metres alongside feet — appended to every
+  // material callout so customers who think metric can read the
+  // plot at a glance. Q2.3 ask from sales.
+  const dimsLine = `${plotLengthFt} × ${plotWidthFt} ft (${(
+    plotLengthFt * 0.3048
+  ).toFixed(1)} × ${(plotWidthFt * 0.3048).toFixed(1)} m)`;
+  const materialLines = tiled
     ? (() => {
         const c = ppeTileCount(plotLengthFt, plotWidthFt);
         return [
@@ -1958,6 +1973,8 @@ function PlotSurface({
               ];
             })()
           : [];
+  const infoLines =
+    materialLines.length > 0 ? [...materialLines, dimsLine] : [];
   const infoH = labelFontSize * (infoLines.length * 1.6 + 0.8);
 
   // Turf stripe geometry — 2 m wide stripes parallel to the field

@@ -1277,6 +1277,88 @@ export default function CourtImageWizard({
                       convention around the sport court.
                     </div>
                   </div>
+
+                  {/* Optional colour override for the run-off zone. Only
+                      offered when a run-off tone is active. Sales and
+                      admin can paint the run-off in a specific hex to
+                      match a real construction photo or brand palette. */}
+                  {layout.style.runOffTone &&
+                    layout.style.runOffTone !== "off" && (
+                      <div>
+                        <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                          Run-off colour override
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={
+                              layout.style.runOffColorOverride ?? "#264d80"
+                            }
+                            onChange={(e) =>
+                              setLayout((l) =>
+                                l
+                                  ? {
+                                      ...l,
+                                      style: {
+                                        ...l.style,
+                                        runOffColorOverride: e.target.value,
+                                      },
+                                    }
+                                  : l,
+                              )
+                            }
+                            className="w-9 h-9 rounded border border-slate-300 cursor-pointer bg-white"
+                            title="Pick a colour"
+                          />
+                          <input
+                            type="text"
+                            value={layout.style.runOffColorOverride ?? ""}
+                            onChange={(e) => {
+                              const v = e.target.value.trim();
+                              setLayout((l) =>
+                                l
+                                  ? {
+                                      ...l,
+                                      style: {
+                                        ...l.style,
+                                        runOffColorOverride:
+                                          v.length === 0 ? undefined : v,
+                                      },
+                                    }
+                                  : l,
+                              );
+                            }}
+                            placeholder="Auto (derived from surface)"
+                            className="flex-1 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                          />
+                          {layout.style.runOffColorOverride && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLayout((l) =>
+                                  l
+                                    ? {
+                                        ...l,
+                                        style: {
+                                          ...l.style,
+                                          runOffColorOverride: undefined,
+                                        },
+                                      }
+                                    : l,
+                                )
+                              }
+                              className="text-[11px] text-slate-500 hover:text-slate-700 underline"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-[10.5px] text-slate-500 mt-1.5">
+                          Leave blank to use the auto-shade from Surface
+                          finish. Any hex value overrides it.
+                        </div>
+                      </div>
+                    )}
                 </div>
 
                 {/* Watermark toggle — Fitoverse logo composited into the

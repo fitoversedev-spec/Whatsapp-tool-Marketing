@@ -527,7 +527,10 @@ export function shadeHexColor(hex: string, factor: number): string {
 export function runOffFactor(
   tone: "off" | "subtle" | "distinct" | undefined,
 ): number {
-  return tone === "distinct" ? 0.75 : tone === "subtle" ? 0.88 : 1;
+  // Sales asked for a modestly darker run-off zone — 20% for subtle,
+  // 30% for distinct — so the split reads on both light and dark
+  // surfaces (e.g. blue acrylic vs green turf).
+  return tone === "distinct" ? 0.7 : tone === "subtle" ? 0.8 : 1;
 }
 
 export function isTurfSurface(surface: SurfaceFinish): boolean {
@@ -656,11 +659,17 @@ export type Style = {
   // builds); "grass" is offered for outdoor turf scenes.
   groundFinish?: "sand" | "concrete" | "grass";
   // Visual distinction between playing area and run-off zone. When
-  // "subtle" the run-off (plot ring around the sport court) tints 12%
-  // darker than the playing area; "distinct" tints 25% darker. Old
+  // "subtle" the run-off (plot ring around the sport court) tints 20%
+  // darker than the playing area; "distinct" tints 30% darker. Old
   // designs stored before this field existed render as they always
   // have (undefined = no split, plot is one flat colour).
   runOffTone?: "off" | "subtle" | "distinct";
+  // Optional explicit run-off zone colour override. When set, this hex
+  // colour is used as the plot fill instead of the auto-darkened shade
+  // derived from runOffTone. Lets sales and admin dial in exact tones
+  // that match the customer's real construction site photo or brand
+  // palette. Leave undefined to use the auto shade.
+  runOffColorOverride?: string;
   // Optional watermark (logo URL + opacity).
   watermarkUrl?: string;
   watermarkOpacity?: number;

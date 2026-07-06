@@ -297,6 +297,22 @@ export default function CourtImageWizard({
     } else if (selectedSports.length === 1 && selectedSports[0] === "basketball") {
       initial.style = { ...initial.style, surface: "ppe_tile_red" };
     }
+    // Grid overlay default: OFF for continuous-surface finishes
+    // (acrylic, turf, PVC) because customers read the grid as a tile
+    // pattern, and Fitoverse quotes those as roll / bulk deliverables
+    // — not per tile. Stays ON for PPE tile (grid maps to real tile
+    // edges) and Plain. Existing designs are untouched — this only
+    // runs on fresh Step 1 → Step 2 hand-off.
+    const continuousSurfaces = new Set([
+      "acrylic_blue",
+      "acrylic_green",
+      "turf_40mm",
+      "turf_50mm",
+      "pvc_sports",
+    ]);
+    if (continuousSurfaces.has(initial.style.surface)) {
+      initial.style = { ...initial.style, showGrid: false };
+    }
     setLayout(initial);
     setSelectedId(null);
     setStep(2);
@@ -1214,9 +1230,33 @@ export default function CourtImageWizard({
                   onUpdate={updateElement}
                   canvasWidth={canvasSize.width}
                   canvasHeight={canvasSize.height}
+                  showGrid={layout.style.showGrid ?? true}
                 />
                 <div className="absolute top-3 left-3 bg-white/90 backdrop-blur rounded-md px-2.5 py-1 text-[11px] text-slate-700 shadow-sm">
                   Plot {layout.plot.lengthFt} × {layout.plot.widthFt} ft
+                </div>
+                {/* Grid overlay toggle. Old designs default to grid ON
+                    (matches historical look). New designs on continuous
+                    surfaces start OFF because customers read the grid as
+                    a tile pattern on solid acrylic / turf / PVC. */}
+                <div className="absolute top-3 right-3 bg-white/90 backdrop-blur rounded-md px-2.5 py-1.5 text-[11px] shadow-sm flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={layout.style.showGrid ?? true}
+                      onChange={(e) =>
+                        setLayout({
+                          ...layout,
+                          style: {
+                            ...layout.style,
+                            showGrid: e.target.checked,
+                          },
+                        })
+                      }
+                      className="accent-wa-green"
+                    />
+                    <span className="text-slate-700">Grid overlay</span>
+                  </label>
                 </div>
               </div>
             </div>

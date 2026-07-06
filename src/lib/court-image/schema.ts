@@ -599,6 +599,14 @@ export type Style = {
   // Surface finish inside the plot footprint. Drives whether we paint a
   // solid earth colour or tile a real PPE-tile photograph across the plot.
   surface: SurfaceFinish;
+  // Whether to overlay a 2-ft measurement grid on the plot. Old designs
+  // rendered the grid always-on. Sales asked for it OFF by default on
+  // continuous-surface finishes (acrylic, turf, PVC) because customers
+  // read the grid as a tile pattern. Still ON by default for PPE tile
+  // (where the grid maps to real physical tile edges) and Plain. When
+  // undefined (old designs stored before this field existed), CourtCanvas
+  // falls back to true — no visual change to anything already saved.
+  showGrid?: boolean;
   // Optional watermark (logo URL + opacity).
   watermarkUrl?: string;
   watermarkOpacity?: number;

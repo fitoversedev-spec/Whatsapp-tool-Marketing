@@ -42,6 +42,7 @@ import type {
   FenceRectElement,
   DugoutElement,
   BasketballHoopElement,
+  HighlightZoneElement,
 } from "@/lib/court-image/schema";
 import { aSideProps } from "@/lib/court-image/schema";
 
@@ -157,8 +158,20 @@ export default function CourtCanvas3D({
     sun.shadow.bias = -0.0004;
     scene.add(sun);
 
-    // Ground (earth) — extends beyond the plot for context.
-    const groundMat = new THREE.MeshLambertMaterial({ color: 0x9c845b });
+    // Ground (earth) — extends beyond the plot for context. Colour
+    // reflects layout.style.groundFinish (concrete grey / grass green /
+    // sand default) so 3D matches the 2D render — user asked for parity.
+    const groundHex = (() => {
+      const finish = layout.style.groundFinish;
+      if (finish === "concrete") return 0x94a3b8;
+      if (finish === "grass") return 0x5c7c3d;
+      if (layout.style.groundColor) {
+        const m = layout.style.groundColor.match(/^#?([0-9a-f]{6})$/i);
+        if (m) return parseInt(m[1], 16);
+      }
+      return 0x9c845b;
+    })();
+    const groundMat = new THREE.MeshLambertMaterial({ color: groundHex });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.05;
@@ -497,10 +510,27 @@ function buildElement(el: Element, layout: CourtLayout, yOffset: number): THREE.
     case "basketball-hoop":
       return makeBasketballHoop(el);
     case "highlight-zone":
-      // 3D-side highlight zones — deferred to a later commit (Q5.3
-      // 3D parity). Skip for now so the 2D flow ships cleanly.
-      return null;
+      return makeHighlightZone(el, yOffset);
   }
+}
+
+function makeHighlightZone(
+  el: HighlightZoneElement,
+  yOffset: number,
+): THREE.Object3D {
+  // 3D highlight zone — a translucent plane at the court surface. Same
+  // rgba fill sales picked in 2D so the 3D preview matches. Sits just
+  // above the court plane so it doesn't z-fight with the surface.
+  const mat = new THREE.MeshBasicMaterial({
+    color: parseColor(el.fill),
+    transparent: true,
+    opacity: parseAlpha(el.fill),
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(el.width, el.height), mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = yOffset + 0.05;
+  return mesh;
 }
 
 function makeFootballField(

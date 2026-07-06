@@ -1564,6 +1564,22 @@ export default function CourtImageWizard({
                   canvasWidth={canvasSize.width}
                   canvasHeight={canvasSize.height}
                   showGrid={layout.style.showGrid ?? true}
+                  onSectionClick={(court, preset) => {
+                    const c = court as unknown as {
+                      x: number;
+                      y: number;
+                      rotation: number;
+                      width: number;
+                      height: number;
+                    };
+                    const zone = highlightZoneFromPreset(c, preset);
+                    setLayout((prev) =>
+                      prev
+                        ? { ...prev, elements: [...prev.elements, zone] }
+                        : prev,
+                    );
+                    setSelectedId(zone.id);
+                  }}
                 />
                 <div className="absolute top-3 left-3 bg-white/90 backdrop-blur rounded-md px-2.5 py-1 text-[11px] text-slate-700 shadow-sm">
                   <div>

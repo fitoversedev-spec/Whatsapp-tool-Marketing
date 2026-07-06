@@ -62,6 +62,8 @@ import {
   resolveGroundColor,
   shadeHexColor,
   runOffFactor,
+  HIGHLIGHT_PRESETS,
+  type HighlightSectionPreset,
   type SurfaceFinish,
 } from "@/lib/court-image/schema";
 
@@ -81,6 +83,16 @@ type Props = {
   // editor responsive without remounting.
   canvasWidth: number;
   canvasHeight: number;
+  // Called when sales clicks a dashed section overlay on the canvas
+  // (basketball key, tennis service box, etc.). Fires with the parent
+  // court element + the preset that was clicked; the wizard creates a
+  // HighlightZoneElement at the correct world position via
+  // highlightZoneFromPreset. Optional — canvas still renders if the
+  // parent doesn't wire it.
+  onSectionClick?: (
+    court: Element,
+    preset: HighlightSectionPreset,
+  ) => void;
   showGrid?: boolean;
   // When set, the canvas refuses to mutate elements — useful for Step 3
   // preview rendering. Drag/transform handles still appear but events are
@@ -100,6 +112,7 @@ export default function CourtCanvas({
   onUpdate,
   canvasWidth,
   canvasHeight,
+  onSectionClick,
   showGrid = true,
   readOnly = false,
   handleRef,
@@ -297,6 +310,7 @@ export default function CourtCanvas({
             readOnly={readOnly}
             onSelect={() => onSelect(el.id)}
             onUpdate={(patch) => onUpdate(el.id, patch)}
+            onSectionClick={onSectionClick}
             registerRef={(node) => {
               if (node) shapeRefs.current[el.id] = node;
               else delete shapeRefs.current[el.id];
@@ -380,12 +394,17 @@ type ElementShapeProps = {
   readOnly: boolean;
   onSelect: () => void;
   onUpdate: (patch: Partial<Element>) => void;
+  onSectionClick?: (
+    court: Element,
+    preset: HighlightSectionPreset,
+  ) => void;
   registerRef: (node: Konva.Group | null) => void;
 };
 
 function ElementShape({
   element,
   pxPerFt,
+  onSectionClick,
   toCanvasX,
   toCanvasY,
   fromCanvasX,
@@ -462,18 +481,42 @@ function ElementShape({
       return (
         <Group {...commonGroupProps}>
           <BasketballCourtShape el={element} pxPerFt={pxPerFt} style={style} />
+          {isSelected && onSectionClick && (
+            <SectionClickOverlays
+              presets={HIGHLIGHT_PRESETS["basketball-court"] ?? []}
+              courtW={element.width * pxPerFt}
+              courtH={element.height * pxPerFt}
+              onSectionClick={(preset) => onSectionClick(element, preset)}
+            />
+          )}
         </Group>
       );
     case "pickleball-court":
       return (
         <Group {...commonGroupProps}>
           <PickleballCourtShape el={element} pxPerFt={pxPerFt} style={style} />
+          {isSelected && onSectionClick && (
+            <SectionClickOverlays
+              presets={HIGHLIGHT_PRESETS["pickleball-court"] ?? []}
+              courtW={element.width * pxPerFt}
+              courtH={element.height * pxPerFt}
+              onSectionClick={(preset) => onSectionClick(element, preset)}
+            />
+          )}
         </Group>
       );
     case "generic-court":
       return (
         <Group {...commonGroupProps}>
           <GenericCourtShape el={element} pxPerFt={pxPerFt} style={style} />
+          {isSelected && onSectionClick && (
+            <SectionClickOverlays
+              presets={HIGHLIGHT_PRESETS[`generic-court-${element.sport}`] ?? []}
+              courtW={element.width * pxPerFt}
+              courtH={element.height * pxPerFt}
+              onSectionClick={(preset) => onSectionClick(element, preset)}
+            />
+          )}
         </Group>
       );
     case "goal-post":
@@ -832,6 +875,76 @@ function CricketPitchShape({
           ))}
         </Group>
       ))}
+    </>
+  );
+}
+
+// One-click section highlighting. When a court is selected, dashed
+// amber outlines appear over its named regions (basketball key, tennis
+// service box, badminton service courts, volleyball attack zone,
+// pickleball kitchen, etc.). Hovering tints the region; clicking drops
+// a HighlightZoneElement at exactly that location so sales doesn't
+// have to drag a blank rectangle around. Matches the "click a shape,
+// fill with colour" mental model the user asked for.
+function SectionClickOverlays({
+  presets,
+  courtW,
+  courtH,
+  onSectionClick,
+}: {
+  presets: HighlightSectionPreset[];
+  courtW: number;
+  courtH: number;
+  onSectionClick: (preset: HighlightSectionPreset) => void;
+}) {
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  if (presets.length === 0) return null;
+  return (
+    <>
+      {presets.map((p) => {
+        const w = p.wFrac * courtW;
+        const h = p.hFrac * courtH;
+        // Preset centre is (cxFrac * courtW, cyFrac * courtH) in court
+        // local coords. Konva Rect places from top-left, so shift by
+        // -w/2, -h/2 to centre on the preset's point.
+        const x = p.cxFrac * courtW - w / 2;
+        const y = p.cyFrac * courtH - h / 2;
+        const hovered = hoveredKey === p.key;
+        return (
+          <Rect
+            key={p.key}
+            x={x}
+            y={y}
+            width={w}
+            height={h}
+            fill={
+              hovered ? "rgba(255,193,7,0.30)" : "rgba(255,193,7,0.04)"
+            }
+            stroke={hovered ? "#f59e0b" : "rgba(251,191,36,0.6)"}
+            strokeWidth={hovered ? 2 : 1}
+            dash={hovered ? [] : [4, 4]}
+            listening={true}
+            onMouseEnter={(e) => {
+              setHoveredKey(p.key);
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "pointer";
+            }}
+            onMouseLeave={(e) => {
+              setHoveredKey(null);
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "default";
+            }}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              onSectionClick(p);
+            }}
+            onTap={(e) => {
+              e.cancelBubble = true;
+              onSectionClick(p);
+            }}
+          />
+        );
+      })}
     </>
   );
 }

@@ -118,7 +118,10 @@ export default function CourtCanvas({
   const surfaceReservesRightSpace = layout.style.surface !== "plain";
   const { pxPerFt, plotOriginX, plotOriginY, plotPxWidth, plotPxHeight } = useMemo(() => {
     const margin = 28; // leave room for the ground border + dimension labels
-    const rightExtra = surfaceReservesRightSpace ? 140 : 0;
+    // Callout column widened from 140 → 210 so the material info panel
+    // fits "105 × 62 ft (32.0 × 18.9 m)" on a single line without
+    // wrapping. Sales asked for the dimensions to read at a glance.
+    const rightExtra = surfaceReservesRightSpace ? 210 : 0;
     const availW = canvasWidth - margin * 2 - rightExtra;
     const availH = canvasHeight - margin * 2;
     const scale = Math.min(availW / layout.plot.lengthFt, availH / layout.plot.widthFt);
@@ -844,22 +847,28 @@ function BasketballCourtShape({
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
-  // When the plot has a tiled surface (PPE tile), skip the solid
-  // basketball fill so the tile pattern shows through. Markings still
-  // paint on top. Element-level overrides win when explicitly set.
+  // When the plot has a tiled surface (PPE tile), keep the court fill
+  // TRANSPARENT so the tile pattern + measurement grid (which
+  // represents real tile edges) show straight through the playing
+  // area. Sales asked for grid lines on PPE-tile courts — those grid
+  // squares are the physical tiles.
   //
-  // When style.runOffTone is on, PlotSurface darkens the plot fill so
-  // the run-off zone reads distinct — but the court's playing area
-  // must stay the FULL surface colour. Override the transparent
-  // fallback with the undarkened SURFACE_SOLID_COLOR in that case.
+  // For continuous surfaces (acrylic, turf, PVC), when style.runOffTone
+  // is on, PlotSurface darkens the plot fill so the run-off zone
+  // reads distinct. In that case the court's playing area rectangle
+  // takes the FULL (undarkened) surface colour so it stays lighter
+  // than the surrounding run-off ring.
   const runOff = style.runOffTone && style.runOffTone !== "off";
+  const tiled = isTiledSurface(style.surface);
   const fill =
     el.surfaceColor ??
-    (runOff && style.surface !== "plain"
-      ? SURFACE_SOLID_COLOR[style.surface] ?? style.basketballSurfaceColor
-      : style.surface !== "plain"
-        ? "transparent"
-        : style.basketballSurfaceColor);
+    (tiled
+      ? "transparent"
+      : runOff && style.surface !== "plain"
+        ? SURFACE_SOLID_COLOR[style.surface] ?? style.basketballSurfaceColor
+        : style.surface !== "plain"
+          ? "transparent"
+          : style.basketballSurfaceColor);
   const line = el.lineColor ?? "#fff5e6";
   const lineWidth = Math.max(1, Math.min(w, h) * 0.005);
 
@@ -1028,7 +1037,12 @@ function PickleballCourtShape({
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
-  const fill = el.surfaceColor ?? style.pickleballSurfaceColor;
+  // Tiled surface (PPE tile) — keep court transparent so tile pattern
+  // + grid show through the playing area. Otherwise use the sport's
+  // default surface colour.
+  const fill =
+    el.surfaceColor ??
+    (isTiledSurface(style.surface) ? "transparent" : style.pickleballSurfaceColor);
   const line = el.lineColor ?? "#ffffff";
   const lineWidth = Math.max(1, Math.min(w, h) * 0.006);
   // Kitchen / non-volley zone — 7 ft from net on each side.
@@ -1069,7 +1083,11 @@ function GenericCourtShape({
         : el.sport === "volleyball"
           ? "#c97a4b"
           : "#5a8a6c";
-  const fill = el.surfaceColor ?? defaultFill;
+  // Tiled surface (PPE tile) — keep the court transparent so tile
+  // pattern + grid render through the playing area.
+  const fill =
+    el.surfaceColor ??
+    (isTiledSurface(style.surface) ? "transparent" : defaultFill);
   const line = el.lineColor ?? "#ffffff";
   const lineWidth = Math.max(1, Math.min(w, h) * 0.005);
 
@@ -1956,12 +1974,18 @@ function PlotSurface({
   // Callout sits OUTSIDE the plot in the reserved right-side area (the
   // parent hook allocates ~140 px for it). Fixed-size box so the layout
   // stays readable regardless of plot scale.
-  const calloutSize = 120;
-  const calloutGap = 12;
+  // Sample photo stays square (calloutSize) but the info box under it
+  // is a bit wider (infoW) so multi-word lines like "105 × 62 ft (32 ×
+  // 18.9 m)" don't wrap mid-phrase. Sales asked for the dimensions to
+  // read at a glance.
+  const calloutSize = 130;
+  const calloutGap = 14;
   const sampleX = plotOriginX + plotPxWidth + calloutGap;
   const sampleY = plotOriginY;
   const samplePx = calloutSize;
-  const infoW = calloutSize;
+  // Info panel widened beyond the sample photo so the dims + metres
+  // line fits on one row.
+  const infoW = Math.max(calloutSize, 190);
   const infoX = sampleX;
   // Plot dimensions in metres alongside feet — appended to every
   // material callout so customers who think metric can read the

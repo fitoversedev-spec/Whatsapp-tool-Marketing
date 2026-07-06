@@ -956,7 +956,31 @@ export default function CourtImageWizard({
                   <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
                     Add element
                   </div>
-                  <div className="grid grid-cols-2 gap-1.5">
+
+                  {/* Highlight zone gets its own row + accent so sales
+                      sees it first. Works on every sport (basketball
+                      key, tennis service box, badminton service courts,
+                      volleyball attack zones, pickleball kitchen — any
+                      rectangle you drag out). */}
+                  <button
+                    type="button"
+                    onClick={() => addElement("highlight")}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-xs font-medium text-amber-900 transition"
+                  >
+                    <span className="inline-block w-3 h-3 rounded-sm bg-amber-400" />
+                    <span className="flex-1 text-left">+ Highlight zone</span>
+                    <span className="text-[10px] text-amber-700">colour · drag · resize</span>
+                  </button>
+                  <div className="text-[10.5px] text-slate-500 leading-snug">
+                    Drops a coloured rectangle you can drag, resize, and
+                    recolour from the inspector. Renders UNDER the sport
+                    markings so lines stay legible on top. Works for every
+                    sport — use it to fill a basketball key, tennis
+                    service box, badminton service court, volleyball
+                    attack zone, pickleball kitchen, etc.
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
                     <AddBtn label="Cricket pitch" onClick={() => addElement("cricket")} />
                     <AddBtn label="Goal post" onClick={() => addElement("goal-post")} />
                     <AddBtn label="Basketball hoop" onClick={() => addElement("hoop")} />
@@ -965,16 +989,6 @@ export default function CourtImageWizard({
                     <AddBtn label="Label" onClick={() => addElement("annotation")} />
                     <AddBtn label="Line / arrow" onClick={() => addElement("line")} />
                     <AddBtn label="Rectangle" onClick={() => addElement("rect")} />
-                    <AddBtn
-                      label="Highlight zone"
-                      onClick={() => addElement("highlight")}
-                    />
-                  </div>
-                  <div className="text-[10.5px] text-slate-500 leading-snug mt-1">
-                    Highlight zone drops a coloured rectangle you can drag,
-                    resize, and colour. Renders UNDER the sport markings —
-                    use it to fill a key / paint area, service box, kitchen,
-                    attack zone, etc.
                   </div>
                 </div>
 

@@ -488,6 +488,48 @@ export function isAcrylicSurface(surface: SurfaceFinish): boolean {
   return surface === "acrylic_blue" || surface === "acrylic_green";
 }
 
+// Ground finish → actual RGB. Used by CourtCanvas to override the
+// stored groundColor when a modern finish is picked in the wizard.
+// Undefined `finish` (old designs) falls back to whatever groundColor
+// was saved (the sand tan default), keeping legacy layouts unchanged.
+export const GROUND_FINISH_COLOR: Record<
+  "sand" | "concrete" | "grass",
+  string
+> = {
+  sand: "#9c845b",
+  concrete: "#94A3B8",
+  grass: "#5C7C3D",
+};
+
+export function resolveGroundColor(
+  finish: "sand" | "concrete" | "grass" | undefined,
+  fallback: string,
+): string {
+  if (!finish) return fallback;
+  return GROUND_FINISH_COLOR[finish];
+}
+
+// Darken a hex colour by the given factor (0.88 = 12% darker, 0.75 =
+// 25% darker). Used to render the run-off zone in a subtly different
+// shade of the base surface colour so playing area vs plot reads at a
+// glance. Returns the input unchanged for non-hex inputs.
+export function shadeHexColor(hex: string, factor: number): string {
+  const m = hex.match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const r = Math.max(0, Math.min(255, Math.round(((n >> 16) & 0xff) * factor)));
+  const g = Math.max(0, Math.min(255, Math.round(((n >> 8) & 0xff) * factor)));
+  const b = Math.max(0, Math.min(255, Math.round((n & 0xff) * factor)));
+  const out = (r << 16) | (g << 8) | b;
+  return "#" + out.toString(16).padStart(6, "0");
+}
+
+export function runOffFactor(
+  tone: "off" | "subtle" | "distinct" | undefined,
+): number {
+  return tone === "distinct" ? 0.75 : tone === "subtle" ? 0.88 : 1;
+}
+
 export function isTurfSurface(surface: SurfaceFinish): boolean {
   return surface === "turf_40mm" || surface === "turf_50mm";
 }
@@ -607,6 +649,18 @@ export type Style = {
   // undefined (old designs stored before this field existed), CourtCanvas
   // falls back to true — no visual change to anything already saved.
   showGrid?: boolean;
+  // Ground finish behind the plot. Only applied when set; undefined
+  // uses the raw groundColor above so existing designs keep their
+  // sand-tan background exactly as saved. Sales asked for "concrete"
+  // as a more realistic default going forward (matches most Fitoverse
+  // builds); "grass" is offered for outdoor turf scenes.
+  groundFinish?: "sand" | "concrete" | "grass";
+  // Visual distinction between playing area and run-off zone. When
+  // "subtle" the run-off (plot ring around the sport court) tints 12%
+  // darker than the playing area; "distinct" tints 25% darker. Old
+  // designs stored before this field existed render as they always
+  // have (undefined = no split, plot is one flat colour).
+  runOffTone?: "off" | "subtle" | "distinct";
   // Optional watermark (logo URL + opacity).
   watermarkUrl?: string;
   watermarkOpacity?: number;

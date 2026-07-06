@@ -58,6 +58,9 @@ import {
   acrylicLitres,
   turfRollMeters,
   pvcRollCount,
+  resolveGroundColor,
+  shadeHexColor,
+  runOffFactor,
   type SurfaceFinish,
 } from "@/lib/court-image/schema";
 
@@ -217,7 +220,10 @@ export default function CourtCanvas({
           y={0}
           width={canvasWidth}
           height={canvasHeight}
-          fill={layout.style.groundColor}
+          fill={resolveGroundColor(
+            layout.style.groundFinish,
+            layout.style.groundColor,
+          )}
         />
         {/* Plot footprint (the actual customer land) — drawn with a faint
             border so even a blank plot is visible against the ground.
@@ -234,6 +240,7 @@ export default function CourtCanvas({
           plotLengthFt={layout.plot.lengthFt}
           plotWidthFt={layout.plot.widthFt}
           polygon={layout.plot.polygon}
+          runOffTone={layout.style.runOffTone}
         />
         {showGrid && (
           <GridLines
@@ -831,8 +838,19 @@ function BasketballCourtShape({
   // When the plot has a tiled surface (PPE tile), skip the solid
   // basketball fill so the tile pattern shows through. Markings still
   // paint on top. Element-level overrides win when explicitly set.
-  const fill = el.surfaceColor
-    ?? (style.surface !== "plain" ? "transparent" : style.basketballSurfaceColor);
+  //
+  // When style.runOffTone is on, PlotSurface darkens the plot fill so
+  // the run-off zone reads distinct — but the court's playing area
+  // must stay the FULL surface colour. Override the transparent
+  // fallback with the undarkened SURFACE_SOLID_COLOR in that case.
+  const runOff = style.runOffTone && style.runOffTone !== "off";
+  const fill =
+    el.surfaceColor ??
+    (runOff && style.surface !== "plain"
+      ? SURFACE_SOLID_COLOR[style.surface] ?? style.basketballSurfaceColor
+      : style.surface !== "plain"
+        ? "transparent"
+        : style.basketballSurfaceColor);
   const line = el.lineColor ?? "#fff5e6";
   const lineWidth = Math.max(1, Math.min(w, h) * 0.005);
 
@@ -1780,6 +1798,7 @@ function PlotSurface({
   plotLengthFt,
   plotWidthFt,
   polygon,
+  runOffTone,
 }: {
   plotOriginX: number;
   plotOriginY: number;
@@ -1793,6 +1812,12 @@ function PlotSurface({
   // provided, the plot boundary renders as this closed polygon instead
   // of a rectangle. Set from non-standard mode's shape picker.
   polygon?: Array<{ x: number; y: number }>;
+  // Run-off zone tone from style. When set, the plot fill is darkened
+  // by the corresponding factor so the sport court's rectangle (which
+  // draws on top with the FULL surface colour via BasketballCourtShape
+  // etc.) reads as a distinct playing area. undefined/"off" preserves
+  // legacy single-shade rendering.
+  runOffTone?: "off" | "subtle" | "distinct";
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [turfLightImg, setTurfLightImg] = useState<HTMLImageElement | null>(null);
@@ -1873,7 +1898,13 @@ function PlotSurface({
     );
   }
 
-  const solidFill = TILE_SOLID_COLORS[surface] ?? SURFACE_SOLID_COLOR[surface] ?? "#caa477";
+  const solidFillBase =
+    TILE_SOLID_COLORS[surface] ?? SURFACE_SOLID_COLOR[surface] ?? "#caa477";
+  // Darken plot fill when run-off distinction is requested. The sport
+  // court shapes below still paint the FULL solidFillBase colour inside
+  // their playing-area rectangle, so the result is a two-tone: darker
+  // ring around the court (run-off zone), full colour inside (playing).
+  const solidFill = shadeHexColor(solidFillBase, runOffFactor(runOffTone));
   const tiled = isTiledSurface(surface);
   const acrylic = isAcrylicSurface(surface);
   const turf = isTurfSurface(surface);

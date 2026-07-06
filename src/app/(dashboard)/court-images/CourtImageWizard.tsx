@@ -1179,6 +1179,106 @@ export default function CourtImageWizard({
                   )}
                 </div>
 
+                {/* Ground finish + Run-off zone — new in the "make design
+                    look more realistic" pass. Both are opt-in: undefined =
+                    old sand-tan + one-tone rendering, so existing designs
+                    open exactly as before. */}
+                <div className="border-t border-slate-200 pt-4 space-y-3">
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                      Ground finish
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        [
+                          { id: undefined, label: "Sand (default)" },
+                          { id: "concrete", label: "Concrete grey" },
+                          { id: "grass", label: "Grass green" },
+                        ] as const
+                      ).map((opt) => {
+                        const active =
+                          (layout.style.groundFinish ?? undefined) === opt.id;
+                        return (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            onClick={() =>
+                              setLayout((l) =>
+                                l
+                                  ? {
+                                      ...l,
+                                      style: {
+                                        ...l.style,
+                                        groundFinish: opt.id,
+                                      },
+                                    }
+                                  : l,
+                              )
+                            }
+                            className={`px-3 py-1.5 text-xs rounded-md border transition ${
+                              active
+                                ? "bg-wa-green text-white border-wa-green"
+                                : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                      Run-off zone tone
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        [
+                          { id: "off", label: "Off (single tone)" },
+                          { id: "subtle", label: "Subtle" },
+                          { id: "distinct", label: "Distinct" },
+                        ] as const
+                      ).map((opt) => {
+                        const current = layout.style.runOffTone ?? "off";
+                        const active = current === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() =>
+                              setLayout((l) =>
+                                l
+                                  ? {
+                                      ...l,
+                                      style: {
+                                        ...l.style,
+                                        runOffTone: opt.id,
+                                      },
+                                    }
+                                  : l,
+                              )
+                            }
+                            className={`px-3 py-1.5 text-xs rounded-md border transition ${
+                              active
+                                ? "bg-wa-green text-white border-wa-green"
+                                : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="text-[10.5px] text-slate-500 mt-1.5 leading-snug">
+                      Splits the plot fill into a playing area (full colour)
+                      and a run-off zone (darker shade of the same colour).
+                      Useful when showing customers the FIBA / FIFA run-off
+                      convention around the sport court.
+                    </div>
+                  </div>
+                </div>
+
                 {/* Watermark toggle — Fitoverse logo composited into the
                     bottom-right of both 2D + 3D renders. On by default. */}
                 <div className="border-t border-slate-200 pt-4">
@@ -1233,7 +1333,29 @@ export default function CourtImageWizard({
                   showGrid={layout.style.showGrid ?? true}
                 />
                 <div className="absolute top-3 left-3 bg-white/90 backdrop-blur rounded-md px-2.5 py-1 text-[11px] text-slate-700 shadow-sm">
-                  Plot {layout.plot.lengthFt} × {layout.plot.widthFt} ft
+                  <div>
+                    Plot {layout.plot.lengthFt} × {layout.plot.widthFt} ft
+                  </div>
+                  {(() => {
+                    // Find the primary sport court in layout.elements so
+                    // sales sees the playing area size alongside the plot
+                    // size. Small labels — doesn't clutter the canvas.
+                    const primary = layout.elements.find((e) =>
+                      [
+                        "basketball-court",
+                        "football-field",
+                        "pickleball-court",
+                        "generic-court",
+                      ].includes(e.type),
+                    );
+                    if (!primary || !("width" in primary)) return null;
+                    return (
+                      <div className="text-slate-500">
+                        Playing {Math.round(primary.width)} ×{" "}
+                        {Math.round(primary.height)} ft
+                      </div>
+                    );
+                  })()}
                 </div>
                 {/* Grid overlay toggle. Old designs default to grid ON
                     (matches historical look). New designs on continuous

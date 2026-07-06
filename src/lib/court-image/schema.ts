@@ -709,6 +709,37 @@ export type InitialLayoutInput = {
 // Called by the wizard at the Step1 -> Step2 transition. The resulting
 // layout is then handed to the editor, which mutates it as the user drags
 // elements around.
+// Scale a sport's regulation playing area to fit the entered plot,
+// preserving the court's aspect ratio. Leaves a small margin (default
+// 4 ft) so markings don't touch the plot edge.
+//
+// Called by buildInitialLayout for every sport. Previously each sport
+// used Math.min(regulation, plot - margin), which capped the court at
+// regulation size — so a customer's 113 × 67 ft plot got the full-court
+// FIBA rectangle (91.86 × 49.21) centred with a lot of empty run-off.
+// Sales asked for the court to actually fill their entered dimensions
+// while still looking proportional.
+function fitCourtToPlot(
+  playLength: number,
+  playWidth: number,
+  longFt: number,
+  shortFt: number,
+  marginFt: number = 4,
+): { courtW: number; courtH: number } {
+  const availableL = Math.max(1, longFt - marginFt);
+  const availableW = Math.max(1, shortFt - marginFt);
+  const courtAspect = playLength / playWidth;
+  const availableAspect = availableL / availableW;
+  if (availableAspect > courtAspect) {
+    // Plot is wider than the court's aspect — fit to the short side.
+    const courtH = availableW;
+    return { courtW: courtH * courtAspect, courtH };
+  }
+  // Plot is narrower (or equal) — fit to the long side.
+  const courtW = availableL;
+  return { courtW, courtH: courtW / courtAspect };
+}
+
 export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   const { plot, sports, config = {} } = input;
   const cx = plot.lengthFt / 2;
@@ -751,10 +782,16 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       11: { l: 344, w: 223 },
     };
     const ps = playSizes[aSide];
-    // If the plot is smaller than the FIFA playing area (custom small
-    // plot) fall back to plot-minus-margin so the pitch still fits.
-    const pitchL = Math.min(ps.l, longFt - 4);
-    const pitchW = Math.min(ps.w, shortFt - 4);
+    // Scale the FIFA playing area to fit the entered plot so the pitch
+    // actually reflects the customer's dimensions instead of getting
+    // clamped at the regulation size (which left huge empty run-off on
+    // custom plots).
+    const { courtW: pitchL, courtH: pitchW } = fitCourtToPlot(
+      ps.l,
+      ps.w,
+      longFt,
+      shortFt,
+    );
     elements.push({
       id: newId("football"),
       type: "football-field",
@@ -776,14 +813,17 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     // markings. Half-court / 3x3 uses the smaller FIBA 3x3 playing
     // area (15 × 11 m ≈ 49.21 × 36.09 ft).
     const halfCourt = config.basketball?.halfCourt ?? false;
-    // Playing-area dimensions per FIBA rulebook.
+    // Playing-area dimensions per FIBA rulebook — used only to derive
+    // the court's aspect ratio; the actual on-canvas court scales to
+    // fill the entered plot.
     const playLength = halfCourt ? 49.21 : 91.86;
     const playWidth = halfCourt ? 36.09 : 49.21;
-    // If the plot is smaller than the playing area (custom small
-    // plot), cap the court at the plot's inner area minus a 2 ft
-    // margin so it still fits.
-    const courtW = Math.min(playLength, longFt - 4);
-    const courtH = Math.min(playWidth, shortFt - 4);
+    const { courtW, courtH } = fitCourtToPlot(
+      playLength,
+      playWidth,
+      longFt,
+      shortFt,
+    );
     elements.push({
       id: newId("basketball"),
       type: "basketball-court",
@@ -848,19 +888,17 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   }
 
   if (hasPickleball) {
-    // Pickleball is regulation 44 × 20 ft. Always landscape; rotate the
-    // whole court on portrait plots so it doesn't get clipped or
-    // unexpectedly squished into the short side.
-    const w = 44;
-    const h = 20;
+    // Pickleball regulation is 44 × 20 ft — used for the aspect ratio.
+    // Court fills the entered plot preserving that aspect.
+    const { courtW, courtH } = fitCourtToPlot(44, 20, longFt, shortFt);
     elements.push({
       id: newId("pickleball"),
       type: "pickleball-court",
       x: cx,
       y: cy,
       rotation: baseRotation,
-      width: Math.min(w, longFt * 0.9),
-      height: Math.min(h, shortFt * 0.9),
+      width: courtW,
+      height: courtH,
       z: z++,
     });
   }
@@ -886,8 +924,15 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     netTargets.push({ sport: "volleyball", width: 59, height: 30, netHeightFt: 7.9 });
   }
   for (const t of netTargets) {
-    const w = Math.min(t.width, longFt * 0.9);
-    const h = Math.min(t.height, shortFt * 0.9);
+    // Fill the plot preserving the sport's regulation aspect ratio so
+    // custom-size plots don't get a tiny regulation court centred with
+    // dead space around it.
+    const { courtW: w, courtH: h } = fitCourtToPlot(
+      t.width,
+      t.height,
+      longFt,
+      shortFt,
+    );
     elements.push({
       id: newId(t.sport),
       type: "generic-court",

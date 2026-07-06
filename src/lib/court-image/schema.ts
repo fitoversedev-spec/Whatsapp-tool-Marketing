@@ -1125,16 +1125,16 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   // still win).
   const uniqueSports = new Set(sports);
   const isMultisport = uniqueSports.size >= 2;
+  // Element `type` → sport mapping — reused by the palette + auto-layout.
+  const sportForType = (type: string, sport?: string): Sport | null => {
+    if (type === "basketball-court") return "basketball";
+    if (type === "football-field") return "football";
+    if (type === "pickleball-court") return "pickleball";
+    if (type === "cricket-pitch") return "cricket";
+    if (type === "generic-court" && sport) return sport as Sport;
+    return null;
+  };
   if (isMultisport) {
-    // Element `type` → sport mapping so we can look up the palette.
-    const sportForType = (type: string, sport?: string): Sport | null => {
-      if (type === "basketball-court") return "basketball";
-      if (type === "football-field") return "football";
-      if (type === "pickleball-court") return "pickleball";
-      if (type === "cricket-pitch") return "cricket";
-      if (type === "generic-court" && sport) return sport as Sport;
-      return null;
-    };
     for (const el of elements) {
       if ("surfaceColor" in el && el.surfaceColor) continue;
       const s = sportForType(el.type, "sport" in el ? el.sport : undefined);
@@ -1143,6 +1143,57 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       if (palette && "surfaceColor" in el) {
         (el as { surfaceColor?: string }).surfaceColor = palette;
       }
+    }
+
+    // Auto-layout — primary sport stays at plot centre (already sized to
+    // fill via the sport branches above). Secondary sports get inset
+    // positions + regulation dimensions so they don't stack at the
+    // centre. Matches the TSS "one court for every sport" reference
+    // photo where basketball is dominant and pickleball / volleyball
+    // sit as smaller zones inside the basketball court.
+    //
+    // Regulation playing-area dimensions used as the inset size for
+    // secondary sports:
+    const INSET_SIZE: Partial<Record<Sport, { w: number; h: number }>> = {
+      basketball: { w: 49.21, h: 36.09 }, // FIBA half court
+      pickleball: { w: 44, h: 20 },
+      tennis: { w: 78, h: 36 },
+      badminton: { w: 44, h: 20 },
+      volleyball: { w: 59, h: 30 },
+    };
+    // Slot positions relative to plot centre, ordered so the first
+    // secondary lands on the LEFT half, second on the RIGHT half, and
+    // additional secondaries stack above / below. Fractions of plot L/W.
+    const SLOTS: Array<{ dx: number; dy: number }> = [
+      { dx: -0.22, dy: 0 },
+      { dx: 0.22, dy: 0 },
+      { dx: 0, dy: -0.28 },
+      { dx: 0, dy: 0.28 },
+    ];
+    const primarySportIndex = 0;
+    let slotIndex = 0;
+    // First pass: find element positions per sport so we can update them.
+    for (let i = 0; i < sports.length; i++) {
+      if (i === primarySportIndex) continue; // primary keeps its size + centre
+      const sport = sports[i];
+      const el = elements.find(
+        (e) => sportForType(e.type, "sport" in e ? e.sport : undefined) === sport,
+      );
+      if (!el) continue;
+      const inset = INSET_SIZE[sport];
+      if (!inset) continue;
+      // Cap the inset at 55% of the plot so it doesn't overrun the
+      // primary court on small plots.
+      const w = Math.min(inset.w, longFt * 0.55);
+      const h = Math.min(inset.h, shortFt * 0.55);
+      const slot = SLOTS[slotIndex % SLOTS.length];
+      slotIndex += 1;
+      const targetX = plot.lengthFt / 2 + slot.dx * plot.lengthFt;
+      const targetY = plot.widthFt / 2 + slot.dy * plot.widthFt;
+      if ("x" in el) el.x = targetX;
+      if ("y" in el) el.y = targetY;
+      if ("width" in el) (el as { width?: number }).width = w;
+      if ("height" in el) (el as { height?: number }).height = h;
     }
   }
 

@@ -347,6 +347,26 @@ export type CustomRectElement = CommonElementFields & {
   strokeWidth?: number;
 };
 
+// Coloured zone overlay used to highlight specific parts of a court —
+// basketball key / paint area, tennis service box, badminton service
+// courts, volleyball attack zones, pickleball kitchen, etc. Sits UNDER
+// the sport markings (low z-index) so lines still read on top. Sales
+// draws a rectangle anywhere on the canvas and picks a colour; the
+// zone becomes a filled rectangle at that location. Not for football
+// or cricket per the user's ask.
+export type HighlightZoneElement = CommonElementFields & {
+  type: "highlight-zone";
+  width: number;
+  height: number;
+  // Hex or rgba() colour. Semi-transparent by default so markings
+  // above it (drawn later in element order) stay legible.
+  fill: string;
+  // Optional preset tag — "basketball-key", "tennis-service-box",
+  // etc. — for future preset shortcuts. Free-drawn zones leave this
+  // undefined.
+  preset?: string;
+};
+
 // Chain-link / mesh fence drawn as a rectangle outline. In 2D the rect
 // shows with a hatched mesh fill; in 3D it becomes a translucent vertical
 // mesh wall around the perimeter at `heightFt` height.
@@ -403,7 +423,8 @@ export type Element =
   | CustomRectElement
   | FenceRectElement
   | DugoutElement
-  | BasketballHoopElement;
+  | BasketballHoopElement
+  | HighlightZoneElement;
 
 // Surface finishes used inside the plot footprint.
 //   plain          — earth-coloured base (undecided material)
@@ -1226,6 +1247,27 @@ export function newCustomRect(plot: Plot): CustomRectElement {
     stroke: "#0f172a",
     strokeWidth: 2,
     z: 150,
+  };
+}
+
+// Highlight zone — coloured underlay for a portion of the court. Sits
+// at a low z-index so it draws BEFORE the sport markings and the
+// customer sees the tint under the lines. Default colour is a semi-
+// transparent yellow (a common "highlight" cue) which sales can
+// change immediately via the colour picker.
+export function newHighlightZone(plot: Plot): HighlightZoneElement {
+  return {
+    id: newId("highlight"),
+    type: "highlight-zone",
+    x: plot.lengthFt / 2,
+    y: plot.widthFt / 2,
+    rotation: 0,
+    width: Math.min(20, plot.lengthFt * 0.25),
+    height: Math.min(15, plot.widthFt * 0.25),
+    // Amber #FFC107 at 45% — visible on both blue acrylic and green
+    // turf without hiding markings on top.
+    fill: "rgba(255, 193, 7, 0.45)",
+    z: 5,
   };
 }
 

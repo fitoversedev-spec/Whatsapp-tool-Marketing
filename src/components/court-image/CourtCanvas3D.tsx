@@ -496,6 +496,10 @@ function buildElement(el: Element, layout: CourtLayout, yOffset: number): THREE.
       return makeDugout(el);
     case "basketball-hoop":
       return makeBasketballHoop(el);
+    case "highlight-zone":
+      // 3D-side highlight zones — deferred to a later commit (Q5.3
+      // 3D parity). Skip for now so the 2D flow ships cleanly.
+      return null;
   }
 }
 

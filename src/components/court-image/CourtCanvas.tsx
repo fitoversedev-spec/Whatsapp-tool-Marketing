@@ -41,6 +41,7 @@ import type {
   FenceRectElement,
   DugoutElement,
   BasketballHoopElement,
+  HighlightZoneElement,
 } from "@/lib/court-image/schema";
 import {
   aSideProps,
@@ -520,6 +521,12 @@ function ElementShape({
           <BasketballHoopShape el={element} pxPerFt={pxPerFt} />
         </Group>
       );
+    case "highlight-zone":
+      return (
+        <Group {...commonGroupProps}>
+          <HighlightZoneShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
   }
 }
 
@@ -540,6 +547,7 @@ function applyScaleToDimensions(
     case "custom-rect":
     case "fence-rect":
     case "dugout":
+    case "highlight-zone":
       (patch as Partial<typeof element>).width = element.width * scaleX;
       (patch as Partial<typeof element>).height = element.height * scaleY;
       break;
@@ -1281,6 +1289,28 @@ function CustomRectShape({ el, pxPerFt }: { el: CustomRectElement; pxPerFt: numb
       fill={el.fill ?? "rgba(15,23,42,0.08)"}
       stroke={el.stroke ?? "#0f172a"}
       strokeWidth={el.strokeWidth ?? 2}
+    />
+  );
+}
+
+function HighlightZoneShape({
+  el,
+  pxPerFt,
+}: {
+  el: HighlightZoneElement;
+  pxPerFt: number;
+}) {
+  const w = el.width * pxPerFt;
+  const h = el.height * pxPerFt;
+  // No stroke — reads as a tinted zone rather than a boxed rectangle.
+  return (
+    <Rect
+      x={-w / 2}
+      y={-h / 2}
+      width={w}
+      height={h}
+      fill={el.fill}
+      listening={true}
     />
   );
 }

@@ -26,6 +26,7 @@ import {
   newDugout,
   newFenceRect,
   newGoalPost,
+  newHighlightZone,
   SPORT_LABEL,
   type CourtLayout,
   type Element,
@@ -437,6 +438,7 @@ export default function CourtImageWizard({
       | "fence"
       | "dugout"
       | "hoop"
+      | "highlight"
   ) {
     if (!layout) return;
     let newEl: Element;
@@ -464,6 +466,9 @@ export default function CourtImageWizard({
         break;
       case "hoop":
         newEl = newBasketballHoop(layout.plot);
+        break;
+      case "highlight":
+        newEl = newHighlightZone(layout.plot);
         break;
     }
     setLayout((prev) => (prev ? { ...prev, elements: [...prev.elements, newEl] } : prev));
@@ -959,6 +964,16 @@ export default function CourtImageWizard({
                     <AddBtn label="Label" onClick={() => addElement("annotation")} />
                     <AddBtn label="Line / arrow" onClick={() => addElement("line")} />
                     <AddBtn label="Rectangle" onClick={() => addElement("rect")} />
+                    <AddBtn
+                      label="Highlight zone"
+                      onClick={() => addElement("highlight")}
+                    />
+                  </div>
+                  <div className="text-[10.5px] text-slate-500 leading-snug mt-1">
+                    Highlight zone drops a coloured rectangle you can drag,
+                    resize, and colour. Renders UNDER the sport markings —
+                    use it to fill a key / paint area, service box, kitchen,
+                    attack zone, etc.
                   </div>
                 </div>
 
@@ -2704,6 +2719,8 @@ function shortLabel(el: Element): string {
       return "Dugout";
     case "basketball-hoop":
       return "Hoop";
+    case "highlight-zone":
+      return "Highlight zone";
   }
 }
 

@@ -21,6 +21,7 @@ import type {
   FenceRectElement,
   DugoutElement,
   BasketballHoopElement,
+  HighlightZoneElement,
 } from "@/lib/court-image/schema";
 
 type Props = {
@@ -161,6 +162,9 @@ export default function ElementInspector({
       )}
       {element.type === "basketball-hoop" && (
         <BasketballHoopFields element={element} onUpdate={onUpdate} />
+      )}
+      {element.type === "highlight-zone" && (
+        <HighlightZoneFields element={element} onUpdate={onUpdate} />
       )}
     </div>
   );
@@ -744,7 +748,101 @@ function labelFor(el: Element): string {
       return "Dugout";
     case "basketball-hoop":
       return "Basketball hoop";
+    case "highlight-zone":
+      return "Highlight zone";
   }
+}
+
+function HighlightZoneFields({
+  element,
+  onUpdate,
+}: {
+  element: HighlightZoneElement;
+  onUpdate: (p: Partial<HighlightZoneElement>) => void;
+}) {
+  // Split "rgba(r, g, b, a)" into RGB hex + alpha slider so sales can
+  // tweak both independently. Falls back to solid amber if the stored
+  // value isn't in the expected shape (shouldn't happen from our
+  // factory but be forgiving on re-open of hand-edited layouts).
+  const parsed = parseRgba(element.fill);
+  const hex = parsed
+    ? rgbToHex(parsed.r, parsed.g, parsed.b)
+    : "#ffc107";
+  const alpha = parsed ? parsed.a : 0.45;
+  return (
+    <>
+      <Section label="Zone size">
+        <div className="grid grid-cols-2 gap-2">
+          <NumberInput
+            label="Width (ft)"
+            value={element.width}
+            onChange={(v) => onUpdate({ width: v })}
+          />
+          <NumberInput
+            label="Height (ft)"
+            value={element.height}
+            onChange={(v) => onUpdate({ height: v })}
+          />
+        </div>
+      </Section>
+      <Section label="Fill">
+        <ColorInput
+          label="Colour"
+          value={hex}
+          onChange={(v) => {
+            const rgb = hexToRgb(v);
+            if (rgb) {
+              onUpdate({
+                fill: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`,
+              });
+            }
+          }}
+        />
+        <div>
+          <Label>Opacity ({Math.round(alpha * 100)}%)</Label>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(alpha * 100)}
+            onChange={(e) => {
+              const a = parseInt(e.target.value) / 100;
+              const rgb = hexToRgb(hex);
+              if (rgb) {
+                onUpdate({ fill: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${a})` });
+              }
+            }}
+            className="w-full"
+          />
+        </div>
+      </Section>
+    </>
+  );
+}
+
+// Helpers used only by HighlightZoneFields. Kept local so they don't
+// leak into unrelated code paths.
+function parseRgba(input: string): { r: number; g: number; b: number; a: number } | null {
+  const m = input.match(
+    /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)$/i,
+  );
+  if (!m) return null;
+  return {
+    r: parseInt(m[1]),
+    g: parseInt(m[2]),
+    b: parseInt(m[3]),
+    a: m[4] ? parseFloat(m[4]) : 1,
+  };
+}
+function rgbToHex(r: number, g: number, b: number): string {
+  const to = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = hex.match(/^#?([a-f\d]{6})$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
 }
 
 function FenceRectFields({

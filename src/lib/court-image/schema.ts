@@ -701,12 +701,33 @@ export type CourtLayout = {
   // The renderer doesn't trust this — actual marks come from the elements.
   // Mainly used by the UI title bar + list view chips.
   sports: Sport[];
+  // Which sport reads as "primary" on a multi-sport plot. Drives z-order
+  // (primary drawn on top) + the auto-colour palette. Optional so single-
+  // sport designs and pre-multisport-refactor layouts stay untouched.
+  primarySport?: Sport;
   elements: Element[];
   style: Style;
   // Optional title shown in the canvas header (the layout name the user
   // sees, e.g. "Dr Prabhusankar — 60x100 ft turf"). Persisted alongside
   // customerName on the CourtImage row.
   title?: string;
+};
+
+// Distinct fill colour per sport for multi-sport plots. Matches the TSS
+// reference photo the user shared: basketball blue, volleyball / pickleball
+// grey, football / cricket green, tennis green, badminton sand. When a
+// layout has 2+ sports, buildInitialLayout applies these as each element's
+// surfaceColor so sales sees the colour-coded zones the customer will get.
+// Single-sport designs skip this so their existing look is unchanged.
+export const MULTISPORT_ZONE_COLOR: Record<Sport, string> = {
+  basketball: "#1E60A8",
+  volleyball: "#7A8894",
+  pickleball: "#8892A0",
+  tennis: "#3D7A47",
+  badminton: "#C4A66A",
+  football: "#3E8A47",
+  cricket: "#3E8A47",
+  multisport: "#6B7280",
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1074,10 +1095,46 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     });
   }
 
+  // Multi-sport zone-colour palette. When 2+ sports on one plot, paint
+  // each sport court in its distinct fill colour (matches the TSS
+  // reference photo: basketball blue, volleyball / pickleball grey,
+  // etc.). Skipped for single-sport plots so existing designs render
+  // unchanged. Only applied to elements that don't already have a
+  // surfaceColor set (so per-element overrides from re-opened designs
+  // still win).
+  const uniqueSports = new Set(sports);
+  const isMultisport = uniqueSports.size >= 2;
+  if (isMultisport) {
+    // Element `type` → sport mapping so we can look up the palette.
+    const sportForType = (type: string, sport?: string): Sport | null => {
+      if (type === "basketball-court") return "basketball";
+      if (type === "football-field") return "football";
+      if (type === "pickleball-court") return "pickleball";
+      if (type === "cricket-pitch") return "cricket";
+      if (type === "generic-court" && sport) return sport as Sport;
+      return null;
+    };
+    for (const el of elements) {
+      if ("surfaceColor" in el && el.surfaceColor) continue;
+      const s = sportForType(el.type, "sport" in el ? el.sport : undefined);
+      if (!s) continue;
+      const palette = MULTISPORT_ZONE_COLOR[s];
+      if (palette && "surfaceColor" in el) {
+        (el as { surfaceColor?: string }).surfaceColor = palette;
+      }
+    }
+  }
+
+  // Default primary sport = the first picked sport. On a multi-sport
+  // plot this reads as the "hero" court; the wizard's Primary Sport
+  // dropdown lets sales flip which one is on top.
+  const primarySport = sports[0];
+
   return {
     v: 1,
     plot,
     sports,
+    primarySport,
     elements,
     style: { ...DEFAULT_STYLE },
     title: input.title,

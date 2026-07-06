@@ -1361,6 +1361,82 @@ export default function CourtImageWizard({
                     )}
                 </div>
 
+                {/* Primary sport dropdown — only shown on multi-sport
+                    plots. Drives z-order (primary drawn on top) so
+                    sales can flip which court reads as the hero. The
+                    zone colours themselves come from
+                    MULTISPORT_ZONE_COLOR applied at layout build. */}
+                {layout.sports.length >= 2 && (
+                  <div className="border-t border-slate-200 pt-4">
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                      Primary sport
+                    </div>
+                    <select
+                      value={layout.primarySport ?? layout.sports[0]}
+                      onChange={(e) => {
+                        const next = e.target.value as Sport;
+                        setLayout((l) => {
+                          if (!l) return l;
+                          // Sort elements so the primary sport's court
+                          // renders on top of the others. Non-court
+                          // elements keep their relative order.
+                          const isCourt = (t: string) =>
+                            t === "basketball-court" ||
+                            t === "football-field" ||
+                            t === "pickleball-court" ||
+                            t === "generic-court" ||
+                            t === "cricket-pitch";
+                          const sportFor = (el: Element): Sport | null => {
+                            if (el.type === "basketball-court")
+                              return "basketball";
+                            if (el.type === "football-field")
+                              return "football";
+                            if (el.type === "pickleball-court")
+                              return "pickleball";
+                            if (el.type === "cricket-pitch")
+                              return "cricket";
+                            if (el.type === "generic-court" && "sport" in el)
+                              return el.sport as Sport;
+                            return null;
+                          };
+                          const elements = [...l.elements].sort((a, b) => {
+                            const aCourt = isCourt(a.type);
+                            const bCourt = isCourt(b.type);
+                            if (aCourt && bCourt) {
+                              const aPrimary = sportFor(a) === next ? 1 : 0;
+                              const bPrimary = sportFor(b) === next ? 1 : 0;
+                              return aPrimary - bPrimary;
+                            }
+                            // Non-court elements always render on top of
+                            // courts (existing behaviour).
+                            if (aCourt !== bCourt) return aCourt ? -1 : 1;
+                            return 0;
+                          });
+                          return {
+                            ...l,
+                            primarySport: next,
+                            elements,
+                          };
+                        });
+                      }}
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                    >
+                      {layout.sports.map((s) => (
+                        <option key={s} value={s}>
+                          {SPORT_LABEL[s]}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="text-[10.5px] text-slate-500 mt-1.5 leading-snug">
+                      Primary court renders on top on the plot. Change to
+                      re-order which sport reads as the hero. Zone
+                      colours (blue basketball · grey pickleball / volley
+                      · green tennis / football / cricket · sand
+                      badminton) come from the shared palette.
+                    </div>
+                  </div>
+                )}
+
                 {/* Watermark toggle — Fitoverse logo composited into the
                     bottom-right of both 2D + 3D renders. On by default. */}
                 <div className="border-t border-slate-200 pt-4">

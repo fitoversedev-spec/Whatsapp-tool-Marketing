@@ -526,7 +526,27 @@ function makeHighlightZone(
     transparent: true,
     opacity: parseAlpha(el.fill),
     depthWrite: false,
+    side: THREE.DoubleSide,
   });
+  const shape = el.shape ?? "rect";
+  if (shape === "arc-right" || shape === "arc-left") {
+    // Semi-circle geometry via THREE.Shape. el.width = radius X,
+    // el.height = full diameter Y. Konva 2D draws the arc opening in
+    // ±X; mirror that here so the 3D preview matches.
+    const s = new THREE.Shape();
+    const rx = el.width;
+    const ry = el.height / 2;
+    const dir = shape === "arc-right" ? 1 : -1;
+    s.moveTo(0, ry);
+    s.absellipse(0, 0, rx, ry, Math.PI / 2, -Math.PI / 2, dir < 0, 0);
+    s.lineTo(0, 0);
+    s.closePath();
+    const geom = new THREE.ShapeGeometry(s);
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = yOffset + 0.05;
+    return mesh;
+  }
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(el.width, el.height), mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = yOffset + 0.05;

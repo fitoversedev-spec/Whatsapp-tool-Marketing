@@ -29,6 +29,7 @@ import {
   newFenceRect,
   newGoalPost,
   newHighlightZone,
+  newRunOffHighlightZone,
   SPORT_LABEL,
   type CourtLayout,
   type Element,
@@ -441,6 +442,7 @@ export default function CourtImageWizard({
       | "dugout"
       | "hoop"
       | "highlight"
+      | "highlight-runoff"
   ) {
     if (!layout) return;
     let newEl: Element;
@@ -471,6 +473,9 @@ export default function CourtImageWizard({
         break;
       case "highlight":
         newEl = newHighlightZone(layout.plot);
+        break;
+      case "highlight-runoff":
+        newEl = newRunOffHighlightZone(layout.plot);
         break;
     }
     setLayout((prev) => (prev ? { ...prev, elements: [...prev.elements, newEl] } : prev));
@@ -971,6 +976,20 @@ export default function CourtImageWizard({
                     <span className="inline-block w-3 h-3 rounded-sm bg-amber-400" />
                     <span className="flex-1 text-left">+ Highlight zone</span>
                     <span className="text-[10px] text-amber-700">colour · drag · resize</span>
+                  </button>
+                  {/* Highlight the run-off (non-playing) area — the
+                      ring inside the plot outside the primary court.
+                      One-click ask from sales. Drops a zone sized to
+                      the whole plot at a low z-index so it visually
+                      fills the ring around courts. */}
+                  <button
+                    type="button"
+                    onClick={() => addElement("highlight-runoff")}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-xs font-medium text-amber-900 transition"
+                  >
+                    <span className="inline-block w-3 h-3 rounded-sm bg-amber-500 opacity-60" />
+                    <span className="flex-1 text-left">+ Highlight run-off area</span>
+                    <span className="text-[10px] text-amber-700">outside the court</span>
                   </button>
                   <div className="text-[10.5px] text-slate-500 leading-snug">
                     Drops a coloured rectangle you can drag, resize, and

@@ -365,6 +365,12 @@ export type HighlightZoneElement = CommonElementFields & {
   // etc. — for future preset shortcuts. Free-drawn zones leave this
   // undefined.
   preset?: string;
+  // Shape of the zone. "rect" (default) = plain rectangle centred on
+  // the element origin. "arc-right" = semi-circle pie slice with
+  // diameter along Y and arc extending +X. "arc-left" = mirror. Used
+  // by presets like basketball 3-point area where a rectangle
+  // extends beyond the actual arc.
+  shape?: "rect" | "arc-right" | "arc-left";
 };
 
 // Chain-link / mesh fence drawn as a rectangle outline. In 2D the rect
@@ -1351,17 +1357,24 @@ export type HighlightSectionPreset = {
   cyFrac: number; // -0.5..0.5 (court width axis)
   wFrac: number;
   hFrac: number;
+  // Optional non-rect shape. Same values as HighlightZoneElement.shape
+  // — "arc-right" or "arc-left" makes the click overlay AND resulting
+  // fill draw as a semi-circle pie slice rather than a rectangle.
+  shape?: "rect" | "arc-right" | "arc-left";
 };
 
 export const HIGHLIGHT_PRESETS: Record<string, HighlightSectionPreset[]> = {
   "basketball-court": [
-    // 3-point area — from baseline out to the arc (~8.325 m from
-    // baseline = 0.297 of court length). Wide enough to include the
-    // corner-3 lines. This is the big semi-circle region between the
-    // baseline and the arc, minus the no-charge area at the basket.
-    // Sales can highlight the whole arc region with one click.
-    { key: "left-3pt", label: "Left 3-point area (arc)", cxFrac: -0.3515, cyFrac: 0, wFrac: 0.297, hFrac: 0.88 },
-    { key: "right-3pt", label: "Right 3-point area (arc)", cxFrac: 0.3515, cyFrac: 0, wFrac: 0.297, hFrac: 0.88 },
+    // 3-point area — SEMI-CIRCLE pie slice centred on the basket
+    // (5.17 ft from baseline = 0.056 w inward). Radius = 3-point arc
+    // distance (~6.75 m from basket = 0.45 of court height in fraction).
+    // Sales asked for the highlight to be shaped like the actual arc,
+    // not a rectangle overlapping the corners.
+    //
+    // For left basket: cxFrac = -0.5 + 0.056 = -0.444, arc extends
+    // to the +x direction (into court).
+    { key: "left-3pt", label: "Left 3-point area (arc)", cxFrac: -0.444, cyFrac: 0, wFrac: 0.24, hFrac: 0.9, shape: "arc-right" },
+    { key: "right-3pt", label: "Right 3-point area (arc)", cxFrac: 0.444, cyFrac: 0, wFrac: 0.24, hFrac: 0.9, shape: "arc-left" },
     // Key / paint area — 4.90 m × 4.90 m out from each baseline.
     // keyW = w * 0.175, keyH = h * 0.327.
     // Key centre X = baseline (±w/2) inward by keyW/2 → ±(0.5 − 0.0875) = ±0.4125.
@@ -1443,7 +1456,32 @@ export function highlightZoneFromPreset(
     height: preset.hFrac * court.height,
     fill,
     preset: preset.key,
+    shape: preset.shape ?? "rect",
     z: 5,
+  };
+}
+
+// "Highlight the run-off area" — a zone the size of the whole plot
+// centred at plot centre. Sits at a low z-index (below courts), so
+// visually it shows only the ring around the primary court and
+// under the surface / grid overlay. Sales gets one-click filling of
+// the non-playing area without needing to drag a rectangle.
+export function newRunOffHighlightZone(plot: Plot): HighlightZoneElement {
+  return {
+    id: newId("highlight"),
+    type: "highlight-zone",
+    x: plot.lengthFt / 2,
+    y: plot.widthFt / 2,
+    rotation: 0,
+    width: plot.lengthFt,
+    height: plot.widthFt,
+    fill: "rgba(255, 193, 7, 0.35)",
+    preset: "run-off",
+    shape: "rect",
+    // z: 4 so it sits below the primary sport court (which is z: 5+
+    // via newId's counter) — the court covers the middle, highlight
+    // fills only the run-off ring visually.
+    z: 4,
   };
 }
 

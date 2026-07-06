@@ -22,6 +22,7 @@ import {
   Line,
   Circle,
   Arc,
+  Path,
   Image as KonvaImage,
 } from "react-konva";
 import Konva from "konva";
@@ -913,12 +914,50 @@ function SectionClickOverlays({
       {sortedPresets.map((p) => {
         const w = p.wFrac * courtW;
         const h = p.hFrac * courtH;
+        const shape = p.shape ?? "rect";
+        const hovered = hoveredKey === p.key;
+        const commonProps = {
+          fill: hovered ? "rgba(255,193,7,0.30)" : "rgba(255,193,7,0.04)",
+          stroke: hovered ? "#f59e0b" : "rgba(251,191,36,0.6)",
+          strokeWidth: hovered ? 2 : 1,
+          dash: hovered ? [] : [4, 4],
+          listening: true,
+          onMouseEnter: (e: Konva.KonvaEventObject<MouseEvent>) => {
+            setHoveredKey(p.key);
+            const stage = e.target.getStage();
+            if (stage) stage.container().style.cursor = "pointer";
+          },
+          onMouseLeave: (e: Konva.KonvaEventObject<MouseEvent>) => {
+            setHoveredKey(null);
+            const stage = e.target.getStage();
+            if (stage) stage.container().style.cursor = "default";
+          },
+          onClick: (e: Konva.KonvaEventObject<MouseEvent>) => {
+            e.cancelBubble = true;
+            onSectionClick(p);
+          },
+          onTap: (e: Konva.KonvaEventObject<TouchEvent>) => {
+            e.cancelBubble = true;
+            onSectionClick(p);
+          },
+        };
+        // Arc-shaped overlays render via Konva Path positioned AT the
+        // arc centre (cxFrac / cyFrac). Rect overlays render from
+        // top-left (shift by -w/2 / -h/2).
+        if (shape === "arc-right" || shape === "arc-left") {
+          const cx = p.cxFrac * courtW;
+          const cy = p.cyFrac * courtH;
+          const data =
+            shape === "arc-right"
+              ? arcRightPath(w, h)
+              : arcLeftPath(w, h);
+          return <Path key={p.key} x={cx} y={cy} data={data} {...commonProps} />;
+        }
         // Preset centre is (cxFrac * courtW, cyFrac * courtH) in court
         // local coords. Konva Rect places from top-left, so shift by
         // -w/2, -h/2 to centre on the preset's point.
         const x = p.cxFrac * courtW - w / 2;
         const y = p.cyFrac * courtH - h / 2;
-        const hovered = hoveredKey === p.key;
         return (
           <Rect
             key={p.key}
@@ -926,31 +965,7 @@ function SectionClickOverlays({
             y={y}
             width={w}
             height={h}
-            fill={
-              hovered ? "rgba(255,193,7,0.30)" : "rgba(255,193,7,0.04)"
-            }
-            stroke={hovered ? "#f59e0b" : "rgba(251,191,36,0.6)"}
-            strokeWidth={hovered ? 2 : 1}
-            dash={hovered ? [] : [4, 4]}
-            listening={true}
-            onMouseEnter={(e) => {
-              setHoveredKey(p.key);
-              const stage = e.target.getStage();
-              if (stage) stage.container().style.cursor = "pointer";
-            }}
-            onMouseLeave={(e) => {
-              setHoveredKey(null);
-              const stage = e.target.getStage();
-              if (stage) stage.container().style.cursor = "default";
-            }}
-            onClick={(e) => {
-              e.cancelBubble = true;
-              onSectionClick(p);
-            }}
-            onTap={(e) => {
-              e.cancelBubble = true;
-              onSectionClick(p);
-            }}
+            {...commonProps}
           />
         );
       })}
@@ -1433,6 +1448,19 @@ function CustomRectShape({ el, pxPerFt }: { el: CustomRectElement; pxPerFt: numb
   );
 }
 
+// SVG paths for arc-shaped highlight zones. Origin at the arc CENTRE
+// (basket location for basketball 3-pt); w = radius X, h = full
+// diameter along Y. arcRightPath makes a semi-circle pie slice
+// opening to +X; arcLeftPath opens to -X.
+function arcRightPath(w: number, h: number): string {
+  const H2 = h / 2;
+  return `M 0 ${-H2} A ${w} ${H2} 0 0 1 0 ${H2} L 0 0 Z`;
+}
+function arcLeftPath(w: number, h: number): string {
+  const H2 = h / 2;
+  return `M 0 ${-H2} A ${w} ${H2} 0 0 0 0 ${H2} L 0 0 Z`;
+}
+
 function HighlightZoneShape({
   el,
   pxPerFt,
@@ -1442,6 +1470,13 @@ function HighlightZoneShape({
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
+  const shape = el.shape ?? "rect";
+  if (shape === "arc-right") {
+    return <Path data={arcRightPath(w, h)} fill={el.fill} listening={true} />;
+  }
+  if (shape === "arc-left") {
+    return <Path data={arcLeftPath(w, h)} fill={el.fill} listening={true} />;
+  }
   // No stroke — reads as a tinted zone rather than a boxed rectangle.
   return (
     <Rect

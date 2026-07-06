@@ -566,12 +566,19 @@ function makeHighlightZone(
     // Semi-circle geometry via THREE.Shape. el.width = radius X,
     // el.height = full diameter Y. Konva 2D draws the arc opening in
     // ±X; mirror that here so the 3D preview matches.
+    //
+    // absellipse(cx, cy, rx, ry, start, end, clockwise). Sweeping from
+    // +PI/2 (top) to -PI/2 (bottom):
+    //   clockwise=true  → passes through angle 0 (+x) → bulges +x  (arc-right)
+    //   clockwise=false → passes through PI  (-x) → bulges -x       (arc-left)
+    // The previous flag (dir<0) was inverted, so the 3D arc bulged
+    // OUTWARD past the baseline instead of into the court.
     const s = new THREE.Shape();
     const rx = el.width;
     const ry = el.height / 2;
-    const dir = shape === "arc-right" ? 1 : -1;
+    const clockwise = shape === "arc-right";
     s.moveTo(0, ry);
-    s.absellipse(0, 0, rx, ry, Math.PI / 2, -Math.PI / 2, dir < 0, 0);
+    s.absellipse(0, 0, rx, ry, Math.PI / 2, -Math.PI / 2, clockwise, 0);
     s.lineTo(0, 0);
     s.closePath();
     const geom = new THREE.ShapeGeometry(s);

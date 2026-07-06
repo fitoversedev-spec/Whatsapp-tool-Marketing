@@ -1322,6 +1322,114 @@ export function newHighlightZone(plot: Plot): HighlightZoneElement {
   };
 }
 
+// Named sections of a sport court that sales can highlight in one
+// click. Each preset defines a rectangle in COURT-LOCAL coordinates
+// (relative to the court element's centre, unrotated) as fractions of
+// the court's width (w) and height (h). Consumed by
+// highlightZoneFromPreset() which transforms local → world coords
+// using the court's own x, y, rotation.
+//
+// Football + cricket are intentionally not listed per the user's ask.
+export type HighlightSectionPreset = {
+  key: string; // stable ID stored on the resulting HighlightZoneElement
+  label: string; // shown in the inspector button
+  // Local rectangle centre + size as fractions of court width/height.
+  cxFrac: number; // -0.5..0.5 (court length axis)
+  cyFrac: number; // -0.5..0.5 (court width axis)
+  wFrac: number;
+  hFrac: number;
+};
+
+export const HIGHLIGHT_PRESETS: Record<string, HighlightSectionPreset[]> = {
+  "basketball-court": [
+    // Key / paint area — 4.90 m × 4.90 m out from each baseline.
+    // keyW = w * 0.175, keyH = h * 0.327.
+    // Key centre X = baseline (±w/2) inward by keyW/2 → ±(0.5 − 0.0875) = ±0.4125.
+    { key: "left-key", label: "Left key (paint)", cxFrac: -0.4125, cyFrac: 0, wFrac: 0.175, hFrac: 0.327 },
+    { key: "right-key", label: "Right key (paint)", cxFrac: 0.4125, cyFrac: 0, wFrac: 0.175, hFrac: 0.327 },
+    // Free-throw circle area — 3.60 m diameter (h*0.24) at end of key.
+    // Centre X = ±(w/2 − keyW) = ±(0.5 − 0.175) = ±0.325.
+    { key: "left-ft", label: "Left free-throw circle", cxFrac: -0.325, cyFrac: 0, wFrac: 0.12, hFrac: 0.24 },
+    { key: "right-ft", label: "Right free-throw circle", cxFrac: 0.325, cyFrac: 0, wFrac: 0.12, hFrac: 0.24 },
+    // Centre circle — 3.60 m diameter.
+    { key: "center-circle", label: "Centre circle", cxFrac: 0, cyFrac: 0, wFrac: 0.12, hFrac: 0.24 },
+    // Half-court halves — the full left / right side of centre line.
+    { key: "left-half", label: "Left half", cxFrac: -0.25, cyFrac: 0, wFrac: 0.5, hFrac: 1 },
+    { key: "right-half", label: "Right half", cxFrac: 0.25, cyFrac: 0, wFrac: 0.5, hFrac: 1 },
+  ],
+  "pickleball-court": [
+    // Kitchen / non-volley zone — 7 ft each side of net. kitchenW = w*0.16.
+    { key: "kitchen", label: "Kitchen (non-volley)", cxFrac: 0, cyFrac: 0, wFrac: 0.32, hFrac: 1 },
+    // Service courts — 4 boxes, one per quadrant.
+    { key: "left-top-service", label: "Left service (top)", cxFrac: -0.34, cyFrac: -0.25, wFrac: 0.34, hFrac: 0.5 },
+    { key: "left-bot-service", label: "Left service (bottom)", cxFrac: -0.34, cyFrac: 0.25, wFrac: 0.34, hFrac: 0.5 },
+    { key: "right-top-service", label: "Right service (top)", cxFrac: 0.34, cyFrac: -0.25, wFrac: 0.34, hFrac: 0.5 },
+    { key: "right-bot-service", label: "Right service (bottom)", cxFrac: 0.34, cyFrac: 0.25, wFrac: 0.34, hFrac: 0.5 },
+  ],
+  // Tennis / badminton / volleyball all use the generic-court renderer.
+  // Presets keyed by sport under the generic bucket below.
+  "generic-court-tennis": [
+    // Service boxes — 2 per side, centred between net + service line
+    // (service line ~6.4 m from net = 27% of court length).
+    { key: "left-deuce", label: "Left deuce service", cxFrac: -0.135, cyFrac: 0.185, wFrac: 0.27, hFrac: 0.37 },
+    { key: "left-ad", label: "Left ad service", cxFrac: -0.135, cyFrac: -0.185, wFrac: 0.27, hFrac: 0.37 },
+    { key: "right-deuce", label: "Right deuce service", cxFrac: 0.135, cyFrac: -0.185, wFrac: 0.27, hFrac: 0.37 },
+    { key: "right-ad", label: "Right ad service", cxFrac: 0.135, cyFrac: 0.185, wFrac: 0.27, hFrac: 0.37 },
+    // Doubles alleys — narrow strips top + bottom.
+    { key: "top-alley", label: "Top doubles alley", cxFrac: 0, cyFrac: -0.44, wFrac: 1, hFrac: 0.12 },
+    { key: "bot-alley", label: "Bottom doubles alley", cxFrac: 0, cyFrac: 0.44, wFrac: 1, hFrac: 0.12 },
+  ],
+  "generic-court-badminton": [
+    { key: "left-right-service", label: "Left right service", cxFrac: -0.185, cyFrac: 0.185, wFrac: 0.37, hFrac: 0.37 },
+    { key: "left-left-service", label: "Left left service", cxFrac: -0.185, cyFrac: -0.185, wFrac: 0.37, hFrac: 0.37 },
+    { key: "right-right-service", label: "Right right service", cxFrac: 0.185, cyFrac: -0.185, wFrac: 0.37, hFrac: 0.37 },
+    { key: "right-left-service", label: "Right left service", cxFrac: 0.185, cyFrac: 0.185, wFrac: 0.37, hFrac: 0.37 },
+  ],
+  "generic-court-volleyball": [
+    // Attack zone — front 3 m of each half. Court is 18 m long; 3 m = 17%.
+    { key: "left-attack", label: "Left attack zone (front)", cxFrac: -0.09, cyFrac: 0, wFrac: 0.17, hFrac: 1 },
+    { key: "right-attack", label: "Right attack zone (front)", cxFrac: 0.09, cyFrac: 0, wFrac: 0.17, hFrac: 1 },
+    // Back zone.
+    { key: "left-back", label: "Left back zone", cxFrac: -0.335, cyFrac: 0, wFrac: 0.33, hFrac: 1 },
+    { key: "right-back", label: "Right back zone", cxFrac: 0.335, cyFrac: 0, wFrac: 0.33, hFrac: 1 },
+  ],
+};
+
+// Build a HighlightZoneElement at the correct WORLD position + size to
+// overlay a specific section of the given court element. Applies the
+// court's rotation so highlights land correctly on portrait plots too.
+export function highlightZoneFromPreset(
+  court: {
+    x: number;
+    y: number;
+    rotation: number;
+    width: number;
+    height: number;
+  },
+  preset: HighlightSectionPreset,
+  fill: string = "rgba(255, 193, 7, 0.45)",
+): HighlightZoneElement {
+  const localX = preset.cxFrac * court.width;
+  const localY = preset.cyFrac * court.height;
+  const rot = (court.rotation * Math.PI) / 180;
+  const cosR = Math.cos(rot);
+  const sinR = Math.sin(rot);
+  const worldX = court.x + (localX * cosR - localY * sinR);
+  const worldY = court.y + (localX * sinR + localY * cosR);
+  return {
+    id: newId("highlight"),
+    type: "highlight-zone",
+    x: worldX,
+    y: worldY,
+    rotation: court.rotation,
+    width: preset.wFrac * court.width,
+    height: preset.hFrac * court.height,
+    fill,
+    preset: preset.key,
+    z: 5,
+  };
+}
+
 export function newFenceRect(plot: Plot): FenceRectElement {
   return {
     id: newId("fence"),

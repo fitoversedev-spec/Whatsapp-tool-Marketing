@@ -23,6 +23,10 @@ import type {
   BasketballHoopElement,
   HighlightZoneElement,
 } from "@/lib/court-image/schema";
+import {
+  HIGHLIGHT_PRESETS,
+  type HighlightSectionPreset,
+} from "@/lib/court-image/schema";
 
 type Props = {
   element: Element;
@@ -30,6 +34,10 @@ type Props = {
   onDelete: () => void;
   onDuplicate: () => void;
   onMoveZ: (direction: -1 | 1) => void;
+  // Called when sales clicks a "Highlight section" preset in the
+  // inspector. Only reachable from court-element panels
+  // (basketball / pickleball / tennis / badminton / volleyball).
+  onAddHighlightFromPreset?: (preset: HighlightSectionPreset) => void;
 };
 
 export default function ElementInspector({
@@ -38,6 +46,7 @@ export default function ElementInspector({
   onDelete,
   onDuplicate,
   onMoveZ,
+  onAddHighlightFromPreset,
 }: Props) {
   return (
     <div className="space-y-4">
@@ -165,6 +174,18 @@ export default function ElementInspector({
       )}
       {element.type === "highlight-zone" && (
         <HighlightZoneFields element={element} onUpdate={onUpdate} />
+      )}
+
+      {/* One-click section presets. Only shown for court types where
+          we've defined named sections (basketball / pickleball /
+          generic tennis-badminton-volleyball). Sales picks a section
+          from the list and the highlight zone lands at the correct
+          position + size on the court — no manual dragging. */}
+      {onAddHighlightFromPreset && (
+        <HighlightPresetPicker
+          element={element}
+          onAdd={onAddHighlightFromPreset}
+        />
       )}
     </div>
   );
@@ -1006,4 +1027,57 @@ function BasketballHoopFields({
       </Section>
     </>
   );
+}
+
+// One-click "highlight this section" picker. Shown for basketball,
+// pickleball, and tennis / badminton / volleyball (via generic-court)
+// courts. Presets come from HIGHLIGHT_PRESETS keyed by element type
+// (with generic-court disambiguated by its `sport` prop).
+function HighlightPresetPicker({
+  element,
+  onAdd,
+}: {
+  element: Element;
+  onAdd: (preset: HighlightSectionPreset) => void;
+}) {
+  const key = presetKeyFor(element);
+  const presets = key ? HIGHLIGHT_PRESETS[key] : null;
+  if (!presets || presets.length === 0) return null;
+  return (
+    <div className="border-t border-slate-200 pt-3 space-y-2">
+      <div className="text-[10px] font-semibold text-amber-800 uppercase tracking-wider">
+        Highlight a section
+      </div>
+      <div className="text-[10.5px] text-slate-500 leading-snug">
+        Click a section below and it fills with amber over the correct
+        area of the court. Change the colour + opacity from the new
+        highlight zone's own inspector afterwards.
+      </div>
+      <div className="grid grid-cols-1 gap-1.5">
+        {presets.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => onAdd(p)}
+            className="flex items-center gap-2 px-2.5 py-1.5 text-left text-[11px] rounded-md border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-900 transition"
+          >
+            <span className="inline-block w-3 h-3 rounded-sm bg-amber-400 flex-shrink-0" />
+            <span>{p.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Map an element to the key we use in HIGHLIGHT_PRESETS. Football +
+// cricket intentionally return null so no section presets are offered
+// on those court types (per the user's ask).
+function presetKeyFor(el: Element): string | null {
+  if (el.type === "basketball-court") return "basketball-court";
+  if (el.type === "pickleball-court") return "pickleball-court";
+  if (el.type === "generic-court") {
+    return `generic-court-${el.sport}`;
+  }
+  return null;
 }

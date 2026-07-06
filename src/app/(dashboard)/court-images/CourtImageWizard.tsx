@@ -20,6 +20,7 @@ import {
   buildPlotPolygon,
   buildMultiCutPolygon,
   newAnnotation,
+  highlightZoneFromPreset,
   newBasketballHoop,
   newCricketPitch,
   newCustomLine,
@@ -1518,6 +1519,26 @@ export default function CourtImageWizard({
                       onDelete={() => removeElement(selectedElement.id)}
                       onDuplicate={() => duplicateElement(selectedElement.id)}
                       onMoveZ={(d) => moveZ(selectedElement.id, d)}
+                      onAddHighlightFromPreset={(preset) => {
+                        // Court elements have x, y, rotation, width, height —
+                        // that's what highlightZoneFromPreset needs. We
+                        // gate this callback on court types below in
+                        // ElementInspector so we can safely cast.
+                        const court = selectedElement as unknown as {
+                          x: number;
+                          y: number;
+                          rotation: number;
+                          width: number;
+                          height: number;
+                        };
+                        const zone = highlightZoneFromPreset(court, preset);
+                        setLayout((prev) =>
+                          prev
+                            ? { ...prev, elements: [...prev.elements, zone] }
+                            : prev,
+                        );
+                        setSelectedId(zone.id);
+                      }}
                     />
                   </div>
                 )}

@@ -1342,6 +1342,13 @@ export type HighlightSectionPreset = {
 
 export const HIGHLIGHT_PRESETS: Record<string, HighlightSectionPreset[]> = {
   "basketball-court": [
+    // 3-point area — from baseline out to the arc (~8.325 m from
+    // baseline = 0.297 of court length). Wide enough to include the
+    // corner-3 lines. This is the big semi-circle region between the
+    // baseline and the arc, minus the no-charge area at the basket.
+    // Sales can highlight the whole arc region with one click.
+    { key: "left-3pt", label: "Left 3-point area (arc)", cxFrac: -0.3515, cyFrac: 0, wFrac: 0.297, hFrac: 0.88 },
+    { key: "right-3pt", label: "Right 3-point area (arc)", cxFrac: 0.3515, cyFrac: 0, wFrac: 0.297, hFrac: 0.88 },
     // Key / paint area — 4.90 m × 4.90 m out from each baseline.
     // keyW = w * 0.175, keyH = h * 0.327.
     // Key centre X = baseline (±w/2) inward by keyW/2 → ±(0.5 − 0.0875) = ±0.4125.
@@ -1353,9 +1360,6 @@ export const HIGHLIGHT_PRESETS: Record<string, HighlightSectionPreset[]> = {
     { key: "right-ft", label: "Right free-throw circle", cxFrac: 0.325, cyFrac: 0, wFrac: 0.12, hFrac: 0.24 },
     // Centre circle — 3.60 m diameter.
     { key: "center-circle", label: "Centre circle", cxFrac: 0, cyFrac: 0, wFrac: 0.12, hFrac: 0.24 },
-    // Half-court halves — the full left / right side of centre line.
-    { key: "left-half", label: "Left half", cxFrac: -0.25, cyFrac: 0, wFrac: 0.5, hFrac: 1 },
-    { key: "right-half", label: "Right half", cxFrac: 0.25, cyFrac: 0, wFrac: 0.5, hFrac: 1 },
   ],
   "pickleball-court": [
     // Kitchen / non-volley zone — 7 ft each side of net. kitchenW = w*0.16.

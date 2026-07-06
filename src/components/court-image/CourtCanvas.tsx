@@ -899,9 +899,16 @@ function SectionClickOverlays({
 }) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   if (presets.length === 0) return null;
+  // Konva paints in array order, so the LAST item ends up on top and
+  // catches pointer events first. Sort smaller sections to the end so
+  // clicking on e.g. the key doesn't accidentally trigger a bigger
+  // overlay that contains it.
+  const sortedPresets = [...presets].sort(
+    (a, b) => b.wFrac * b.hFrac - a.wFrac * a.hFrac,
+  );
   return (
     <>
-      {presets.map((p) => {
+      {sortedPresets.map((p) => {
         const w = p.wFrac * courtW;
         const h = p.hFrac * courtH;
         // Preset centre is (cxFrac * courtW, cyFrac * courtH) in court

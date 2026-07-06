@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import ElementInspector from "@/components/court-image/ElementInspector";
+import SportDataPanel from "@/components/court-image/SportDataPanel";
 import type { CourtCanvasHandle } from "@/components/court-image/CourtCanvas";
 import type { CourtCanvas3DHandle, CourtView } from "@/components/court-image/CourtCanvas3D";
 import {
@@ -1450,6 +1451,30 @@ export default function CourtImageWizard({
                       badminton) come from the shared palette.
                     </div>
                   </div>
+                )}
+
+                {/* Sport Data Panel — per-sport product photos, TDS
+                    PDFs, and written specs pulled live from MVPv2 +
+                    the admin TDS uploads. Two-stage tap: click a
+                    product for a preview, then Pin to canvas to drop
+                    a labelled annotation. */}
+                {layout.sports.length > 0 && (
+                  <SportDataPanel
+                    sports={layout.sports}
+                    primarySport={layout.primarySport}
+                    onPinProduct={(label) => {
+                      const el = newAnnotation(layout.plot, label);
+                      setLayout((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              elements: [...prev.elements, el],
+                            }
+                          : prev,
+                      );
+                      setSelectedId(el.id);
+                    }}
+                  />
                 )}
 
                 {/* Watermark toggle — Fitoverse logo composited into the

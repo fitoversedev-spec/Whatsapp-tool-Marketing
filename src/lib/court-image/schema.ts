@@ -788,6 +788,15 @@ export type CourtLayout = {
   // sees, e.g. "Dr Prabhusankar — 60x100 ft turf"). Persisted alongside
   // customerName on the CourtImage row.
   title?: string;
+  // Catalogue items attached to this design (Phase E). Selected in the
+  // Step 2 sidebar's Products / TDS / Equipment tabs, included in the
+  // combined PDF (Phase F). IDs reference the internal Product / TdsFile
+  // tables. Optional so pre-existing designs open unchanged.
+  attachments?: {
+    productIds: string[];
+    equipmentIds: string[];
+    tdsIds: string[];
+  };
 };
 
 // Distinct fill colour per sport for multi-sport plots. Matches the TSS

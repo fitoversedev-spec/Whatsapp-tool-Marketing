@@ -13,6 +13,10 @@ import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import ElementInspector from "@/components/court-image/ElementInspector";
 import SportDataPanel from "@/components/court-image/SportDataPanel";
+import DesignAttachments, {
+  type AttachmentTab,
+  type Attachments,
+} from "@/components/court-image/DesignAttachments";
 import type { CourtCanvasHandle } from "@/components/court-image/CourtCanvas";
 import type { CourtCanvas3DHandle, CourtView } from "@/components/court-image/CourtCanvas3D";
 import {
@@ -128,6 +132,11 @@ export default function CourtImageWizard({
   // customer's material already applied. Can still be changed on the
   // Design step's surface picker.
   const [initialSurface, setInitialSurface] = useState<"plain" | "ppe_tile_red" | "acrylic_blue" | "acrylic_green" | "turf_40mm" | "turf_50mm" | "pvc_sports">("plain");
+  // Step 2 sidebar tab — Design (edit) vs Products / Equipment / TDS
+  // (attach catalogue items to the design for the combined PDF).
+  const [sidebarTab, setSidebarTab] = useState<"design" | AttachmentTab>(
+    "design",
+  );
   // Base work (sub-base) + linked flooring product chosen in Step 1.
   const [baseWork, setBaseWork] = useState<"" | "concrete" | "asphalt">("");
   const [flooringProduct, setFlooringProduct] = useState<{
@@ -991,6 +1000,52 @@ export default function CourtImageWizard({
               {/* Left panel — layers + inspector + add. Shown below the
                   canvas on mobile so the visual editor stays primary. */}
               <div className="order-2 md:order-1 w-full md:w-72 md:shrink-0 md:border-r border-slate-200 bg-slate-50 overflow-y-auto p-4 space-y-4 max-h-[45vh] md:max-h-none">
+                {/* Sidebar tabs — Design (edit the court) vs attach
+                    catalogue items (Products / Equipment / TDS) that go
+                    into the combined PDF. */}
+                <div className="grid grid-cols-4 gap-1 bg-slate-100 rounded-lg p-1 sticky top-0 z-10">
+                  {(
+                    [
+                      { id: "design", label: "Design" },
+                      { id: "products", label: "Products" },
+                      { id: "equipment", label: "Equip." },
+                      { id: "tds", label: "TDS" },
+                    ] as const
+                  ).map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setSidebarTab(t.id)}
+                      className={`px-1 py-1.5 text-[11px] font-medium rounded-md transition ${
+                        sidebarTab === t.id
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {sidebarTab !== "design" && (
+                  <DesignAttachments
+                    tab={sidebarTab}
+                    sports={layout.sports}
+                    attachments={
+                      layout.attachments ?? {
+                        productIds: [],
+                        equipmentIds: [],
+                        tdsIds: [],
+                      }
+                    }
+                    onChange={(next: Attachments) =>
+                      setLayout((l) => (l ? { ...l, attachments: next } : l))
+                    }
+                  />
+                )}
+
+                {sidebarTab === "design" && (
+                  <>
                 <LayerList
                   elements={layout.elements}
                   selectedId={selectedId}
@@ -1744,6 +1799,8 @@ export default function CourtImageWizard({
                     rotation, etc. Drag to move. Use the corner handles to resize
                     and the rotation handle to spin.
                   </div>
+                )}
+                  </>
                 )}
               </div>
 

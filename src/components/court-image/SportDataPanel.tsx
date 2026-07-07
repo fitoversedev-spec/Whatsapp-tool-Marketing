@@ -11,7 +11,7 @@
 // the design.
 
 import { useEffect, useState } from "react";
-import type { MvpProduct } from "@/lib/mvpv2/products";
+import type { ProductDTO } from "@/lib/products/store";
 import type { SportTdsFile } from "@/lib/court-image/sport-tds";
 import type { Sport } from "@/lib/court-image/schema";
 
@@ -30,16 +30,16 @@ export default function SportDataPanel({
     primarySport ?? sports[0] ?? ("football" as Sport),
   );
   const [tab, setTab] = useState<Tab>("photos");
-  const [products, setProducts] = useState<MvpProduct[]>([]);
+  const [products, setProducts] = useState<ProductDTO[]>([]);
   const [tds, setTds] = useState<SportTdsFile[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState<MvpProduct | null>(null);
+  const [selected, setSelected] = useState<ProductDTO | null>(null);
 
   useEffect(() => {
     setSelected(null);
     setLoading(true);
     Promise.all([
-      fetch(`/api/mvpv2/products?sport=${activeSport}`)
+      fetch(`/api/products?sport=${activeSport}`)
         .then((r) => r.json())
         .catch(() => ({ products: [] })),
       fetch(`/api/admin/sport-tds?sport=${activeSport}`)
@@ -54,7 +54,7 @@ export default function SportDataPanel({
   }, [activeSport]);
 
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
-    { id: "photos", label: "Photos", count: products.filter((p) => !!p.image_url).length },
+    { id: "photos", label: "Photos", count: products.filter((p) => !!p.heroImageUrl).length },
     { id: "documents", label: "Documents", count: tds.length },
     { id: "written", label: "Written", count: products.length },
   ];
@@ -107,7 +107,7 @@ export default function SportDataPanel({
         </div>
       ) : tab === "photos" ? (
         <PhotoGrid
-          products={products.filter((p) => !!p.image_url)}
+          products={products.filter((p) => !!p.heroImageUrl)}
           selected={selected}
           onSelect={setSelected}
           onPin={(p) => onPinProduct(p.name.trim())}
@@ -132,15 +132,16 @@ function PhotoGrid({
   onSelect,
   onPin,
 }: {
-  products: MvpProduct[];
-  selected: MvpProduct | null;
-  onSelect: (p: MvpProduct | null) => void;
-  onPin: (p: MvpProduct) => void;
+  products: ProductDTO[];
+  selected: ProductDTO | null;
+  onSelect: (p: ProductDTO | null) => void;
+  onPin: (p: ProductDTO) => void;
 }) {
   if (products.length === 0) {
     return (
       <div className="text-[11px] text-slate-500 italic py-3">
-        No product photos for this sport yet in MVPv2.
+        No product photos for this sport yet. Add them in the Products
+        page.
       </div>
     );
   }
@@ -159,10 +160,10 @@ function PhotoGrid({
             }`}
             title={p.name.trim()}
           >
-            {p.image_url && (
+            {p.heroImageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={p.image_url}
+                src={p.heroImageUrl}
                 alt={p.name.trim()}
                 className="w-full h-full object-cover"
               />
@@ -183,10 +184,10 @@ function WrittenList({
   onSelect,
   onPin,
 }: {
-  products: MvpProduct[];
-  selected: MvpProduct | null;
-  onSelect: (p: MvpProduct | null) => void;
-  onPin: (p: MvpProduct) => void;
+  products: ProductDTO[];
+  selected: ProductDTO | null;
+  onSelect: (p: ProductDTO | null) => void;
+  onPin: (p: ProductDTO) => void;
 }) {
   if (products.length === 0) {
     return (
@@ -225,16 +226,16 @@ function PreviewCard({
   product,
   onPin,
 }: {
-  product: MvpProduct;
+  product: ProductDTO;
   onPin: () => void;
 }) {
   const text = stripHtml(product.description).slice(0, 260);
   return (
     <div className="border border-slate-200 rounded-md p-2.5 bg-slate-50 space-y-2">
-      {product.image_url && (
+      {product.heroImageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={product.image_url}
+          src={product.heroImageUrl}
           alt={product.name.trim()}
           className="w-full aspect-video object-cover rounded"
         />

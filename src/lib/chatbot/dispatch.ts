@@ -19,11 +19,11 @@ import {
   sendImageButtons,
 } from "@/lib/whatsapp";
 import { getSportMeta, type SportKey } from "@/lib/catalogue/sport-meta";
+import { listProducts, getProduct, type ProductDTO } from "@/lib/products/store";
 import {
-  listProductsBySport,
   htmlToWhatsappText,
-  type MvpProduct,
-} from "@/lib/mvpv2/products";
+  specsToWhatsappBlock,
+} from "@/lib/products/format";
 import {
   getStep,
   type CollectedData,
@@ -45,17 +45,6 @@ const PRODUCT_SHORT_DESC_LIMIT = 500;
 // as one or more text messages. WhatsApp text bodies cap at 4096
 // chars; we chunk on paragraph boundaries below.
 const PRODUCT_FULL_DESC_CHUNK = 3800;
-
-// MVPv2 web base for the "View full details on our site" link. The
-// per-product page is /products/<id>. Override via env if MVPv2 ever
-// moves off fitoverse.vercel.app.
-const MVPV2_WEB_URL = (
-  process.env.MVPV2_WEB_URL ?? "https://fitoverse.vercel.app"
-).replace(/\/$/, "");
-
-function productPageUrl(productId: string): string {
-  return `${MVPV2_WEB_URL}/products/${productId}`;
-}
 
 // 4-hour inactivity timeout: after that, next inbound restarts fresh.
 const FLOW_TIMEOUT_MS = 4 * 60 * 60 * 1000;
@@ -374,12 +363,12 @@ async function sendProductListing(
   const meta = getSportMeta(sport);
   const sportLabel = meta?.label ?? sport;
 
-  let products: MvpProduct[] = [];
+  let products: ProductDTO[] = [];
   try {
-    products = await listProductsBySport(sport);
+    products = await listProducts({ sport });
   } catch (err) {
-    console.error("[chatbot] MVPv2 product fetch failed", sport, err);
-    // Fall through as if empty — MVPv2 down should not crash the flow.
+    console.error("[chatbot] product fetch failed", sport, err);
+    // Fall through as if empty — a DB hiccup shouldn't crash the flow.
   }
 
   if (products.length === 0) {
@@ -412,26 +401,21 @@ async function sendProductListing(
   const toShow = products.slice(0, PRODUCTS_TO_SHOW);
   for (let i = 0; i < toShow.length; i++) {
     const p = toShow[i];
-    if (!p.image_url) continue;
+    if (!p.heroImageUrl) continue;
     // Trim descriptions to fit inside the interactive body limit. Full
     // spec lives behind the "Read more" button, so this preview only
     // needs to hook the customer — the first paragraph is enough.
     const short = htmlToWhatsappText(p.description)
       .split(/\n{2,}/)[0]
       .slice(0, PRODUCT_SHORT_DESC_LIMIT);
-    // Product page URL inline in the body so customers who prefer the
-    // full web experience can tap through directly. WhatsApp auto-
-    // linkifies http(s) URLs, so no markup needed.
-    const url = productPageUrl(p.id);
-    const body =
-      `*${i + 1}. ${p.name.trim()}*\n\n${short}\n\nFull specs: ${url}`.trim();
+    const body = `*${i + 1}. ${p.name.trim()}*\n\n${short}`.trim();
     // What the inbox thread mirrors — same body + the button labels so
     // sales can see the exact card the customer saw.
     const mirrorBody = `${body}\n\nOptions: [Read more] [Interested]`;
     try {
       const r = await sendImageButtons({
         to: contactPhone,
-        imageUrl: p.image_url,
+        imageUrl: p.heroImageUrl,
         body,
         buttons: [
           { id: `product_more:${p.id}`, title: "Read more" },
@@ -442,7 +426,7 @@ async function sendProductListing(
       await writeOutboundMessage(conversationId, {
         type: "image",
         body: mirrorBody,
-        mediaUrl: p.image_url,
+        mediaUrl: p.heroImageUrl,
         waMessageId: r.waMessageId,
       });
     } catch (err) {
@@ -454,14 +438,14 @@ async function sendProductListing(
         const r = await sendMedia({
           to: contactPhone,
           mediaType: "image",
-          url: p.image_url,
+          url: p.heroImageUrl,
           caption: body,
         });
         lastWaId = r.waMessageId;
         await writeOutboundMessage(conversationId, {
           type: "image",
           body,
-          mediaUrl: p.image_url,
+          mediaUrl: p.heroImageUrl,
           waMessageId: r.waMessageId,
         });
       } catch (err2) {
@@ -662,9 +646,6 @@ async function sendProductDetails(
   productId: string,
   conversationId: string,
 ): Promise<void> {
-  const { getProduct, specsToWhatsappBlock } = await import(
-    "@/lib/mvpv2/products"
-  );
   const p = await getProduct(productId);
   if (!p) {
     const body =
@@ -679,17 +660,21 @@ async function sendProductDetails(
     }
     return;
   }
-  const url = productPageUrl(p.id);
   const specs = specsToWhatsappBlock(p.specs);
   const fullDesc = htmlToWhatsappText(p.description);
 
   const header = `*${p.name.trim()}*`;
-  const footer = `_View gallery + full spec sheet:_ ${url}`;
 
   const bodyParts: string[] = [header];
   if (fullDesc) bodyParts.push(fullDesc);
   if (specs) bodyParts.push(specs);
-  bodyParts.push(footer);
+  if (p.priceInr != null) {
+    bodyParts.push(
+      `_Indicative price:_ ₹${p.priceInr.toLocaleString("en-IN")}${
+        p.unit ? ` / ${p.unit}` : ""
+      }`,
+    );
+  }
   const combined = bodyParts.join("\n\n");
 
   // Chunk if the whole message exceeds WhatsApp's 4096-char text limit.
@@ -751,17 +736,15 @@ async function captureProductInterest(
   productId: string,
 ): Promise<void> {
   // Best-effort product name lookup for a nicer thank-you and lead row.
-  // Import lazily so the chatbot doesn't hard-depend on MVPv2 at boot.
   let productName = productId;
   try {
-    const { getProduct } = await import("@/lib/mvpv2/products");
     const p = await getProduct(productId);
     if (p) productName = p.name.trim();
   } catch (err) {
     console.error("[chatbot] product name lookup failed", err);
   }
 
-  const ackBody = `Thanks for your interest in *${productName}*. Our team will contact you within 24 hours with pricing and next steps.\n\nFor reference: ${productPageUrl(productId)}`;
+  const ackBody = `Thanks for your interest in *${productName}*. Our team will contact you within 24 hours with pricing and next steps.`;
   const ackRes = await sendText({ to: contactPhone, body: ackBody }).catch(
     (err) => {
       console.error("[chatbot] interest ack failed", err);

@@ -16,7 +16,7 @@ import {
   type PDFImage,
   type PDFPage,
 } from "pdf-lib";
-import { htmlToPlainText } from "@/lib/products/format";
+import { htmlToPlainText, extractHtmlTable } from "@/lib/products/format";
 import type { ProductDTO, TdsDTO } from "@/lib/products/store";
 
 const MARGIN = 40;
@@ -214,13 +214,38 @@ export async function renderCombinedPdf(
   if (input.baseWork) text(ctx, `Base work: ${cap(input.baseWork)}`, { color: COL.soft });
   if (input.flooringName) text(ctx, `Flooring: ${input.flooringName}`, { color: COL.soft });
   if (input.viewer3dUrl) {
-    gap(ctx, 4);
-    text(ctx, "Rotate the design in 3D (open on your phone):", {
-      size: 9,
-      bold: true,
+    gap(ctx, 10);
+    ensure(ctx, 44);
+    const boxH = 40;
+    const boxTop = ctx.y;
+    ctx.page.drawRectangle({
+      x: MARGIN,
+      y: boxTop - boxH,
+      width: CONTENT_W,
+      height: boxH,
+      color: rgb(0.9, 0.97, 0.94),
+      borderColor: COL.green,
+      borderWidth: 1,
+    });
+    ctx.page.drawText("View & rotate this court in 3D", {
+      x: MARGIN + 10,
+      y: boxTop - 15,
+      size: 10.5,
+      font: bold,
       color: COL.green,
     });
-    text(ctx, input.viewer3dUrl, { size: 8.5, color: COL.soft });
+    ctx.page.drawText(
+      sanitize("Open this link on your phone to spin the design and see every angle:"),
+      { x: MARGIN + 10, y: boxTop - 26, size: 8, font, color: COL.soft },
+    );
+    ctx.page.drawText(sanitize(input.viewer3dUrl), {
+      x: MARGIN + 10,
+      y: boxTop - 35,
+      size: 8,
+      font: bold,
+      color: COL.ink,
+    });
+    ctx.y = boxTop - boxH - 4;
   }
 
   // ── Design images ──
@@ -347,7 +372,11 @@ async function drawProduct(ctx: Ctx, p: ProductDTO) {
     );
     ly -= 12;
   }
-  const desc = htmlToPlainText(p.description).slice(0, 220);
+  // Catalogue products keep their spec sheet as an HTML <table> inside
+  // the description. Pull it out so the description text stays readable
+  // and the specs render as a real table below.
+  const { rows: htmlRows, rest } = extractHtmlTable(p.description);
+  const desc = rest.slice(0, 220);
   if (desc) {
     for (const line of wrap(ctx.font, sanitize(desc), 8.5, w)) {
       ctx.page.drawText(line, { x: textX, y: ly, size: 8.5, font: ctx.font, color: COL.soft });
@@ -356,12 +385,20 @@ async function drawProduct(ctx: Ctx, p: ProductDTO) {
   }
   ctx.y = Math.min(ly, startY - 62) - 6;
 
-  // Spec table — key/value rows in a clean 2-column table.
+  // Spec table — prefer the structured specs JSON, fall back to the
+  // table parsed out of the description HTML.
   const specEntries = Object.entries(p.specs).filter(
     ([, v]) => v && String(v).trim(),
   );
-  if (specEntries.length > 0) {
-    drawSpecTable(ctx, specEntries);
+  const tableRows: Array<[string, string]> =
+    specEntries.length > 0
+      ? specEntries.map(([k, v]) => [
+          k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim(),
+          String(v),
+        ])
+      : htmlRows;
+  if (tableRows.length > 0) {
+    drawSpecTable(ctx, tableRows);
   }
   gap(ctx, 6);
 }
@@ -401,9 +438,9 @@ function drawSpecTable(ctx: Ctx, entries: Array<[string, string]>) {
 
   for (const [k, v] of entries) {
     ensure(ctx, rowH);
-    const label = sanitize(
-      k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim(),
-    );
+    // Labels arrive already human-readable (from specs JSON mapping or
+    // the parsed HTML table) — don't re-split camelCase here.
+    const label = sanitize(k.trim());
     // Row border
     ctx.page.drawRectangle({
       x: tableX,

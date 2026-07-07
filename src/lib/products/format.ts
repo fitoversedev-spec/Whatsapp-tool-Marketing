@@ -95,3 +95,63 @@ export function htmlToPlainText(html: string): string {
     .replace(/_/g, "")
     .trim();
 }
+
+// Extract the FIRST HTML <table> from a description as [col1, col2]
+// row pairs, plus the description text with the table removed. Product
+// descriptions from the catalogue put specs in a two-column table
+// (Specification | Value); the PDF renders those as a real table
+// instead of flattening them into messy text.
+export function extractHtmlTable(html: string): {
+  rows: Array<[string, string]>;
+  rest: string;
+} {
+  if (!html) return { rows: [], rest: "" };
+  const tableMatch = html.match(/<table[\s\S]*?<\/table>/i);
+  if (!tableMatch) {
+    return { rows: [], rest: htmlToPlainText(html) };
+  }
+  const tableHtml = tableMatch[0];
+  const rows: Array<[string, string]> = [];
+  const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let tr: RegExpExecArray | null;
+  while ((tr = trRegex.exec(tableHtml)) !== null) {
+    const cells: string[] = [];
+    const cellRegex = /<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi;
+    let cell: RegExpExecArray | null;
+    while ((cell = cellRegex.exec(tr[1])) !== null) {
+      cells.push(cleanCell(cell[1]));
+    }
+    if (cells.length >= 2 && (cells[0] || cells[1])) {
+      rows.push([cells[0], cells.slice(1).join(" ")]);
+    }
+  }
+  // Drop a leading header row if it looks like "Specification | Value".
+  if (
+    rows.length > 0 &&
+    /specification|spec|property|attribute/i.test(rows[0][0]) &&
+    /value|detail/i.test(rows[0][1])
+  ) {
+    rows.shift();
+  }
+  const rest = htmlToPlainText(html.replace(tableHtml, " "));
+  return { rows, rest };
+}
+
+function cleanCell(html: string): string {
+  const entities: Record<string, string> = {
+    "&nbsp;": " ",
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&#39;": "'",
+    "&rsquo;": "'",
+    "&mdash;": "-",
+    "&ndash;": "-",
+  };
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-z#0-9]+;/gi, (m) => entities[m] ?? m)
+    .replace(/\s+/g, " ")
+    .trim();
+}

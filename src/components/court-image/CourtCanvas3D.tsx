@@ -162,9 +162,16 @@ export default function CourtCanvas3D({
     // reflects layout.style.groundFinish (concrete grey / grass green /
     // sand default) so 3D matches the 2D render — user asked for parity.
     const groundHex = (() => {
+      // Explicit hex override wins (matches 2D resolveGroundColor).
+      const override = layout.style.groundColorOverride;
+      if (override) {
+        const m = override.match(/^#?([0-9a-f]{6})$/i);
+        if (m) return parseInt(m[1], 16);
+      }
       const finish = layout.style.groundFinish;
       if (finish === "concrete") return 0x94a3b8;
       if (finish === "grass") return 0x5c7c3d;
+      if (finish === "white") return 0xf1f3f5;
       if (layout.style.groundColor) {
         const m = layout.style.groundColor.match(/^#?([0-9a-f]{6})$/i);
         if (m) return parseInt(m[1], 16);

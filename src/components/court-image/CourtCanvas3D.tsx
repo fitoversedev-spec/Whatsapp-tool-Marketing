@@ -58,6 +58,16 @@ export type CourtCanvas3DHandle = {
     fps?: number;
     onProgress?: (fraction: number) => void;
   }) => Promise<Blob | null>;
+  // Captures N still frames of a horizontal 360° spin (fixed pitch) as
+  // JPEG data URLs. Feeds the self-contained drag-to-rotate HTML file so
+  // the customer can spin the court in any phone browser, offline — no
+  // hosting, no 3D engine, just image-swapping on drag.
+  captureSpinFrames: (options?: {
+    frames?: number;
+    quality?: number;
+    maxWidth?: number;
+    onProgress?: (fraction: number) => void;
+  }) => Promise<string[] | null>;
 };
 
 export type CourtView = "orbit" | "top" | "iso" | "side";
@@ -453,6 +463,75 @@ export default function CourtCanvas3D({
         } finally {
           // Resume the normal animation loop + restore controls regardless
           // of whether the recording succeeded.
+          if (controls) {
+            controls.enabled = true;
+            controls.autoRotate = prevAutoRotate;
+          }
+          const tick = () => {
+            animationIdRef.current = requestAnimationFrame(tick);
+            if (controlsRef.current) controlsRef.current.update();
+            rendererRef.current?.render(sceneRef.current!, cameraRef.current!);
+          };
+          tick();
+        }
+      },
+      async captureSpinFrames(options) {
+        const renderer = rendererRef.current;
+        const scene = sceneRef.current;
+        const camera = cameraRef.current;
+        const controls = controlsRef.current;
+        const currentLayout = layoutRef.current;
+        if (!renderer || !scene || !camera) return null;
+        const frames = Math.max(8, Math.min(48, options?.frames ?? 24));
+        const quality = options?.quality ?? 0.72;
+        const maxWidth = options?.maxWidth ?? 900;
+
+        // Take over the camera from the live loop + auto-orbit while we
+        // step through the spin. Restored in finally.
+        const prevAutoRotate = controls?.autoRotate ?? false;
+        if (controls) {
+          controls.autoRotate = false;
+          controls.enabled = false;
+        }
+        cancelAnimationFrame(animationIdRef.current);
+
+        const canvas = renderer.domElement;
+        // Downscale into a 2D canvas to cap file size + bake the watermark.
+        const scale = canvas.width > maxWidth ? maxWidth / canvas.width : 1;
+        const outW = Math.max(2, Math.round(canvas.width * scale));
+        const outH = Math.max(2, Math.round(canvas.height * scale));
+        const out = document.createElement("canvas");
+        out.width = outW;
+        out.height = outH;
+        const octx = out.getContext("2d");
+        const wmImg = watermarkImgRef.current;
+        const wmOpacity = layoutRef.current.style.watermarkOpacity ?? 0.9;
+
+        // Horizontal orbit at fixed pitch — same radius derivation as the
+        // MP4 recorder, but y stays constant so it's a pure yaw spin.
+        const plotL = currentLayout.plot.lengthFt;
+        const plotW = currentLayout.plot.widthFt;
+        const radius = Math.max(plotL, plotW) * 1.1;
+
+        const urls: string[] = [];
+        try {
+          if (!octx) return null;
+          for (let i = 0; i < frames; i++) {
+            const angle = (i / frames) * Math.PI * 2;
+            camera.position.x = Math.sin(angle) * radius;
+            camera.position.z = Math.cos(angle) * radius;
+            camera.position.y = radius * 0.55;
+            camera.lookAt(0, 0, 0);
+            renderer.render(scene, camera);
+            octx.drawImage(canvas, 0, 0, outW, outH);
+            if (wmImg) drawWatermarkOn(octx, wmImg, outW, outH, wmOpacity);
+            urls.push(out.toDataURL("image/jpeg", quality));
+            options?.onProgress?.((i + 1) / frames);
+            // Yield occasionally so the UI thread stays responsive.
+            if (i % 4 === 3) await new Promise((r) => setTimeout(r, 0));
+          }
+          return urls;
+        } finally {
           if (controls) {
             controls.enabled = true;
             controls.autoRotate = prevAutoRotate;

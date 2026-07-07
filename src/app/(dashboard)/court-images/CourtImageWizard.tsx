@@ -2102,6 +2102,17 @@ export default function CourtImageWizard({
                 await new Promise((r) => setTimeout(r, 800));
                 return capture3D() ?? null;
               }}
+              onCaptureSpin={async (onProgress) => {
+                // Mount the 3D scene, then capture a 360° set of spin
+                // frames for the self-contained drag-to-rotate file.
+                setPreviewMode("3d-image");
+                await new Promise((r) => setTimeout(r, 800));
+                const h = canvas3dRef.current;
+                if (!h) return null;
+                return (
+                  (await h.captureSpinFrames({ frames: 24, onProgress })) ?? null
+                );
+              }}
               previewMode={previewMode}
               setPreviewMode={setPreviewMode}
               pngDataUrl2D={pngDataUrl2D}
@@ -3283,6 +3294,7 @@ function Step3({
   generatingVideo,
   videoProgress,
   onGenerateVideo,
+  onCaptureSpin,
 }: {
   layout: CourtLayout | null;
   pngDataUrl3D: string | null;
@@ -3322,6 +3334,9 @@ function Step3({
   generatingVideo: boolean;
   videoProgress: number;
   onGenerateVideo: () => void;
+  onCaptureSpin: (
+    onProgress: (fraction: number) => void,
+  ) => Promise<string[] | null>;
 }) {
   const total = selectedFormatCount(sendFormats);
 
@@ -3517,6 +3532,15 @@ function Step3({
             quoteTitle={quoteTitle}
             quoteNotes={quoteNotes}
             quoteItems={quoteItems}
+          />
+        )}
+
+        {layout && (
+          <SpinFileBlock
+            layout={layout}
+            contactPhone={contactPhone}
+            customerName={customerName}
+            onCaptureSpin={onCaptureSpin}
           />
         )}
 
@@ -3886,6 +3910,144 @@ function CombinedPdfBlock({
           Open the 2D preview first so the plan can be included.
         </div>
       )}
+    </div>
+  );
+}
+
+// Self-contained drag-to-rotate 3D file. Captures a 360° set of frames
+// from the live 3D scene, builds one offline HTML file (no hosting, no
+// Vercel, no third party), and sends it to the customer as a WhatsApp
+// Document. They tap it → opens in their browser → drag to rotate.
+function SpinFileBlock({
+  layout,
+  contactPhone,
+  customerName,
+  onCaptureSpin,
+}: {
+  layout: CourtLayout;
+  contactPhone: string;
+  customerName: string;
+  onCaptureSpin: (
+    onProgress: (fraction: number) => void,
+  ) => Promise<string[] | null>;
+}) {
+  const toast = useToast();
+  const [busy, setBusy] = useState<"" | "download" | "send" | "email">("");
+  const [progress, setProgress] = useState(0);
+  const [email, setEmail] = useState("");
+
+  async function build(mode: "download" | "send" | "email") {
+    setBusy(mode);
+    setProgress(0);
+    try {
+      const frames = await onCaptureSpin((f) => setProgress(f));
+      if (!frames || frames.length < 2) {
+        toast.error("Could not capture the 3D — open the 3D preview and retry");
+        return;
+      }
+      const payload = {
+        customerName,
+        plotLabel: `${layout.plot.lengthFt} × ${layout.plot.widthFt} ft`,
+        frames,
+        send: mode === "send",
+        contactPhone: mode === "send" ? contactPhone : undefined,
+        email: mode === "email" ? email.trim() : undefined,
+      };
+      const r = await fetch("/api/court-images/spin-file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "build_failed");
+      if (mode === "send") {
+        toast.success(
+          j.sent ? "Rotatable 3D file sent on WhatsApp" : "Built (send failed — check number)",
+        );
+      } else if (mode === "email") {
+        if (j.emailed === "not_configured") {
+          toast.error("Email isn't set up yet — opening the file");
+          window.open(j.url, "_blank");
+        } else if (j.emailed) {
+          toast.success(`Emailed to ${email.trim()}`);
+        } else {
+          toast.error("Email failed — opening the file");
+          window.open(j.url, "_blank");
+        }
+      } else {
+        window.open(j.url, "_blank");
+        toast.success("Rotatable 3D file ready");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setBusy("");
+      setProgress(0);
+    }
+  }
+
+  return (
+    <div className="border border-indigo-300/50 bg-indigo-50 rounded-lg p-3 space-y-2.5">
+      <div className="text-sm font-semibold text-slate-900">
+        Rotatable 3D (spin file)
+      </div>
+      <div className="text-[11px] text-slate-600 leading-snug">
+        One self-contained file the customer opens in their phone browser and
+        <span className="font-medium"> drags to rotate 360°</span> — works
+        offline, no link to any website. Sent on WhatsApp as a document.
+      </div>
+      {busy && (
+        <div className="space-y-1">
+          <div className="h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-indigo-500 transition-all"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          </div>
+          <div className="text-[10px] text-slate-500">
+            {progress < 1 ? "Capturing angles…" : "Building file…"}
+          </div>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => build("download")}
+          disabled={!!busy}
+          className="flex-1 text-xs font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded-md px-3 py-2 disabled:opacity-50"
+        >
+          {busy === "download" ? "Building…" : "Download file"}
+        </button>
+        <button
+          type="button"
+          onClick={() => build("send")}
+          disabled={!!busy || !contactPhone}
+          className="flex-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-md px-3 py-2 disabled:opacity-50"
+        >
+          {busy === "send" ? "Sending…" : "Send on WhatsApp"}
+        </button>
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="customer@email.com"
+          className="flex-1 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-300"
+        />
+        <button
+          type="button"
+          onClick={() => build("email")}
+          disabled={!!busy || !email.trim()}
+          className="text-xs font-medium border border-indigo-300 text-indigo-700 hover:bg-indigo-100 rounded-md px-3 py-1.5 disabled:opacity-50 whitespace-nowrap"
+        >
+          {busy === "email" ? "Emailing…" : "Send by email"}
+        </button>
+      </div>
+      <div className="text-[10px] text-slate-400">
+        Tip: on iPhone, if it opens as a preview, tap Share → open in Safari to
+        rotate.
+      </div>
     </div>
   );
 }

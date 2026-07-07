@@ -2997,6 +2997,16 @@ function Step3({
           </div>
         </div>
 
+        {layout && (
+          <CombinedPdfBlock
+            layout={layout}
+            pngDataUrl2D={pngDataUrl2D}
+            canvas3dRef={canvas3dRef}
+            contactPhone={contactPhone}
+            customerName={customerName}
+          />
+        )}
+
         <div>
           <h3 className="text-sm font-semibold text-slate-900 mb-2">Caption</h3>
           <textarea
@@ -3015,6 +3025,125 @@ function Step3({
           order 2D → 3D image → 3D video. Pick any combination.
         </div>
       </div>
+    </div>
+  );
+}
+
+// Combined-PDF block in Step 3 — one PDF with the 2D plan, 3D image,
+// the attached products / equipment / TDS, and (optionally) a quote.
+// Builds server-side; can download or send over WhatsApp.
+function CombinedPdfBlock({
+  layout,
+  pngDataUrl2D,
+  canvas3dRef,
+  contactPhone,
+  customerName,
+}: {
+  layout: CourtLayout;
+  pngDataUrl2D: string | null;
+  canvas3dRef: React.MutableRefObject<CourtCanvas3DHandle | null>;
+  contactPhone: string;
+  customerName: string;
+}) {
+  const toast = useToast();
+  const [includeQuote, setIncludeQuote] = useState(false);
+  const [busy, setBusy] = useState<"" | "download" | "send">("");
+
+  const att = layout.attachments ?? {
+    productIds: [],
+    equipmentIds: [],
+    tdsIds: [],
+  };
+  const attachCount =
+    att.productIds.length + att.equipmentIds.length + att.tdsIds.length;
+
+  async function build(send: boolean) {
+    setBusy(send ? "send" : "download");
+    try {
+      // 2D image — prefer the already-rendered Step-3 PNG, else render
+      // fresh isn't available here, so require the 2D preview.
+      const image2d = pngDataUrl2D ?? undefined;
+      const image3d = canvas3dRef.current?.toDataURL(2) ?? undefined;
+      const payload = {
+        customerName,
+        plotLabel: `${layout.plot.lengthFt} × ${layout.plot.widthFt} ft`,
+        lengthFt: layout.plot.lengthFt,
+        widthFt: layout.plot.widthFt,
+        baseWork: layout.style.baseWork ?? null,
+        flooringName: layout.style.flooringProductName ?? null,
+        sports: layout.sports,
+        image2d,
+        image3d,
+        attachments: att,
+        includeQuote,
+        send,
+        contactPhone: send ? contactPhone : undefined,
+      };
+      const r = await fetch("/api/court-images/combined-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "build_failed");
+      if (send) {
+        toast.success(j.sent ? "Combined PDF sent on WhatsApp" : "Built (send failed — check number)");
+      } else {
+        window.open(j.url, "_blank");
+        toast.success("Combined PDF ready");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <div className="border border-wa-green/30 bg-wa-green/5 rounded-lg p-3 space-y-2.5">
+      <div className="text-sm font-semibold text-slate-900">
+        Combined PDF
+      </div>
+      <div className="text-[11px] text-slate-600 leading-snug">
+        One PDF with the 2D plan, 3D image
+        {attachCount > 0
+          ? `, and ${attachCount} attached item${attachCount !== 1 ? "s" : ""} (products / equipment / TDS)`
+          : ""}
+        . Attach items from the Design step&apos;s Products / Equipment /
+        TDS tabs.
+      </div>
+      <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={includeQuote}
+          onChange={(e) => setIncludeQuote(e.target.checked)}
+          className="accent-wa-green"
+        />
+        Include a quote (auto-computed from the sport&apos;s rate sheet)
+      </label>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => build(false)}
+          disabled={!!busy || !pngDataUrl2D}
+          className="flex-1 text-xs font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded-md px-3 py-2 disabled:opacity-50"
+        >
+          {busy === "download" ? "Building…" : "Download PDF"}
+        </button>
+        <button
+          type="button"
+          onClick={() => build(true)}
+          disabled={!!busy || !pngDataUrl2D || !contactPhone}
+          className="flex-1 text-xs font-medium bg-wa-green hover:bg-wa-green/90 text-white rounded-md px-3 py-2 disabled:opacity-50"
+        >
+          {busy === "send" ? "Sending…" : "Send on WhatsApp"}
+        </button>
+      </div>
+      {!pngDataUrl2D && (
+        <div className="text-[10.5px] text-amber-700">
+          Open the 2D preview first so the plan can be included.
+        </div>
+      )}
     </div>
   );
 }

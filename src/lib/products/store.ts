@@ -139,6 +139,34 @@ export async function listProducts(filter?: {
   return dtos;
 }
 
+export async function getProductsByIds(ids: string[]): Promise<ProductDTO[]> {
+  if (ids.length === 0) return [];
+  const rows = await prisma.product.findMany({
+    where: { id: { in: ids } },
+    include: {
+      media: { orderBy: { sortOrder: "asc" } },
+      tdsFiles: true,
+    },
+  });
+  const dtos = rows.map(toDTO);
+  // Preserve the caller's order.
+  const byId = new Map(dtos.map((d) => [d.id, d]));
+  return ids.map((id) => byId.get(id)).filter((d): d is ProductDTO => !!d);
+}
+
+export async function getTdsByIds(ids: string[]): Promise<TdsDTO[]> {
+  if (ids.length === 0) return [];
+  const rows = await prisma.tdsFile.findMany({ where: { id: { in: ids } } });
+  return rows.map((t) => ({
+    id: t.id,
+    sport: t.sport,
+    name: t.name,
+    url: t.url,
+    productId: t.productId,
+    createdAt: t.createdAt.toISOString(),
+  }));
+}
+
 export async function getProduct(id: string): Promise<ProductDTO | null> {
   const row = await prisma.product.findUnique({
     where: { id },

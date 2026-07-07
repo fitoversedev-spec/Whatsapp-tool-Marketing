@@ -52,6 +52,9 @@ export type CombinedPdfInput = {
   equipment: ProductDTO[];
   tds: TdsDTO[];
   quote?: CombinedQuote | null;
+  // Public interactive 3D viewer link — printed on the cover so the
+  // customer can open it and rotate the court.
+  viewer3dUrl?: string | null;
 };
 
 function sanitize(s: string): string {
@@ -210,6 +213,15 @@ export async function renderCombinedPdf(
   text(ctx, `Plot: ${input.plotLabel}`, { color: COL.soft });
   if (input.baseWork) text(ctx, `Base work: ${cap(input.baseWork)}`, { color: COL.soft });
   if (input.flooringName) text(ctx, `Flooring: ${input.flooringName}`, { color: COL.soft });
+  if (input.viewer3dUrl) {
+    gap(ctx, 4);
+    text(ctx, "Rotate the design in 3D (open on your phone):", {
+      size: 9,
+      bold: true,
+      color: COL.green,
+    });
+    text(ctx, input.viewer3dUrl, { size: 8.5, color: COL.soft });
+  }
 
   // ── Design images ──
   for (const img of input.designImages) {

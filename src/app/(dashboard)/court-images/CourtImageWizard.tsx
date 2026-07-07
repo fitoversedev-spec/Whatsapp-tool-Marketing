@@ -1908,6 +1908,17 @@ export default function CourtImageWizard({
             <Step3
               layout={layout}
               pngDataUrl3D={pngDataUrl3D}
+              onEnsureSaved={async () => {
+                // Save the design (if not already) so it has an id, and
+                // return the public 3D viewer link for it.
+                try {
+                  const result = await saveDraft();
+                  if (!result?.id) return null;
+                  return `${window.location.origin}/view/court/${result.id}`;
+                } catch {
+                  return null;
+                }
+              }}
               onEnsure3D={async () => {
                 // Make sure the 3D scene is rendered + captured so the
                 // combined PDF can include it even if the user never
@@ -2797,6 +2808,7 @@ function Step1(props: {
 function Step3({
   layout,
   pngDataUrl3D,
+  onEnsureSaved,
   onEnsure3D,
   previewMode,
   setPreviewMode,
@@ -2822,6 +2834,7 @@ function Step3({
 }: {
   layout: CourtLayout | null;
   pngDataUrl3D: string | null;
+  onEnsureSaved: () => Promise<string | null>;
   onEnsure3D: () => Promise<string | null>;
   previewMode: "2d" | "3d-image" | "3d-video";
   setPreviewMode: (v: "2d" | "3d-image" | "3d-video") => void;
@@ -3038,6 +3051,7 @@ function Step3({
             pngDataUrl2D={pngDataUrl2D}
             pngDataUrl3D={pngDataUrl3D}
             onEnsure3D={onEnsure3D}
+            onEnsureSaved={onEnsureSaved}
             canvas3dRef={canvas3dRef}
             contactPhone={contactPhone}
             customerName={customerName}
@@ -3204,6 +3218,7 @@ function CombinedPdfBlock({
   pngDataUrl2D,
   pngDataUrl3D,
   onEnsure3D,
+  onEnsureSaved,
   canvas3dRef,
   contactPhone,
   customerName,
@@ -3212,12 +3227,14 @@ function CombinedPdfBlock({
   pngDataUrl2D: string | null;
   pngDataUrl3D: string | null;
   onEnsure3D: () => Promise<string | null>;
+  onEnsureSaved: () => Promise<string | null>;
   canvas3dRef: React.MutableRefObject<CourtCanvas3DHandle | null>;
   contactPhone: string;
   customerName: string;
 }) {
   const toast = useToast();
   const [includeQuote, setIncludeQuote] = useState(false);
+  const [include3dLink, setInclude3dLink] = useState(true);
   const [busy, setBusy] = useState<"" | "download" | "send" | "email">("");
   const [email, setEmail] = useState("");
   // Editable quote line items — loaded from the sport's rate sheet when
@@ -3306,6 +3323,13 @@ function CombinedPdfBlock({
       if (!image3d) {
         image3d = (await onEnsure3D()) ?? undefined;
       }
+      // Interactive 3D viewer link — saves the design (to get an id) and
+      // includes the public /view/court/<id> URL so the customer can
+      // rotate the design on their phone.
+      let viewer3dUrl: string | undefined;
+      if (include3dLink) {
+        viewer3dUrl = (await onEnsureSaved()) ?? undefined;
+      }
       const payload = {
         customerName,
         plotLabel: `${layout.plot.lengthFt} × ${layout.plot.widthFt} ft`,
@@ -3317,6 +3341,7 @@ function CombinedPdfBlock({
         image2d,
         image3d,
         attachments: att,
+        viewer3dUrl,
         includeQuote,
         quote:
           includeQuote && quoteItems.length > 0
@@ -3376,6 +3401,15 @@ function CombinedPdfBlock({
         . Attach items from the Design step&apos;s Products / Equipment /
         TDS tabs.
       </div>
+      <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={include3dLink}
+          onChange={(e) => setInclude3dLink(e.target.checked)}
+          className="accent-wa-green"
+        />
+        Include interactive 3D link (customer can rotate on their phone)
+      </label>
       <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
         <input
           type="checkbox"

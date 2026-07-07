@@ -127,6 +127,7 @@ export async function POST(req: NextRequest) {
     equipment,
     tds,
     quote,
+    viewer3dUrl: typeof body.viewer3dUrl === "string" ? body.viewer3dUrl : null,
   };
 
   let pdfBytes: Uint8Array;
@@ -148,7 +149,10 @@ export async function POST(req: NextRequest) {
   let sent = false;
   if (body.send && typeof body.contactPhone === "string" && body.contactPhone) {
     try {
-      const caption = `Fitoverse court design proposal for ${input.customerName || "your project"}.`;
+      const linkLine = input.viewer3dUrl
+        ? `\n\nRotate the design in 3D: ${input.viewer3dUrl}`
+        : "";
+      const caption = `Fitoverse court design proposal for ${input.customerName || "your project"}.${linkLine}`;
       await sendText({ to: body.contactPhone, body: caption }).catch(() => null);
       await sendMedia({
         to: body.contactPhone,

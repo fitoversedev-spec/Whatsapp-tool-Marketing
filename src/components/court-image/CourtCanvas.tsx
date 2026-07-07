@@ -661,23 +661,32 @@ function FootballFieldShape({
   const stripeCount = 10;
   const stripeW = w / stripeCount;
 
+  // When a real plot surface is chosen (turf / tile / etc.) the PLOT
+  // already paints the surface (and its own turf stripes). Drawing the
+  // field's own grass on top produced a "two layers" look with
+  // mismatched stripe directions. So skip the field grass fill when a
+  // surface is set — let the plot surface show through, markings on
+  // top. On a "plain" plot the field draws its own grass as before.
+  const drawOwnGrass = style.surface === "plain";
+
   return (
     <>
-      {/* Grass */}
-      {style.grassStripes ? (
-        Array.from({ length: stripeCount }).map((_, i) => (
-          <Rect
-            key={i}
-            x={-w / 2 + i * stripeW}
-            y={-h / 2}
-            width={stripeW}
-            height={h}
-            fill={i % 2 ? grassColor : darken(grassColor, 0.08)}
-          />
-        ))
-      ) : (
-        <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={grassColor} />
-      )}
+      {/* Grass — only when the plot has no real surface finish */}
+      {drawOwnGrass &&
+        (style.grassStripes ? (
+          Array.from({ length: stripeCount }).map((_, i) => (
+            <Rect
+              key={i}
+              x={-w / 2 + i * stripeW}
+              y={-h / 2}
+              width={stripeW}
+              height={h}
+              fill={i % 2 ? grassColor : darken(grassColor, 0.08)}
+            />
+          ))
+        ) : (
+          <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={grassColor} />
+        ))}
 
       {/* Outer boundary */}
       <Rect

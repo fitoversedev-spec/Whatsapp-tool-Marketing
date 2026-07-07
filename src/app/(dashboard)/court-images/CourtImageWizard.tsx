@@ -12,7 +12,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import ElementInspector from "@/components/court-image/ElementInspector";
-import SportDataPanel from "@/components/court-image/SportDataPanel";
 import DesignAttachments, {
   type AttachmentTab,
   type Attachments,
@@ -1755,29 +1754,10 @@ export default function CourtImageWizard({
                   </div>
                 )}
 
-                {/* Sport Data Panel — per-sport product photos, TDS
-                    PDFs, and written specs pulled live from MVPv2 +
-                    the admin TDS uploads. Two-stage tap: click a
-                    product for a preview, then Pin to canvas to drop
-                    a labelled annotation. */}
-                {layout.sports.length > 0 && (
-                  <SportDataPanel
-                    sports={layout.sports}
-                    primarySport={layout.primarySport}
-                    onPinProduct={(label) => {
-                      const el = newAnnotation(layout.plot, label);
-                      setLayout((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              elements: [...prev.elements, el],
-                            }
-                          : prev,
-                      );
-                      setSelectedId(el.id);
-                    }}
-                  />
-                )}
+                {/* Product / TDS / equipment browsing moved to the
+                    dedicated Products / Equip. / TDS tabs above — no
+                    longer duplicated here, keeping the Design tab focused
+                    on editing the court. */}
 
                 {/* Watermark toggle — Fitoverse logo composited into the
                     bottom-right of both 2D + 3D renders. On by default. */}

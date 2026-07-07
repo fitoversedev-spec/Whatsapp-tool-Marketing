@@ -1342,9 +1342,9 @@ export default function CourtImageWizard({
                     automatically clipped to the polygon so they don't
                     spill into the cut zones. */}
                 {designMode === "custom" && (
-                  <div className="border-t border-slate-200 pt-4 space-y-2">
+                  <CollapsibleSection title="Plot shape">
                     <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                      Plot shape — corner cuts (multi-select)
+                      Corner cuts (multi-select)
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
                       {(
@@ -1434,7 +1434,7 @@ export default function CourtImageWizard({
                       auto-shrink it inside the polygon (preserves the
                       sport's aspect ratio).
                     </div>
-                  </div>
+                  </CollapsibleSection>
                 )}
 
                 {/* Surface & colour — ONE collapsible category: the

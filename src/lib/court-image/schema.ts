@@ -536,6 +536,25 @@ export const GROUND_FINISH_COLOR: Record<
   grass: "#5C7C3D",
 };
 
+// Infer the canvas SurfaceFinish from a flooring product's category +
+// name, so picking a real catalogue product still drives the 2D/3D
+// render (turf stripes, acrylic solid, tile pattern, etc.). Falls back
+// to "plain" when nothing matches — sales can then pick an appearance
+// manually.
+export function surfaceFromProduct(
+  category: string | null | undefined,
+  name: string,
+): SurfaceFinish {
+  const hay = `${category ?? ""} ${name}`.toLowerCase();
+  if (/50\s*mm/.test(hay) && /turf|grass/.test(hay)) return "turf_50mm";
+  if (/turf|grass|artificial/.test(hay)) return "turf_40mm";
+  if (/acrylic|hard\s*court|itf/.test(hay))
+    return /green/.test(hay) ? "acrylic_green" : "acrylic_blue";
+  if (/ppe|tile|interlock/.test(hay)) return "ppe_tile_red";
+  if (/pvc|vinyl/.test(hay)) return "pvc_sports";
+  return "plain";
+}
+
 export function resolveGroundColor(
   finish: "sand" | "concrete" | "grass" | undefined,
   fallback: string,
@@ -718,6 +737,16 @@ export type Style = {
   // sales pick any exact ground tone rather than sand / concrete /
   // grass.
   groundColorOverride?: string;
+  // Base work under the flooring — "concrete" | "asphalt" | undefined.
+  // Chosen in Step 1; informational (surfaces in the combined PDF /
+  // quote). Doesn't change the canvas render.
+  baseWork?: "concrete" | "asphalt";
+  // Linked flooring product from the internal catalogue (Phase B).
+  // Selected in Step 1's flooring picker. The canvas surface finish is
+  // inferred from the product; these fields carry the reference through
+  // to the combined PDF so it lists the exact product.
+  flooringProductId?: string;
+  flooringProductName?: string;
   // Optional watermark (logo URL + opacity).
   watermarkUrl?: string;
   watermarkOpacity?: number;

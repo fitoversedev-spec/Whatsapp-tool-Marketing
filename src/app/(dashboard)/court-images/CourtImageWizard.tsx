@@ -19,6 +19,7 @@ import {
   buildInitialLayout,
   buildPlotPolygon,
   buildMultiCutPolygon,
+  surfaceFromProduct,
   newAnnotation,
   highlightZoneFromPreset,
   newBasketballHoop,
@@ -127,6 +128,12 @@ export default function CourtImageWizard({
   // customer's material already applied. Can still be changed on the
   // Design step's surface picker.
   const [initialSurface, setInitialSurface] = useState<"plain" | "ppe_tile_red" | "acrylic_blue" | "acrylic_green" | "turf_40mm" | "turf_50mm" | "pvc_sports">("plain");
+  // Base work (sub-base) + linked flooring product chosen in Step 1.
+  const [baseWork, setBaseWork] = useState<"" | "concrete" | "asphalt">("");
+  const [flooringProduct, setFlooringProduct] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Step 2 state
   const [layout, setLayout] = useState<CourtLayout | null>(null);
@@ -317,6 +324,18 @@ export default function CourtImageWizard({
     if (continuousSurfaces.has(initial.style.surface)) {
       initial.style = { ...initial.style, showGrid: false };
     }
+    // Carry the Step 1 base work + linked flooring product onto the
+    // layout so the design + combined PDF know them.
+    initial.style = {
+      ...initial.style,
+      ...(baseWork ? { baseWork } : {}),
+      ...(flooringProduct
+        ? {
+            flooringProductId: flooringProduct.id,
+            flooringProductName: flooringProduct.name,
+          }
+        : {}),
+    };
     setLayout(initial);
     setSelectedId(null);
     setStep(2);
@@ -957,6 +976,10 @@ export default function CourtImageWizard({
               setDesignMode={setDesignMode}
               initialSurface={initialSurface}
               setInitialSurface={setInitialSurface}
+              baseWork={baseWork}
+              setBaseWork={setBaseWork}
+              flooringProduct={flooringProduct}
+              setFlooringProduct={setFlooringProduct}
             />
           )}
 
@@ -1939,6 +1962,10 @@ function Step1(props: {
   setDesignMode: (v: "standard" | "custom") => void;
   initialSurface: Step1SurfaceOption;
   setInitialSurface: (v: Step1SurfaceOption) => void;
+  baseWork: "" | "concrete" | "asphalt";
+  setBaseWork: (v: "" | "concrete" | "asphalt") => void;
+  flooringProduct: { id: string; name: string } | null;
+  setFlooringProduct: (v: { id: string; name: string } | null) => void;
 }) {
   const { unit, setUnit } = useUserUnit();
   const {
@@ -1964,7 +1991,48 @@ function Step1(props: {
     setDesignMode,
     initialSurface,
     setInitialSurface,
+    baseWork,
+    setBaseWork,
+    flooringProduct,
+    setFlooringProduct,
   } = props;
+
+  // Flooring products for the chosen sport(s), fetched from the internal
+  // catalogue. Sales picks one as the design's flooring; the canvas
+  // surface finish is inferred from it. Empty state falls back to the
+  // manual appearance buttons below.
+  const [flooringProducts, setFlooringProducts] = useState<
+    Array<{ id: string; name: string; heroImageUrl: string | null; category: string | null }>
+  >([]);
+  const primarySportForFlooring = selectedSports[0];
+  useEffect(() => {
+    if (!primarySportForFlooring) {
+      setFlooringProducts([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/products?type=flooring&sport=${primarySportForFlooring}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        setFlooringProducts(
+          (j.products ?? []).map(
+            (p: { id: string; name: string; heroImageUrl: string | null; category: string | null }) => ({
+              id: p.id,
+              name: p.name,
+              heroImageUrl: p.heroImageUrl,
+              category: p.category,
+            }),
+          ),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setFlooringProducts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [primarySportForFlooring]);
 
   function toggleSport(sport: Sport) {
     const next = selectedSports.includes(sport)
@@ -2453,12 +2521,110 @@ function Step1(props: {
         </section>
       )}
 
-      {/* Flooring picker — chosen up-front so the Design step opens with
-          the customer's material already applied. Sales can still swap
-          it inside the Design step from the surface picker. */}
+      {/* Base work — sub-base under the flooring. Informational; shows
+          in the combined PDF / quote. */}
       <section>
         <h3 className="text-sm font-semibold text-slate-900 mb-3">
-          Flooring
+          Base work
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { id: "", label: "Not decided" },
+              { id: "concrete", label: "Concrete" },
+              { id: "asphalt", label: "Asphalt" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.label}
+              type="button"
+              onClick={() => setBaseWork(opt.id)}
+              className={`px-3 py-2 text-xs rounded-md border transition ${
+                baseWork === opt.id
+                  ? "bg-wa-green/10 border-wa-green text-wa-dark font-medium"
+                  : "bg-white border-slate-300 text-slate-700 hover:border-slate-400"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* Flooring — driven by the internal product catalogue, filtered
+          by the primary sport. Picking a product records it on the
+          design AND infers the canvas surface finish. Empty state falls
+          back to the manual appearance picker below. */}
+      <section>
+        <h3 className="text-sm font-semibold text-slate-900 mb-1">
+          Flooring product
+          {primarySportForFlooring && (
+            <span className="text-xs font-normal text-slate-500">
+              {" "}
+              · {SPORT_LABEL[primarySportForFlooring]}
+            </span>
+          )}
+        </h3>
+        <div className="text-[11px] text-slate-500 mb-3">
+          Pick from Fitoverse&apos;s catalogue. Add more in the Products
+          page. Only {primarySportForFlooring ? SPORT_LABEL[primarySportForFlooring] : "the chosen sport's"} floorings are listed.
+        </div>
+        {flooringProducts.length === 0 ? (
+          <div className="text-[11px] text-slate-500 italic bg-slate-50 border border-slate-200 rounded-md px-3 py-2">
+            No flooring products for this sport yet — pick an appearance
+            below, or add products in the Products page.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {flooringProducts.map((p) => {
+              const active = flooringProduct?.id === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    setFlooringProduct(active ? null : { id: p.id, name: p.name });
+                    if (!active) {
+                      const inferred = surfaceFromProduct(p.category, p.name);
+                      if (inferred !== "plain") setInitialSurface(inferred);
+                    }
+                  }}
+                  className={`text-left rounded-md border overflow-hidden transition ${
+                    active
+                      ? "border-wa-green ring-2 ring-wa-green/30"
+                      : "border-slate-300 hover:border-slate-400"
+                  }`}
+                >
+                  <div className="aspect-video bg-slate-100">
+                    {p.heroImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.heroImageUrl}
+                        alt={p.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">
+                        No photo
+                      </div>
+                    )}
+                  </div>
+                  <div className="px-2 py-1.5 text-[11px] font-medium text-slate-800 leading-tight line-clamp-2">
+                    {p.name}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Surface appearance — how the flooring renders on the canvas.
+          Auto-set when a flooring product is picked; sales can override
+          here or use it directly when no product matches. */}
+      <section>
+        <h3 className="text-sm font-semibold text-slate-900 mb-3">
+          Surface appearance
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {(

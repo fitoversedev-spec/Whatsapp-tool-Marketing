@@ -17,6 +17,10 @@ import DesignAttachments, {
   type AttachmentTab,
   type Attachments,
 } from "@/components/court-image/DesignAttachments";
+import {
+  resolveColorName,
+  knownColorNames,
+} from "@/lib/court-image/color-names";
 import type { CourtCanvasHandle } from "@/components/court-image/CourtCanvas";
 import type { CourtCanvas3DHandle, CourtView } from "@/components/court-image/CourtCanvas3D";
 import {
@@ -1041,11 +1045,43 @@ export default function CourtImageWizard({
                     onChange={(next: Attachments) =>
                       setLayout((l) => (l ? { ...l, attachments: next } : l))
                     }
+                    onFlooringPicked={(product) => {
+                      const inferred = surfaceFromProduct(
+                        product.category,
+                        product.name,
+                      );
+                      setLayout((l) =>
+                        l
+                          ? {
+                              ...l,
+                              style: {
+                                ...l.style,
+                                ...(inferred !== "plain"
+                                  ? { surface: inferred }
+                                  : {}),
+                                flooringProductId: product.id,
+                                flooringProductName: product.name,
+                              },
+                            }
+                          : l,
+                      );
+                    }}
                   />
                 )}
 
                 {sidebarTab === "design" && (
                   <>
+                {/* When a highlight zone is selected, surface the colour
+                    prompt right at the top so sales sees "what colour?"
+                    immediately after picking an area. */}
+                {selectedElement?.type === "highlight-zone" && (
+                  <HighlightColorPrompt
+                    fill={selectedElement.fill}
+                    onColor={(rgba) =>
+                      updateElement(selectedElement.id, { fill: rgba })
+                    }
+                  />
+                )}
                 <LayerList
                   elements={layout.elements}
                   selectedId={selectedId}
@@ -1346,6 +1382,7 @@ export default function CourtImageWizard({
                           { id: undefined, label: "Sand (default)" },
                           { id: "concrete", label: "Concrete grey" },
                           { id: "grass", label: "Grass green" },
+                          { id: "white", label: "White" },
                         ] as const
                       ).map((opt) => {
                         const active =
@@ -1995,6 +2032,49 @@ type Step1SurfaceOption =
   | "turf_40mm"
   | "turf_50mm"
   | "pvc_sports";
+
+const ALL_SURFACE_OPTIONS: Array<{ id: Step1SurfaceOption; label: string }> = [
+  { id: "plain", label: "Plain / undecided" },
+  { id: "ppe_tile_red", label: "PPE tile — Red" },
+  { id: "acrylic_blue", label: "Acrylic — Blue" },
+  { id: "acrylic_green", label: "Acrylic — Green" },
+  { id: "turf_40mm", label: "Turf — 40 mm" },
+  { id: "turf_50mm", label: "Turf — 50 mm" },
+  { id: "pvc_sports", label: "PVC sports floor" },
+];
+
+// Which surface finishes make sense per sport, so the appearance
+// picker only offers relevant options (football → turf, basketball →
+// tile/acrylic, racket sports → pvc/acrylic, etc.). "plain" is always
+// offered. Multi-sport shows the union.
+const SPORT_SURFACES: Record<string, Step1SurfaceOption[]> = {
+  football: ["turf_40mm", "turf_50mm"],
+  cricket: ["turf_40mm", "turf_50mm"],
+  basketball: ["ppe_tile_red", "acrylic_blue", "acrylic_green"],
+  tennis: ["acrylic_blue", "acrylic_green"],
+  volleyball: ["pvc_sports", "acrylic_blue", "acrylic_green"],
+  badminton: ["pvc_sports"],
+  pickleball: ["pvc_sports", "acrylic_blue", "acrylic_green", "ppe_tile_red"],
+  multisport: [
+    "ppe_tile_red",
+    "acrylic_blue",
+    "acrylic_green",
+    "turf_40mm",
+    "turf_50mm",
+    "pvc_sports",
+  ],
+};
+
+function surfaceOptionsForSports(
+  sports: Sport[],
+): Array<{ id: Step1SurfaceOption; label: string }> {
+  if (sports.length === 0) return ALL_SURFACE_OPTIONS;
+  const allowed = new Set<Step1SurfaceOption>(["plain"]);
+  for (const s of sports) {
+    for (const surf of SPORT_SURFACES[s] ?? []) allowed.add(surf);
+  }
+  return ALL_SURFACE_OPTIONS.filter((o) => allowed.has(o.id));
+}
 
 function Step1(props: {
   customerName: string;
@@ -2677,24 +2757,16 @@ function Step1(props: {
       </section>
 
       {/* Surface appearance — how the flooring renders on the canvas.
-          Auto-set when a flooring product is picked; sales can override
-          here or use it directly when no product matches. */}
+          Filtered to finishes that make sense for the chosen sport
+          (football/cricket → turf; basketball → tile/acrylic; racket
+          sports → pvc/acrylic). Auto-set when a flooring product is
+          picked; sales can override here. */}
       <section>
         <h3 className="text-sm font-semibold text-slate-900 mb-3">
           Surface appearance
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {(
-            [
-              { id: "plain", label: "Plain / undecided" },
-              { id: "ppe_tile_red", label: "PPE tile — Red" },
-              { id: "acrylic_blue", label: "Acrylic — Blue" },
-              { id: "acrylic_green", label: "Acrylic — Green" },
-              { id: "turf_40mm", label: "Turf — 40 mm" },
-              { id: "turf_50mm", label: "Turf — 50 mm" },
-              { id: "pvc_sports", label: "PVC sports floor" },
-            ] as const
-          ).map((opt) => (
+          {surfaceOptionsForSports(selectedSports).map((opt) => (
             <button
               key={opt.id}
               type="button"
@@ -3025,6 +3097,78 @@ function Step3({
           order 2D → 3D image → 3D video. Pick any combination.
         </div>
       </div>
+    </div>
+  );
+}
+
+// Colour-name prompt shown at the top of the Design tab the moment a
+// highlight zone is selected — "what colour?" per the user's ask.
+// Resolves a typed name (sky blue, maroon…) to a shade and keeps the
+// zone's current opacity.
+function HighlightColorPrompt({
+  fill,
+  onColor,
+}: {
+  fill: string;
+  onColor: (rgba: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState(false);
+  // Preserve the current alpha from the existing rgba() fill.
+  const alphaMatch = fill.match(/rgba?\([^)]*,\s*([\d.]+)\)\s*$/);
+  const alpha = alphaMatch ? parseFloat(alphaMatch[1]) : 0.45;
+  const swatch = fill;
+
+  function apply(v: string) {
+    setText(v);
+    if (!v.trim()) {
+      setError(false);
+      return;
+    }
+    const { hex } = resolveColorName(v);
+    if (!hex) {
+      setError(true);
+      return;
+    }
+    setError(false);
+    const m = hex.replace("#", "").match(/.{2}/g);
+    if (!m) return;
+    const [r, g, b] = m.map((h) => parseInt(h, 16));
+    onColor(`rgba(${r}, ${g}, ${b}, ${alpha})`);
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
+      <div className="text-xs font-semibold text-amber-900">
+        Highlight colour — what colour?
+      </div>
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-block w-7 h-7 rounded border border-amber-300 shrink-0"
+          style={{ backgroundColor: swatch }}
+        />
+        <input
+          type="text"
+          value={text}
+          list="fitoverse-color-names-inline"
+          onChange={(e) => apply(e.target.value)}
+          placeholder="Type a colour name (e.g. sky blue)"
+          className={`flex-1 px-2 py-1.5 text-xs border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400/40 ${
+            error ? "border-red-400" : "border-amber-300"
+          }`}
+        />
+      </div>
+      <datalist id="fitoverse-color-names-inline">
+        {knownColorNames().map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
+      {error && (
+        <div className="text-[10.5px] text-red-500">
+          Couldn&apos;t match that name — try another, or use the full
+          colour controls below.
+        </div>
+      )}
     </div>
   );
 }

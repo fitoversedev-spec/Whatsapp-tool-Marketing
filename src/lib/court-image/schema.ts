@@ -528,12 +528,13 @@ export function isAcrylicSurface(surface: SurfaceFinish): boolean {
 // Undefined `finish` (old designs) falls back to whatever groundColor
 // was saved (the sand tan default), keeping legacy layouts unchanged.
 export const GROUND_FINISH_COLOR: Record<
-  "sand" | "concrete" | "grass",
+  "sand" | "concrete" | "grass" | "white",
   string
 > = {
   sand: "#9c845b",
   concrete: "#94A3B8",
   grass: "#5C7C3D",
+  white: "#F1F3F5",
 };
 
 // Infer the canvas SurfaceFinish from a flooring product's category +
@@ -556,7 +557,7 @@ export function surfaceFromProduct(
 }
 
 export function resolveGroundColor(
-  finish: "sand" | "concrete" | "grass" | undefined,
+  finish: "sand" | "concrete" | "grass" | "white" | undefined,
   fallback: string,
   override?: string,
 ): string {
@@ -713,7 +714,7 @@ export type Style = {
   // sand-tan background exactly as saved. Sales asked for "concrete"
   // as a more realistic default going forward (matches most Fitoverse
   // builds); "grass" is offered for outdoor turf scenes.
-  groundFinish?: "sand" | "concrete" | "grass";
+  groundFinish?: "sand" | "concrete" | "grass" | "white";
   // Visual distinction between playing area and run-off zone. When
   // "subtle" the run-off (plot ring around the sport court) tints 20%
   // darker than the playing area; "distinct" tints 30% darker. Old

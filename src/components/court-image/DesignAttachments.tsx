@@ -25,11 +25,16 @@ export default function DesignAttachments({
   sports,
   attachments,
   onChange,
+  onFlooringPicked,
 }: {
   tab: AttachmentTab;
   sports: Sport[];
   attachments: Attachments;
   onChange: (next: Attachments) => void;
+  // Fires when a flooring/material product is checked ON, so the wizard
+  // can apply its appearance to the canvas + record it as the design's
+  // flooring. Only called for the Products tab (not equipment / TDS).
+  onFlooringPicked?: (product: ProductDTO) => void;
 }) {
   const primarySport = sports[0] ?? "football";
   const [activeSport, setActiveSport] = useState<string>(primarySport);
@@ -76,10 +81,17 @@ export default function DesignAttachments({
   function toggleProduct(id: string, isEquipment: boolean) {
     const key = isEquipment ? "equipmentIds" : "productIds";
     const cur = attachments[key];
-    const next = cur.includes(id)
-      ? cur.filter((x) => x !== id)
-      : [...cur, id];
+    const turningOn = !cur.includes(id);
+    const next = turningOn ? [...cur, id] : cur.filter((x) => x !== id);
     onChange({ ...attachments, [key]: next });
+    // When a flooring/material product is checked on, reflect it on the
+    // canvas (apply its surface + record it as the design's flooring).
+    if (turningOn && !isEquipment && onFlooringPicked) {
+      const p = products.find((x) => x.id === id);
+      if (p && (p.type === "flooring" || p.type === "material")) {
+        onFlooringPicked(p);
+      }
+    }
   }
   function toggleTds(id: string) {
     const cur = attachments.tdsIds;

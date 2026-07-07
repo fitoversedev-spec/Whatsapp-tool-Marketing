@@ -135,6 +135,9 @@ export default function CourtCanvas3D({
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
+    // Solid sky-blue fallback so a snapshot is never washed grey/black if
+    // the Sky dome hasn't painted yet (the dome renders in front of it).
+    scene.background = new THREE.Color(0x8fb8de);
     // Ground haze so the flat plane's far edge melts into the horizon
     // instead of ending in a hard line. The Sky dome is a fog-less
     // ShaderMaterial, so this only affects the ground + court objects.
@@ -182,8 +185,8 @@ export default function CourtCanvas3D({
     const sky = new Sky();
     sky.scale.setScalar(5000);
     const su = sky.material.uniforms;
-    su.turbidity.value = 5;
-    su.rayleigh.value = 1.3;
+    su.turbidity.value = 4;
+    su.rayleigh.value = 2.6; // deeper, clearer blue (was washing out pale)
     su.mieCoefficient.value = 0.004;
     su.mieDirectionalG.value = 0.82;
     su.sunPosition.value.copy(sunDir);
@@ -322,6 +325,35 @@ export default function CourtCanvas3D({
     const group = new THREE.Group();
     courtGroupRef.current = group;
     scene.add(group);
+
+    // Base work — the concrete/asphalt sub-base the court is built on.
+    // Lift the whole court assembly onto a visible pad so the customer
+    // can see the foundation they picked; the slab edge shows around and
+    // beneath the flooring.
+    const baseH = layout.style.baseWork ? 0.6 : 0;
+    group.position.y = baseH;
+    if (layout.style.baseWork) {
+      const asphalt = layout.style.baseWork === "asphalt";
+      const padH = baseH + 0.05;
+      const pad = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          layout.plot.lengthFt + 2,
+          padH,
+          layout.plot.widthFt + 2,
+        ),
+        new THREE.MeshStandardMaterial({
+          color: asphalt ? 0x35383d : 0xc2c8ce,
+          roughness: asphalt ? 0.82 : 0.92,
+          metalness: 0,
+        }),
+      );
+      // Top a hair BELOW the court surfaces (which sit at local y≥0) so
+      // the flooring and the pad don't z-fight; bottom rests on the earth.
+      pad.position.set(0, -padH / 2 - 0.04, 0);
+      pad.receiveShadow = true;
+      pad.castShadow = true;
+      group.add(pad);
+    }
 
     // Centre the plot at world origin. plot-space (0,0) is bottom-left,
     // so we offset every element by -plot.lengthFt/2 horizontally and

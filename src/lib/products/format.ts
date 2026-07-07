@@ -96,21 +96,9 @@ export function htmlToPlainText(html: string): string {
     .trim();
 }
 
-// Extract the FIRST HTML <table> from a description as [col1, col2]
-// row pairs, plus the description text with the table removed. Product
-// descriptions from the catalogue put specs in a two-column table
-// (Specification | Value); the PDF renders those as a real table
-// instead of flattening them into messy text.
-export function extractHtmlTable(html: string): {
-  rows: Array<[string, string]>;
-  rest: string;
-} {
-  if (!html) return { rows: [], rest: "" };
-  const tableMatch = html.match(/<table[\s\S]*?<\/table>/i);
-  if (!tableMatch) {
-    return { rows: [], rest: htmlToPlainText(html) };
-  }
-  const tableHtml = tableMatch[0];
+// Parse a single <table>...</table> block into [col1, col2] row pairs,
+// dropping a leading "Specification | Value" header row.
+function parseTableRows(tableHtml: string): Array<[string, string]> {
   const rows: Array<[string, string]> = [];
   const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let tr: RegExpExecArray | null;
@@ -125,7 +113,6 @@ export function extractHtmlTable(html: string): {
       rows.push([cells[0], cells.slice(1).join(" ")]);
     }
   }
-  // Drop a leading header row if it looks like "Specification | Value".
   if (
     rows.length > 0 &&
     /specification|spec|property|attribute/i.test(rows[0][0]) &&
@@ -133,8 +120,47 @@ export function extractHtmlTable(html: string): {
   ) {
     rows.shift();
   }
-  const rest = htmlToPlainText(html.replace(tableHtml, " "));
-  return { rows, rest };
+  return rows;
+}
+
+// Extract ALL HTML <table>s from a description, each titled by the
+// nearest preceding heading (Product Information / Yarn / Backing / …),
+// plus the leftover prose with every table + its heading removed.
+// Catalogue descriptions are a stack of two-column spec tables; the PDF
+// renders each as a real titled table instead of flattening them into
+// the misaligned text tiptap's <p>-in-cell markup would otherwise give.
+export function extractHtmlTables(html: string): {
+  tables: Array<{ title: string; rows: Array<[string, string]> }>;
+  rest: string;
+} {
+  if (!html) return { tables: [], rest: "" };
+  const tables: Array<{ title: string; rows: Array<[string, string]> }> = [];
+  let working = html;
+  const tableRegex = /<table[\s\S]*?<\/table>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = tableRegex.exec(html)) !== null) {
+    const tableHtml = m[0];
+    const rows = parseTableRows(tableHtml);
+    if (rows.length === 0) continue;
+    // Title = text of the nearest heading before this table.
+    const before = html.slice(0, m.index);
+    const headings = [...before.matchAll(/<h[1-6][^>]*>[\s\S]*?<\/h[1-6]>/gi)];
+    const lastH = headings.length ? headings[headings.length - 1][0] : null;
+    const title = lastH ? cleanCell(lastH) : "";
+    tables.push({ title, rows });
+    working = working.replace(tableHtml, " ");
+    if (lastH) working = working.replace(lastH, " ");
+  }
+  return { tables, rest: htmlToPlainText(working) };
+}
+
+// Back-compat single-table helper (first table only).
+export function extractHtmlTable(html: string): {
+  rows: Array<[string, string]>;
+  rest: string;
+} {
+  const { tables, rest } = extractHtmlTables(html);
+  return { rows: tables[0]?.rows ?? [], rest };
 }
 
 function cleanCell(html: string): string {

@@ -16,7 +16,7 @@ import {
   type PDFImage,
   type PDFPage,
 } from "pdf-lib";
-import { htmlToPlainText, extractHtmlTable } from "@/lib/products/format";
+import { htmlToPlainText, extractHtmlTables } from "@/lib/products/format";
 import type { ProductDTO, TdsDTO } from "@/lib/products/store";
 
 const MARGIN = 40;
@@ -357,11 +357,12 @@ async function drawProduct(ctx: Ctx, p: ProductDTO) {
     );
     ly -= 12;
   }
-  // Catalogue products keep their spec sheet as an HTML <table> inside
-  // the description. Pull it out so the description text stays readable
-  // and the specs render as a real table below.
-  const { rows: htmlRows, rest } = extractHtmlTable(p.description);
-  const desc = rest.slice(0, 220);
+  // Catalogue products keep their spec sheet as a stack of HTML <table>s
+  // inside the description (Product Information / Yarn / Backing / …).
+  // Pull them all out so the summary text stays readable and each spec
+  // group renders as its own titled table.
+  const { tables, rest } = extractHtmlTables(p.description);
+  const desc = rest.slice(0, 300);
   if (desc) {
     for (const line of wrap(ctx.font, sanitize(desc), 8.5, w)) {
       ctx.page.drawText(line, { x: textX, y: ly, size: 8.5, font: ctx.font, color: COL.soft });
@@ -370,20 +371,35 @@ async function drawProduct(ctx: Ctx, p: ProductDTO) {
   }
   ctx.y = Math.min(ly, startY - 62) - 6;
 
-  // Spec table — prefer the structured specs JSON, fall back to the
-  // table parsed out of the description HTML.
+  // Prefer the structured specs JSON if it has real values; otherwise
+  // render every table parsed out of the description HTML, each titled.
   const specEntries = Object.entries(p.specs).filter(
     ([, v]) => v && String(v).trim(),
   );
-  const tableRows: Array<[string, string]> =
-    specEntries.length > 0
-      ? specEntries.map(([k, v]) => [
-          k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim(),
-          String(v),
-        ])
-      : htmlRows;
-  if (tableRows.length > 0) {
-    drawSpecTable(ctx, tableRows);
+  if (specEntries.length > 0) {
+    drawSpecTable(
+      ctx,
+      specEntries.map(([k, v]) => [
+        k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim(),
+        String(v),
+      ]),
+    );
+  } else {
+    for (const t of tables) {
+      if (t.title) {
+        ensure(ctx, 16);
+        gap(ctx, 4);
+        ctx.page.drawText(sanitize(t.title), {
+          x: MARGIN + 8,
+          y: ctx.y - 10,
+          size: 8.5,
+          font: ctx.bold,
+          color: COL.green,
+        });
+        ctx.y -= 14;
+      }
+      drawSpecTable(ctx, t.rows);
+    }
   }
   gap(ctx, 6);
 }

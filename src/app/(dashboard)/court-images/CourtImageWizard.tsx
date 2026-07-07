@@ -2096,17 +2096,19 @@ export default function CourtImageWizard({
               onEnsure3D={async () => {
                 // Make sure the 3D scene is rendered + captured so the
                 // combined PDF can include it even if the user never
-                // opened the 3D tab. Switch to 3D, let it render, grab
-                // the PNG.
+                // opened the 3D tab. Switch to 3D, let it mount + the
+                // environment/sky settle, then grab the PNG. The wait is
+                // generous because PMREM + Sky take a moment on first paint
+                // and a short wait was capturing a blank frame.
                 setPreviewMode("3d-image");
-                await new Promise((r) => setTimeout(r, 800));
+                await new Promise((r) => setTimeout(r, 1400));
                 return capture3D() ?? null;
               }}
               onCaptureSpin={async (onProgress) => {
                 // Mount the 3D scene, then capture a 360° set of spin
                 // frames for the self-contained drag-to-rotate file.
                 setPreviewMode("3d-image");
-                await new Promise((r) => setTimeout(r, 800));
+                await new Promise((r) => setTimeout(r, 1400));
                 const h = canvas3dRef.current;
                 if (!h) return null;
                 return (
@@ -3730,7 +3732,10 @@ function CombinedPdfBlock({
   quoteItems: QuoteLineItem[];
 }) {
   const toast = useToast();
-  const [include3dLink, setInclude3dLink] = useState(true);
+  // Off by default — the hosted /view link opens a website (Vercel). The
+  // customer's rotate-in-all-angles path is the self-contained spin file
+  // below; this stays opt-in for anyone who still wants a web link.
+  const [include3dLink, setInclude3dLink] = useState(false);
   const [busy, setBusy] = useState<"" | "download" | "send" | "email">("");
   const [email, setEmail] = useState("");
 
@@ -3835,7 +3840,8 @@ function CombinedPdfBlock({
           onChange={(e) => setInclude3dLink(e.target.checked)}
           className="accent-wa-green"
         />
-        Include interactive 3D link (customer can rotate on their phone)
+        Include hosted 3D web link (opens a website — off by default; use the
+        spin file below instead)
       </label>
 
       {/* Quote summary — seeded + edited on the Quotation step. Shown

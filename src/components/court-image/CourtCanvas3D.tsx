@@ -26,6 +26,8 @@ import { useEffect, useRef } from "react";
 import type { MutableRefObject } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { Sky } from "three/examples/jsm/objects/Sky.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type {
   CourtLayout,
   CricketPitchElement,
@@ -133,10 +135,12 @@ export default function CourtCanvas3D({
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(0xc4dff5);
-    scene.fog = new THREE.Fog(0xc4dff5, 110, 320);
+    // Ground haze so the flat plane's far edge melts into the horizon
+    // instead of ending in a hard line. The Sky dome is a fog-less
+    // ShaderMaterial, so this only affects the ground + court objects.
+    scene.fog = new THREE.Fog(0xcbd9e6, 260, 900);
 
-    const camera = new THREE.PerspectiveCamera(45, canvasWidth / canvasHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(42, canvasWidth / canvasHeight, 0.1, 6000);
     camera.position.set(80, 70, 80);
     cameraRef.current = camera;
 
@@ -151,22 +155,63 @@ export default function CourtCanvas3D({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Filmic tone mapping + sRGB output = photographic contrast and
+    // colour instead of the flat, washed-out look of raw linear output.
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     rendererRef.current = renderer;
     container.appendChild(renderer.domElement);
 
-    // Lights — soft hemisphere + warm sun with shadow casting.
-    const hemi = new THREE.HemisphereLight(0xfffaf0, 0x7a8a7a, 0.75);
+    // Image-based ambient light from a neutral studio environment. This
+    // is what makes PBR (MeshStandard) surfaces read as real — soft sky
+    // fill, subtle reflections on metal posts — without a second light
+    // rig. Generated once via PMREM, then thrown away.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.55;
+
+    // Physical sky dome with an atmospheric horizon + real sun position.
+    const SUN_ELEV = 34 * (Math.PI / 180);
+    const SUN_AZI = 128 * (Math.PI / 180);
+    const sunDir = new THREE.Vector3().setFromSphericalCoords(
+      1,
+      Math.PI / 2 - SUN_ELEV,
+      SUN_AZI,
+    );
+    const sky = new Sky();
+    sky.scale.setScalar(5000);
+    const su = sky.material.uniforms;
+    su.turbidity.value = 5;
+    su.rayleigh.value = 1.3;
+    su.mieCoefficient.value = 0.004;
+    su.mieDirectionalG.value = 0.82;
+    su.sunPosition.value.copy(sunDir);
+    scene.add(sky);
+
+    // Lights — the env map does the ambient fill now, so the hemisphere
+    // is dialled way down; the sun stays strong for crisp shadows and
+    // specular highlights, aligned with the sky's sun.
+    const hemi = new THREE.HemisphereLight(0xbcd6ff, 0x55603f, 0.35);
     scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff8e6, 1.0);
-    sun.position.set(55, 90, 35);
+    const sun = new THREE.DirectionalLight(0xfff2d6, 2.6);
+    sun.position.copy(sunDir).multiplyScalar(160);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -100;
-    sun.shadow.camera.right = 100;
-    sun.shadow.camera.top = 100;
-    sun.shadow.camera.bottom = -100;
-    sun.shadow.bias = -0.0004;
+    sun.shadow.mapSize.set(4096, 4096);
+    sun.shadow.camera.left = -140;
+    sun.shadow.camera.right = 140;
+    sun.shadow.camera.top = 140;
+    sun.shadow.camera.bottom = -140;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 520;
+    sun.shadow.bias = -0.00018;
+    sun.shadow.normalBias = 0.6;
     scene.add(sun);
+    // Cool sky-side fill from the opposite direction so shadowed faces
+    // aren't dead black — mimics bounced skylight.
+    const fill = new THREE.DirectionalLight(0x9db4d6, 0.35);
+    fill.position.set(-sunDir.x * 120, 80, -sunDir.z * 120);
+    scene.add(fill);
 
     // Ground (earth) — extends beyond the plot for context. Colour
     // reflects layout.style.groundFinish (concrete grey / grass green /
@@ -188,12 +233,29 @@ export default function CourtCanvas3D({
       }
       return 0x9c845b;
     })();
-    const groundMat = new THREE.MeshLambertMaterial({ color: groundHex });
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), groundMat);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: groundHex,
+      roughness: 0.98,
+      metalness: 0.0,
+    });
+    // Give grass/sand a faint tonal break-up so the huge plane doesn't
+    // read as flat plastic; concrete/white stay clean. The map carries
+    // the colour, so the base colour becomes white to avoid double-tint.
+    const finishNow = layout.style.groundFinish;
+    if (finishNow !== "concrete" && finishNow !== "white") {
+      groundMat.map = groundNoiseTexture(groundHex);
+      groundMat.map.colorSpace = THREE.SRGBColorSpace;
+      groundMat.color.set(0xffffff);
+    }
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.05;
     ground.receiveShadow = true;
     scene.add(ground);
+
+    // The PMREM texture is baked into scene.environment; the generator
+    // itself is no longer needed.
+    pmrem.dispose();
 
     // Orbit controls — drag to rotate, scroll to zoom.
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -230,6 +292,7 @@ export default function CourtCanvas3D({
           (mat as THREE.Material).dispose();
         }
       });
+      scene.environment?.dispose();
       renderer.dispose();
       if (renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);
@@ -685,7 +748,7 @@ function makeFootballField(
   yOffset: number
 ): THREE.Object3D {
   const tex = footballTexture(el, layout);
-  const mat = new THREE.MeshLambertMaterial({ map: tex });
+  const mat = surfaceMaterial(tex, 0.92);
   const geo = new THREE.PlaneGeometry(el.width, el.height);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
@@ -711,7 +774,7 @@ function makeCricketPitch(
   yOffset: number
 ): THREE.Object3D {
   const tex = cricketTexture(el, layout);
-  const mat = new THREE.MeshLambertMaterial({ map: tex });
+  const mat = surfaceMaterial(tex, 0.9);
   const geo = new THREE.PlaneGeometry(el.pitchLengthFt, el.pitchWidthFt);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
@@ -727,7 +790,7 @@ function makeBasketballCourt(
   yOffset: number
 ): THREE.Object3D {
   const tex = basketballTexture(el, layout);
-  const mat = new THREE.MeshLambertMaterial({ map: tex });
+  const mat = surfaceMaterial(tex, 0.55);
   const geo = new THREE.PlaneGeometry(el.width, el.height);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
@@ -742,7 +805,7 @@ function makePickleballCourt(
   yOffset: number
 ): THREE.Object3D {
   const tex = pickleballTexture(el, layout);
-  const mat = new THREE.MeshLambertMaterial({ map: tex });
+  const mat = surfaceMaterial(tex, 0.55);
   const geo = new THREE.PlaneGeometry(el.width, el.height);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
@@ -757,7 +820,7 @@ function makeGenericCourt(
   yOffset: number
 ): THREE.Object3D {
   const tex = genericCourtTexture(el);
-  const mat = new THREE.MeshLambertMaterial({ map: tex });
+  const mat = surfaceMaterial(tex, 0.6);
   const geo = new THREE.PlaneGeometry(el.width, el.height);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
@@ -772,7 +835,11 @@ function makeGoalPost(el: GoalPostElement): THREE.Object3D {
 
 function makeNet(el: NetElement): THREE.Object3D {
   const g = new THREE.Group();
-  const postMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+  const postMat = new THREE.MeshStandardMaterial({
+    color: 0x2a2a2a,
+    metalness: 0.6,
+    roughness: 0.45,
+  });
   const postGeo = new THREE.CylinderGeometry(0.15, 0.15, el.heightFt, 8);
   const left = new THREE.Mesh(postGeo, postMat);
   left.position.set(-el.widthFt / 2, el.heightFt / 2, 0);
@@ -975,12 +1042,16 @@ function makeDugout(el: DugoutElement): THREE.Object3D {
 
 function makeBasketballHoop(el: BasketballHoopElement): THREE.Object3D {
   const group = new THREE.Group();
-  const poleMat = new THREE.MeshPhongMaterial({
+  const poleMat = new THREE.MeshStandardMaterial({
     color: parseColor(el.color ?? "#0f172a"),
-    shininess: 40,
+    metalness: 0.6,
+    roughness: 0.4,
+    envMapIntensity: 0.8,
   });
-  const rimMat = new THREE.MeshBasicMaterial({
+  const rimMat = new THREE.MeshStandardMaterial({
     color: parseColor(el.rimColor ?? "#ef4444"),
+    metalness: 0.5,
+    roughness: 0.45,
   });
   // Pole — vertical cylinder behind the backboard
   const pole = new THREE.Mesh(
@@ -1078,7 +1149,14 @@ function fenceMeshTexture(color: number): THREE.CanvasTexture {
 
 function buildPostsAndCrossbar(widthFt: number, heightFt: number, depthFt: number): THREE.Group {
   const g = new THREE.Group();
-  const mat = new THREE.MeshPhongMaterial({ color: 0xf2f2f2, shininess: 40 });
+  // Painted galvanised-steel goal — semi-metallic so the env map + sun
+  // leave a realistic soft highlight down each post.
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xf4f6f8,
+    metalness: 0.55,
+    roughness: 0.33,
+    envMapIntensity: 0.8,
+  });
   const postGeo = new THREE.CylinderGeometry(0.32, 0.32, heightFt, 14);
   const left = new THREE.Mesh(postGeo, mat);
   left.position.set(0, heightFt / 2, -widthFt / 2);
@@ -1128,6 +1206,62 @@ function buildPostsAndCrossbar(widthFt: number, heightFt: number, depthFt: numbe
   sr.position.set(-depthFt / 2, (heightFt - 0.6) / 2, widthFt / 2);
   g.add(sr);
   return g;
+}
+
+// Standard (PBR) material for a court surface plane. Sets the diffuse
+// map to sRGB + anisotropic filtering (crisp at grazing angles) and a
+// per-surface roughness: turf is matte (~0.9), hard courts (acrylic /
+// PVC) keep a faint sheen (~0.55) so the sun leaves a soft highlight.
+function surfaceMaterial(
+  tex: THREE.CanvasTexture,
+  roughness: number,
+): THREE.MeshStandardMaterial {
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return new THREE.MeshStandardMaterial({
+    map: tex,
+    roughness,
+    metalness: 0.0,
+    envMapIntensity: 0.5,
+  });
+}
+
+// Subtle tonal break-up for the surrounding earth so the big ground
+// plane doesn't read as flat plastic. Soft light/dark blotches around
+// the base colour, tiled across the plane.
+function groundNoiseTexture(baseHex: number): THREE.CanvasTexture {
+  const size = 256;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d")!;
+  const base = new THREE.Color(baseHex);
+  ctx.fillStyle = `#${base.getHexString()}`;
+  ctx.fillRect(0, 0, size, size);
+  // Very subtle mottling — just enough tonal life to avoid a flat-plastic
+  // look, biased slightly lighter so it never reads as dark patches.
+  for (let i = 0; i < 1400; i++) {
+    const col = base.clone();
+    col.offsetHSL(0, (Math.random() - 0.5) * 0.04, (Math.random() - 0.35) * 0.09);
+    const r = Math.round(col.r * 255);
+    const g = Math.round(col.g * 255);
+    const b = Math.round(col.b * 255);
+    ctx.fillStyle = `rgba(${r},${g},${b},0.3)`;
+    ctx.beginPath();
+    ctx.arc(
+      Math.random() * size,
+      Math.random() * size,
+      2 + Math.random() * 4,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(30, 30);
+  tex.anisotropy = 8;
+  return tex;
 }
 
 // ─────────────────────────────────────────────────────────────────────

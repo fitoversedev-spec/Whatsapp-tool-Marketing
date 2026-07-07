@@ -1060,6 +1060,8 @@ export default function CourtImageWizard({
                                   : {}),
                                 flooringProductId: product.id,
                                 flooringProductName: product.name,
+                                flooringProductImageUrl:
+                                  product.heroImageUrl ?? undefined,
                               },
                             }
                           : l,

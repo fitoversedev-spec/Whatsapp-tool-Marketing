@@ -262,6 +262,8 @@ export default function CourtCanvas({
           runOffTone={layout.style.runOffTone}
           runOffColorOverride={layout.style.runOffColorOverride}
           surfaceColorOverride={layout.style.surfaceColorOverride}
+          productName={layout.style.flooringProductName}
+          productImageUrl={layout.style.flooringProductImageUrl}
         />
         {showGrid && (
           <GridLines
@@ -2062,6 +2064,8 @@ function PlotSurface({
   runOffTone,
   runOffColorOverride,
   surfaceColorOverride,
+  productName,
+  productImageUrl,
 }: {
   plotOriginX: number;
   plotOriginY: number;
@@ -2089,8 +2093,14 @@ function PlotSurface({
   // built-in SURFACE_SOLID_COLOR / TILE_SOLID_COLORS lookup so sales
   // can dial in a specific brand colour that isn't in the presets.
   surfaceColorOverride?: string;
+  // Linked flooring product — when set, the right-side callout shows
+  // the actual product photo + name so the customer sees exactly what
+  // they're getting instead of only the generic material sample.
+  productName?: string;
+  productImageUrl?: string;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [productImg, setProductImg] = useState<HTMLImageElement | null>(null);
   const [turfLightImg, setTurfLightImg] = useState<HTMLImageElement | null>(null);
   const [turfDarkImg, setTurfDarkImg] = useState<HTMLImageElement | null>(null);
   const imageUrl = SURFACE_IMAGE_URL[surface];
@@ -2109,6 +2119,21 @@ function PlotSurface({
       el.onload = null;
     };
   }, [imageUrl]);
+
+  // Load the linked flooring product photo for the callout.
+  useEffect(() => {
+    if (!productImageUrl) {
+      setProductImg(null);
+      return;
+    }
+    const el = new window.Image();
+    el.crossOrigin = "anonymous";
+    el.src = productImageUrl;
+    el.onload = () => setProductImg(el);
+    return () => {
+      el.onload = null;
+    };
+  }, [productImageUrl]);
 
   useEffect(() => {
     if (!turfUrls) {
@@ -2250,22 +2275,30 @@ function PlotSurface({
               ];
             })()
           : [];
+  // When a real product is linked, lead the callout with its NAME so
+  // the customer sees exactly what they're getting (not just "turf").
+  const nameLine = productName ? [productName] : [];
   const infoLines =
-    materialLines.length > 0 ? [...materialLines, dimsLine] : [];
+    materialLines.length > 0 || nameLine.length > 0
+      ? [...nameLine, ...materialLines, ...(materialLines.length ? [dimsLine] : [])]
+      : [];
   const infoH = labelFontSize * (infoLines.length * 1.6 + 0.8);
 
-  // Turf stripe geometry — 2 m wide stripes parallel to the field
-  // length, running across the plot width. Alternating light + dark.
+  // Turf stripe geometry — VERTICAL mowed bands running along the
+  // pitch length (top-to-bottom), alternating light + dark across the
+  // width. This matches how football / cricket pitches are actually
+  // mowed (stripes down the length), which is what sales asked for.
+  // Each stripe is one roll-width (2 m) wide, full plot height tall.
   const stripes = turf
     ? (() => {
         const FT_PER_M = 3.281;
         const stripeFt = TURF_ROLL_WIDTH_M * FT_PER_M;
         const stripePx = stripeFt * pxPerFt;
-        const count = Math.ceil(plotPxHeight / stripePx);
+        const count = Math.ceil(plotPxWidth / stripePx);
         const cols = TURF_STRIPE_COLORS[surface] ?? { light: "#3fa050", dark: "#256c30" };
         return Array.from({ length: count }, (_, i) => ({
-          y: plotOriginY + i * stripePx,
-          height: Math.min(stripePx, plotOriginY + plotPxHeight - (plotOriginY + i * stripePx)),
+          x: plotOriginX + i * stripePx,
+          width: Math.min(stripePx, plotOriginX + plotPxWidth - (plotOriginX + i * stripePx)),
           fill: i % 2 === 0 ? cols.light : cols.dark,
         }));
       })()
@@ -2304,10 +2337,10 @@ function PlotSurface({
           {stripes.map((s, i) => (
             <Rect
               key={i}
-              x={plotOriginX}
-              y={s.y}
-              width={plotPxWidth}
-              height={s.height}
+              x={s.x}
+              y={plotOriginY}
+              width={s.width}
+              height={plotPxHeight}
               fill={s.fill}
               listening={false}
               globalCompositeOperation="source-atop"
@@ -2335,10 +2368,10 @@ function PlotSurface({
           {stripes.map((s, i) => (
             <Rect
               key={i}
-              x={plotOriginX}
-              y={s.y}
-              width={plotPxWidth}
-              height={s.height}
+              x={s.x}
+              y={plotOriginY}
+              width={s.width}
+              height={plotPxHeight}
               fill={s.fill}
               listening={false}
             />
@@ -2365,46 +2398,58 @@ function PlotSurface({
         />
       )}
 
-      {/* Sample callout on the RIGHT side of the plot. Photo when we
-          have one (PPE tile, PVC), coloured swatch otherwise (acrylic,
-          PVC-before-photo). Below it: quantity required. */}
-      {hasSamplePhoto && img && (
+      {/* Sample callout on the RIGHT side of the plot. When a real
+          flooring product is linked, its photo takes over the whole
+          swatch so the customer sees the actual product. Otherwise we
+          show the generic material sample (tile / turf light+dark). */}
+      {productImg ? (
         <KonvaImage
-          image={img}
+          image={productImg}
           x={sampleX}
           y={sampleY}
           width={samplePx}
           height={samplePx}
         />
-      )}
-      {(acrylic || (pvc && !img)) && (
-        <Rect
-          x={sampleX}
-          y={sampleY}
-          width={samplePx}
-          height={samplePx}
-          fill={solidFill}
-        />
-      )}
-      {/* Turf callout — TWO photos stacked (light on top, dark below)
-          so the customer sees both roll colours. */}
-      {turf && turfLightImg && (
-        <KonvaImage
-          image={turfLightImg}
-          x={sampleX}
-          y={sampleY}
-          width={samplePx}
-          height={samplePx / 2 - 2}
-        />
-      )}
-      {turf && turfDarkImg && (
-        <KonvaImage
-          image={turfDarkImg}
-          x={sampleX}
-          y={sampleY + samplePx / 2 + 2}
-          width={samplePx}
-          height={samplePx / 2 - 2}
-        />
+      ) : (
+        <>
+          {hasSamplePhoto && img && (
+            <KonvaImage
+              image={img}
+              x={sampleX}
+              y={sampleY}
+              width={samplePx}
+              height={samplePx}
+            />
+          )}
+          {(acrylic || (pvc && !img)) && (
+            <Rect
+              x={sampleX}
+              y={sampleY}
+              width={samplePx}
+              height={samplePx}
+              fill={solidFill}
+            />
+          )}
+          {/* Turf callout — TWO photos stacked (light + dark). */}
+          {turf && turfLightImg && (
+            <KonvaImage
+              image={turfLightImg}
+              x={sampleX}
+              y={sampleY}
+              width={samplePx}
+              height={samplePx / 2 - 2}
+            />
+          )}
+          {turf && turfDarkImg && (
+            <KonvaImage
+              image={turfDarkImg}
+              x={sampleX}
+              y={sampleY + samplePx / 2 + 2}
+              width={samplePx}
+              height={samplePx / 2 - 2}
+            />
+          )}
+        </>
       )}
       {(tiled || acrylic || turf || pvc) && (
         <Rect

@@ -748,6 +748,9 @@ export type Style = {
   // to the combined PDF so it lists the exact product.
   flooringProductId?: string;
   flooringProductName?: string;
+  // Hero image of the linked flooring product — shown in the canvas
+  // callout so the customer sees the actual product they're getting.
+  flooringProductImageUrl?: string;
   // Optional watermark (logo URL + opacity).
   watermarkUrl?: string;
   watermarkOpacity?: number;

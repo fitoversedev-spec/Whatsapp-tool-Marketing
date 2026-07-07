@@ -170,6 +170,49 @@ function buildQuotePayload(
   };
 }
 
+// Collapsible sidebar section — a titled header (with a chevron) that
+// expands/collapses its body. Used to categorise the Design panel so it
+// isn't one long messy scroll.
+function CollapsibleSection({
+  title,
+  hint,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-t border-slate-200 pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-0.5 hover:text-slate-700"
+      >
+        <span>{title}</span>
+        <span
+          className={`text-slate-400 transition-transform ${open ? "rotate-90" : ""}`}
+        >
+          ▸
+        </span>
+      </button>
+      {open && (
+        <div className="pt-2 space-y-3">
+          {hint && (
+            <div className="text-[10.5px] text-slate-500 leading-snug">
+              {hint}
+            </div>
+          )}
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Sports the wizard can lay out. "multisport" is a base surface; others
 // are stacked or substituted depending on combinations.
 const SPORTS: Sport[] = [
@@ -1248,16 +1291,15 @@ export default function CourtImageWizard({
                   }}
                 />
 
-                <div className="border-t border-slate-200 pt-4 space-y-2">
-                  <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                    Add element
-                  </div>
-
-                  {/* Highlight zone gets its own row + accent so sales
-                      sees it first. Works on every sport (basketball
-                      key, tennis service box, badminton service courts,
-                      volleyball attack zones, pickleball kitchen — any
-                      rectangle you drag out). */}
+                {/* Highlights — the "colour just one area" tools. Kept
+                    open + near the top because sales reaches for these a
+                    lot (this is the per-area counterpart to the whole-court
+                    colour under Colour & surface). */}
+                <CollapsibleSection
+                  title="Highlights (colour one area)"
+                  defaultOpen
+                  hint="Drop a coloured rectangle you drag, resize, and recolour from the inspector — to fill a basketball key, service box, pickleball kitchen, etc. Renders UNDER the markings so lines stay legible."
+                >
                   <button
                     type="button"
                     onClick={() => addElement("highlight")}
@@ -1267,11 +1309,6 @@ export default function CourtImageWizard({
                     <span className="flex-1 text-left">+ Highlight zone</span>
                     <span className="text-[10px] text-amber-700">colour · drag · resize</span>
                   </button>
-                  {/* Highlight the run-off (non-playing) area — the
-                      ring inside the plot outside the primary court.
-                      One-click ask from sales. Drops a zone sized to
-                      the whole plot at a low z-index so it visually
-                      fills the ring around courts. */}
                   <button
                     type="button"
                     onClick={() => addElement("highlight-runoff")}
@@ -1281,16 +1318,11 @@ export default function CourtImageWizard({
                     <span className="flex-1 text-left">+ Highlight run-off area</span>
                     <span className="text-[10px] text-amber-700">outside the court</span>
                   </button>
-                  <div className="text-[10.5px] text-slate-500 leading-snug">
-                    Drops a coloured rectangle you can drag, resize, and
-                    recolour from the inspector. Renders UNDER the sport
-                    markings so lines stay legible on top. Works for every
-                    sport — use it to fill a basketball key, tennis
-                    service box, badminton service court, volleyball
-                    attack zone, pickleball kitchen, etc.
-                  </div>
+                </CollapsibleSection>
 
-                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                {/* Add element — objects dropped onto the plot. */}
+                <CollapsibleSection title="Add element">
+                  <div className="grid grid-cols-2 gap-1.5">
                     <AddBtn label="Cricket pitch" onClick={() => addElement("cricket")} />
                     <AddBtn label="Goal post" onClick={() => addElement("goal-post")} />
                     <AddBtn label="Basketball hoop" onClick={() => addElement("hoop")} />
@@ -1300,7 +1332,7 @@ export default function CourtImageWizard({
                     <AddBtn label="Line / arrow" onClick={() => addElement("line")} />
                     <AddBtn label="Rectangle" onClick={() => addElement("rect")} />
                   </div>
-                </div>
+                </CollapsibleSection>
 
                 {/* Plot shape — only shown in non-standard (custom) mode.
                     Corner cuts stack (checkboxes): sales can click Cut
@@ -1519,11 +1551,15 @@ export default function CourtImageWizard({
                   )}
                 </div>
 
-                {/* Ground finish + Run-off zone — new in the "make design
-                    look more realistic" pass. Both are opt-in: undefined =
-                    old sand-tan + one-tone rendering, so existing designs
-                    open exactly as before. */}
-                <div className="border-t border-slate-200 pt-4 space-y-3">
+                {/* Colour & surface — grouped into one collapsible
+                    category so the Design panel isn't a long messy scroll.
+                    Ground finish / surface colour / run-off all live here;
+                    per-area colouring lives under Add element. */}
+                <CollapsibleSection
+                  title="Colour & surface"
+                  defaultOpen
+                  hint="Change the WHOLE court's colour here (ground finish, surface colour, run-off zone). To colour just ONE area — a basketball key, service box, pickleball kitchen — use “+ Highlight zone” under Add element, then pick its colour in the inspector."
+                >
                   <div>
                     <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
                       Ground finish
@@ -1829,7 +1865,7 @@ export default function CourtImageWizard({
                         </div>
                       </div>
                     )}
-                </div>
+                </CollapsibleSection>
 
                 {/* Primary sport dropdown — only shown on multi-sport
                     plots. Drives z-order (primary drawn on top) so

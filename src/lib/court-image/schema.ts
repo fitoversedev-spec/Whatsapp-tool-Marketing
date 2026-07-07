@@ -1493,10 +1493,23 @@ export const HIGHLIGHT_PRESETS: Record<string, HighlightSectionPreset[]> = {
     { key: "bot-alley", label: "Bottom doubles alley", cxFrac: 0, cyFrac: 0.44, wFrac: 1, hFrac: 0.12 },
   ],
   "generic-court-badminton": [
-    { key: "left-right-service", label: "Left right service", cxFrac: -0.185, cyFrac: 0.185, wFrac: 0.37, hFrac: 0.37 },
-    { key: "left-left-service", label: "Left left service", cxFrac: -0.185, cyFrac: -0.185, wFrac: 0.37, hFrac: 0.37 },
-    { key: "right-right-service", label: "Right right service", cxFrac: 0.185, cyFrac: -0.185, wFrac: 0.37, hFrac: 0.37 },
-    { key: "right-left-service", label: "Right left service", cxFrac: 0.185, cyFrac: 0.185, wFrac: 0.37, hFrac: 0.37 },
+    // Regulation 44 × 20: short service line 6.5 ft from net (0.148 w),
+    // doubles long service line 2.5 ft from back (0.443 w), singles
+    // sideline 1.5 ft in (0.425 h). The four doubles service courts run
+    // from the short service line to the long service line, split by the
+    // centre line — sized + placed to match the real boxes (the old
+    // presets sat over the net and were the wrong size).
+    { key: "left-service-right", label: "Left service — right box", cxFrac: -0.296, cyFrac: 0.212, wFrac: 0.295, hFrac: 0.425 },
+    { key: "left-service-left", label: "Left service — left box", cxFrac: -0.296, cyFrac: -0.212, wFrac: 0.295, hFrac: 0.425 },
+    { key: "right-service-left", label: "Right service — left box", cxFrac: 0.296, cyFrac: -0.212, wFrac: 0.295, hFrac: 0.425 },
+    { key: "right-service-right", label: "Right service — right box", cxFrac: 0.296, cyFrac: 0.212, wFrac: 0.295, hFrac: 0.425 },
+    // Rear doubles tramlines — the strip between the long service line and
+    // the back boundary on each side (where a doubles serve can't land).
+    { key: "left-rear-tram", label: "Left rear tramline", cxFrac: -0.4715, cyFrac: 0, wFrac: 0.057, hFrac: 0.85 },
+    { key: "right-rear-tram", label: "Right rear tramline", cxFrac: 0.4715, cyFrac: 0, wFrac: 0.057, hFrac: 0.85 },
+    // Side doubles alleys — strips outside the singles sidelines, full length.
+    { key: "top-alley", label: "Top doubles alley", cxFrac: 0, cyFrac: -0.4625, wFrac: 1, hFrac: 0.075 },
+    { key: "bot-alley", label: "Bottom doubles alley", cxFrac: 0, cyFrac: 0.4625, wFrac: 1, hFrac: 0.075 },
   ],
   "generic-court-volleyball": [
     // Attack zone — front 3 m of each half. Court is 18 m long; 3 m = 17%.

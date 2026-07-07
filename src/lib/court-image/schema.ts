@@ -940,6 +940,11 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   const longFt = Math.max(plot.lengthFt, plot.widthFt);
   const shortFt = Math.min(plot.lengthFt, plot.widthFt);
   const baseRotation = isPortrait ? 90 : 0;
+  // Reserve a visible run-off zone around court sports (basketball,
+  // pickleball, tennis, badminton, volleyball) so turning on the run-off
+  // tone shows a distinct darker ring — not a whole-court recolour. Real
+  // courts keep ~2 m of unobstructed space around the lines anyway.
+  const courtRunoffMargin = Math.max(6, shortFt * 0.16);
 
   // Largest sport renders on the bottom of the stack. Football and the
   // other full-court sports compete for "base"; cricket is always an
@@ -1005,6 +1010,7 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       playWidth,
       longFt,
       shortFt,
+      courtRunoffMargin,
     );
     elements.push({
       id: newId("basketball"),
@@ -1072,7 +1078,7 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   if (hasPickleball) {
     // Pickleball regulation is 44 × 20 ft — used for the aspect ratio.
     // Court fills the entered plot preserving that aspect.
-    const { courtW, courtH } = fitCourtToPlot(44, 20, longFt, shortFt);
+    const { courtW, courtH } = fitCourtToPlot(44, 20, longFt, shortFt, courtRunoffMargin);
     elements.push({
       id: newId("pickleball"),
       type: "pickleball-court",
@@ -1081,6 +1087,19 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       rotation: baseRotation,
       width: courtW,
       height: courtH,
+      z: z++,
+    });
+    // Regulation pickleball net — 36" at the posts, 34" at centre; spans
+    // the court's short side across the middle. Perpendicular to length
+    // like the tennis/badminton/volleyball nets (rotate 90°).
+    elements.push({
+      id: newId("pickleball-net"),
+      type: "net",
+      x: cx,
+      y: cy,
+      rotation: baseRotation + 90,
+      widthFt: courtH,
+      heightFt: 3,
       z: z++,
     });
   }
@@ -1114,6 +1133,7 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       t.height,
       longFt,
       shortFt,
+      courtRunoffMargin,
     );
     elements.push({
       id: newId(t.sport),
@@ -1214,55 +1234,68 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       }
     }
 
-    // Auto-layout — primary sport stays at plot centre (already sized to
-    // fill via the sport branches above). Secondary sports get inset
-    // positions + regulation dimensions so they don't stack at the
-    // centre. Matches the TSS "one court for every sport" reference
-    // photo where basketball is dominant and pickleball / volleyball
-    // sit as smaller zones inside the basketball court.
+    // Auto-layout — CONCENTRIC STACK. Draw the biggest court, then each
+    // smaller court centred on top at its TRUE relative size, so a
+    // multi-use surface reads like a real gym floor with nested markings
+    // (basketball outermost, then tennis, volleyball, pickleball/
+    // badminton inside it) instead of separate courts tiled side by side.
     //
-    // Regulation playing-area dimensions used as the inset size for
-    // secondary sports:
-    const INSET_SIZE: Partial<Record<Sport, { w: number; h: number }>> = {
-      basketball: { w: 49.21, h: 36.09 }, // FIBA half court
-      pickleball: { w: 44, h: 20 },
-      tennis: { w: 78, h: 36 },
-      badminton: { w: 44, h: 20 },
-      volleyball: { w: 59, h: 30 },
+    // Regulation playing-area dimensions (long × short, ft) used to
+    // derive the relative sizes.
+    const REG: Partial<Record<Sport, { l: number; w: number }>> = {
+      football: { l: 197, w: 131 },
+      basketball: { l: 91.86, w: 49.21 },
+      tennis: { l: 78, w: 36 },
+      volleyball: { l: 59, w: 30 },
+      pickleball: { l: 44, w: 20 },
+      badminton: { l: 44, w: 20 },
     };
-    // Slot positions relative to plot centre, ordered so the first
-    // secondary lands on the LEFT half, second on the RIGHT half, and
-    // additional secondaries stack above / below. Fractions of plot L/W.
-    const SLOTS: Array<{ dx: number; dy: number }> = [
-      { dx: -0.22, dy: 0 },
-      { dx: 0.22, dy: 0 },
-      { dx: 0, dy: -0.28 },
-      { dx: 0, dy: 0.28 },
-    ];
-    const primarySportIndex = 0;
-    let slotIndex = 0;
-    // First pass: find element positions per sport so we can update them.
-    for (let i = 0; i < sports.length; i++) {
-      if (i === primarySportIndex) continue; // primary keeps its size + centre
-      const sport = sports[i];
-      const el = elements.find(
-        (e) => sportForType(e.type, "sport" in e ? e.sport : undefined) === sport,
-      );
-      if (!el) continue;
-      const inset = INSET_SIZE[sport];
-      if (!inset) continue;
-      // Cap the inset at 55% of the plot so it doesn't overrun the
-      // primary court on small plots.
-      const w = Math.min(inset.w, longFt * 0.55);
-      const h = Math.min(inset.h, shortFt * 0.55);
-      const slot = SLOTS[slotIndex % SLOTS.length];
-      slotIndex += 1;
-      const targetX = plot.lengthFt / 2 + slot.dx * plot.lengthFt;
-      const targetY = plot.widthFt / 2 + slot.dy * plot.widthFt;
-      if ("x" in el) el.x = targetX;
-      if ("y" in el) el.y = targetY;
-      if ("width" in el) (el as { width?: number }).width = w;
-      if ("height" in el) (el as { height?: number }).height = h;
+    // Court elements to stack (skip cricket-pitch overlay + multisport
+    // base + nets). Keep a handle on each with its regulation size.
+    const stack: Array<{
+      el: { x?: number; y?: number; rotation?: number; width?: number; height?: number; z?: number };
+      sport: Sport;
+      reg: { l: number; w: number };
+    }> = [];
+    for (const el of elements) {
+      const s = sportForType(el.type, "sport" in el ? el.sport : undefined);
+      if (!s || s === "cricket" || s === "multisport") continue;
+      const reg = REG[s];
+      if (!reg) continue;
+      stack.push({ el: el as (typeof stack)[number]["el"], sport: s, reg });
+    }
+    if (stack.length >= 2) {
+      // Biggest regulation area is the reference and fills the plot.
+      stack.sort((a, b) => b.reg.l * b.reg.w - a.reg.l * a.reg.w);
+      const ref = stack[0];
+      const { courtW: refLong } = fitCourtToPlot(ref.reg.l, ref.reg.w, longFt, shortFt);
+      const scale = refLong / ref.reg.l; // canvas-ft per regulation-ft
+      let stackZ = z; // biggest gets the lowest z (drawn first / underneath)
+      const sizeBySport = new Map<Sport, { w: number; h: number }>();
+      for (const s of stack) {
+        s.el.x = cx;
+        s.el.y = cy;
+        s.el.rotation = baseRotation;
+        s.el.width = s.reg.l * scale;
+        s.el.height = s.reg.w * scale;
+        s.el.z = stackZ++;
+        sizeBySport.set(s.sport, { w: s.el.width, h: s.el.height });
+      }
+      // Re-centre each sport net onto the middle + size to that sport's
+      // (now concentric) court short side. Net id is `${sport}-net`.
+      for (const el of elements) {
+        if (el.type !== "net" || !("id" in el)) continue;
+        const netSport = (Object.keys(REG) as Sport[]).find((sp) =>
+          (el.id as string).startsWith(`${sp}-`),
+        );
+        const sz = netSport ? sizeBySport.get(netSport) : undefined;
+        if (!sz) continue;
+        el.x = cx;
+        el.y = cy;
+        el.rotation = baseRotation + 90;
+        (el as { widthFt?: number }).widthFt = sz.h;
+        (el as { z?: number }).z = stackZ++;
+      }
     }
   }
 

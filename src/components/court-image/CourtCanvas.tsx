@@ -1008,8 +1008,14 @@ function BasketballCourtShape({
   // than the surrounding run-off ring.
   const runOff = style.runOffTone && style.runOffTone !== "off";
   const tiled = isTiledSurface(style.surface);
+  // A surface colour override paints the PLAYING area its full (undarkened)
+  // colour; the plot base under it takes the darkened run-off shade, so the
+  // playing-area vs run-off split shows for this sport too (not just
+  // football/cricket). Per-element surfaceColor still wins for multi-sport
+  // zone colours.
   const fill =
     el.surfaceColor ??
+    style.surfaceColorOverride ??
     (tiled
       ? "transparent"
       : runOff && style.surface !== "plain"
@@ -1185,12 +1191,20 @@ function PickleballCourtShape({
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
-  // Tiled surface (PPE tile) — keep court transparent so tile pattern
-  // + grid show through the playing area. Otherwise use the sport's
-  // default surface colour.
+  // Same run-off / override logic as the other courts: an override (or the
+  // full surface colour when run-off is on) paints the playing area so the
+  // darker run-off ring around it reads distinct.
+  const runOff = style.runOffTone && style.runOffTone !== "off";
   const fill =
     el.surfaceColor ??
-    (isTiledSurface(style.surface) ? "transparent" : style.pickleballSurfaceColor);
+    style.surfaceColorOverride ??
+    (isTiledSurface(style.surface)
+      ? "transparent"
+      : runOff && style.surface !== "plain"
+        ? SURFACE_SOLID_COLOR[style.surface] ?? style.pickleballSurfaceColor
+        : style.surface !== "plain"
+          ? "transparent"
+          : style.pickleballSurfaceColor);
   const line = el.lineColor ?? "#ffffff";
   const lineWidth = Math.max(1, Math.min(w, h) * 0.006);
   // Kitchen / non-volley zone — 7 ft from net on each side.
@@ -1231,11 +1245,19 @@ function GenericCourtShape({
         : el.sport === "volleyball"
           ? "#c97a4b"
           : "#5a8a6c";
-  // Tiled surface (PPE tile) — keep the court transparent so tile
-  // pattern + grid render through the playing area.
+  // Same run-off / override logic as the other courts so the playing-area
+  // vs run-off split shows for tennis / badminton / volleyball too.
+  const runOff = style.runOffTone && style.runOffTone !== "off";
   const fill =
     el.surfaceColor ??
-    (isTiledSurface(style.surface) ? "transparent" : defaultFill);
+    style.surfaceColorOverride ??
+    (isTiledSurface(style.surface)
+      ? "transparent"
+      : runOff && style.surface !== "plain"
+        ? SURFACE_SOLID_COLOR[style.surface] ?? defaultFill
+        : style.surface !== "plain"
+          ? "transparent"
+          : defaultFill);
   const line = el.lineColor ?? "#ffffff";
   const lineWidth = Math.max(1, Math.min(w, h) * 0.005);
 

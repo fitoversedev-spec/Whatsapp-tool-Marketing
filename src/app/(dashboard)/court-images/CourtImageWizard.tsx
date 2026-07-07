@@ -3012,9 +3012,24 @@ function Step3({
           </label>
         </div>
 
+        {/* Primary send path — the all-in-one combined PDF. Shown first
+            and prominently because sales asked "send as PDF" and got
+            only the design image (they'd used the individual-image
+            sender below). This is the recommended way to send. */}
+        {layout && (
+          <CombinedPdfBlock
+            layout={layout}
+            pngDataUrl2D={pngDataUrl2D}
+            canvas3dRef={canvas3dRef}
+            contactPhone={contactPhone}
+            customerName={customerName}
+          />
+        )}
+
         <div>
           <h3 className="text-sm font-semibold text-slate-900 mb-2">
-            What to send <span className="text-xs font-normal text-slate-500">({total} selected)</span>
+            Or send individual images{" "}
+            <span className="text-xs font-normal text-slate-500">({total} selected)</span>
           </h3>
           <div className="space-y-1.5">
             <FormatCheckbox
@@ -3048,16 +3063,6 @@ function Step3({
             />
           </div>
         </div>
-
-        {layout && (
-          <CombinedPdfBlock
-            layout={layout}
-            pngDataUrl2D={pngDataUrl2D}
-            canvas3dRef={canvas3dRef}
-            contactPhone={contactPhone}
-            customerName={customerName}
-          />
-        )}
 
         <div>
           <h3 className="text-sm font-semibold text-slate-900 mb-2">Caption</h3>
@@ -3153,6 +3158,26 @@ function HighlightColorPrompt({
   );
 }
 
+// Quote total row (label left, ₹value right).
+function Row({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: number;
+  strong?: boolean;
+}) {
+  return (
+    <div
+      className={`flex justify-between ${strong ? "font-semibold text-slate-900" : "text-slate-600"}`}
+    >
+      <span>{label}</span>
+      <span>₹{value.toLocaleString("en-IN")}</span>
+    </div>
+  );
+}
+
 // Combined-PDF block in Step 3 — one PDF with the 2D plan, 3D image,
 // the attached products / equipment / TDS, and (optionally) a quote.
 // Builds server-side; can download or send over WhatsApp.
@@ -3173,6 +3198,13 @@ function CombinedPdfBlock({
   const [includeQuote, setIncludeQuote] = useState(false);
   const [busy, setBusy] = useState<"" | "download" | "send" | "email">("");
   const [email, setEmail] = useState("");
+  // Editable quote line items — loaded from the sport's rate sheet when
+  // Include quote is turned on. Sales can tweak the rate + toggle items;
+  // the edited quote is what goes into the PDF.
+  const [quoteItems, setQuoteItems] = useState<
+    Array<{ id: string; name: string; area: number; rate: number; gst: number; included: boolean }>
+  >([]);
+  const [quoteLoaded, setQuoteLoaded] = useState(false);
 
   const att = layout.attachments ?? {
     productIds: [],
@@ -3181,6 +3213,64 @@ function CombinedPdfBlock({
   };
   const attachCount =
     att.productIds.length + att.equipmentIds.length + att.tdsIds.length;
+
+  // Load the rate sheet the first time Include quote is switched on.
+  useEffect(() => {
+    if (!includeQuote || quoteLoaded) return;
+    const L = layout.plot.lengthFt;
+    const W = layout.plot.widthFt;
+    const supported = ["football", "basketball", "multisport", "pickleball"];
+    const primary = layout.sports[0];
+    const rateSport = supported.includes(primary) ? primary : "multisport";
+    fetch(`/api/quotations/rates?sport=${rateSport}`)
+      .then((r) => r.json())
+      .then((j) => {
+        const items = (j.items ?? []).map(
+          (it: {
+            id: string;
+            name: string;
+            areaMode: string;
+            defaultRate: number;
+            gstPercent: number;
+            optional?: boolean;
+          }) => {
+            const area =
+              it.areaMode === "perimeter"
+                ? 2 * (L + W)
+                : it.areaMode === "per_piece"
+                  ? 1
+                  : L * W;
+            return {
+              id: it.id,
+              name: it.name,
+              area,
+              rate: it.defaultRate,
+              gst: it.gstPercent,
+              included: !it.optional,
+            };
+          },
+        );
+        setQuoteItems(items);
+        setQuoteLoaded(true);
+      })
+      .catch(() => setQuoteLoaded(true));
+  }, [includeQuote, quoteLoaded, layout.plot.lengthFt, layout.plot.widthFt, layout.sports]);
+
+  const quoteTotals = (() => {
+    let subtotal = 0;
+    let gst = 0;
+    for (const it of quoteItems) {
+      if (!it.included) continue;
+      const line = it.area * it.rate;
+      subtotal += line;
+      gst += (line * it.gst) / 100;
+    }
+    return {
+      subtotal: Math.round(subtotal),
+      gst: Math.round(gst),
+      grandTotal: Math.round(subtotal + gst),
+    };
+  })();
 
   async function build(mode: "download" | "send" | "email") {
     setBusy(mode);
@@ -3199,6 +3289,17 @@ function CombinedPdfBlock({
         image3d,
         attachments: att,
         includeQuote,
+        quote:
+          includeQuote && quoteItems.length > 0
+            ? {
+                items: quoteItems
+                  .filter((it) => it.included)
+                  .map((it) => ({ name: it.name, total: it.area * it.rate })),
+                subtotal: quoteTotals.subtotal,
+                gst: quoteTotals.gst,
+                grandTotal: quoteTotals.grandTotal,
+              }
+            : undefined,
         send: mode === "send",
         contactPhone: mode === "send" ? contactPhone : undefined,
         email: mode === "email" ? email.trim() : undefined,
@@ -3253,8 +3354,68 @@ function CombinedPdfBlock({
           onChange={(e) => setIncludeQuote(e.target.checked)}
           className="accent-wa-green"
         />
-        Include a quote (auto-computed from the sport&apos;s rate sheet)
+        Include a quote in the PDF
       </label>
+
+      {/* Editable quote — line items seeded from the sport's rate sheet.
+          Sales tweaks the rate / toggles items; live totals. This is
+          the quote that goes into the combined PDF. */}
+      {includeQuote && (
+        <div className="border border-slate-200 rounded-md bg-white p-2 space-y-1.5">
+          {!quoteLoaded ? (
+            <div className="text-[11px] text-slate-500 italic">
+              Loading rate sheet…
+            </div>
+          ) : quoteItems.length === 0 ? (
+            <div className="text-[11px] text-slate-500 italic">
+              No rate sheet for this sport. Set rates in Quotation rates.
+            </div>
+          ) : (
+            <>
+              {quoteItems.map((it, idx) => (
+                <div key={it.id} className="flex items-center gap-1.5 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={it.included}
+                    onChange={(e) =>
+                      setQuoteItems((prev) =>
+                        prev.map((x, i) =>
+                          i === idx ? { ...x, included: e.target.checked } : x,
+                        ),
+                      )
+                    }
+                    className="accent-wa-green"
+                  />
+                  <span
+                    className={`flex-1 truncate ${it.included ? "text-slate-700" : "text-slate-400 line-through"}`}
+                    title={it.name}
+                  >
+                    {it.name}
+                  </span>
+                  <span className="text-slate-400">₹</span>
+                  <input
+                    type="number"
+                    value={it.rate}
+                    onChange={(e) =>
+                      setQuoteItems((prev) =>
+                        prev.map((x, i) =>
+                          i === idx ? { ...x, rate: Number(e.target.value) || 0 } : x,
+                        ),
+                      )
+                    }
+                    className="w-16 px-1 py-0.5 border border-slate-200 rounded text-right"
+                  />
+                </div>
+              ))}
+              <div className="border-t border-slate-200 pt-1.5 mt-1 space-y-0.5 text-[11px]">
+                <Row label="Subtotal" value={quoteTotals.subtotal} />
+                <Row label="GST" value={quoteTotals.gst} />
+                <Row label="Grand total" value={quoteTotals.grandTotal} strong />
+              </div>
+            </>
+          )}
+        </div>
+      )}
       <div className="flex gap-2">
         <button
           type="button"

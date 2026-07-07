@@ -76,14 +76,28 @@ export async function POST(req: NextRequest) {
     (p) => p.type !== "equipment",
   );
 
-  // Optional quote — computed server-side from the sport's rate sheet
-  // × plot area (same logic the Quotation wizard seeds with). Only when
-  // includeQuote is on and we have plot dimensions.
+  // Quote — prefer an explicit edited quote from the client. If none
+  // is given but includeQuote is on, compute one server-side from the
+  // sport's rate sheet × plot area (same logic the Quotation wizard
+  // seeds with).
   let quote: CombinedQuote | null = null;
   const sports: string[] = Array.isArray(body.sports) ? body.sports : [];
   const lengthFt = Number(body.lengthFt) || 0;
   const widthFt = Number(body.widthFt) || 0;
-  if (body.includeQuote && lengthFt > 0 && widthFt > 0) {
+  if (body.quote && Array.isArray(body.quote.items)) {
+    quote = {
+      number: String(body.quote.number ?? buildQuotationNumber(new Date().getFullYear(), 0)),
+      items: body.quote.items
+        .filter((it: { name?: unknown; total?: unknown }) => it && typeof it.name === "string")
+        .map((it: { name: string; total: number }) => ({
+          name: it.name,
+          total: Number(it.total) || 0,
+        })),
+      subtotal: Number(body.quote.subtotal) || 0,
+      gst: Number(body.quote.gst) || 0,
+      grandTotal: Number(body.quote.grandTotal) || 0,
+    };
+  } else if (body.includeQuote && lengthFt > 0 && widthFt > 0) {
     const primary = sports[0];
     const rateSport: Sport = SUPPORTED_SPORTS.includes(primary as Sport)
       ? (primary as Sport)

@@ -6,6 +6,7 @@
 // annotations, etc. Every change calls onUpdate with a partial patch that
 // the parent merges into the layout JSON.
 
+import { useState } from "react";
 import type {
   Element,
   AnnotationElement,
@@ -27,6 +28,7 @@ import {
   HIGHLIGHT_PRESETS,
   type HighlightSectionPreset,
 } from "@/lib/court-image/schema";
+import { resolveColorName, knownColorNames } from "@/lib/court-image/color-names";
 
 type Props = {
   element: Element;
@@ -786,10 +788,16 @@ function HighlightZoneFields({
   // value isn't in the expected shape (shouldn't happen from our
   // factory but be forgiving on re-open of hand-edited layouts).
   const parsed = parseRgba(element.fill);
-  const hex = parsed
-    ? rgbToHex(parsed.r, parsed.g, parsed.b)
-    : "#ffc107";
+  const hex = parsed ? rgbToHex(parsed.r, parsed.g, parsed.b) : "#ffc107";
   const alpha = parsed ? parsed.a : 0.45;
+
+  function applyHex(newHex: string) {
+    const rgb = hexToRgb(newHex);
+    if (rgb) {
+      onUpdate({ fill: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})` });
+    }
+  }
+
   return (
     <>
       <Section label="Zone size">
@@ -806,20 +814,13 @@ function HighlightZoneFields({
           />
         </div>
       </Section>
-      <Section label="Fill">
-        <ColorInput
-          label="Colour"
-          value={hex}
-          onChange={(v) => {
-            const rgb = hexToRgb(v);
-            if (rgb) {
-              onUpdate({
-                fill: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`,
-              });
-            }
-          }}
-        />
-        <div>
+      <Section label="Colour">
+        {/* Primary control — type a colour NAME. Sales asked to pick
+            highlight colours by name ("sky blue", "maroon") rather than
+            hex codes / picker. The hex picker below stays as a fallback
+            for exact brand tones. */}
+        <ColorNameInput hex={hex} onResolved={applyHex} />
+        <div className="pt-1">
           <Label>Opacity ({Math.round(alpha * 100)}%)</Label>
           <input
             type="range"
@@ -836,8 +837,83 @@ function HighlightZoneFields({
             className="w-full"
           />
         </div>
+        <details className="pt-1">
+          <summary className="text-[11px] text-slate-500 cursor-pointer select-none">
+            Pick exact colour (advanced)
+          </summary>
+          <div className="pt-2">
+            <ColorInput label="Hex" value={hex} onChange={applyHex} />
+          </div>
+        </details>
       </Section>
     </>
+  );
+}
+
+// Colour-name text field with autocomplete + live swatch. Resolves the
+// typed name to a hex on change; shows a red hint when the name isn't
+// recognised so sales knows to try another word or use the hex picker.
+function ColorNameInput({
+  hex,
+  onResolved,
+}: {
+  hex: string;
+  onResolved: (hex: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState(false);
+
+  function handleChange(v: string) {
+    setText(v);
+    if (v.trim().length === 0) {
+      setError(false);
+      return;
+    }
+    const { hex: resolved } = resolveColorName(v);
+    if (resolved) {
+      setError(false);
+      onResolved(resolved);
+    } else {
+      setError(true);
+    }
+  }
+
+  return (
+    <div>
+      <Label>Colour name</Label>
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-block w-7 h-7 rounded border border-slate-300 flex-shrink-0"
+          style={{ backgroundColor: hex }}
+          title={hex}
+        />
+        <input
+          type="text"
+          list="fitoverse-color-names"
+          value={text}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder="e.g. sky blue, maroon, sea green"
+          className={`flex-1 px-2 py-1.5 text-xs border rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 ${
+            error ? "border-red-400" : "border-slate-300"
+          }`}
+        />
+      </div>
+      <datalist id="fitoverse-color-names">
+        {knownColorNames().map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
+      {error ? (
+        <div className="text-[10.5px] text-red-500 mt-1">
+          Couldn&apos;t match that colour name. Try another word, or use
+          the exact-colour picker below.
+        </div>
+      ) : (
+        <div className="text-[10.5px] text-slate-500 mt-1">
+          Type a colour name and the highlight updates. Current: {hex}
+        </div>
+      )}
+    </div>
   );
 }
 

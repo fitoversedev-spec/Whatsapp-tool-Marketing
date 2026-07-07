@@ -41,6 +41,8 @@ export default function DesignAttachments({
   const [products, setProducts] = useState<ProductDTO[]>([]);
   const [tds, setTds] = useState<TdsDTO[]>([]);
   const [loading, setLoading] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     setActiveSport(primarySport);
@@ -76,7 +78,7 @@ export default function DesignAttachments({
     return () => {
       cancelled = true;
     };
-  }, [tab, activeSport]);
+  }, [tab, activeSport, refreshKey]);
 
   function toggleProduct(id: string, isEquipment: boolean) {
     const key = isEquipment ? "equipmentIds" : "productIds";
@@ -116,14 +118,25 @@ export default function DesignAttachments({
         </select>
       )}
 
-      <a
-        href="/products"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block text-center text-[11px] text-wa-dark hover:underline border border-dashed border-wa-green/40 rounded-md py-1.5"
+      {/* Inline add — create a product / equipment / TDS right here
+          without leaving the canvas (so the design isn't lost). */}
+      <button
+        type="button"
+        onClick={() => setAdding((a) => !a)}
+        className="block w-full text-center text-[11px] text-wa-dark hover:bg-wa-green/5 border border-dashed border-wa-green/40 rounded-md py-1.5"
       >
-        + Add new in Products page ↗
-      </a>
+        {adding ? "Cancel" : `+ Add ${tab === "tds" ? "TDS" : tab === "equipment" ? "equipment" : "product"} here`}
+      </button>
+      {adding && (
+        <InlineAddForm
+          tab={tab}
+          sport={activeSport}
+          onDone={() => {
+            setAdding(false);
+            setRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
 
       {loading ? (
         <div className="text-[11px] text-slate-500 italic py-2">Loading…</div>
@@ -205,6 +218,109 @@ export default function DesignAttachments({
 
       <SelectionSummary attachments={attachments} />
     </div>
+  );
+}
+
+// Compact inline creator for a product / equipment / TDS. Posts to the
+// same APIs the Products page uses, then the parent refreshes the list.
+// Sport is pre-filled from the active sport so it shows up immediately.
+function InlineAddForm({
+  tab,
+  sport,
+  onDone,
+}: {
+  tab: AttachmentTab;
+  sport: string;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    if (!name.trim()) {
+      setErr("Name required");
+      return;
+    }
+    setBusy(true);
+    try {
+      const form = new FormData();
+      if (tab === "tds") {
+        if (!file) {
+          setErr("PDF required");
+          setBusy(false);
+          return;
+        }
+        form.set("sport", sport);
+        form.set("name", name.trim());
+        form.set("file", file);
+        const r = await fetch("/api/products/tds", { method: "POST", body: form });
+        if (!r.ok) throw new Error((await r.json()).error ?? "failed");
+      } else {
+        form.set("name", name.trim());
+        form.set("type", tab === "equipment" ? "equipment" : "flooring");
+        form.set("description", description);
+        form.set("sports", JSON.stringify([sport]));
+        if (file) form.set("hero", file);
+        const r = await fetch("/api/products", { method: "POST", body: form });
+        if (!r.ok) throw new Error((await r.json()).error ?? "failed");
+      }
+      onDone();
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="border border-slate-200 rounded-md bg-white p-2 space-y-1.5"
+    >
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={
+          tab === "tds"
+            ? "TDS name (e.g. Turf 50mm — TDS)"
+            : tab === "equipment"
+              ? "Equipment name (e.g. Goal post)"
+              : "Product name (e.g. Turf 50mm)"
+        }
+        className="w-full px-2 py-1.5 text-[11px] border border-slate-300 rounded"
+      />
+      {tab !== "tds" && (
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={2}
+          placeholder="Short description (optional)"
+          className="w-full px-2 py-1.5 text-[11px] border border-slate-300 rounded resize-none"
+        />
+      )}
+      <input
+        type="file"
+        accept={tab === "tds" ? "application/pdf" : "image/*"}
+        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        className="w-full text-[11px]"
+      />
+      {err && <div className="text-[10.5px] text-red-500">{err}</div>}
+      <div className="text-[10px] text-slate-400">
+        Adds to <span className="capitalize">{sport}</span>.
+      </div>
+      <button
+        type="submit"
+        disabled={busy}
+        className="w-full bg-wa-green hover:bg-wa-green/90 text-white text-[11px] font-medium py-1.5 rounded disabled:opacity-50"
+      >
+        {busy ? "Saving…" : "Save & attach"}
+      </button>
+    </form>
   );
 }
 

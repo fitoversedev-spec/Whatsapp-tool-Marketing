@@ -244,6 +244,25 @@ export default function CourtCanvas({
             layout.style.groundColorOverride,
           )}
         />
+        {/* Base work (concrete / asphalt sub-base) — the foundation the
+            court is built on. Drawn as a slab under the plot that extends a
+            little past it, so a concrete/asphalt frame shows around the
+            court — mirroring the raised base pad in the 3D view (colours
+            match: asphalt #35383d, concrete #c2c8ce). */}
+        {layout.style.baseWork &&
+          (() => {
+            const m = Math.max(6, 1.8 * pxPerFt);
+            return (
+              <Rect
+                x={plotOriginX - m}
+                y={plotOriginY - m}
+                width={plotPxWidth + 2 * m}
+                height={plotPxHeight + 2 * m}
+                cornerRadius={3}
+                fill={layout.style.baseWork === "asphalt" ? "#35383d" : "#c2c8ce"}
+              />
+            );
+          })()}
         {/* Plot footprint (the actual customer land) — drawn with a faint
             border so even a blank plot is visible against the ground.
             When a tiled surface is picked (e.g. PPE tile), the plot is
@@ -262,6 +281,7 @@ export default function CourtCanvas({
           runOffTone={layout.style.runOffTone}
           runOffColorOverride={layout.style.runOffColorOverride}
           surfaceColorOverride={layout.style.surfaceColorOverride}
+          baseWork={layout.style.baseWork}
           productName={layout.style.flooringProductName}
           productImageUrl={layout.style.flooringProductImageUrl}
         />
@@ -2086,6 +2106,7 @@ function PlotSurface({
   runOffTone,
   runOffColorOverride,
   surfaceColorOverride,
+  baseWork,
   productName,
   productImageUrl,
 }: {
@@ -2115,6 +2136,10 @@ function PlotSurface({
   // built-in SURFACE_SOLID_COLOR / TILE_SOLID_COLORS lookup so sales
   // can dial in a specific brand colour that isn't in the presets.
   surfaceColorOverride?: string;
+  // Base work (concrete / asphalt sub-base). On a plain surface the plot
+  // fill takes the base colour so the run-off around the court reads as
+  // the foundation — matching the 3D pad — instead of bare sand.
+  baseWork?: "" | "concrete" | "asphalt" | null;
   // Linked flooring product — when set, the right-side callout shows
   // the actual product photo + name so the customer sees exactly what
   // they're getting instead of only the generic material sample.
@@ -2219,10 +2244,20 @@ function PlotSurface({
   // Explicit hex override wins over the preset lookup. Lets sales
   // paint the plot any colour without needing us to add a new surface
   // preset for every brand tone.
+  // On a plain surface (no flooring product tiling the plot), a chosen
+  // base work paints the plot fill so the area around the court reads as
+  // the concrete/asphalt foundation (mirrors the 3D pad colours).
+  const baseWorkColor =
+    baseWork === "asphalt"
+      ? "#35383d"
+      : baseWork === "concrete"
+        ? "#c2c8ce"
+        : null;
   const solidFillBase =
     surfaceColorOverride ??
     TILE_SOLID_COLORS[surface] ??
     SURFACE_SOLID_COLOR[surface] ??
+    baseWorkColor ??
     "#caa477";
   // Darken plot fill when run-off distinction is requested. The sport
   // court shapes below still paint the FULL solidFillBase colour inside

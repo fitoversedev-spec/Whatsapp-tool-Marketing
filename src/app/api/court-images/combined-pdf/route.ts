@@ -33,6 +33,7 @@ import {
   recompute,
   buildQuotationNumber,
 } from "@/lib/quotation/calculator";
+import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -169,5 +170,28 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ url: uploaded.url, sent });
+  // Optional send by email as a PDF attachment.
+  let emailed: boolean | "not_configured" = false;
+  if (body.email && typeof body.email === "string") {
+    if (!isEmailConfigured()) {
+      emailed = "not_configured";
+    } else {
+      const res = await sendEmail({
+        to: body.email,
+        subject: `Fitoverse court design — ${input.customerName || "your project"}`,
+        html: `<p>Hi,</p><p>Please find attached your Fitoverse court design proposal${
+          input.plotLabel ? ` (${input.plotLabel})` : ""
+        }.</p><p>You can also view it here: <a href="${uploaded.url}">${uploaded.url}</a></p><p>— Fitoverse</p>`,
+        attachments: [
+          {
+            filename: "fitoverse-court-design.pdf",
+            content: Buffer.from(pdfBytes).toString("base64"),
+          },
+        ],
+      });
+      emailed = res.sent;
+    }
+  }
+
+  return NextResponse.json({ url: uploaded.url, sent, emailed });
 }

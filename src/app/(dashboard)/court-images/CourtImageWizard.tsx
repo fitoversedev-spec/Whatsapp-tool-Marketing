@@ -3047,7 +3047,8 @@ function CombinedPdfBlock({
 }) {
   const toast = useToast();
   const [includeQuote, setIncludeQuote] = useState(false);
-  const [busy, setBusy] = useState<"" | "download" | "send">("");
+  const [busy, setBusy] = useState<"" | "download" | "send" | "email">("");
+  const [email, setEmail] = useState("");
 
   const att = layout.attachments ?? {
     productIds: [],
@@ -3057,11 +3058,9 @@ function CombinedPdfBlock({
   const attachCount =
     att.productIds.length + att.equipmentIds.length + att.tdsIds.length;
 
-  async function build(send: boolean) {
-    setBusy(send ? "send" : "download");
+  async function build(mode: "download" | "send" | "email") {
+    setBusy(mode);
     try {
-      // 2D image — prefer the already-rendered Step-3 PNG, else render
-      // fresh isn't available here, so require the 2D preview.
       const image2d = pngDataUrl2D ?? undefined;
       const image3d = canvas3dRef.current?.toDataURL(2) ?? undefined;
       const payload = {
@@ -3076,8 +3075,9 @@ function CombinedPdfBlock({
         image3d,
         attachments: att,
         includeQuote,
-        send,
-        contactPhone: send ? contactPhone : undefined,
+        send: mode === "send",
+        contactPhone: mode === "send" ? contactPhone : undefined,
+        email: mode === "email" ? email.trim() : undefined,
       };
       const r = await fetch("/api/court-images/combined-pdf", {
         method: "POST",
@@ -3086,8 +3086,18 @@ function CombinedPdfBlock({
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "build_failed");
-      if (send) {
+      if (mode === "send") {
         toast.success(j.sent ? "Combined PDF sent on WhatsApp" : "Built (send failed — check number)");
+      } else if (mode === "email") {
+        if (j.emailed === "not_configured") {
+          toast.error("Email isn't set up yet — PDF built, download link opened");
+          window.open(j.url, "_blank");
+        } else if (j.emailed) {
+          toast.success(`Emailed to ${email.trim()}`);
+        } else {
+          toast.error("Email failed — download link opened");
+          window.open(j.url, "_blank");
+        }
       } else {
         window.open(j.url, "_blank");
         toast.success("Combined PDF ready");
@@ -3124,7 +3134,7 @@ function CombinedPdfBlock({
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => build(false)}
+          onClick={() => build("download")}
           disabled={!!busy || !pngDataUrl2D}
           className="flex-1 text-xs font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded-md px-3 py-2 disabled:opacity-50"
         >
@@ -3132,11 +3142,31 @@ function CombinedPdfBlock({
         </button>
         <button
           type="button"
-          onClick={() => build(true)}
+          onClick={() => build("send")}
           disabled={!!busy || !pngDataUrl2D || !contactPhone}
           className="flex-1 text-xs font-medium bg-wa-green hover:bg-wa-green/90 text-white rounded-md px-3 py-2 disabled:opacity-50"
         >
           {busy === "send" ? "Sending…" : "Send on WhatsApp"}
+        </button>
+      </div>
+      {/* Email delivery — sends the PDF as an attachment. Works once
+          RESEND_API_KEY is set; until then it falls back to opening the
+          download link. */}
+      <div className="flex gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="customer@email.com"
+          className="flex-1 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+        />
+        <button
+          type="button"
+          onClick={() => build("email")}
+          disabled={!!busy || !pngDataUrl2D || !email.trim()}
+          className="text-xs font-medium border border-wa-green/40 text-wa-dark hover:bg-wa-green/10 rounded-md px-3 py-1.5 disabled:opacity-50 whitespace-nowrap"
+        >
+          {busy === "email" ? "Emailing…" : "Send by email"}
         </button>
       </div>
       {!pngDataUrl2D && (

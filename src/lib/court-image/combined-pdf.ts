@@ -335,7 +335,7 @@ async function drawProduct(ctx: Ctx, p: ProductDTO) {
     );
     ly -= 12;
   }
-  const desc = htmlToPlainText(p.description).slice(0, 260);
+  const desc = htmlToPlainText(p.description).slice(0, 220);
   if (desc) {
     for (const line of wrap(ctx.font, sanitize(desc), 8.5, w)) {
       ctx.page.drawText(line, { x: textX, y: ly, size: 8.5, font: ctx.font, color: COL.soft });
@@ -343,6 +343,82 @@ async function drawProduct(ctx: Ctx, p: ProductDTO) {
     }
   }
   ctx.y = Math.min(ly, startY - 62) - 6;
+
+  // Spec table — key/value rows in a clean 2-column table.
+  const specEntries = Object.entries(p.specs).filter(
+    ([, v]) => v && String(v).trim(),
+  );
+  if (specEntries.length > 0) {
+    drawSpecTable(ctx, specEntries);
+  }
+  gap(ctx, 6);
+}
+
+// Two-column spec table (Specification | Value) with a header band and
+// row separators. Full content width, indented under the product.
+function drawSpecTable(ctx: Ctx, entries: Array<[string, string]>) {
+  const tableX = MARGIN + 8;
+  const tableW = CONTENT_W - 8;
+  const col1 = Math.round(tableW * 0.42);
+  const rowH = 15;
+  ensure(ctx, rowH * (entries.length + 1) + 6);
+
+  // Header
+  ctx.page.drawRectangle({
+    x: tableX,
+    y: ctx.y - rowH,
+    width: tableW,
+    height: rowH,
+    color: COL.band,
+  });
+  ctx.page.drawText("Specification", {
+    x: tableX + 5,
+    y: ctx.y - rowH + 4,
+    size: 8,
+    font: ctx.bold,
+    color: COL.ink,
+  });
+  ctx.page.drawText("Value", {
+    x: tableX + col1 + 5,
+    y: ctx.y - rowH + 4,
+    size: 8,
+    font: ctx.bold,
+    color: COL.ink,
+  });
+  ctx.y -= rowH;
+
+  for (const [k, v] of entries) {
+    ensure(ctx, rowH);
+    const label = sanitize(
+      k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim(),
+    );
+    // Row border
+    ctx.page.drawRectangle({
+      x: tableX,
+      y: ctx.y - rowH,
+      width: tableW,
+      height: rowH,
+      borderColor: COL.line,
+      borderWidth: 0.5,
+    });
+    ctx.page.drawText(label.slice(0, 40), {
+      x: tableX + 5,
+      y: ctx.y - rowH + 4,
+      size: 8,
+      font: ctx.font,
+      color: COL.soft,
+    });
+    // Value — wrap/truncate to the column.
+    const valLines = wrap(ctx.font, sanitize(String(v)), 8, tableW - col1 - 10);
+    ctx.page.drawText(valLines[0] ?? "", {
+      x: tableX + col1 + 5,
+      y: ctx.y - rowH + 4,
+      size: 8,
+      font: ctx.font,
+      color: COL.ink,
+    });
+    ctx.y -= rowH;
+  }
 }
 
 function drawTotalLine(ctx: Ctx, label: string, val: number, strong = false) {

@@ -1907,6 +1907,16 @@ export default function CourtImageWizard({
           {step === 3 && (
             <Step3
               layout={layout}
+              pngDataUrl3D={pngDataUrl3D}
+              onEnsure3D={async () => {
+                // Make sure the 3D scene is rendered + captured so the
+                // combined PDF can include it even if the user never
+                // opened the 3D tab. Switch to 3D, let it render, grab
+                // the PNG.
+                setPreviewMode("3d-image");
+                await new Promise((r) => setTimeout(r, 800));
+                return capture3D() ?? null;
+              }}
               previewMode={previewMode}
               setPreviewMode={setPreviewMode}
               pngDataUrl2D={pngDataUrl2D}
@@ -2786,6 +2796,8 @@ function Step1(props: {
 
 function Step3({
   layout,
+  pngDataUrl3D,
+  onEnsure3D,
   previewMode,
   setPreviewMode,
   pngDataUrl2D,
@@ -2809,6 +2821,8 @@ function Step3({
   onGenerateVideo,
 }: {
   layout: CourtLayout | null;
+  pngDataUrl3D: string | null;
+  onEnsure3D: () => Promise<string | null>;
   previewMode: "2d" | "3d-image" | "3d-video";
   setPreviewMode: (v: "2d" | "3d-image" | "3d-video") => void;
   pngDataUrl2D: string | null;
@@ -3022,6 +3036,8 @@ function Step3({
           <CombinedPdfBlock
             layout={layout}
             pngDataUrl2D={pngDataUrl2D}
+            pngDataUrl3D={pngDataUrl3D}
+            onEnsure3D={onEnsure3D}
             canvas3dRef={canvas3dRef}
             contactPhone={contactPhone}
             customerName={customerName}
@@ -3186,12 +3202,16 @@ function Row({
 function CombinedPdfBlock({
   layout,
   pngDataUrl2D,
+  pngDataUrl3D,
+  onEnsure3D,
   canvas3dRef,
   contactPhone,
   customerName,
 }: {
   layout: CourtLayout;
   pngDataUrl2D: string | null;
+  pngDataUrl3D: string | null;
+  onEnsure3D: () => Promise<string | null>;
   canvas3dRef: React.MutableRefObject<CourtCanvas3DHandle | null>;
   contactPhone: string;
   customerName: string;
@@ -3278,7 +3298,14 @@ function CombinedPdfBlock({
     setBusy(mode);
     try {
       const image2d = pngDataUrl2D ?? undefined;
-      const image3d = canvas3dRef.current?.toDataURL(2) ?? undefined;
+      // 3D image — use the already-captured snapshot; if none exists
+      // (user never opened the 3D tab), render + capture it now so the
+      // PDF always includes the 3D view.
+      let image3d =
+        pngDataUrl3D ?? canvas3dRef.current?.toDataURL(2) ?? undefined;
+      if (!image3d) {
+        image3d = (await onEnsure3D()) ?? undefined;
+      }
       const payload = {
         customerName,
         plotLabel: `${layout.plot.lengthFt} × ${layout.plot.widthFt} ft`,

@@ -93,6 +93,83 @@ type Props = {
   editingId?: string;
 };
 
+// A single editable quotation line. `qty` is the area in sq.ft for
+// area-priced rows or a piece count for per-piece rows; line total is
+// always qty × rate. Seeded from the sport's rate sheet, then fully
+// editable (and extendable with custom rows) in the Quotation step.
+type QuoteLineItem = {
+  id: string;
+  name: string;
+  desc: string;
+  qty: number;
+  unit: string;
+  rate: number;
+  gst: number;
+  included: boolean;
+};
+
+let quoteLineSeq = 0;
+function newQuoteLineId() {
+  quoteLineSeq += 1;
+  return `q-${quoteLineSeq}-${Math.floor(Math.random() * 1e6)}`;
+}
+
+function cap(s: string) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+// Human-friendly default quotation number, e.g. "FIT-2026-4821".
+function defaultQuoteNumber() {
+  const year = new Date().getFullYear();
+  const rand = String(Math.floor(1000 + Math.random() * 9000));
+  return `FIT-${year}-${rand}`;
+}
+
+// Live totals over the included line items (qty × rate, + GST%).
+function computeQuoteTotals(items: QuoteLineItem[]) {
+  let subtotal = 0;
+  let gst = 0;
+  for (const it of items) {
+    if (!it.included) continue;
+    const line = it.qty * it.rate;
+    subtotal += line;
+    gst += (line * it.gst) / 100;
+  }
+  return {
+    subtotal: Math.round(subtotal),
+    gst: Math.round(gst),
+    grandTotal: Math.round(subtotal + gst),
+  };
+}
+
+// Shape the wizard quote into the combined-PDF payload.
+function buildQuotePayload(
+  number: string,
+  title: string,
+  notes: string,
+  items: QuoteLineItem[],
+) {
+  const t = computeQuoteTotals(items);
+  return {
+    number: number || defaultQuoteNumber(),
+    title: title.trim() || null,
+    notes: notes.trim() || null,
+    items: items
+      .filter((i) => i.included)
+      .map((i) => ({
+        name: i.name,
+        desc: i.desc.trim() || null,
+        qty: i.qty,
+        unit: i.unit || null,
+        rate: i.rate,
+        total: Math.round(i.qty * i.rate),
+      })),
+    subtotal: t.subtotal,
+    gst: t.gst,
+    grandTotal: t.grandTotal,
+  };
+}
+
 // Sports the wizard can lay out. "multisport" is a base surface; others
 // are stacked or substituted depending on combinations.
 const SPORTS: Sport[] = [
@@ -114,7 +191,7 @@ export default function CourtImageWizard({
   editingId,
 }: Props) {
   const toast = useToast();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Step 1 state
   const [customerName, setCustomerName] = useState(prefill?.customerName ?? "");
@@ -200,6 +277,16 @@ export default function CourtImageWizard({
     "3d-video"?: string;
   }>({});
 
+  // ── Step 3 (Quotation) state ──
+  // Sales seeds a quote here — number, title, notes and fully editable
+  // line items — which then flows into the combined PDF on the Send step.
+  const [quoteEnabled, setQuoteEnabled] = useState(false);
+  const [quoteNumber, setQuoteNumber] = useState("");
+  const [quoteTitle, setQuoteTitle] = useState("");
+  const [quoteNotes, setQuoteNotes] = useState("");
+  const [quoteItems, setQuoteItems] = useState<QuoteLineItem[]>([]);
+  const [quoteSeeded, setQuoteSeeded] = useState(false);
+
   const canvasRef = useRef<CourtCanvasHandle | null>(null);
   const canvas3dRef = useRef<CourtCanvas3DHandle | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -244,6 +331,12 @@ export default function CourtImageWizard({
       setPngDataUrl2D(null);
       setPngDataUrl3D(null);
       setPreviewMode("2d");
+      setQuoteEnabled(false);
+      setQuoteNumber(defaultQuoteNumber());
+      setQuoteTitle("");
+      setQuoteNotes("");
+      setQuoteItems([]);
+      setQuoteSeeded(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingId]);
@@ -370,6 +463,64 @@ export default function CourtImageWizard({
     setPreviewMode("2d");
     setStep(3);
   }
+
+  // Seed the quotation line items from the primary sport's rate sheet,
+  // sized to the plot. Fully editable afterwards. Returns silently if
+  // there's no rate sheet for the sport (sales can still add rows).
+  async function seedQuoteFromRates(force = false) {
+    if (!layout) return;
+    if (quoteItems.length > 0 && !force) return;
+    const L = layout.plot.lengthFt;
+    const W = layout.plot.widthFt;
+    const supported = ["football", "basketball", "multisport", "pickleball"];
+    const primary = layout.sports[0];
+    const rateSport = supported.includes(primary) ? primary : "multisport";
+    try {
+      const r = await fetch(`/api/quotations/rates?sport=${rateSport}`);
+      const j = await r.json();
+      const items: QuoteLineItem[] = (j.items ?? []).map(
+        (it: {
+          id: string;
+          name: string;
+          areaMode: string;
+          defaultRate: number;
+          gstPercent: number;
+          optional?: boolean;
+        }) => {
+          const qty =
+            it.areaMode === "perimeter"
+              ? 2 * (L + W)
+              : it.areaMode === "per_piece"
+                ? 1
+                : L * W;
+          const unit = it.areaMode === "per_piece" ? "nos" : "sq.ft";
+          return {
+            id: newQuoteLineId(),
+            name: it.name,
+            desc: "",
+            qty,
+            unit,
+            rate: it.defaultRate,
+            gst: it.gstPercent,
+            included: !it.optional,
+          };
+        },
+      );
+      setQuoteItems(items);
+    } catch {
+      // No rate sheet — leave items empty; sales adds rows manually.
+    }
+  }
+
+  // Entering the Quotation step for the first time: seed a starting
+  // quote from the rate sheet so sales has a base to edit.
+  useEffect(() => {
+    if (step !== 3 || quoteSeeded) return;
+    setQuoteSeeded(true);
+    if (!quoteNumber) setQuoteNumber(defaultQuoteNumber());
+    seedQuoteFromRates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, quoteSeeded]);
 
   // Capture the current 3D scene as PNG. Called when the user switches to
   // 3D tab + clicks Refresh, and right before save/send if 3D is the
@@ -1904,10 +2055,33 @@ export default function CourtImageWizard({
             </div>
           )}
 
-          {step === 3 && (
+          {step === 3 && layout && (
+            <StepQuotation
+              layout={layout}
+              customerName={customerName}
+              quoteEnabled={quoteEnabled}
+              setQuoteEnabled={setQuoteEnabled}
+              quoteNumber={quoteNumber}
+              setQuoteNumber={setQuoteNumber}
+              quoteTitle={quoteTitle}
+              setQuoteTitle={setQuoteTitle}
+              quoteNotes={quoteNotes}
+              setQuoteNotes={setQuoteNotes}
+              quoteItems={quoteItems}
+              setQuoteItems={setQuoteItems}
+              onReseed={() => seedQuoteFromRates(true)}
+            />
+          )}
+
+          {step === 4 && (
             <Step3
               layout={layout}
               pngDataUrl3D={pngDataUrl3D}
+              quoteEnabled={quoteEnabled}
+              quoteNumber={quoteNumber}
+              quoteTitle={quoteTitle}
+              quoteNotes={quoteNotes}
+              quoteItems={quoteItems}
               onEnsureSaved={async () => {
                 // Save the design (if not already) so it has an id, and
                 // return the public 3D viewer link for it.
@@ -1959,7 +2133,7 @@ export default function CourtImageWizard({
             {step > 1 && (
               <button
                 type="button"
-                onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3)}
+                onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3 | 4)}
                 className="text-sm text-slate-600 hover:text-slate-900 px-3 py-1.5"
               >
                 ← Back
@@ -1983,10 +2157,19 @@ export default function CourtImageWizard({
                 onClick={goStep3}
                 className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-5 py-2 rounded-lg text-sm"
               >
-                Preview →
+                Quotation →
               </button>
             )}
             {step === 3 && (
+              <button
+                type="button"
+                onClick={() => setStep(4)}
+                className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-5 py-2 rounded-lg text-sm"
+              >
+                Preview & Send →
+              </button>
+            )}
+            {step === 4 && (
               <>
                 <button
                   type="button"
@@ -2802,12 +2985,281 @@ function Step1(props: {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-//  Step 3 — preview + send
+//  Step 3 — Quotation (seed name / notes / line items → combined PDF)
+// ─────────────────────────────────────────────────────────────────────
+
+function StepQuotation({
+  layout,
+  customerName,
+  quoteEnabled,
+  setQuoteEnabled,
+  quoteNumber,
+  setQuoteNumber,
+  quoteTitle,
+  setQuoteTitle,
+  quoteNotes,
+  setQuoteNotes,
+  quoteItems,
+  setQuoteItems,
+  onReseed,
+}: {
+  layout: CourtLayout;
+  customerName: string;
+  quoteEnabled: boolean;
+  setQuoteEnabled: (v: boolean) => void;
+  quoteNumber: string;
+  setQuoteNumber: (v: string) => void;
+  quoteTitle: string;
+  setQuoteTitle: (v: string) => void;
+  quoteNotes: string;
+  setQuoteNotes: (v: string) => void;
+  quoteItems: QuoteLineItem[];
+  setQuoteItems: React.Dispatch<React.SetStateAction<QuoteLineItem[]>>;
+  onReseed: () => void;
+}) {
+  const totals = computeQuoteTotals(quoteItems);
+  const area = layout.plot.lengthFt * layout.plot.widthFt;
+
+  function patch(id: string, next: Partial<QuoteLineItem>) {
+    setQuoteItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, ...next } : it)),
+    );
+  }
+  function remove(id: string) {
+    setQuoteItems((prev) => prev.filter((it) => it.id !== id));
+  }
+  function addRow() {
+    setQuoteItems((prev) => [
+      ...prev,
+      {
+        id: newQuoteLineId(),
+        name: "",
+        desc: "",
+        qty: 1,
+        unit: "nos",
+        rate: 0,
+        gst: 18,
+        included: true,
+      },
+    ]);
+  }
+
+  return (
+    <div className="h-full overflow-y-auto bg-slate-50">
+      <div className="max-w-3xl mx-auto p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">
+              Quotation
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Seed a quote for {customerName || "this customer"} — it&apos;s
+              attached to the combined PDF on the next step. Line items are
+              pre-filled from the {cap(layout.sports[0] ?? "sport")} rate
+              sheet, sized to {layout.plot.lengthFt} × {layout.plot.widthFt} ft
+              ({area.toLocaleString("en-IN")} sq.ft).
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-700 whitespace-nowrap cursor-pointer">
+            <input
+              type="checkbox"
+              checked={quoteEnabled}
+              onChange={(e) => setQuoteEnabled(e.target.checked)}
+              className="accent-wa-green w-4 h-4"
+            />
+            Attach quote to PDF
+          </label>
+        </div>
+
+        {!quoteEnabled ? (
+          <div className="text-sm text-slate-500 italic bg-white border border-dashed border-slate-200 rounded-lg px-4 py-6 text-center">
+            Quote is off. Tick “Attach quote to PDF” to build one, or skip
+            straight to Send.
+          </div>
+        ) : (
+          <>
+            {/* Header fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-600">
+                  Quotation number
+                </span>
+                <input
+                  value={quoteNumber}
+                  onChange={(e) => setQuoteNumber(e.target.value)}
+                  className="mt-1 w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-600">
+                  Title / project name
+                </span>
+                <input
+                  value={quoteTitle}
+                  onChange={(e) => setQuoteTitle(e.target.value)}
+                  placeholder="e.g. Salem 7-a-side turf"
+                  className="mt-1 w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                />
+              </label>
+            </div>
+            <label className="block">
+              <span className="text-[11px] font-medium text-slate-600">
+                Notes / description
+              </span>
+              <textarea
+                value={quoteNotes}
+                onChange={(e) => setQuoteNotes(e.target.value)}
+                rows={2}
+                placeholder="Scope, inclusions, validity, payment terms…"
+                className="mt-1 w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+              />
+            </label>
+
+            {/* Line items */}
+            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+                <span className="text-xs font-semibold text-slate-700">
+                  Line items
+                </span>
+                <button
+                  type="button"
+                  onClick={onReseed}
+                  className="text-[11px] text-wa-dark hover:underline"
+                >
+                  ↺ Reset from rate sheet
+                </button>
+              </div>
+
+              {/* Column header (desktop) */}
+              <div className="hidden sm:grid grid-cols-[auto_1fr_5rem_4rem_6rem_6rem_auto] gap-2 px-3 py-1.5 text-[10px] font-medium text-slate-400 uppercase tracking-wide">
+                <span></span>
+                <span>Item</span>
+                <span className="text-right">Qty</span>
+                <span>Unit</span>
+                <span className="text-right">Rate ₹</span>
+                <span className="text-right">Amount</span>
+                <span></span>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {quoteItems.length === 0 ? (
+                  <div className="px-3 py-4 text-[12px] text-slate-500 italic">
+                    No line items. Add one below or reset from the rate sheet.
+                  </div>
+                ) : (
+                  quoteItems.map((it) => {
+                    const amount = Math.round(it.qty * it.rate);
+                    return (
+                      <div
+                        key={it.id}
+                        className="grid grid-cols-2 sm:grid-cols-[auto_1fr_5rem_4rem_6rem_6rem_auto] gap-2 px-3 py-2 items-center"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={it.included}
+                          onChange={(e) =>
+                            patch(it.id, { included: e.target.checked })
+                          }
+                          className="accent-wa-green w-4 h-4 row-start-1"
+                          title="Include in quote"
+                        />
+                        <div className="col-span-2 sm:col-span-1 order-last sm:order-none">
+                          <input
+                            value={it.name}
+                            onChange={(e) => patch(it.id, { name: e.target.value })}
+                            placeholder="Item name"
+                            className={`w-full px-2 py-1 text-[12px] border border-slate-200 rounded ${
+                              it.included ? "text-slate-800" : "text-slate-400"
+                            }`}
+                          />
+                          <input
+                            value={it.desc}
+                            onChange={(e) => patch(it.id, { desc: e.target.value })}
+                            placeholder="Description (optional)"
+                            className="mt-1 w-full px-2 py-0.5 text-[10.5px] text-slate-500 border border-transparent hover:border-slate-200 focus:border-slate-200 rounded"
+                          />
+                        </div>
+                        <input
+                          type="number"
+                          value={it.qty}
+                          onChange={(e) =>
+                            patch(it.id, { qty: Number(e.target.value) || 0 })
+                          }
+                          className="w-full px-1.5 py-1 text-[12px] text-right border border-slate-200 rounded"
+                        />
+                        <input
+                          value={it.unit}
+                          onChange={(e) => patch(it.id, { unit: e.target.value })}
+                          className="w-full px-1.5 py-1 text-[12px] border border-slate-200 rounded"
+                        />
+                        <input
+                          type="number"
+                          value={it.rate}
+                          onChange={(e) =>
+                            patch(it.id, { rate: Number(e.target.value) || 0 })
+                          }
+                          className="w-full px-1.5 py-1 text-[12px] text-right border border-slate-200 rounded"
+                        />
+                        <span className="text-[12px] text-right text-slate-700 tabular-nums">
+                          ₹{amount.toLocaleString("en-IN")}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => remove(it.id)}
+                          className="text-slate-400 hover:text-red-500 text-sm justify-self-end"
+                          title="Remove"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="px-3 py-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={addRow}
+                  className="text-[11px] text-wa-dark hover:bg-wa-green/5 border border-dashed border-wa-green/40 rounded-md px-3 py-1"
+                >
+                  + Add line item
+                </button>
+              </div>
+
+              {/* Totals */}
+              <div className="px-3 py-2.5 border-t border-slate-200 bg-slate-50 space-y-0.5 text-[12px]">
+                <div className="ml-auto max-w-[16rem] space-y-0.5">
+                  <Row label="Subtotal" value={totals.subtotal} />
+                  <Row label="GST" value={totals.gst} />
+                  <Row label="Grand total" value={totals.grandTotal} strong />
+                </div>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              GST is computed per line from each item&apos;s rate-sheet
+              percentage. Unticked rows are excluded from the total and the
+              PDF.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  Step 4 — preview + send
 // ─────────────────────────────────────────────────────────────────────
 
 function Step3({
   layout,
   pngDataUrl3D,
+  quoteEnabled,
+  quoteNumber,
+  quoteTitle,
+  quoteNotes,
+  quoteItems,
   onEnsureSaved,
   onEnsure3D,
   previewMode,
@@ -2834,6 +3286,11 @@ function Step3({
 }: {
   layout: CourtLayout | null;
   pngDataUrl3D: string | null;
+  quoteEnabled: boolean;
+  quoteNumber: string;
+  quoteTitle: string;
+  quoteNotes: string;
+  quoteItems: QuoteLineItem[];
   onEnsureSaved: () => Promise<string | null>;
   onEnsure3D: () => Promise<string | null>;
   previewMode: "2d" | "3d-image" | "3d-video";
@@ -3055,6 +3512,11 @@ function Step3({
             canvas3dRef={canvas3dRef}
             contactPhone={contactPhone}
             customerName={customerName}
+            quoteEnabled={quoteEnabled}
+            quoteNumber={quoteNumber}
+            quoteTitle={quoteTitle}
+            quoteNotes={quoteNotes}
+            quoteItems={quoteItems}
           />
         )}
 
@@ -3222,6 +3684,11 @@ function CombinedPdfBlock({
   canvas3dRef,
   contactPhone,
   customerName,
+  quoteEnabled,
+  quoteNumber,
+  quoteTitle,
+  quoteNotes,
+  quoteItems,
 }: {
   layout: CourtLayout;
   pngDataUrl2D: string | null;
@@ -3231,19 +3698,17 @@ function CombinedPdfBlock({
   canvas3dRef: React.MutableRefObject<CourtCanvas3DHandle | null>;
   contactPhone: string;
   customerName: string;
+  // Quote seeded on the Quotation step — read-only here.
+  quoteEnabled: boolean;
+  quoteNumber: string;
+  quoteTitle: string;
+  quoteNotes: string;
+  quoteItems: QuoteLineItem[];
 }) {
   const toast = useToast();
-  const [includeQuote, setIncludeQuote] = useState(false);
   const [include3dLink, setInclude3dLink] = useState(true);
   const [busy, setBusy] = useState<"" | "download" | "send" | "email">("");
   const [email, setEmail] = useState("");
-  // Editable quote line items — loaded from the sport's rate sheet when
-  // Include quote is turned on. Sales can tweak the rate + toggle items;
-  // the edited quote is what goes into the PDF.
-  const [quoteItems, setQuoteItems] = useState<
-    Array<{ id: string; name: string; area: number; rate: number; gst: number; included: boolean }>
-  >([]);
-  const [quoteLoaded, setQuoteLoaded] = useState(false);
 
   const att = layout.attachments ?? {
     productIds: [],
@@ -3253,63 +3718,9 @@ function CombinedPdfBlock({
   const attachCount =
     att.productIds.length + att.equipmentIds.length + att.tdsIds.length;
 
-  // Load the rate sheet the first time Include quote is switched on.
-  useEffect(() => {
-    if (!includeQuote || quoteLoaded) return;
-    const L = layout.plot.lengthFt;
-    const W = layout.plot.widthFt;
-    const supported = ["football", "basketball", "multisport", "pickleball"];
-    const primary = layout.sports[0];
-    const rateSport = supported.includes(primary) ? primary : "multisport";
-    fetch(`/api/quotations/rates?sport=${rateSport}`)
-      .then((r) => r.json())
-      .then((j) => {
-        const items = (j.items ?? []).map(
-          (it: {
-            id: string;
-            name: string;
-            areaMode: string;
-            defaultRate: number;
-            gstPercent: number;
-            optional?: boolean;
-          }) => {
-            const area =
-              it.areaMode === "perimeter"
-                ? 2 * (L + W)
-                : it.areaMode === "per_piece"
-                  ? 1
-                  : L * W;
-            return {
-              id: it.id,
-              name: it.name,
-              area,
-              rate: it.defaultRate,
-              gst: it.gstPercent,
-              included: !it.optional,
-            };
-          },
-        );
-        setQuoteItems(items);
-        setQuoteLoaded(true);
-      })
-      .catch(() => setQuoteLoaded(true));
-  }, [includeQuote, quoteLoaded, layout.plot.lengthFt, layout.plot.widthFt, layout.sports]);
-
-  const quoteTotals = (() => {
-    let subtotal = 0;
-    let gst = 0;
-    for (const it of quoteItems) {
-      if (!it.included) continue;
-      const line = it.area * it.rate;
-      subtotal += line;
-      gst += (line * it.gst) / 100;
-    }
-    return {
-      subtotal: Math.round(subtotal),
-      gst: Math.round(gst),
-      grandTotal: Math.round(subtotal + gst),
-    };
-  })();
+  const includedCount = quoteItems.filter((i) => i.included).length;
+  const quoteActive = quoteEnabled && includedCount > 0;
+  const quoteTotals = computeQuoteTotals(quoteItems);
 
   async function build(mode: "download" | "send" | "email") {
     setBusy(mode);
@@ -3342,18 +3753,10 @@ function CombinedPdfBlock({
         image3d,
         attachments: att,
         viewer3dUrl,
-        includeQuote,
-        quote:
-          includeQuote && quoteItems.length > 0
-            ? {
-                items: quoteItems
-                  .filter((it) => it.included)
-                  .map((it) => ({ name: it.name, total: it.area * it.rate })),
-                subtotal: quoteTotals.subtotal,
-                gst: quoteTotals.gst,
-                grandTotal: quoteTotals.grandTotal,
-              }
-            : undefined,
+        includeQuote: quoteActive,
+        quote: quoteActive
+          ? buildQuotePayload(quoteNumber, quoteTitle, quoteNotes, quoteItems)
+          : undefined,
         send: mode === "send",
         contactPhone: mode === "send" ? contactPhone : undefined,
         email: mode === "email" ? email.trim() : undefined,
@@ -3410,73 +3813,34 @@ function CombinedPdfBlock({
         />
         Include interactive 3D link (customer can rotate on their phone)
       </label>
-      <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={includeQuote}
-          onChange={(e) => setIncludeQuote(e.target.checked)}
-          className="accent-wa-green"
-        />
-        Include a quote in the PDF
-      </label>
 
-      {/* Editable quote — line items seeded from the sport's rate sheet.
-          Sales tweaks the rate / toggles items; live totals. This is
-          the quote that goes into the combined PDF. */}
-      {includeQuote && (
-        <div className="border border-slate-200 rounded-md bg-white p-2 space-y-1.5">
-          {!quoteLoaded ? (
-            <div className="text-[11px] text-slate-500 italic">
-              Loading rate sheet…
-            </div>
-          ) : quoteItems.length === 0 ? (
-            <div className="text-[11px] text-slate-500 italic">
-              No rate sheet for this sport. Set rates in Quotation rates.
-            </div>
-          ) : (
-            <>
-              {quoteItems.map((it, idx) => (
-                <div key={it.id} className="flex items-center gap-1.5 text-[11px]">
-                  <input
-                    type="checkbox"
-                    checked={it.included}
-                    onChange={(e) =>
-                      setQuoteItems((prev) =>
-                        prev.map((x, i) =>
-                          i === idx ? { ...x, included: e.target.checked } : x,
-                        ),
-                      )
-                    }
-                    className="accent-wa-green"
-                  />
-                  <span
-                    className={`flex-1 truncate ${it.included ? "text-slate-700" : "text-slate-400 line-through"}`}
-                    title={it.name}
-                  >
-                    {it.name}
-                  </span>
-                  <span className="text-slate-400">₹</span>
-                  <input
-                    type="number"
-                    value={it.rate}
-                    onChange={(e) =>
-                      setQuoteItems((prev) =>
-                        prev.map((x, i) =>
-                          i === idx ? { ...x, rate: Number(e.target.value) || 0 } : x,
-                        ),
-                      )
-                    }
-                    className="w-16 px-1 py-0.5 border border-slate-200 rounded text-right"
-                  />
-                </div>
-              ))}
-              <div className="border-t border-slate-200 pt-1.5 mt-1 space-y-0.5 text-[11px]">
-                <Row label="Subtotal" value={quoteTotals.subtotal} />
-                <Row label="GST" value={quoteTotals.gst} />
-                <Row label="Grand total" value={quoteTotals.grandTotal} strong />
-              </div>
-            </>
+      {/* Quote summary — seeded + edited on the Quotation step. Shown
+          read-only here so sales can confirm what the PDF will carry. */}
+      {quoteActive ? (
+        <div className="border border-slate-200 rounded-md bg-white p-2 space-y-1 text-[11px]">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-slate-800">
+              Quote {quoteNumber}
+            </span>
+            <span className="text-slate-500">
+              {includedCount} item{includedCount !== 1 ? "s" : ""}
+            </span>
+          </div>
+          {quoteTitle && (
+            <div className="text-slate-600 truncate">{quoteTitle}</div>
           )}
+          <div className="border-t border-slate-200 pt-1 mt-1 space-y-0.5">
+            <Row label="Subtotal" value={quoteTotals.subtotal} />
+            <Row label="GST" value={quoteTotals.gst} />
+            <Row label="Grand total" value={quoteTotals.grandTotal} strong />
+          </div>
+          <div className="text-[10px] text-slate-400 pt-0.5">
+            Edit on the Quotation step (← Back).
+          </div>
+        </div>
+      ) : (
+        <div className="text-[11px] text-slate-500 italic border border-dashed border-slate-200 rounded-md px-2 py-1.5">
+          No quote attached. Go back to the Quotation step to add one.
         </div>
       )}
       <div className="flex gap-2">
@@ -3574,12 +3938,12 @@ function selectedFormatCount(s: {
 //  Small UI bits
 // ─────────────────────────────────────────────────────────────────────
 
-function StepDots({ current }: { current: 1 | 2 | 3 }) {
-  const labels = ["Sports", "Design", "Send"];
+function StepDots({ current }: { current: 1 | 2 | 3 | 4 }) {
+  const labels = ["Sports", "Design", "Quotation", "Send"];
   return (
     <div className="flex items-center gap-2 text-xs">
       {labels.map((label, i) => {
-        const n = (i + 1) as 1 | 2 | 3;
+        const n = (i + 1) as 1 | 2 | 3 | 4;
         const active = n === current;
         const done = n < current;
         return (
@@ -3598,7 +3962,7 @@ function StepDots({ current }: { current: 1 | 2 | 3 }) {
             <span className={active ? "text-slate-900 font-medium" : "text-slate-500"}>
               {label}
             </span>
-            {n < 3 && <span className="text-slate-300">·</span>}
+            {n < labels.length && <span className="text-slate-300">·</span>}
           </div>
         );
       })}

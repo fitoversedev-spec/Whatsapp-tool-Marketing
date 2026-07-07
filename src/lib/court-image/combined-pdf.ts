@@ -34,7 +34,16 @@ const COL = {
 
 export type CombinedQuote = {
   number: string;
-  items: Array<{ name: string; total: number }>;
+  title?: string | null;
+  notes?: string | null;
+  items: Array<{
+    name: string;
+    desc?: string | null;
+    qty?: number;
+    unit?: string | null;
+    rate?: number;
+    total: number;
+  }>;
   subtotal: number;
   gst: number;
   grandTotal: number;
@@ -293,31 +302,7 @@ export async function renderCombinedPdf(
 
   // ── Quote (optional) ──
   if (input.quote) {
-    sectionTitle(ctx, `Quotation ${input.quote.number}`);
-    for (const it of input.quote.items) {
-      ensure(ctx, 14);
-      const label = sanitize(it.name);
-      const val = `Rs ${it.total.toLocaleString("en-IN")}`;
-      ctx.page.drawText(label.slice(0, 60), {
-        x: MARGIN,
-        y: ctx.y - 10,
-        size: 9,
-        font,
-        color: COL.ink,
-      });
-      ctx.page.drawText(val, {
-        x: PAGE_W - MARGIN - font.widthOfTextAtSize(val, 9),
-        y: ctx.y - 10,
-        size: 9,
-        font,
-        color: COL.ink,
-      });
-      ctx.y -= 14;
-    }
-    gap(ctx, 4);
-    drawTotalLine(ctx, "Subtotal", input.quote.subtotal);
-    drawTotalLine(ctx, "GST", input.quote.gst);
-    drawTotalLine(ctx, "Grand total", input.quote.grandTotal, true);
+    drawQuote(ctx, input.quote);
   }
 
   // ── Footer on every page ──
@@ -468,6 +453,108 @@ function drawSpecTable(ctx: Ctx, entries: Array<[string, string]>) {
     });
     ctx.y -= rowH;
   }
+}
+
+// Full quotation block: number, title, notes, then a 4-column line-item
+// table (Item | Qty | Rate | Amount) and the totals.
+function drawQuote(ctx: Ctx, q: CombinedQuote) {
+  sectionTitle(ctx, `Quotation ${q.number}`);
+  if (q.title) {
+    text(ctx, q.title, { size: 10.5, bold: true });
+  }
+  if (q.notes) {
+    text(ctx, q.notes, { size: 8.5, color: COL.soft });
+  }
+  gap(ctx, 4);
+
+  // Column geometry.
+  const xItem = MARGIN + 4;
+  const xAmount = PAGE_W - MARGIN - 4; // right edge
+  const wAmount = 70;
+  const wRate = 60;
+  const wQty = 55;
+  const xQty = xAmount - wAmount - wRate - wQty;
+  const xRate = xAmount - wAmount - wRate;
+  const rowH = 14;
+
+  // Header band.
+  ensure(ctx, rowH + 4);
+  ctx.page.drawRectangle({
+    x: MARGIN,
+    y: ctx.y - rowH,
+    width: CONTENT_W,
+    height: rowH,
+    color: COL.band,
+  });
+  const head = (s: string, x: number, right = false) =>
+    ctx.page.drawText(s, {
+      x: right ? x - ctx.bold.widthOfTextAtSize(s, 8) : x,
+      y: ctx.y - rowH + 4,
+      size: 8,
+      font: ctx.bold,
+      color: COL.ink,
+    });
+  head("Item", xItem);
+  head("Qty", xQty + wQty, true);
+  head("Rate", xRate + wRate, true);
+  head("Amount", xAmount, true);
+  ctx.y -= rowH;
+
+  for (const it of q.items) {
+    ensure(ctx, rowH);
+    const cell = (
+      s: string,
+      x: number,
+      right = false,
+      color = COL.ink,
+    ) =>
+      ctx.page.drawText(sanitize(s), {
+        x: right ? x - ctx.font.widthOfTextAtSize(sanitize(s), 8) : x,
+        y: ctx.y - rowH + 4,
+        size: 8,
+        font: ctx.font,
+        color,
+      });
+    // Item name (truncated to fit the item column).
+    const nameMax = xQty - xItem - 6;
+    let name = it.name;
+    while (
+      ctx.font.widthOfTextAtSize(sanitize(name), 8) > nameMax &&
+      name.length > 4
+    ) {
+      name = name.slice(0, -2);
+    }
+    cell(name, xItem);
+    if (it.qty != null)
+      cell(
+        `${Math.round(it.qty).toLocaleString("en-IN")}${it.unit ? ` ${it.unit}` : ""}`,
+        xQty + wQty,
+        true,
+        COL.soft,
+      );
+    if (it.rate != null)
+      cell(`Rs ${it.rate.toLocaleString("en-IN")}`, xRate + wRate, true, COL.soft);
+    cell(`Rs ${it.total.toLocaleString("en-IN")}`, xAmount, true);
+    ctx.y -= rowH;
+    // Optional per-line description under the item name.
+    if (it.desc) {
+      ensure(ctx, 11);
+      for (const line of wrap(ctx.font, sanitize(it.desc), 7.5, nameMax)) {
+        ctx.page.drawText(line, {
+          x: xItem + 4,
+          y: ctx.y - 9,
+          size: 7.5,
+          font: ctx.font,
+          color: COL.faint,
+        });
+        ctx.y -= 10;
+      }
+    }
+  }
+  gap(ctx, 4);
+  drawTotalLine(ctx, "Subtotal", q.subtotal);
+  drawTotalLine(ctx, "GST", q.gst);
+  drawTotalLine(ctx, "Grand total", q.grandTotal, true);
 }
 
 function drawTotalLine(ctx: Ctx, label: string, val: number, strong = false) {

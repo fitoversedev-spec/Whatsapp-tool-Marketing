@@ -87,12 +87,27 @@ export async function POST(req: NextRequest) {
   if (body.quote && Array.isArray(body.quote.items)) {
     quote = {
       number: String(body.quote.number ?? buildQuotationNumber(new Date().getFullYear(), 0)),
+      title: typeof body.quote.title === "string" ? body.quote.title : null,
+      notes: typeof body.quote.notes === "string" ? body.quote.notes : null,
       items: body.quote.items
         .filter((it: { name?: unknown; total?: unknown }) => it && typeof it.name === "string")
-        .map((it: { name: string; total: number }) => ({
-          name: it.name,
-          total: Number(it.total) || 0,
-        })),
+        .map(
+          (it: {
+            name: string;
+            desc?: string | null;
+            qty?: number;
+            unit?: string | null;
+            rate?: number;
+            total: number;
+          }) => ({
+            name: it.name,
+            desc: typeof it.desc === "string" ? it.desc : null,
+            qty: it.qty != null ? Number(it.qty) : undefined,
+            unit: typeof it.unit === "string" ? it.unit : null,
+            rate: it.rate != null ? Number(it.rate) : undefined,
+            total: Number(it.total) || 0,
+          }),
+        ),
       subtotal: Number(body.quote.subtotal) || 0,
       gst: Number(body.quote.gst) || 0,
       grandTotal: Number(body.quote.grandTotal) || 0,

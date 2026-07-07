@@ -1437,11 +1437,17 @@ export default function CourtImageWizard({
                   </div>
                 )}
 
-                {/* Surface finish — plain earth vs a tiled PPE-tile
-                    photo. When ppe_tile_red is picked the tile count is
-                    computed from the plot size and shown so sales can
-                    quote materials without a separate calc. */}
-                <div className="border-t border-slate-200 pt-4 space-y-2">
+                {/* Surface & colour — ONE collapsible category: the
+                    material (surface finish), the ground/court colour, and
+                    the run-off convention all live together so appearance
+                    isn't split across the panel. Per-area colouring is the
+                    separate Highlights section above. */}
+                <CollapsibleSection
+                  title="Surface & colour"
+                  defaultOpen
+                  hint="Everything about how the WHOLE court looks — material, colour, run-off. To colour just ONE area (a key, service box, pickleball kitchen), use “+ Highlight zone” under Highlights above."
+                >
+                  <div className="space-y-2">
                   <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
                     Surface finish
                   </div>
@@ -1549,17 +1555,8 @@ export default function CourtImageWizard({
                       })()}
                     </div>
                   )}
-                </div>
+                  </div>
 
-                {/* Colour & surface — grouped into one collapsible
-                    category so the Design panel isn't a long messy scroll.
-                    Ground finish / surface colour / run-off all live here;
-                    per-area colouring lives under Add element. */}
-                <CollapsibleSection
-                  title="Colour & surface"
-                  defaultOpen
-                  hint="Change the WHOLE court's colour here (ground finish, surface colour, run-off zone). To colour just ONE area — a basketball key, service box, pickleball kitchen — use “+ Highlight zone” under Add element, then pick its colour in the inspector."
-                >
                   <div>
                     <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
                       Ground finish
@@ -1873,10 +1870,7 @@ export default function CourtImageWizard({
                     zone colours themselves come from
                     MULTISPORT_ZONE_COLOR applied at layout build. */}
                 {layout.sports.length >= 2 && (
-                  <div className="border-t border-slate-200 pt-4">
-                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                      Primary sport
-                    </div>
+                  <CollapsibleSection title="Primary sport" defaultOpen>
                     <select
                       value={layout.primarySport ?? layout.sports[0]}
                       onChange={(e) => {
@@ -1940,7 +1934,7 @@ export default function CourtImageWizard({
                       · green tennis / football / cricket · sand
                       badminton) come from the shared palette.
                     </div>
-                  </div>
+                  </CollapsibleSection>
                 )}
 
                 {/* Product / TDS / equipment browsing moved to the
@@ -1948,9 +1942,9 @@ export default function CourtImageWizard({
                     longer duplicated here, keeping the Design tab focused
                     on editing the court. */}
 
-                {/* Watermark toggle — Fitoverse logo composited into the
-                    bottom-right of both 2D + 3D renders. On by default. */}
-                <div className="border-t border-slate-200 pt-4">
+                {/* Branding — watermark toggle (Fitoverse logo composited
+                    into the bottom-right of 2D + 3D + video). */}
+                <CollapsibleSection title="Branding">
                   <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
                     <input
                       type="checkbox"
@@ -1965,7 +1959,7 @@ export default function CourtImageWizard({
                       </div>
                     </div>
                   </label>
-                </div>
+                </CollapsibleSection>
 
                 {selectedElement && (
                   <div className="border-t border-slate-200 pt-4">

@@ -49,6 +49,7 @@ model User {
   quotations           Quotation[]
   courtImages          CourtImage[]
   portfolioProjects    PortfolioProject[]
+  products             Product[]
 
   @@map("users")
 }
@@ -615,4 +616,90 @@ model PortfolioProject {
   @@index([featured])
   @@index([archived])
   @@map("portfolio_projects")
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  Internal product catalogue (replaces the MVPv2 dependency).
+//
+//  Sales uploads floorings, materials, and sports equipment here. The
+//  court designer + chatbot read from these tables instead of the
+//  sibling MVPv2 web tool. TDS PDFs attach per sport (and optionally to
+//  a specific product).
+// ─────────────────────────────────────────────────────────────────────
+
+model Product {
+  id          String @id @default(uuid())
+  name        String
+  // "flooring" | "material" | "equipment"
+  //   flooring  — turf / acrylic / PPE tile / PVC surfaces
+  //   material  — infill, adhesives, sub-base consumables
+  //   equipment — goal posts, nets, machines, shot clocks, etc.
+  type        String
+  description String @default("")
+  // JSON array of sport keys this product applies to, e.g.
+  // ["football","multisport"]. Court designer + chatbot filter by sport.
+  sports      String @default("[]")
+  // Optional sub-category within a type — flooring → "turf" / "acrylic"
+  // / "ppe_tile" / "pvc"; equipment → "goal" / "net" / "machine".
+  category    String?
+  // Hero photo shown in listings. Gallery + video live in ProductMedia.
+  heroImageUrl String? @map("hero_image_url")
+  videoUrl     String? @map("video_url")
+  // Free-form JSON specs { key: value } shown in the product detail +
+  // combined PDF.
+  specs        String  @default("{}")
+  // Optional indicative price + unit for the combined PDF / quote line.
+  priceInr     Decimal? @map("price_inr") @db.Decimal(12, 2)
+  unit         String?
+  // For flooring: the base work it sits on ("concrete" | "asphalt" |
+  // null). Informational — surfaces in the design + PDF.
+  baseWork     String?  @map("base_work")
+  featured     Boolean  @default(false)
+  archived     Boolean  @default(false)
+  createdByUserId String @map("created_by_user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  createdBy User           @relation(fields: [createdByUserId], references: [id])
+  media     ProductMedia[]
+  tdsFiles  TdsFile[]
+
+  @@index([type])
+  @@index([featured])
+  @@index([archived])
+  @@map("products")
+}
+
+model ProductMedia {
+  id        String   @id @default(uuid())
+  productId String   @map("product_id")
+  url       String
+  // "image" | "video"
+  kind      String   @default("image")
+  caption   String?
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_media")
+}
+
+model TdsFile {
+  id               String   @id @default(uuid())
+  sport            String
+  name             String
+  url              String
+  // Optional link to a specific product (a TDS can be sport-level or
+  // product-specific).
+  productId        String?  @map("product_id")
+  uploadedByUserId String?  @map("uploaded_by_user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([sport])
+  @@index([productId])
+  @@map("tds_files")
 }

@@ -226,47 +226,34 @@ export async function renderCombinedPdf(
   if (input.baseWork) text(ctx, `Base work: ${cap(input.baseWork)}`, { color: COL.soft });
   if (input.flooringName) text(ctx, `Flooring: ${input.flooringName}`, { color: COL.soft });
 
-  // ── Design images (2D plan) ──
-  for (const img of input.designImages) {
-    sectionTitle(ctx, img.label);
-    const embedded = await tryEmbed(doc, img.bytes);
-    if (embedded) {
-      const scale = Math.min(CONTENT_W / embedded.width, 300 / embedded.height);
-      const w = embedded.width * scale;
-      const h = embedded.height * scale;
-      ensure(ctx, h + 8);
-      ctx.page.drawImage(embedded, {
-        x: MARGIN,
-        y: ctx.y - h,
-        width: w,
-        height: h,
-      });
-      ctx.y -= h + 6;
-    } else {
-      text(ctx, "(image could not be embedded)", { color: COL.faint, size: 9 });
-    }
+  // ── Page 1 — 2D court plan, filling the page under the header ──
+  const twoD = input.designImages[0];
+  if (twoD) {
+    sectionTitle(ctx, "2D court plan");
+    await drawImageFit(ctx, twoD.bytes, ctx.y - MARGIN - 24);
   }
 
-  // ── 3D — all angles (turntable grid) ──
+  // ── 3D — every angle, on its own dedicated page(s) ──
   if (input.angleImages && input.angleImages.length > 0) {
+    newPage(ctx);
     await drawAngleGrid(ctx, input.angleImages);
+    // ── 3D walkaround video — its own page (large poster + note) ──
+    newPage(ctx);
+    await drawVideoPage(ctx, input.angleImages[0]);
   }
 
-  // ── Products ──
+  // ── Products & materials — own page(s) ──
   if (input.products.length > 0) {
+    newPage(ctx);
     sectionTitle(ctx, "Flooring & materials");
     for (const p of input.products) await drawProduct(ctx, p);
   }
 
-  // ── Equipment ──
+  // ── Sports equipment — own page(s) ──
   if (input.equipment.length > 0) {
+    newPage(ctx);
     sectionTitle(ctx, "Sports equipment");
     for (const p of input.equipment) await drawProduct(ctx, p);
-  }
-
-  // ── Quote (optional) ──
-  if (input.quote) {
-    drawQuote(ctx, input.quote);
   }
 
   // ── TDS — merge the actual PDF pages so the spec sheets live INSIDE
@@ -292,11 +279,18 @@ export async function renderCombinedPdf(
       }
     }
   } else if (input.tds.length > 0) {
+    newPage(ctx);
     sectionTitle(ctx, "Technical data sheets (TDS)");
     for (const t of input.tds) {
       ensure(ctx, 16);
       text(ctx, `- ${t.name}`, { size: 9.5 });
     }
+  }
+
+  // ── Quotation — its own page, last ──
+  if (input.quote) {
+    newPage(ctx);
+    drawQuote(ctx, input.quote);
   }
 
   // ── Footer on every page (skip merged TDS pages so it doesn't overlap
@@ -324,8 +318,13 @@ async function drawAngleGrid(ctx: Ctx, images: Uint8Array[]) {
   const gapX = 10;
   const gapY = 10;
   const cellW = (CONTENT_W - gapX * (cols - 1)) / cols;
-  const cellH = cellW * 0.64;
+  const cellH = cellW * 0.72; // larger tiles → a prominent 2-page showcase
+  const perPage = 4; // 2×2 per page → the turntable spans two dedicated pages
   for (let i = 0; i < images.length; i += cols) {
+    if (i > 0 && i % perPage === 0) {
+      newPage(ctx);
+      sectionTitle(ctx, "3D views — every angle (continued)");
+    }
     ensure(ctx, cellH + gapY);
     const rowTop = ctx.y;
     for (let c = 0; c < cols; c++) {
@@ -346,6 +345,59 @@ async function drawAngleGrid(ctx: Ctx, images: Uint8Array[]) {
     }
     ctx.y = rowTop - cellH - gapY;
   }
+}
+
+// Draw one image centred, scaled to the content width and a max height —
+// used for the full-page 2D plan and the 3D video poster.
+async function drawImageFit(ctx: Ctx, bytes: Uint8Array, maxH: number) {
+  const embedded = await tryEmbed(ctx.doc, bytes);
+  if (!embedded) {
+    text(ctx, "(image could not be embedded)", { color: COL.faint, size: 9 });
+    return;
+  }
+  const availH = Math.max(120, Math.min(maxH, ctx.y - MARGIN - 30));
+  const scale = Math.min(CONTENT_W / embedded.width, availH / embedded.height);
+  const w = embedded.width * scale;
+  const h = embedded.height * scale;
+  ctx.page.drawImage(embedded, {
+    x: MARGIN + (CONTENT_W - w) / 2,
+    y: ctx.y - h,
+    width: w,
+    height: h,
+  });
+  ctx.y -= h + 6;
+}
+
+// A dedicated "3D walkaround video" page — the poster still with a play
+// badge, and a note that the actual video arrives as a WhatsApp message
+// (a PDF can't play video).
+async function drawVideoPage(ctx: Ctx, posterBytes: Uint8Array) {
+  sectionTitle(ctx, "3D walkaround video");
+  const embedded = await tryEmbed(ctx.doc, posterBytes);
+  if (embedded) {
+    const availH = ctx.y - MARGIN - 50;
+    const scale = Math.min(CONTENT_W / embedded.width, availH / embedded.height);
+    const w = embedded.width * scale;
+    const h = embedded.height * scale;
+    const x = MARGIN + (CONTENT_W - w) / 2;
+    const y = ctx.y - h;
+    ctx.page.drawImage(embedded, { x, y, width: w, height: h });
+    // Play badge — a translucent dark disc with a white triangle.
+    const bx = x + w / 2;
+    const by = y + h / 2;
+    ctx.page.drawCircle({ x: bx, y: by, size: 24, color: rgb(0, 0, 0), opacity: 0.5 });
+    ctx.page.drawSvgPath("M 0 -11 L 0 11 L 16 0 Z", {
+      x: bx - 4,
+      y: by,
+      color: rgb(1, 1, 1),
+    });
+    ctx.y = y - 10;
+  }
+  text(
+    ctx,
+    "A 6-second spinning 3D walkaround of this court is sent to you as a separate WhatsApp video.",
+    { color: COL.soft, size: 9.5 },
+  );
 }
 
 async function drawProduct(ctx: Ctx, p: ProductDTO) {

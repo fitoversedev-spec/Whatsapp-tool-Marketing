@@ -585,8 +585,15 @@ export default function CourtImageWizard({
 
   async function generate3DVideo() {
     if (generatingVideo) return;
+    // Ensure the 3D scene is mounted (switch to the video tab + let it
+    // settle) so the recorder handle is available even when the user
+    // triggers Generate from the sidebar on another tab.
     if (!canvas3dRef.current) {
-      toast.error("Open the 3D tab first so the scene mounts");
+      setPreviewMode("3d-video");
+      await new Promise((r) => setTimeout(r, 1400));
+    }
+    if (!canvas3dRef.current) {
+      toast.error("Could not start the 3D scene — open the 3D video tab and retry");
       return;
     }
     setGeneratingVideo(true);
@@ -3444,7 +3451,7 @@ function Step3({
           </div>
         </div>
         {/* Preview area */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative min-h-0">
           {previewMode === "2d" && (
             <div className="absolute inset-0 overflow-auto p-6 flex items-center justify-center">
               {pngDataUrl2D ? (
@@ -3564,6 +3571,9 @@ function Step3({
             onEnsure3D={onEnsure3D}
             onCaptureAngles={onCaptureAngles}
             onUploadVideo={onUploadVideo}
+            onGenerateVideo={onGenerateVideo}
+            generatingVideo={generatingVideo}
+            videoProgress={videoProgress}
             hasVideo={hasVideo}
             canvas3dRef={canvas3dRef}
             contactPhone={contactPhone}
@@ -3738,6 +3748,9 @@ function CombinedPdfBlock({
   onEnsure3D,
   onCaptureAngles,
   onUploadVideo,
+  onGenerateVideo,
+  generatingVideo,
+  videoProgress,
   hasVideo,
   canvas3dRef,
   contactPhone,
@@ -3759,6 +3772,11 @@ function CombinedPdfBlock({
   // Upload the generated 3D orbit video, returning its URL so the combined
   // PDF send can also fire the video as a follow-up WhatsApp message.
   onUploadVideo: () => Promise<string | null>;
+  // Record the 3D orbit video (auto-mounts the scene). Lets sales generate
+  // the video right here without hunting for the button on the 3D tab.
+  onGenerateVideo: () => void;
+  generatingVideo: boolean;
+  videoProgress: number;
   hasVideo: boolean;
   canvas3dRef: React.MutableRefObject<CourtCanvas3DHandle | null>;
   contactPhone: string;
@@ -3888,9 +3906,8 @@ function CombinedPdfBlock({
       </div>
       <label
         className={`flex items-center gap-2 text-xs cursor-pointer ${
-          hasVideo ? "text-slate-700" : "text-slate-400"
+          hasVideo ? "text-slate-700" : "text-slate-500"
         }`}
-        title={hasVideo ? "" : "Generate the video in the 3D video tab first"}
       >
         <input
           type="checkbox"
@@ -3899,9 +3916,30 @@ function CombinedPdfBlock({
           onChange={(e) => setAlsoSendVideo(e.target.checked)}
           className="accent-wa-green"
         />
-        Also send the 3D spinning video{" "}
-        {hasVideo ? "(ready)" : "(generate it in the 3D video tab first)"}
+        Also send the 3D spinning video {hasVideo ? "(ready ✓)" : ""}
       </label>
+      {/* Generate the video right here — no need to hunt for the button on
+          the 3D tab. onGenerateVideo auto-mounts the 3D scene. */}
+      {!hasVideo && (
+        <button
+          type="button"
+          onClick={onGenerateVideo}
+          disabled={generatingVideo || !!busy}
+          className="w-full text-xs font-medium border border-wa-green/40 text-wa-dark hover:bg-wa-green/10 rounded-md px-3 py-2 disabled:opacity-50"
+        >
+          {generatingVideo
+            ? `Recording video… ${Math.round(videoProgress * 100)}%`
+            : "🎬 Generate the 3D spinning video (~10s)"}
+        </button>
+      )}
+      {generatingVideo && (
+        <div className="h-1.5 bg-wa-green/15 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-wa-green transition-all"
+            style={{ width: `${videoProgress * 100}%` }}
+          />
+        </div>
+      )}
       {busy && progress > 0 && progress < 1 && (
         <div className="space-y-1">
           <div className="h-1.5 bg-wa-green/15 rounded-full overflow-hidden">

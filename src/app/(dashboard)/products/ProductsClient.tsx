@@ -678,7 +678,15 @@ function TdsSection({
         <FilePicker
           accept="application/pdf,.pdf"
           file={file}
-          onPick={setFile}
+          onPick={(f) => {
+            setFile(f);
+            // Auto-fill the display name from the PDF filename when it's
+            // still empty, so the Upload button enables right after
+            // choosing a file (name stays editable).
+            if (f && !name.trim()) {
+              setName(f.name.replace(/\.pdf$/i, "").trim());
+            }
+          }}
           label="Choose PDF"
           className="flex-1 min-w-0 sm:min-w-[9rem]"
         />

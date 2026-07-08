@@ -63,6 +63,9 @@ export type CombinedPdfInput = {
   products: ProductDTO[];
   equipment: ProductDTO[];
   tds: TdsDTO[];
+  // Actual TDS PDF bytes — their pages are merged into this document so
+  // the customer gets one PDF with the spec sheets inside (not a link).
+  tdsPdfs?: Array<{ name: string; bytes: Uint8Array }>;
   quote?: CombinedQuote | null;
 };
 
@@ -261,24 +264,46 @@ export async function renderCombinedPdf(
     for (const p of input.equipment) await drawProduct(ctx, p);
   }
 
-  // ── TDS ──
-  if (input.tds.length > 0) {
-    sectionTitle(ctx, "Technical data sheets (TDS)");
-    for (const t of input.tds) {
-      ensure(ctx, 16);
-      text(ctx, `- ${t.name}`, { size: 9.5 });
-      if (t.url) text(ctx, `  ${t.url}`, { size: 8, color: COL.faint });
-    }
-  }
-
   // ── Quote (optional) ──
   if (input.quote) {
     drawQuote(ctx, input.quote);
   }
 
-  // ── Footer on every page ──
+  // ── TDS — merge the actual PDF pages so the spec sheets live INSIDE
+  //    this one document (a divider page introduces each). Falls back to
+  //    a titled list only if the bytes couldn't be fetched. ──
+  const mergedTdsPages = new Set<PDFPage>();
+  if (input.tdsPdfs && input.tdsPdfs.length > 0) {
+    for (const t of input.tdsPdfs) {
+      newPage(ctx);
+      sectionTitle(ctx, `Technical Data Sheet — ${t.name}`);
+      try {
+        const src = await PDFDocument.load(t.bytes);
+        const copied = await doc.copyPages(src, src.getPageIndices());
+        for (const pg of copied) {
+          doc.addPage(pg);
+          mergedTdsPages.add(pg);
+        }
+      } catch {
+        text(ctx, "(This TDS could not be embedded — please request the source PDF.)", {
+          color: COL.faint,
+          size: 9,
+        });
+      }
+    }
+  } else if (input.tds.length > 0) {
+    sectionTitle(ctx, "Technical data sheets (TDS)");
+    for (const t of input.tds) {
+      ensure(ctx, 16);
+      text(ctx, `- ${t.name}`, { size: 9.5 });
+    }
+  }
+
+  // ── Footer on every page (skip merged TDS pages so it doesn't overlap
+  //    the original spec-sheet layout) ──
   const pages = doc.getPages();
   pages.forEach((pg, i) => {
+    if (mergedTdsPages.has(pg)) return;
     pg.drawText(sanitize(`Fitoverse - +91 93638 63382   ·   Page ${i + 1} of ${pages.length}`), {
       x: MARGIN,
       y: 24,

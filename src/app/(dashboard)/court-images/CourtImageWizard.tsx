@@ -2258,9 +2258,9 @@ export default function CourtImageWizard({
                 >
                   {sending
                     ? "Sending…"
-                    : selectedFormatCount(sendFormats) === 1
-                      ? "📤 Send to WhatsApp"
-                      : `📤 Send ${selectedFormatCount(sendFormats)} items`}
+                    : `📤 Send ${selectedFormatCount(sendFormats)} image${
+                        selectedFormatCount(sendFormats) !== 1 ? "s" : ""
+                      } separately`}
                 </button>
               </>
             )}

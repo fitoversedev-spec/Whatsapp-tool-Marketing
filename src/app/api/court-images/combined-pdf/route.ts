@@ -88,6 +88,21 @@ export async function POST(req: NextRequest) {
     (p) => p.type !== "equipment",
   );
 
+  // Fetch the actual TDS PDF bytes so their pages can be merged into the
+  // combined document (the customer gets one PDF with the spec sheets
+  // inside, not a link to fetch separately).
+  const tdsPdfs: Array<{ name: string; bytes: Uint8Array }> = [];
+  for (const t of tds) {
+    if (!t.url) continue;
+    try {
+      const r = await fetch(t.url);
+      if (!r.ok) continue;
+      tdsPdfs.push({ name: t.name, bytes: new Uint8Array(await r.arrayBuffer()) });
+    } catch {
+      // Skip a TDS we can't fetch — the rest of the PDF still builds.
+    }
+  }
+
   // Quote — prefer an explicit edited quote from the client. If none
   // is given but includeQuote is on, compute one server-side from the
   // sport's rate sheet × plot area (same logic the Quotation wizard
@@ -154,6 +169,7 @@ export async function POST(req: NextRequest) {
     products,
     equipment,
     tds,
+    tdsPdfs,
     quote,
   };
 

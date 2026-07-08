@@ -1686,14 +1686,33 @@ export default function CourtImageWizard({
                   <div className="flex flex-wrap gap-2">
                     {(
                       [
-                        { id: "plain", label: "Plain" },
-                        { id: "ppe_tile_red", label: "PPE tile — Red" },
-                        { id: "acrylic_blue", label: "Acrylic — Blue" },
-                        { id: "acrylic_green", label: "Acrylic — Green" },
-                        { id: "turf_40mm", label: "Turf — 40 mm" },
-                        { id: "turf_50mm", label: "Turf — 50 mm" },
+                        { id: "plain", label: "Plain", group: "any" },
+                        { id: "ppe_tile_red", label: "PPE tile — Red", group: "hard" },
+                        { id: "acrylic_blue", label: "Acrylic — Blue", group: "hard" },
+                        { id: "acrylic_green", label: "Acrylic — Green", group: "hard" },
+                        { id: "turf_40mm", label: "Turf — 40 mm", group: "turf" },
+                        { id: "turf_50mm", label: "Turf — 50 mm", group: "turf" },
                       ] as const
-                    ).map((opt) => (
+                    )
+                      .filter((opt) => {
+                        // Only offer finishes that suit the sport: turf for
+                        // football/cricket, hard-court (PPE / acrylic) for the
+                        // court sports, everything for multisport. "Plain"
+                        // always shows.
+                        if (opt.group === "any") return true;
+                        const s = layout.sports;
+                        const turf =
+                          s.includes("multisport") ||
+                          s.some((x) => x === "football" || x === "cricket");
+                        const hard =
+                          s.includes("multisport") ||
+                          s.some(
+                            (x) =>
+                              !["football", "cricket", "multisport"].includes(x),
+                          );
+                        return opt.group === "turf" ? turf : hard;
+                      })
+                      .map((opt) => (
                       <button
                         key={opt.id}
                         type="button"

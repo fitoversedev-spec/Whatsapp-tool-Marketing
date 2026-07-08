@@ -317,7 +317,7 @@ export default function CourtImageWizard({
   const [lengthFt, setLengthFt] = useState(80);
   const [widthFt, setWidthFt] = useState(60);
   const [selectedSports, setSelectedSports] = useState<Sport[]>(["football"]);
-  const [footballASide, setFootballASide] = useState<5 | 7 | 11>(7);
+  const [footballASide, setFootballASide] = useState<5 | 7 | 11 | null>(11);
   const [cricketLengthPreset, setCricketLengthPreset] = useState<22 | 16 | 12 | "custom">(22);
   const [cricketLengthCustom, setCricketLengthCustom] = useState(22);
   const [cricketOrientation, setCricketOrientation] = useState<"horizontal" | "vertical">("horizontal");
@@ -440,7 +440,7 @@ export default function CourtImageWizard({
       setCricketLengthPreset(22);
       setCricketLengthCustom(22);
       setCricketOrientation("horizontal");
-      setFootballASide(7);
+      setFootballASide(11);
       setBasketballHalfCourt(false);
       setCaption("");
       setLayout(null);
@@ -513,7 +513,7 @@ export default function CourtImageWizard({
       plot: { lengthFt, widthFt },
       sports: selectedSports,
       config: {
-        football: { aSide: footballASide },
+        football: { aSide: footballASide ?? undefined },
         cricket: {
           pitchLengthFt: cricketLengthFt,
           pitchWidthFt: 10,
@@ -2469,8 +2469,8 @@ function Step1(props: {
   setWidthFt: (v: number) => void;
   selectedSports: Sport[];
   setSelectedSports: (v: Sport[]) => void;
-  footballASide: 5 | 7 | 11;
-  setFootballASide: (v: 5 | 7 | 11) => void;
+  footballASide: 5 | 7 | 11 | null;
+  setFootballASide: (v: 5 | 7 | 11 | null) => void;
   cricketLengthPreset: 22 | 16 | 12 | "custom";
   setCricketLengthPreset: (v: 22 | 16 | 12 | "custom") => void;
   cricketLengthCustom: number;
@@ -2890,33 +2890,51 @@ function Step1(props: {
               A-side preset (drives marking proportions)
             </span>
             <div className="flex gap-2 mt-1">
-              {[5, 7, 11].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => {
-                    setFootballASide(s as 5 | 7 | 11);
-                    // Auto-apply the FIFA plot dimensions (playing area
-                    // + 2 m run-off) so sales doesn't need to hunt for
-                    // the preset chip. Only when football is the ONLY
-                    // sport picked, to avoid clobbering a multi-sport
-                    // plot.
-                    if (selectedSports.length === 1 && selectedSports[0] === "football") {
-                      if (s === 5) { setLengthFt(144); setWidthFt(79); }
-                      else if (s === 7) { setLengthFt(210); setWidthFt(144); }
-                      else if (s === 11) { setLengthFt(358); setWidthFt(236); }
-                    }
-                  }}
-                  className={`flex-1 px-3 py-2 text-sm rounded border ${
-                    footballASide === s
-                      ? "border-wa-green bg-wa-green/10 text-wa-dark"
-                      : "border-slate-300 text-slate-600 hover:bg-white"
-                  }`}
-                >
-                  {s}-a-side
-                </button>
-              ))}
+              {(
+                [
+                  { side: 5, play: "131 × 66 ft · 40 × 20 m", plotL: 151, plotW: 85 },
+                  { side: 7, play: "180 × 120 ft · 54.86 × 36.58 m", plotL: 193, plotW: 133 },
+                  { side: 11, play: "344 × 223 ft · 105 × 68 m", plotL: 358, plotW: 236 },
+                ] as const
+              ).map(({ side, play, plotL, plotW }) => {
+                const active = footballASide === side;
+                return (
+                  <button
+                    key={side}
+                    type="button"
+                    onClick={() => {
+                      if (active) {
+                        // Deselect — leave the plot untouched so sales can
+                        // enter a custom size.
+                        setFootballASide(null);
+                        return;
+                      }
+                      setFootballASide(side);
+                      // Auto-apply the plot only when football is the sole
+                      // sport, to avoid clobbering a multi-sport plot.
+                      if (selectedSports.length === 1 && selectedSports[0] === "football") {
+                        setLengthFt(plotL);
+                        setWidthFt(plotW);
+                      }
+                    }}
+                    className={`flex-1 px-3 py-2 rounded border text-left transition ${
+                      active
+                        ? "border-wa-green bg-wa-green/10 text-wa-dark"
+                        : "border-slate-300 text-slate-600 hover:bg-white"
+                    }`}
+                  >
+                    <div className="text-sm font-medium">{side}-a-side</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                      {play}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
+            <p className="text-[10px] text-slate-400 mt-1.5 italic">
+              Tap the selected format again to deselect and enter a custom plot
+              size.
+            </p>
           </div>
         </section>
       )}
@@ -2932,22 +2950,25 @@ function Step1(props: {
             </span>
             <div className="flex gap-2 mt-1">
               {[
-                { label: "22 yd (regulation)", v: 22 as const },
-                { label: "16 yd (junior)", v: 16 as const },
-                { label: "12 yd (compact)", v: 12 as const },
-                { label: "Custom", v: "custom" as const },
+                { label: "22 yd", sub: "regulation", dim: "66 × 10 ft · 20.12 × 3.05 m", v: 22 as const },
+                { label: "16 yd", sub: "junior", dim: "48 × 10 ft · 14.6 × 3.05 m", v: 16 as const },
+                { label: "12 yd", sub: "compact", dim: "36 × 10 ft · 11 × 3.05 m", v: 12 as const },
+                { label: "Custom", sub: "set below", dim: "", v: "custom" as const },
               ].map((opt) => (
                 <button
                   key={String(opt.v)}
                   type="button"
                   onClick={() => setCricketLengthPreset(opt.v)}
-                  className={`flex-1 px-2 py-2 text-xs rounded border ${
+                  className={`flex-1 px-2 py-2 rounded border text-left ${
                     cricketLengthPreset === opt.v
                       ? "border-wa-green bg-wa-green/10 text-wa-dark"
                       : "border-slate-300 text-slate-600 hover:bg-white"
                   }`}
                 >
-                  {opt.label}
+                  <div className="text-xs font-medium">{opt.label}</div>
+                  <div className="text-[9px] text-slate-500 leading-tight">
+                    {opt.dim || opt.sub}
+                  </div>
                 </button>
               ))}
             </div>
@@ -3008,13 +3029,16 @@ function Step1(props: {
                   setWidthFt(62);
                 }
               }}
-              className={`px-3 py-1.5 text-xs rounded-md border transition ${
+              className={`px-3 py-2 rounded-md border text-left transition ${
                 !basketballHalfCourt
                   ? "bg-wa-green text-white border-wa-green"
                   : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
               }`}
             >
-              Full court
+              <div className="text-xs font-medium">Full court</div>
+              <div className="text-[9px] opacity-75 leading-tight">
+                92 × 49 ft · 28 × 15 m
+              </div>
             </button>
             <button
               type="button"
@@ -3025,13 +3049,16 @@ function Step1(props: {
                   setWidthFt(49);
                 }
               }}
-              className={`px-3 py-1.5 text-xs rounded-md border transition ${
+              className={`px-3 py-2 rounded-md border text-left transition ${
                 basketballHalfCourt
                   ? "bg-wa-green text-white border-wa-green"
                   : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
               }`}
             >
-              Half court
+              <div className="text-xs font-medium">Half court (3×3)</div>
+              <div className="text-[9px] opacity-75 leading-tight">
+                49 × 36 ft · 15 × 11 m
+              </div>
             </button>
           </div>
           <div className="text-[11px] text-slate-500">

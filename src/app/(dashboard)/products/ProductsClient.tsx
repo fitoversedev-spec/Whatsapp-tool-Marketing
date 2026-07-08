@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import type { ProductDTO, ProductType } from "@/lib/products/store";
+import { toEmbeddableImage } from "@/lib/products/image-embed";
 
 const SPORTS = [
   "football",
@@ -375,7 +376,7 @@ function ProductForm({
     form.set("category", category);
     form.set("priceInr", priceInr);
     form.set("unit", unit);
-    if (hero) form.set("hero", hero);
+    if (hero) form.set("hero", await toEmbeddableImage(hero));
     if (video) form.set("video", video);
     const r = await fetch("/api/products", { method: "POST", body: form });
     setBusy(false);

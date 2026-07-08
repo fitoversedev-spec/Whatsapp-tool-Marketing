@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from "react";
 import type { ProductDTO, TdsDTO } from "@/lib/products/store";
+import { toEmbeddableImage } from "@/lib/products/image-embed";
 import type { Sport } from "@/lib/court-image/schema";
 
 export type AttachmentTab = "products" | "equipment" | "tds";
@@ -265,7 +266,7 @@ function InlineAddForm({
         form.set("type", tab === "equipment" ? "equipment" : "flooring");
         form.set("description", description);
         form.set("sports", JSON.stringify([sport]));
-        if (file) form.set("hero", file);
+        if (file) form.set("hero", await toEmbeddableImage(file));
         const r = await fetch("/api/products", { method: "POST", body: form });
         if (!r.ok) throw new Error((await r.json()).error ?? "failed");
       }

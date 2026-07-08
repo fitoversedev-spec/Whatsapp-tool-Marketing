@@ -242,18 +242,21 @@ export async function renderCombinedPdf(
     await drawVideoPage(ctx, input.angleImages[0]);
   }
 
-  // ── Products & materials — own page(s) ──
-  if (input.products.length > 0) {
+  // ── Products & equipment — flow together across page(s), packed tight
+  //    so neither section leaves a mostly-empty page. ──
+  if (input.products.length > 0 || input.equipment.length > 0) {
     newPage(ctx);
-    sectionTitle(ctx, "Flooring & materials");
-    for (const p of input.products) await drawProduct(ctx, p);
-  }
-
-  // ── Sports equipment — own page(s) ──
-  if (input.equipment.length > 0) {
-    newPage(ctx);
-    sectionTitle(ctx, "Sports equipment");
-    for (const p of input.equipment) await drawProduct(ctx, p);
+    if (input.products.length > 0) {
+      sectionTitle(ctx, "Flooring & materials");
+      for (const p of input.products) await drawProduct(ctx, p);
+    }
+    if (input.equipment.length > 0) {
+      // Small gap, then keep the header with at least one item on the page.
+      if (input.products.length > 0) ctx.y -= 12;
+      ensure(ctx, 96);
+      sectionTitle(ctx, "Sports equipment");
+      for (const p of input.equipment) await drawProduct(ctx, p);
+    }
   }
 
   // ── TDS — merge the actual PDF pages so the spec sheets live INSIDE
@@ -261,9 +264,20 @@ export async function renderCombinedPdf(
   //    a titled list only if the bytes couldn't be fetched. ──
   const mergedTdsPages = new Set<PDFPage>();
   if (input.tdsPdfs && input.tdsPdfs.length > 0) {
+    // One intro page lists the sheets, then every sheet's actual pages are
+    // merged in right after — no title-only divider page per sheet.
+    newPage(ctx);
+    sectionTitle(ctx, "Technical Data Sheets");
+    text(ctx, "Manufacturer spec sheets for the materials in this proposal:", {
+      color: COL.soft,
+      size: 10,
+    });
+    ctx.y -= 4;
     for (const t of input.tdsPdfs) {
-      newPage(ctx);
-      sectionTitle(ctx, `Technical Data Sheet — ${t.name}`);
+      ensure(ctx, 16);
+      text(ctx, `-  ${t.name}`, { size: 10 });
+    }
+    for (const t of input.tdsPdfs) {
       try {
         const src = await PDFDocument.load(t.bytes);
         const copied = await doc.copyPages(src, src.getPageIndices());
@@ -272,7 +286,8 @@ export async function renderCombinedPdf(
           mergedTdsPages.add(pg);
         }
       } catch {
-        text(ctx, "(This TDS could not be embedded — please request the source PDF.)", {
+        ensure(ctx, 16);
+        text(ctx, `(Could not embed "${t.name}" — please request the source PDF.)`, {
           color: COL.faint,
           size: 9,
         });
@@ -318,14 +333,13 @@ async function drawAngleGrid(ctx: Ctx, images: Uint8Array[]) {
   const gapX = 10;
   const gapY = 10;
   const cellW = (CONTENT_W - gapX * (cols - 1)) / cols;
-  const cellH = cellW * 0.72; // larger tiles → a prominent 2-page showcase
-  const perPage = 4; // 2×2 per page → the turntable spans two dedicated pages
+  const rows = Math.max(1, Math.ceil(images.length / cols));
+  // Size the rows to fill the space left under the title — every captured
+  // angle shares one full, balanced page instead of spilling a half-empty
+  // second page.
+  const availH = ctx.y - MARGIN - 18;
+  const cellH = (availH - gapY * (rows - 1)) / rows;
   for (let i = 0; i < images.length; i += cols) {
-    if (i > 0 && i % perPage === 0) {
-      newPage(ctx);
-      sectionTitle(ctx, "3D views — every angle (continued)");
-    }
-    ensure(ctx, cellH + gapY);
     const rowTop = ctx.y;
     for (let c = 0; c < cols; c++) {
       const bytes = images[i + c];

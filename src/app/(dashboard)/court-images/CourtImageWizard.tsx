@@ -2112,17 +2112,6 @@ export default function CourtImageWizard({
               quoteTitle={quoteTitle}
               quoteNotes={quoteNotes}
               quoteItems={quoteItems}
-              onEnsureSaved={async () => {
-                // Save the design (if not already) so it has an id, and
-                // return the public 3D viewer link for it.
-                try {
-                  const result = await saveDraft();
-                  if (!result?.id) return null;
-                  return `${window.location.origin}/view/court/${result.id}`;
-                } catch {
-                  return null;
-                }
-              }}
               onEnsure3D={async () => {
                 // Make sure the 3D scene is rendered + captured so the
                 // combined PDF can include it even if the user never
@@ -2134,16 +2123,25 @@ export default function CourtImageWizard({
                 await new Promise((r) => setTimeout(r, 1400));
                 return capture3D() ?? null;
               }}
-              onCaptureSpin={async (onProgress) => {
-                // Mount the 3D scene, then capture a 360° set of spin
-                // frames for the self-contained drag-to-rotate file.
+              onCaptureAngles={async (onProgress) => {
+                // Mount the 3D scene, then capture a turntable of 6 angles
+                // for the PDF's all-angle grid (customer sees every side in
+                // the static document, no link or video needed).
                 setPreviewMode("3d-image");
                 await new Promise((r) => setTimeout(r, 1400));
                 const h = canvas3dRef.current;
                 if (!h) return null;
                 return (
-                  (await h.captureSpinFrames({ frames: 24, onProgress })) ?? null
+                  (await h.captureSpinFrames({ frames: 6, onProgress })) ?? null
                 );
+              }}
+              onUploadVideo={async () => {
+                if (!videoBlob) return null;
+                try {
+                  return await uploadVideo(videoBlob);
+                } catch {
+                  return null;
+                }
               }}
               previewMode={previewMode}
               setPreviewMode={setPreviewMode}
@@ -3303,7 +3301,8 @@ function Step3({
   quoteTitle,
   quoteNotes,
   quoteItems,
-  onEnsureSaved,
+  onCaptureAngles,
+  onUploadVideo,
   onEnsure3D,
   previewMode,
   setPreviewMode,
@@ -3326,7 +3325,6 @@ function Step3({
   generatingVideo,
   videoProgress,
   onGenerateVideo,
-  onCaptureSpin,
 }: {
   layout: CourtLayout | null;
   pngDataUrl3D: string | null;
@@ -3335,7 +3333,10 @@ function Step3({
   quoteTitle: string;
   quoteNotes: string;
   quoteItems: QuoteLineItem[];
-  onEnsureSaved: () => Promise<string | null>;
+  onCaptureAngles: (
+    onProgress?: (fraction: number) => void,
+  ) => Promise<string[] | null>;
+  onUploadVideo: () => Promise<string | null>;
   onEnsure3D: () => Promise<string | null>;
   previewMode: "2d" | "3d-image" | "3d-video";
   setPreviewMode: (v: "2d" | "3d-image" | "3d-video") => void;
@@ -3366,9 +3367,6 @@ function Step3({
   generatingVideo: boolean;
   videoProgress: number;
   onGenerateVideo: () => void;
-  onCaptureSpin: (
-    onProgress: (fraction: number) => void,
-  ) => Promise<string[] | null>;
 }) {
   const total = selectedFormatCount(sendFormats);
 
@@ -3555,7 +3553,9 @@ function Step3({
             pngDataUrl2D={pngDataUrl2D}
             pngDataUrl3D={pngDataUrl3D}
             onEnsure3D={onEnsure3D}
-            onEnsureSaved={onEnsureSaved}
+            onCaptureAngles={onCaptureAngles}
+            onUploadVideo={onUploadVideo}
+            hasVideo={hasVideo}
             canvas3dRef={canvas3dRef}
             contactPhone={contactPhone}
             customerName={customerName}
@@ -3564,15 +3564,6 @@ function Step3({
             quoteTitle={quoteTitle}
             quoteNotes={quoteNotes}
             quoteItems={quoteItems}
-          />
-        )}
-
-        {layout && (
-          <SpinFileBlock
-            layout={layout}
-            contactPhone={contactPhone}
-            customerName={customerName}
-            onCaptureSpin={onCaptureSpin}
           />
         )}
 
@@ -3736,7 +3727,9 @@ function CombinedPdfBlock({
   pngDataUrl2D,
   pngDataUrl3D,
   onEnsure3D,
-  onEnsureSaved,
+  onCaptureAngles,
+  onUploadVideo,
+  hasVideo,
   canvas3dRef,
   contactPhone,
   customerName,
@@ -3750,7 +3743,14 @@ function CombinedPdfBlock({
   pngDataUrl2D: string | null;
   pngDataUrl3D: string | null;
   onEnsure3D: () => Promise<string | null>;
-  onEnsureSaved: () => Promise<string | null>;
+  // Capture several 3D angles (turntable) for the PDF's all-angle grid.
+  onCaptureAngles: (
+    onProgress?: (fraction: number) => void,
+  ) => Promise<string[] | null>;
+  // Upload the generated 3D orbit video, returning its URL so the combined
+  // PDF send can also fire the video as a follow-up WhatsApp message.
+  onUploadVideo: () => Promise<string | null>;
+  hasVideo: boolean;
   canvas3dRef: React.MutableRefObject<CourtCanvas3DHandle | null>;
   contactPhone: string;
   customerName: string;
@@ -3762,11 +3762,12 @@ function CombinedPdfBlock({
   quoteItems: QuoteLineItem[];
 }) {
   const toast = useToast();
-  // Off by default — the hosted /view link opens a website (Vercel). The
-  // customer's rotate-in-all-angles path is the self-contained spin file
-  // below; this stays opt-in for anyone who still wants a web link.
-  const [include3dLink, setInclude3dLink] = useState(false);
+  // Send the 3D orbit video alongside the PDF (on by default when a video
+  // has been generated). The PDF carries the court from all angles as
+  // still images; the video shows it spinning.
+  const [alsoSendVideo, setAlsoSendVideo] = useState(true);
   const [busy, setBusy] = useState<"" | "download" | "send" | "email">("");
+  const [progress, setProgress] = useState(0);
   const [email, setEmail] = useState("");
 
   const att = layout.attachments ?? {
@@ -3783,22 +3784,26 @@ function CombinedPdfBlock({
 
   async function build(mode: "download" | "send" | "email") {
     setBusy(mode);
+    setProgress(0);
     try {
       const image2d = pngDataUrl2D ?? undefined;
-      // 3D image — use the already-captured snapshot; if none exists
-      // (user never opened the 3D tab), render + capture it now so the
-      // PDF always includes the 3D view.
+      // All-angle 3D — capture a turntable set of stills so the PDF shows
+      // the court from every side (the customer's "see all angles" without
+      // a link or video). Falls back to a single snapshot if capture fails.
+      let image3dAngles = (await onCaptureAngles((f) => setProgress(f))) ?? [];
       let image3d =
         pngDataUrl3D ?? canvas3dRef.current?.toDataURL(2) ?? undefined;
-      if (!image3d) {
-        image3d = (await onEnsure3D()) ?? undefined;
+      if (image3dAngles.length === 0) {
+        if (!image3d) image3d = (await onEnsure3D()) ?? undefined;
+        if (image3d) image3dAngles = [image3d];
+      } else if (!image3d) {
+        image3d = image3dAngles[0];
       }
-      // Interactive 3D viewer link — saves the design (to get an id) and
-      // includes the public /view/court/<id> URL so the customer can
-      // rotate the design on their phone.
-      let viewer3dUrl: string | undefined;
-      if (include3dLink) {
-        viewer3dUrl = (await onEnsureSaved()) ?? undefined;
+      // When sending, upload the spinning 3D video so the route can fire it
+      // as a follow-up WhatsApp message right after the PDF.
+      let videoUrl: string | undefined;
+      if (mode === "send" && alsoSendVideo && hasVideo) {
+        videoUrl = (await onUploadVideo()) ?? undefined;
       }
       const payload = {
         customerName,
@@ -3810,12 +3815,13 @@ function CombinedPdfBlock({
         sports: layout.sports,
         image2d,
         image3d,
+        image3dAngles,
         attachments: att,
-        viewer3dUrl,
         includeQuote: quoteActive,
         quote: quoteActive
           ? buildQuotePayload(quoteNumber, quoteTitle, quoteNotes, quoteItems)
           : undefined,
+        videoUrl,
         send: mode === "send",
         contactPhone: mode === "send" ? contactPhone : undefined,
         email: mode === "email" ? email.trim() : undefined,
@@ -3828,7 +3834,13 @@ function CombinedPdfBlock({
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "build_failed");
       if (mode === "send") {
-        toast.success(j.sent ? "Combined PDF sent on WhatsApp" : "Built (send failed — check number)");
+        toast.success(
+          j.sent
+            ? j.videoSent
+              ? "PDF + 3D video sent on WhatsApp"
+              : "Combined PDF sent on WhatsApp"
+            : "Built (send failed — check number)",
+        );
       } else if (mode === "email") {
         if (j.emailed === "not_configured") {
           toast.error("Email isn't set up yet — PDF built, download link opened");
@@ -3847,6 +3859,7 @@ function CombinedPdfBlock({
       toast.error(err instanceof Error ? err.message : "Failed");
     } finally {
       setBusy("");
+      setProgress(0);
     }
   }
 
@@ -3856,23 +3869,41 @@ function CombinedPdfBlock({
         Combined PDF
       </div>
       <div className="text-[11px] text-slate-600 leading-snug">
-        One PDF with the 2D plan, 3D image
+        One PDF with the 2D plan and the 3D court from{" "}
+        <span className="font-medium">all angles</span> (a turntable of still
+        shots)
         {attachCount > 0
-          ? `, and ${attachCount} attached item${attachCount !== 1 ? "s" : ""} (products / equipment / TDS)`
+          ? `, plus ${attachCount} attached item${attachCount !== 1 ? "s" : ""} (products / equipment / TDS)`
           : ""}
-        . Attach items from the Design step&apos;s Products / Equipment /
-        TDS tabs.
+        . The spinning 3D video is sent right after.
       </div>
-      <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+      <label
+        className={`flex items-center gap-2 text-xs cursor-pointer ${
+          hasVideo ? "text-slate-700" : "text-slate-400"
+        }`}
+        title={hasVideo ? "" : "Generate the video in the 3D video tab first"}
+      >
         <input
           type="checkbox"
-          checked={include3dLink}
-          onChange={(e) => setInclude3dLink(e.target.checked)}
+          checked={alsoSendVideo && hasVideo}
+          disabled={!hasVideo}
+          onChange={(e) => setAlsoSendVideo(e.target.checked)}
           className="accent-wa-green"
         />
-        Include hosted 3D web link (opens a website — off by default; use the
-        spin file below instead)
+        Also send the 3D spinning video{" "}
+        {hasVideo ? "(ready)" : "(generate it in the 3D video tab first)"}
       </label>
+      {busy && progress > 0 && progress < 1 && (
+        <div className="space-y-1">
+          <div className="h-1.5 bg-wa-green/15 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-wa-green transition-all"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          </div>
+          <div className="text-[10px] text-slate-500">Capturing 3D angles…</div>
+        </div>
+      )}
 
       {/* Quote summary — seeded + edited on the Quotation step. Shown
           read-only here so sales can confirm what the PDF will carry. */}
@@ -3946,144 +3977,6 @@ function CombinedPdfBlock({
           Open the 2D preview first so the plan can be included.
         </div>
       )}
-    </div>
-  );
-}
-
-// Self-contained drag-to-rotate 3D file. Captures a 360° set of frames
-// from the live 3D scene, builds one offline HTML file (no hosting, no
-// Vercel, no third party), and sends it to the customer as a WhatsApp
-// Document. They tap it → opens in their browser → drag to rotate.
-function SpinFileBlock({
-  layout,
-  contactPhone,
-  customerName,
-  onCaptureSpin,
-}: {
-  layout: CourtLayout;
-  contactPhone: string;
-  customerName: string;
-  onCaptureSpin: (
-    onProgress: (fraction: number) => void,
-  ) => Promise<string[] | null>;
-}) {
-  const toast = useToast();
-  const [busy, setBusy] = useState<"" | "download" | "send" | "email">("");
-  const [progress, setProgress] = useState(0);
-  const [email, setEmail] = useState("");
-
-  async function build(mode: "download" | "send" | "email") {
-    setBusy(mode);
-    setProgress(0);
-    try {
-      const frames = await onCaptureSpin((f) => setProgress(f));
-      if (!frames || frames.length < 2) {
-        toast.error("Could not capture the 3D — open the 3D preview and retry");
-        return;
-      }
-      const payload = {
-        customerName,
-        plotLabel: `${layout.plot.lengthFt} × ${layout.plot.widthFt} ft`,
-        frames,
-        send: mode === "send",
-        contactPhone: mode === "send" ? contactPhone : undefined,
-        email: mode === "email" ? email.trim() : undefined,
-      };
-      const r = await fetch("/api/court-images/spin-file", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error ?? "build_failed");
-      if (mode === "send") {
-        toast.success(
-          j.sent ? "Rotatable 3D file sent on WhatsApp" : "Built (send failed — check number)",
-        );
-      } else if (mode === "email") {
-        if (j.emailed === "not_configured") {
-          toast.error("Email isn't set up yet — opening the file");
-          window.open(j.url, "_blank");
-        } else if (j.emailed) {
-          toast.success(`Emailed to ${email.trim()}`);
-        } else {
-          toast.error("Email failed — opening the file");
-          window.open(j.url, "_blank");
-        }
-      } else {
-        window.open(j.url, "_blank");
-        toast.success("Rotatable 3D file ready");
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed");
-    } finally {
-      setBusy("");
-      setProgress(0);
-    }
-  }
-
-  return (
-    <div className="border border-indigo-300/50 bg-indigo-50 rounded-lg p-3 space-y-2.5">
-      <div className="text-sm font-semibold text-slate-900">
-        Rotatable 3D (spin file)
-      </div>
-      <div className="text-[11px] text-slate-600 leading-snug">
-        One self-contained file the customer opens in their phone browser and
-        <span className="font-medium"> drags to rotate 360°</span> — works
-        offline, no link to any website. Sent on WhatsApp as a document.
-      </div>
-      {busy && (
-        <div className="space-y-1">
-          <div className="h-1.5 bg-indigo-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-indigo-500 transition-all"
-              style={{ width: `${Math.round(progress * 100)}%` }}
-            />
-          </div>
-          <div className="text-[10px] text-slate-500">
-            {progress < 1 ? "Capturing angles…" : "Building file…"}
-          </div>
-        </div>
-      )}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => build("download")}
-          disabled={!!busy}
-          className="flex-1 text-xs font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded-md px-3 py-2 disabled:opacity-50"
-        >
-          {busy === "download" ? "Building…" : "Download file"}
-        </button>
-        <button
-          type="button"
-          onClick={() => build("send")}
-          disabled={!!busy || !contactPhone}
-          className="flex-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-md px-3 py-2 disabled:opacity-50"
-        >
-          {busy === "send" ? "Sending…" : "Send on WhatsApp"}
-        </button>
-      </div>
-      <div className="flex gap-2">
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="customer@email.com"
-          className="flex-1 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-300"
-        />
-        <button
-          type="button"
-          onClick={() => build("email")}
-          disabled={!!busy || !email.trim()}
-          className="text-xs font-medium border border-indigo-300 text-indigo-700 hover:bg-indigo-100 rounded-md px-3 py-1.5 disabled:opacity-50 whitespace-nowrap"
-        >
-          {busy === "email" ? "Emailing…" : "Send by email"}
-        </button>
-      </div>
-      <div className="text-[10px] text-slate-400">
-        Tip: on iPhone, if it opens as a preview, tap Share → open in Safari to
-        rotate.
-      </div>
     </div>
   );
 }

@@ -55,15 +55,15 @@ export type CombinedPdfInput = {
   baseWork?: string | null;
   flooringName?: string | null;
   sports: string[];
-  // Design renders (2D plan, 3D image) as raw image bytes + format.
+  // Design renders (2D plan) as raw image bytes.
   designImages: Array<{ label: string; bytes: Uint8Array }>;
+  // 3D turntable — a set of stills from every angle, laid out in a grid
+  // so the customer sees the court from all sides in the static PDF.
+  angleImages?: Uint8Array[];
   products: ProductDTO[];
   equipment: ProductDTO[];
   tds: TdsDTO[];
   quote?: CombinedQuote | null;
-  // Public interactive 3D viewer link — printed on the cover so the
-  // customer can open it and rotate the court.
-  viewer3dUrl?: string | null;
 };
 
 function sanitize(s: string): string {
@@ -222,42 +222,8 @@ export async function renderCombinedPdf(
   text(ctx, `Plot: ${input.plotLabel}`, { color: COL.soft });
   if (input.baseWork) text(ctx, `Base work: ${cap(input.baseWork)}`, { color: COL.soft });
   if (input.flooringName) text(ctx, `Flooring: ${input.flooringName}`, { color: COL.soft });
-  if (input.viewer3dUrl) {
-    gap(ctx, 10);
-    ensure(ctx, 44);
-    const boxH = 40;
-    const boxTop = ctx.y;
-    ctx.page.drawRectangle({
-      x: MARGIN,
-      y: boxTop - boxH,
-      width: CONTENT_W,
-      height: boxH,
-      color: rgb(0.9, 0.97, 0.94),
-      borderColor: COL.green,
-      borderWidth: 1,
-    });
-    ctx.page.drawText("View & rotate this court in 3D", {
-      x: MARGIN + 10,
-      y: boxTop - 15,
-      size: 10.5,
-      font: bold,
-      color: COL.green,
-    });
-    ctx.page.drawText(
-      sanitize("Open this link on your phone to spin the design and see every angle:"),
-      { x: MARGIN + 10, y: boxTop - 26, size: 8, font, color: COL.soft },
-    );
-    ctx.page.drawText(sanitize(input.viewer3dUrl), {
-      x: MARGIN + 10,
-      y: boxTop - 35,
-      size: 8,
-      font: bold,
-      color: COL.ink,
-    });
-    ctx.y = boxTop - boxH - 4;
-  }
 
-  // ── Design images ──
+  // ── Design images (2D plan) ──
   for (const img of input.designImages) {
     sectionTitle(ctx, img.label);
     const embedded = await tryEmbed(doc, img.bytes);
@@ -276,6 +242,11 @@ export async function renderCombinedPdf(
     } else {
       text(ctx, "(image could not be embedded)", { color: COL.faint, size: 9 });
     }
+  }
+
+  // ── 3D — all angles (turntable grid) ──
+  if (input.angleImages && input.angleImages.length > 0) {
+    await drawAngleGrid(ctx, input.angleImages);
   }
 
   // ── Products ──
@@ -318,6 +289,38 @@ export async function renderCombinedPdf(
   });
 
   return doc.save();
+}
+
+// 3D turntable grid — the captured angle stills laid out 2-per-row so the
+// customer sees the court from every side in the static document.
+async function drawAngleGrid(ctx: Ctx, images: Uint8Array[]) {
+  sectionTitle(ctx, "3D views — every angle");
+  const cols = 2;
+  const gapX = 10;
+  const gapY = 10;
+  const cellW = (CONTENT_W - gapX * (cols - 1)) / cols;
+  const cellH = cellW * 0.64;
+  for (let i = 0; i < images.length; i += cols) {
+    ensure(ctx, cellH + gapY);
+    const rowTop = ctx.y;
+    for (let c = 0; c < cols; c++) {
+      const bytes = images[i + c];
+      if (!bytes) break;
+      const embedded = await tryEmbed(ctx.doc, bytes);
+      if (!embedded) continue;
+      const x = MARGIN + c * (cellW + gapX);
+      const scale = Math.min(cellW / embedded.width, cellH / embedded.height);
+      const w = embedded.width * scale;
+      const h = embedded.height * scale;
+      ctx.page.drawImage(embedded, {
+        x: x + (cellW - w) / 2,
+        y: rowTop - cellH + (cellH - h) / 2,
+        width: w,
+        height: h,
+      });
+    }
+    ctx.y = rowTop - cellH - gapY;
+  }
 }
 
 async function drawProduct(ctx: Ctx, p: ProductDTO) {

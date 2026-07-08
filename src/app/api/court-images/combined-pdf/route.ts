@@ -56,9 +56,21 @@ export async function POST(req: NextRequest) {
     const bytes = dataUrlToBytes(body.image2d);
     if (bytes) designImages.push({ label: "2D court plan", bytes });
   }
-  if (typeof body.image3d === "string") {
-    const bytes = dataUrlToBytes(body.image3d);
-    if (bytes) designImages.push({ label: "3D view", bytes });
+  // All-angle 3D turntable — a set of stills so the customer sees the
+  // court from every side in the static PDF. Falls back to the single 3D
+  // snapshot when no angle set was captured.
+  const angleImages: Uint8Array[] = [];
+  if (Array.isArray(body.image3dAngles)) {
+    for (const a of body.image3dAngles) {
+      if (typeof a === "string") {
+        const b = dataUrlToBytes(a);
+        if (b) angleImages.push(b);
+      }
+    }
+  }
+  if (angleImages.length === 0 && typeof body.image3d === "string") {
+    const b = dataUrlToBytes(body.image3d);
+    if (b) angleImages.push(b);
   }
 
   const attachments = body.attachments ?? {
@@ -138,11 +150,11 @@ export async function POST(req: NextRequest) {
     flooringName: body.flooringName ?? null,
     sports,
     designImages,
+    angleImages,
     products,
     equipment,
     tds,
     quote,
-    viewer3dUrl: typeof body.viewer3dUrl === "string" ? body.viewer3dUrl : null,
   };
 
   let pdfBytes: Uint8Array;
@@ -160,14 +172,12 @@ export async function POST(req: NextRequest) {
     folder: "combined-pdf",
   });
 
-  // Optional send over WhatsApp as a document.
+  // Optional send over WhatsApp as a document, then the spinning 3D video.
   let sent = false;
+  let videoSent = false;
   if (body.send && typeof body.contactPhone === "string" && body.contactPhone) {
     try {
-      const linkLine = input.viewer3dUrl
-        ? `\n\nRotate the design in 3D: ${input.viewer3dUrl}`
-        : "";
-      const caption = `Fitoverse court design proposal for ${input.customerName || "your project"}.${linkLine}`;
+      const caption = `Fitoverse court design proposal for ${input.customerName || "your project"}.`;
       await sendText({ to: body.contactPhone, body: caption }).catch(() => null);
       await sendMedia({
         to: body.contactPhone,
@@ -177,6 +187,19 @@ export async function POST(req: NextRequest) {
         filename: "fitoverse-court-design.pdf",
       });
       sent = true;
+      // Follow up with the spinning 3D video (shows all angles in motion).
+      if (typeof body.videoUrl === "string" && body.videoUrl) {
+        await sendMedia({
+          to: body.contactPhone,
+          mediaType: "video",
+          url: body.videoUrl,
+          caption: "3D walkaround of your court.",
+        })
+          .then(() => {
+            videoSent = true;
+          })
+          .catch((e) => console.error("[combined-pdf] video send failed", e));
+      }
       // Mirror into the conversation thread if we know it.
       if (typeof body.conversationId === "string" && body.conversationId) {
         await prisma.message
@@ -226,5 +249,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ url: uploaded.url, sent, emailed });
+  return NextResponse.json({ url: uploaded.url, sent, videoSent, emailed });
 }

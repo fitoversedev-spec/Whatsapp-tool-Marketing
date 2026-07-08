@@ -2610,6 +2610,12 @@ function Step1(props: {
   const showFootballConfig = selectedSports.includes("football");
   const showCricketConfig = selectedSports.includes("cricket");
   const showBasketballConfig = selectedSports.includes("basketball");
+  // Sports without a dedicated config picker (pickleball, tennis, badminton,
+  // volleyball, multisport) get the standards preset chips instead, so they
+  // aren't left with no way to apply a governing-body size.
+  const presetChipSports = selectedSports.filter(
+    (s) => !["football", "cricket", "basketball"].includes(s),
+  );
 
   // Display values are the user-facing unit; storage stays in feet.
   // Rounded to 1 decimal for meters, 0 for feet.
@@ -2849,10 +2855,11 @@ function Step1(props: {
             )}
           </>
         )}
-        {/* Dimensions come from the sport-specific config below
-            (Football A-side, Basketball Full/Half, etc.) — there's no
-            separate "International Standards" preset chip strip so sales
-            doesn't get two places to make the same choice. */}
+        {/* Dimensions come from the sport-specific config below where one
+            exists (Football A-side, Cricket pitch, Basketball Full/Half);
+            sports without a config (pickleball, tennis, badminton,
+            volleyball, multisport) get the standards preset chips instead,
+            so nobody ends up with two places to make the same choice. */}
       </section>
 
       <section>
@@ -3066,6 +3073,21 @@ function Step1(props: {
               ? "FIBA 3x3 Olympic playing area is 15 × 11 m. Plot includes a 2 m safety run-off on all sides."
               : "FIBA regulation playing area is 28 × 15 m. Plot includes a 2 m safety run-off on all sides."}
           </div>
+        </section>
+      )}
+
+      {/* Standards presets for sports without a dedicated config picker
+          (pickleball, tennis, badminton, volleyball, multisport). */}
+      {presetChipSports.length > 0 && (
+        <section className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+          <DimensionPresets
+            sports={presetChipSports}
+            unit={unit}
+            onPick={(p) => {
+              setLengthFt(Math.round(p.lengthFt));
+              setWidthFt(Math.round(p.widthFt));
+            }}
+          />
         </section>
       )}
 

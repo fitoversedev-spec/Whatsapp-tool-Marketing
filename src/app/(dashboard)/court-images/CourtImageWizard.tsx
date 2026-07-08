@@ -2584,7 +2584,7 @@ function Step1(props: {
           setInitialSurface("pvc_sports");
           break;
         case "volleyball":
-          setLengthFt(78); // FIVB 24 × 15 m (18 × 9 + 3 m free zone)
+          setLengthFt(79); // FIVB 24 × 15 m (18 × 9 + 3 m free zone)
           setWidthFt(49);
           setInitialSurface("pvc_sports");
           break;
@@ -3083,6 +3083,8 @@ function Step1(props: {
           <DimensionPresets
             sports={presetChipSports}
             unit={unit}
+            currentLengthFt={lengthFt}
+            currentWidthFt={widthFt}
             onPick={(p) => {
               setLengthFt(Math.round(p.lengthFt));
               setWidthFt(Math.round(p.widthFt));
@@ -4572,12 +4574,24 @@ function AddBtn({ label, onClick }: { label: string; onClick: () => void }) {
 function DimensionPresets({
   sports,
   unit,
+  currentLengthFt,
+  currentWidthFt,
   onPick,
 }: {
   sports: Sport[];
   unit: "ft" | "m";
+  currentLengthFt: number;
+  currentWidthFt: number;
   onPick: (p: CourtPreset) => void;
 }) {
+  const isActive = (p: CourtPreset) => {
+    const pl = Math.round(p.lengthFt);
+    const pw = Math.round(p.widthFt);
+    return (
+      (currentLengthFt === pl && currentWidthFt === pw) ||
+      (currentLengthFt === pw && currentWidthFt === pl)
+    );
+  };
   const presets = useMemo(
     () => presetsForSports(sports as string[]),
     [sports]
@@ -4610,9 +4624,14 @@ function DimensionPresets({
                   key={`${p.label}|${p.lengthFt}x${p.widthFt}`}
                   type="button"
                   onClick={() => onPick(p)}
-                  className="text-left px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded hover:border-wa-green hover:bg-wa-green/5 transition"
+                  className={`text-left px-2.5 py-1.5 text-xs rounded border transition ${
+                    isActive(p)
+                      ? "border-wa-green bg-wa-green/10 ring-1 ring-wa-green/40"
+                      : "bg-white border-slate-300 hover:border-wa-green hover:bg-wa-green/5"
+                  }`}
                 >
-                  <div className="font-medium text-slate-900 leading-tight">
+                  <div className="font-medium text-slate-900 leading-tight flex items-center gap-1">
+                    {isActive(p) && <span className="text-wa-green">✓</span>}
                     {stripVariantPrefix(p.label, v)}
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">

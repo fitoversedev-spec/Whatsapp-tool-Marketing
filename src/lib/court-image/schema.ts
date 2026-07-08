@@ -1138,9 +1138,12 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     //   5-a-side  : 40 × 20 m ≈ 131 × 66 ft
     //   7-a-side  : 60 × 40 m ≈ 197 × 131 ft
     //   11-a-side : 105 × 68 m ≈ 344 × 223 ft
+    // Playing-area sizes (ft) per format, from the Fitoverse dimensions
+    // reference: 5-a-side futsal 40 × 20 m, FA 7-a-side 54.86 × 36.58 m,
+    // FIFA 11-a-side 105 × 68 m.
     const playSizes: Record<5 | 7 | 11, { l: number; w: number }> = {
       5: { l: 131, w: 66 },
-      7: { l: 197, w: 131 },
+      7: { l: 180, w: 120 },
       11: { l: 344, w: 223 },
     };
     const ps = playSizes[aSide];
@@ -1419,7 +1422,7 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     // Regulation playing-area dimensions (long × short, ft) used to
     // derive the relative sizes.
     const REG: Partial<Record<Sport, { l: number; w: number }>> = {
-      football: { l: 197, w: 131 },
+      football: { l: 344, w: 223 },
       basketball: { l: 91.86, w: 49.21 },
       tennis: { l: 78, w: 36 },
       volleyball: { l: 59, w: 30 },

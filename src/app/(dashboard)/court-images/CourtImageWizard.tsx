@@ -4558,7 +4558,7 @@ function DimensionPresets({
               .filter((p) => (p.variant ?? "default") === v)
               .map((p) => (
                 <button
-                  key={p.label}
+                  key={`${p.label}|${p.lengthFt}x${p.widthFt}`}
                   type="button"
                   onClick={() => onPick(p)}
                   className="text-left px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded hover:border-wa-green hover:bg-wa-green/5 transition"

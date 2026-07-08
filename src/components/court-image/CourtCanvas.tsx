@@ -131,13 +131,11 @@ export default function CourtCanvas({
   // the court, not on top of it. Turf callouts show TWO photos stacked
   // (light + dark) so they need more vertical room; reserved width is
   // the same for all non-plain surfaces to keep the layout uniform.
-  const surfaceReservesRightSpace = layout.style.surface !== "plain";
   const { pxPerFt, plotOriginX, plotOriginY, plotPxWidth, plotPxHeight } = useMemo(() => {
     const margin = 28; // leave room for the ground border + dimension labels
-    // Callout column widened from 140 → 210 so the material info panel
-    // fits "105 × 62 ft (32.0 × 18.9 m)" on a single line without
-    // wrapping. Sales asked for the dimensions to read at a glance.
-    const rightExtra = surfaceReservesRightSpace ? 210 : 0;
+    // Always reserve the right column — it holds the prominent DIMENSIONS
+    // card (shown for every design) with the material callout below it.
+    const rightExtra = RIGHT_COL_W;
     const availW = canvasWidth - margin * 2 - rightExtra;
     const availH = canvasHeight - margin * 2;
     const scale = Math.min(availW / layout.plot.lengthFt, availH / layout.plot.widthFt);
@@ -152,7 +150,7 @@ export default function CourtCanvas({
       plotPxWidth: w,
       plotPxHeight: h,
     };
-  }, [canvasWidth, canvasHeight, layout.plot.lengthFt, layout.plot.widthFt, surfaceReservesRightSpace]);
+  }, [canvasWidth, canvasHeight, layout.plot.lengthFt, layout.plot.widthFt]);
 
   // Convert plot coords (origin bottom-left) to Konva canvas coords (origin
   // top-left). Used everywhere we draw or read positions.
@@ -286,6 +284,7 @@ export default function CourtCanvas({
           baseWork={layout.style.baseWork}
           productName={layout.style.flooringProductName}
           productImageUrl={layout.style.flooringProductImageUrl}
+          calloutTopOffset={plotPxHeight * 0.5 + 10}
         />
         {showGrid && (
           <GridLines
@@ -361,10 +360,9 @@ export default function CourtCanvas({
           />
           <DesignInfoPanel
             areas={computeDesignAreas(layout)}
-            plotOriginX={plotOriginX}
             plotOriginY={plotOriginY}
-            plotPxWidth={plotPxWidth}
             plotPxHeight={plotPxHeight}
+            canvasWidth={canvasWidth}
           />
         </Layer>
       )}
@@ -1886,59 +1884,80 @@ function BasketballHoopShape({
 // plot size, court size (the drawn playing surface), and the non-playing area
 // (plot − court) — each in feet AND metres. Drawn on the canvas so it also
 // appears in the exported PNG the customer receives.
+// Width of the right-hand column reserved on the canvas for the dimensions
+// card (top) + the material callout (below it).
+const RIGHT_COL_W = 230;
+
+// Prominent dimensions card — top-right of every design (baked into the
+// exported PNG) so sales + the customer read the sizes at a glance. Each of
+// Plot / Playing area / Non-playing shows "L × W ft = A sq.ft" and
+// "L × W m = A sq.m".
 function DesignInfoPanel({
   areas,
-  plotOriginX,
   plotOriginY,
-  plotPxWidth,
   plotPxHeight,
+  canvasWidth,
 }: {
   areas: DesignAreas;
-  plotOriginX: number;
   plotOriginY: number;
-  plotPxWidth: number;
   plotPxHeight: number;
+  canvasWidth: number;
 }) {
   const FT_M = 0.3048;
   const SQFT_SQM = 0.092903;
-  // Feet to 1 decimal (drop a trailing .0), metres to 2 decimals so the readout
-  // matches the governing-body reference exactly (e.g. 180 × 120 ft ·
-  // 54.86 × 36.58 m) rather than rounding a 7-a-side pitch to "54.9".
   const ft = (v: number) => {
     const r = Math.round(v * 10) / 10;
     return Number.isInteger(r) ? r.toFixed(0) : r.toFixed(1);
   };
-  const dim = (l: number, w: number) =>
-    `${ft(l)} × ${ft(w)} ft  (${(l * FT_M).toFixed(2)} × ${(w * FT_M).toFixed(2)} m)`;
-  const areaStr = (sqft: number) =>
-    `${Math.round(sqft).toLocaleString("en-IN")} sq.ft  (${Math.round(
-      sqft * SQFT_SQM,
-    ).toLocaleString("en-IN")} sq.m)`;
+  const mt = (v: number) => (v * FT_M).toFixed(2);
+  const nf = (n: number) => Math.round(n).toLocaleString("en-IN");
 
-  const c = areas.courts;
-  const courtLine =
-    areas.courtCount === 0
-      ? "Court: not placed yet"
-      : areas.courtCount === 1
-        ? `Court: ${dim(c[0].lengthFt, c[0].widthFt)}`
-        : `Courts: ${areas.courtCount} × ${dim(c[0].lengthFt, c[0].widthFt)}`;
+  type Sec = { label: string; ftLine: string; mLine: string };
+  const secs: Sec[] = [];
+  const p = areas.plot;
+  secs.push({
+    label: "Plot",
+    ftLine: `${ft(p.lengthFt)} × ${ft(p.widthFt)} ft = ${nf(p.areaSqFt)} sq.ft`,
+    mLine: `${mt(p.lengthFt)} × ${mt(p.widthFt)} m = ${nf(p.areaSqFt * SQFT_SQM)} sq.m`,
+  });
+  if (areas.courtCount >= 1) {
+    const c = areas.courts[0];
+    const n = areas.courtCount;
+    secs.push({
+      label: n === 1 ? "Playing area" : `Playing area (×${n})`,
+      ftLine:
+        n === 1
+          ? `${ft(c.lengthFt)} × ${ft(c.widthFt)} ft = ${nf(c.areaSqFt)} sq.ft`
+          : `${n} × ${ft(c.lengthFt)} × ${ft(c.widthFt)} ft = ${nf(areas.courtAreaSqFt)} sq.ft`,
+      mLine:
+        n === 1
+          ? `${mt(c.lengthFt)} × ${mt(c.widthFt)} m = ${nf(c.areaSqFt * SQFT_SQM)} sq.m`
+          : `${n} × ${mt(c.lengthFt)} × ${mt(c.widthFt)} m = ${nf(areas.courtAreaSqFt * SQFT_SQM)} sq.m`,
+    });
+  }
+  secs.push({
+    label: "Non-playing (run-off)",
+    ftLine: `${nf(areas.nonPlayingSqFt)} sq.ft`,
+    mLine: `${nf(areas.nonPlayingSqFt * SQFT_SQM)} sq.m`,
+  });
 
-  const lines = [
-    `Plot: ${dim(areas.plot.lengthFt, areas.plot.widthFt)}`,
-    courtLine,
-    `Non-playing: ${areaStr(areas.nonPlayingSqFt)}`,
-  ];
+  const rows: { text: string; kind: "label" | "val" }[] = [];
+  for (const s of secs) {
+    rows.push({ text: s.label, kind: "label" });
+    rows.push({ text: s.ftLine, kind: "val" });
+    rows.push({ text: s.mLine, kind: "val" });
+  }
 
-  const fontSize = Math.max(
-    9,
-    Math.min(14, Math.min(plotPxWidth, plotPxHeight) * 0.02),
-  );
-  const pad = fontSize * 0.8;
-  const lineH = fontSize * 1.55;
-  const boxW = Math.min(plotPxWidth - fontSize, fontSize * 25);
-  const boxH = pad * 2 + lineH * lines.length;
-  const x = plotOriginX + fontSize * 0.6;
-  const y = plotOriginY + plotPxHeight - boxH - fontSize * 0.6;
+  const boxW = RIGHT_COL_W - 14;
+  const x = canvasWidth - RIGHT_COL_W + 6;
+  const y = plotOriginY;
+  const titleH = 22;
+  const pad = 8;
+  // Fit the rows into the top portion of the right column.
+  const fitH = Math.max(150, plotPxHeight * 0.5);
+  const rowH = Math.max(11, Math.min(15, (fitH - titleH - pad * 2) / rows.length));
+  const fontSize = Math.min(11.5, rowH * 0.82);
+  const boxH = titleH + pad + rows.length * rowH + pad;
 
   return (
     <Group listening={false}>
@@ -1947,27 +1966,44 @@ function DesignInfoPanel({
         y={y}
         width={boxW}
         height={boxH}
-        fill="rgba(255,255,255,0.92)"
-        stroke="#0f172a"
-        strokeWidth={1}
-        cornerRadius={fontSize * 0.3}
-        shadowColor="rgba(0,0,0,0.25)"
-        shadowBlur={fontSize * 0.4}
-        shadowOffsetY={1}
+        fill="#ffffff"
+        stroke="#0f766e"
+        strokeWidth={1.5}
+        cornerRadius={7}
+        shadowColor="rgba(0,0,0,0.22)"
+        shadowBlur={7}
+        shadowOffsetY={2}
       />
-      {lines.map((ln, i) => (
+      <Rect
+        x={x}
+        y={y}
+        width={boxW}
+        height={titleH}
+        fill="#0f766e"
+        cornerRadius={[7, 7, 0, 0]}
+      />
+      <Text
+        text="DIMENSIONS"
+        x={x + pad}
+        y={y + 6}
+        fontSize={11}
+        fontStyle="700"
+        fill="#ffffff"
+        letterSpacing={1}
+        fontFamily="system-ui, -apple-system, sans-serif"
+      />
+      {rows.map((r, i) => (
         <Text
           key={i}
-          text={ln}
+          text={r.text}
           x={x + pad}
-          y={y + pad + i * lineH}
+          y={y + titleH + pad + i * rowH}
           width={boxW - pad * 2}
-          fontSize={fontSize}
+          fontSize={r.kind === "label" ? fontSize : fontSize * 0.96}
+          fontStyle={r.kind === "label" ? "700" : "400"}
+          fill={r.kind === "label" ? "#0f766e" : "#1e293b"}
           fontFamily="system-ui, -apple-system, sans-serif"
-          fontStyle={i === 0 ? "600" : "400"}
-          fill="#0f172a"
           wrap="none"
-          ellipsis
         />
       ))}
     </Group>
@@ -2210,6 +2246,7 @@ function PlotSurface({
   baseWork,
   productName,
   productImageUrl,
+  calloutTopOffset = 0,
 }: {
   plotOriginX: number;
   plotOriginY: number;
@@ -2246,6 +2283,7 @@ function PlotSurface({
   // they're getting instead of only the generic material sample.
   productName?: string;
   productImageUrl?: string;
+  calloutTopOffset?: number;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [productImg, setProductImg] = useState<HTMLImageElement | null>(null);
@@ -2387,7 +2425,9 @@ function PlotSurface({
   const calloutSize = 130;
   const calloutGap = 14;
   const sampleX = plotOriginX + plotPxWidth + calloutGap;
-  const sampleY = plotOriginY;
+  // Drop the material callout below the dimensions card that occupies the
+  // top of the right column.
+  const sampleY = plotOriginY + calloutTopOffset;
   const samplePx = calloutSize;
   // Info panel widened beyond the sample photo so the dims + metres
   // line fits on one row.

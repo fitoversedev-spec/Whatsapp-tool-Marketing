@@ -170,6 +170,22 @@ function buildQuotePayload(
   };
 }
 
+// Ready-made playing-surface colours for the dedicated "Court colour"
+// picker. Sales can still type any custom hex. Applies to every sport that
+// has a coloured hard court (i.e. all except football & cricket turf).
+const COURT_COLORS: { name: string; hex: string }[] = [
+  { name: "Sport Blue", hex: "#1E60A8" },
+  { name: "Sky Blue", hex: "#3E7FB7" },
+  { name: "Teal", hex: "#1E8A8A" },
+  { name: "Court Green", hex: "#2F7D52" },
+  { name: "Lawn Green", hex: "#4E9A5E" },
+  { name: "Terracotta", hex: "#C0563B" },
+  { name: "Court Red", hex: "#B83227" },
+  { name: "Sand", hex: "#C97A4B" },
+  { name: "Purple", hex: "#6C3FA4" },
+  { name: "Slate Grey", hex: "#556070" },
+];
+
 // Collapsible sidebar section — a titled header (with a chevron) that
 // expands/collapses its body. Used to categorise the Design panel so it
 // isn't one long messy scroll.
@@ -1465,15 +1481,136 @@ export default function CourtImageWizard({
                   </CollapsibleSection>
                 )}
 
+                {/* Court colour — the dedicated, easy control for the
+                    playing-surface colour. Sets surfaceColorOverride, which
+                    both the 2D plan and the 3D render honour. Hidden for pure
+                    turf sports (football / cricket) — those use the grass
+                    colour instead. */}
+                {layout.sports.some(
+                  (s) => s !== "football" && s !== "cricket",
+                ) && (
+                  <CollapsibleSection
+                    title="Court colour"
+                    defaultOpen
+                    hint="The playing-surface colour, shown in both the 2D plan and the 3D render. Pick a preset or type any hex. Football & cricket use the grass colour instead."
+                  >
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-5 gap-2">
+                        {COURT_COLORS.map((c) => {
+                          const active =
+                            (
+                              layout.style.surfaceColorOverride ?? ""
+                            ).toLowerCase() === c.hex.toLowerCase();
+                          return (
+                            <button
+                              key={c.hex}
+                              type="button"
+                              title={c.name}
+                              onClick={() =>
+                                setLayout((l) =>
+                                  l
+                                    ? {
+                                        ...l,
+                                        style: {
+                                          ...l.style,
+                                          surfaceColorOverride: c.hex,
+                                        },
+                                      }
+                                    : l,
+                                )
+                              }
+                              className={`h-9 rounded-md border-2 transition ${
+                                active
+                                  ? "border-wa-green ring-2 ring-wa-green/40"
+                                  : "border-slate-200 hover:border-slate-400"
+                              }`}
+                              style={{ backgroundColor: c.hex }}
+                            />
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={layout.style.surfaceColorOverride ?? "#1E60A8"}
+                          onChange={(e) =>
+                            setLayout((l) =>
+                              l
+                                ? {
+                                    ...l,
+                                    style: {
+                                      ...l.style,
+                                      surfaceColorOverride: e.target.value,
+                                    },
+                                  }
+                                : l,
+                            )
+                          }
+                          className="w-9 h-9 rounded border border-slate-300 cursor-pointer bg-white shrink-0"
+                          title="Custom colour"
+                        />
+                        <input
+                          type="text"
+                          value={layout.style.surfaceColorOverride ?? ""}
+                          placeholder="Custom hex e.g. #1E60A8"
+                          onChange={(e) => {
+                            const v = e.target.value.trim();
+                            setLayout((l) =>
+                              l
+                                ? {
+                                    ...l,
+                                    style: {
+                                      ...l.style,
+                                      surfaceColorOverride:
+                                        v.length === 0 ? undefined : v,
+                                    },
+                                  }
+                                : l,
+                            );
+                          }}
+                          className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                        />
+                        {layout.style.surfaceColorOverride && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLayout((l) =>
+                                l
+                                  ? {
+                                      ...l,
+                                      style: {
+                                        ...l.style,
+                                        surfaceColorOverride: undefined,
+                                      },
+                                    }
+                                  : l,
+                              )
+                            }
+                            className="text-[10.5px] text-slate-500 hover:text-slate-700 underline whitespace-nowrap shrink-0"
+                            title="Use the finish's default colour"
+                          >
+                            Default
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-[10.5px] text-slate-500 leading-snug">
+                        Applies to the whole playing surface. To colour just one
+                        area (a key, service box, kitchen), use “+ Highlight
+                        zone” under Highlights above.
+                      </div>
+                    </div>
+                  </CollapsibleSection>
+                )}
+
                 {/* Surface & colour — ONE collapsible category: the
                     material (surface finish), the ground/court colour, and
                     the run-off convention all live together so appearance
                     isn't split across the panel. Per-area colouring is the
                     separate Highlights section above. */}
                 <CollapsibleSection
-                  title="Surface & colour"
+                  title="Surface finish & run-off"
                   defaultOpen
-                  hint="Everything about how the WHOLE court looks — material, colour, run-off. To colour just ONE area (a key, service box, pickleball kitchen), use “+ Highlight zone” under Highlights above."
+                  hint="The material finish, the ground/base colour and the run-off convention. The main court colour is now its own “Court colour” section above; per-area colours are under Highlights."
                 >
                   <div className="space-y-2">
                   <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
@@ -1679,85 +1816,10 @@ export default function CourtImageWizard({
                     </div>
                   </div>
 
-                  {/* Surface colour override — paints the plot in ANY
-                      hex the customer picks, no need for us to add a
-                      new acrylic / ppe preset. Overrides the built-in
-                      SURFACE_SOLID_COLOR lookup for the chosen finish. */}
-                  <div>
-                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                      Surface colour override
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={
-                          layout.style.surfaceColorOverride ?? "#1E60A8"
-                        }
-                        onChange={(e) =>
-                          setLayout((l) =>
-                            l
-                              ? {
-                                  ...l,
-                                  style: {
-                                    ...l.style,
-                                    surfaceColorOverride: e.target.value,
-                                  },
-                                }
-                              : l,
-                          )
-                        }
-                        className="w-8 h-8 rounded border border-slate-300 cursor-pointer bg-white"
-                        title="Surface colour override"
-                      />
-                      <input
-                        type="text"
-                        value={layout.style.surfaceColorOverride ?? ""}
-                        placeholder="Custom hex (paints the plot)"
-                        onChange={(e) => {
-                          const v = e.target.value.trim();
-                          setLayout((l) =>
-                            l
-                              ? {
-                                  ...l,
-                                  style: {
-                                    ...l.style,
-                                    surfaceColorOverride:
-                                      v.length === 0 ? undefined : v,
-                                  },
-                                }
-                              : l,
-                          );
-                        }}
-                        className="flex-1 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
-                      />
-                      {layout.style.surfaceColorOverride && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setLayout((l) =>
-                              l
-                                ? {
-                                    ...l,
-                                    style: {
-                                      ...l.style,
-                                      surfaceColorOverride: undefined,
-                                    },
-                                  }
-                                : l,
-                            )
-                          }
-                          className="text-[10.5px] text-slate-500 hover:text-slate-700 underline"
-                        >
-                          Reset
-                        </button>
-                      )}
-                    </div>
-                    <div className="text-[10.5px] text-slate-500 mt-1.5 leading-snug">
-                      Overrides the finish's preset colour with any hex.
-                      Leave blank to use the built-in acrylic / turf /
-                      PPE / PVC tones.
-                    </div>
-                  </div>
+                  {/* Court playing-surface colour now lives in its own
+                      dedicated "Court colour" section above (presets + custom
+                      hex). This section keeps the material finish, the ground
+                      colour and the run-off convention. */}
 
                   <div>
                     <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">

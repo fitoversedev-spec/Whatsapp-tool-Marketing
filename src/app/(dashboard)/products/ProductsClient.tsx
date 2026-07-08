@@ -236,7 +236,13 @@ function ProductSection({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map((p) => (
-            <ProductCard key={p.id} product={p} onChanged={onChanged} />
+            <ProductCard
+              key={p.id}
+              product={p}
+              types={types}
+              defaultType={defaultType}
+              onChanged={onChanged}
+            />
           ))}
         </div>
       )}
@@ -246,12 +252,17 @@ function ProductSection({
 
 function ProductCard({
   product,
+  types,
+  defaultType,
   onChanged,
 }: {
   product: ProductDTO;
+  types: ProductType[];
+  defaultType: ProductType;
   onChanged: () => void;
 }) {
   const toast = useToast();
+  const [editing, setEditing] = useState(false);
   async function archive() {
     if (!confirm(`Remove "${product.name}" from the catalogue?`)) return;
     const r = await fetch(`/api/products/${product.id}`, { method: "DELETE" });
@@ -262,6 +273,32 @@ function ProductCard({
       toast.error("Remove failed");
     }
   }
+
+  // Inline edit — reuse the product form pre-filled, spanning the full grid
+  // width so the fields aren't cramped into a single column.
+  if (editing) {
+    return (
+      <div className="sm:col-span-2 xl:col-span-3">
+        <ProductForm
+          types={types}
+          defaultType={defaultType}
+          product={product}
+          onDone={() => {
+            setEditing(false);
+            onChanged();
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          className="mt-1 text-xs text-slate-500 hover:underline"
+        >
+          Cancel edit
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div className="aspect-video bg-slate-100">
@@ -283,13 +320,22 @@ function ProductCard({
           <div className="text-sm font-semibold text-slate-900 leading-tight">
             {product.name}
           </div>
-          <button
-            type="button"
-            onClick={archive}
-            className="text-xs text-red-500 hover:underline shrink-0"
-          >
-            Remove
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-xs text-wa-dark hover:underline"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={archive}
+              className="text-xs text-red-500 hover:underline"
+            >
+              Remove
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-1">
           <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded capitalize">
@@ -333,21 +379,28 @@ function ProductCard({
 function ProductForm({
   types,
   defaultType,
+  product,
   onDone,
 }: {
   types: ProductType[];
   defaultType: ProductType;
+  product?: ProductDTO;
   onDone: () => void;
 }) {
   const toast = useToast();
+  const editing = !!product;
   const [busy, setBusy] = useState(false);
-  const [name, setName] = useState("");
-  const [type, setType] = useState<ProductType>(defaultType);
-  const [description, setDescription] = useState("");
-  const [sports, setSports] = useState<string[]>([]);
-  const [category, setCategory] = useState("");
-  const [priceInr, setPriceInr] = useState("");
-  const [unit, setUnit] = useState("");
+  const [name, setName] = useState(product?.name ?? "");
+  const [type, setType] = useState<ProductType>(product?.type ?? defaultType);
+  const [description, setDescription] = useState(product?.description ?? "");
+  const [sports, setSports] = useState<string[]>(
+    product ? [...product.sports] : [],
+  );
+  const [category, setCategory] = useState(product?.category ?? "");
+  const [priceInr, setPriceInr] = useState(
+    product?.priceInr != null ? String(product.priceInr) : "",
+  );
+  const [unit, setUnit] = useState(product?.unit ?? "");
   const [hero, setHero] = useState<File | null>(null);
   const [video, setVideo] = useState<File | null>(null);
 
@@ -378,10 +431,12 @@ function ProductForm({
     form.set("unit", unit);
     if (hero) form.set("hero", await toEmbeddableImage(hero));
     if (video) form.set("video", video);
-    const r = await fetch("/api/products", { method: "POST", body: form });
+    const r = editing
+      ? await fetch(`/api/products/${product!.id}`, { method: "PATCH", body: form })
+      : await fetch("/api/products", { method: "POST", body: form });
     setBusy(false);
     if (r.ok) {
-      toast.success("Added");
+      toast.success(editing ? "Updated" : "Added");
       onDone();
     } else {
       const j = await r.json().catch(() => ({}));
@@ -502,7 +557,7 @@ function ProductForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="block min-w-0">
           <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-            Photo
+            Photo{editing ? " · leave blank to keep current" : ""}
           </span>
           <FilePicker
             accept="image/*"
@@ -532,7 +587,7 @@ function ProductForm({
           disabled={busy}
           className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-medium px-5 py-2 rounded-lg disabled:opacity-50"
         >
-          {busy ? "Saving…" : "Save product"}
+          {busy ? "Saving…" : editing ? "Save changes" : "Save product"}
         </button>
       </div>
     </form>
@@ -593,6 +648,9 @@ function TdsSection({
   const [productId, setProductId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editFile, setEditFile] = useState<File | null>(null);
 
   async function load(forSport: string) {
     setLoaded(false);
@@ -640,6 +698,35 @@ function TdsSection({
     const r = await fetch(`/api/products/tds?id=${id}`, { method: "DELETE" });
     if (r.ok) load(sport);
     else toast.error("Remove failed");
+  }
+
+  function startEdit(f: { id: string; name: string }) {
+    setEditingId(f.id);
+    setEditName(f.name);
+    setEditFile(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editName.trim()) {
+      toast.error("Name required");
+      return;
+    }
+    setBusy(true);
+    const form = new FormData();
+    form.set("id", id);
+    form.set("name", editName.trim());
+    if (editFile) form.set("file", editFile);
+    const r = await fetch("/api/products/tds", { method: "PATCH", body: form });
+    setBusy(false);
+    if (r.ok) {
+      toast.success("Updated");
+      setEditingId(null);
+      setEditFile(null);
+      load(sport);
+    } else {
+      const j = await r.json().catch(() => ({}));
+      toast.error(j.error ?? "Save failed");
+    }
   }
 
   const sportProducts = products.filter((p) => p.sports.includes(sport));
@@ -711,23 +798,67 @@ function TdsSection({
           {files.map((f) => (
             <li
               key={f.id}
-              className="flex items-center gap-3 bg-white border border-slate-200 rounded-md px-3 py-2 text-sm"
+              className="bg-white border border-slate-200 rounded-md px-3 py-2 text-sm"
             >
-              <a
-                href={f.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 text-wa-dark hover:underline truncate"
-              >
-                📄 {f.name}
-              </a>
-              <button
-                type="button"
-                onClick={() => remove(f.id)}
-                className="text-xs text-red-500 hover:underline"
-              >
-                Remove
-              </button>
+              {editingId === f.id ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Display name"
+                    className="input flex-1 min-w-0"
+                  />
+                  <FilePicker
+                    accept="application/pdf,.pdf"
+                    file={editFile}
+                    onPick={setEditFile}
+                    label="Replace PDF"
+                    className="flex-1 min-w-0 sm:min-w-[9rem]"
+                  />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      disabled={busy || !editName.trim()}
+                      onClick={() => saveEdit(f.id)}
+                      className="bg-wa-green hover:bg-wa-green/90 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      className="text-xs text-slate-500 hover:underline"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <a
+                    href={f.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 text-wa-dark hover:underline truncate"
+                  >
+                    📄 {f.name}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(f)}
+                    className="text-xs text-wa-dark hover:underline"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(f.id)}
+                    className="text-xs text-red-500 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>

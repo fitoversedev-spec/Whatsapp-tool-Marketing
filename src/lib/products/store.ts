@@ -323,6 +323,34 @@ export async function createTds(input: {
   };
 }
 
+export async function updateTds(
+  id: string,
+  input: {
+    name?: string;
+    sport?: string;
+    url?: string;
+    productId?: string | null;
+  },
+): Promise<TdsDTO | null> {
+  const data: Record<string, unknown> = {};
+  if (input.name !== undefined) data.name = input.name;
+  if (input.sport !== undefined) data.sport = input.sport;
+  if (input.url !== undefined) data.url = input.url;
+  if (input.productId !== undefined) data.productId = input.productId;
+  const row = await prisma.tdsFile
+    .update({ where: { id }, data })
+    .catch(() => null);
+  if (!row) return null;
+  return {
+    id: row.id,
+    sport: row.sport,
+    name: row.name,
+    url: row.url,
+    productId: row.productId,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export async function removeTds(id: string): Promise<void> {
   await prisma.tdsFile.delete({ where: { id } }).catch(() => null);
 }

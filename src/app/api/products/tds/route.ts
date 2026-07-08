@@ -37,7 +37,14 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json({ error: "file_required" }, { status: 400 });
   }
-  if (file.type !== "application/pdf") {
+  // Accept by MIME OR by .pdf extension — some browsers/OSes report an
+  // empty or non-standard type for a valid PDF, which was wrongly rejected.
+  const looksPdf =
+    file.type === "application/pdf" ||
+    file.type === "application/x-pdf" ||
+    file.type === "" ||
+    /\.pdf$/i.test(file.name);
+  if (!looksPdf) {
     return NextResponse.json({ error: "pdf_only" }, { status: 400 });
   }
   const bytes = Buffer.from(await file.arrayBuffer());

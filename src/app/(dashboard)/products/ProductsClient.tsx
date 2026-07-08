@@ -499,28 +499,30 @@ function ProductForm({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label className="block">
+        <div className="block min-w-0">
           <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
             Photo
           </span>
-          <input
-            type="file"
+          <FilePicker
             accept="image/*"
-            onChange={(e) => setHero(e.target.files?.[0] ?? null)}
-            className="mt-1 text-sm"
+            file={hero}
+            onPick={setHero}
+            label="Choose photo"
+            className="mt-1 w-full"
           />
-        </label>
-        <label className="block">
+        </div>
+        <div className="block min-w-0">
           <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
             Video (optional)
           </span>
-          <input
-            type="file"
+          <FilePicker
             accept="video/*"
-            onChange={(e) => setVideo(e.target.files?.[0] ?? null)}
-            className="mt-1 text-sm"
+            file={video}
+            onPick={setVideo}
+            label="Choose video"
+            className="mt-1 w-full"
           />
-        </label>
+        </div>
       </div>
 
       <div className="flex justify-end">
@@ -533,6 +535,41 @@ function ProductForm({
         </button>
       </div>
     </form>
+  );
+}
+
+// Styled, width-controlled file picker. The native <input type="file"> has
+// an uncontrollable intrinsic width (its "Choose File" button + filename),
+// which pushed rows past the screen edge. This wraps a hidden input in a
+// label that truncates the filename, so it never overflows its column.
+function FilePicker({
+  accept,
+  file,
+  onPick,
+  label,
+  className = "",
+}: {
+  accept: string;
+  file: File | null;
+  onPick: (f: File | null) => void;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <label
+      className={`flex items-center gap-2 min-w-0 cursor-pointer text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white hover:border-slate-400 ${className}`}
+    >
+      <input
+        type="file"
+        accept={accept}
+        onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+        className="hidden"
+      />
+      <span className="shrink-0 font-medium text-slate-700">{label}</span>
+      <span className="truncate text-slate-500">
+        {file ? file.name : "No file chosen"}
+      </span>
+    </label>
   );
 }
 
@@ -618,18 +655,18 @@ function TdsSection({
 
       <form
         onSubmit={upload}
-        className="bg-white border border-slate-200 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2"
+        className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
       >
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Display name (e.g. Turf 50mm — TDS)"
-          className="input"
+          className="input flex-1 min-w-0 sm:min-w-[9rem]"
         />
         <select
           value={productId}
           onChange={(e) => setProductId(e.target.value)}
-          className="input"
+          className="input flex-1 min-w-0 sm:min-w-[9rem]"
         >
           <option value="">Sport-level (no specific product)</option>
           {sportProducts.map((p) => (
@@ -638,21 +675,20 @@ function TdsSection({
             </option>
           ))}
         </select>
-        <div className="flex items-center gap-2">
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="text-sm"
-          />
-          <button
-            type="submit"
-            disabled={busy || !name.trim() || !file}
-            className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 whitespace-nowrap"
-          >
-            Upload
-          </button>
-        </div>
+        <FilePicker
+          accept="application/pdf,.pdf"
+          file={file}
+          onPick={setFile}
+          label="Choose PDF"
+          className="flex-1 min-w-0 sm:min-w-[9rem]"
+        />
+        <button
+          type="submit"
+          disabled={busy || !name.trim() || !file}
+          className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 whitespace-nowrap shrink-0"
+        >
+          Upload
+        </button>
       </form>
 
       {!loaded ? (

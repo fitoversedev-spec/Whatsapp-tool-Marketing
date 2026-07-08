@@ -950,18 +950,26 @@ export default function CourtImageWizard({
 
   // Resize observer for the 3D preview container in Step 3 — runs whenever
   // either 3D tab is active (image OR video), since both mount the same
-  // Three.js renderer.
+  // Three.js renderer. Send is step 4 (Sports→Design→Quotation→Send); this
+  // was still gated on step 3 from before the Quotation step existed, so the
+  // 3D canvas never resized to its container and rendered at a fixed 800×500
+  // that didn't fit the preview. Also re-measure on the next frame so the
+  // container has its real size after the tab switch.
   useEffect(() => {
-    if (step !== 3) return;
+    if (step !== 4) return;
     if (previewMode !== "3d-image" && previewMode !== "3d-video") return;
     const el = preview3dContainerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
+    const measure = () =>
       setPreview3dSize({ width: el.clientWidth, height: el.clientHeight });
-    });
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setPreview3dSize({ width: el.clientWidth, height: el.clientHeight });
-    return () => ro.disconnect();
+    measure();
+    const raf = requestAnimationFrame(measure);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
   }, [step, previewMode]);
 
   // Upload data-URL PNG to /api/media/upload (which writes to Vercel Blob).

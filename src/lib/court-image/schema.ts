@@ -1113,11 +1113,13 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   const longFt = Math.max(plot.lengthFt, plot.widthFt);
   const shortFt = Math.min(plot.lengthFt, plot.widthFt);
   const baseRotation = isPortrait ? 90 : 0;
-  // Reserve a visible run-off zone around court sports (basketball,
-  // pickleball, tennis, badminton, volleyball) so turning on the run-off
-  // tone shows a distinct darker ring — not a whole-court recolour. Real
-  // courts keep ~2 m of unobstructed space around the lines anyway.
-  const courtRunoffMargin = Math.max(6, shortFt * 0.16);
+  // Fixed 3 m non-playing run-off on EVERY side of the court, for every sport
+  // (both sides ⇒ 6 m removed from each plot dimension). Sales asked for a
+  // consistent 3 m safety border between the playing lines and the plot
+  // boundary instead of the old variable margin. Capped on tiny plots so the
+  // court never collapses.
+  const RUNOFF_PER_SIDE_FT = 3 / 0.3048; // 3 m ≈ 9.843 ft per side
+  const courtRunoffMargin = Math.min(RUNOFF_PER_SIDE_FT * 2, shortFt * 0.5);
 
   // Largest sport renders on the bottom of the stack. Football and the
   // other full-court sports compete for "base"; cricket is always an
@@ -1151,6 +1153,7 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
       ps.w,
       longFt,
       shortFt,
+      courtRunoffMargin,
     );
     elements.push({
       id: newId("football"),

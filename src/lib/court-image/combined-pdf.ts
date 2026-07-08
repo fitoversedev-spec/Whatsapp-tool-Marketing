@@ -565,103 +565,123 @@ function drawSpecTable(ctx: Ctx, entries: Array<[string, string]>) {
   }
 }
 
-// Full quotation block: number, title, notes, then a 4-column line-item
-// table (Item | Qty | Rate | Amount) and the totals.
+// Full quotation block styled like the Fitoverse client quote sheet: a green
+// header row (Service description | Total Area in Sq.ft | Price per sq.ft |
+// Total Value), one gridded row per line item with the full description under
+// the name, then the totals.
 function drawQuote(ctx: Ctx, q: CombinedQuote) {
   sectionTitle(ctx, `Quotation ${q.number}`);
-  if (q.title) {
-    text(ctx, q.title, { size: 10.5, bold: true });
-  }
-  if (q.notes) {
-    text(ctx, q.notes, { size: 8.5, color: COL.soft });
-  }
-  gap(ctx, 4);
+  if (q.title) text(ctx, q.title, { size: 10.5, bold: true });
+  if (q.notes) text(ctx, q.notes, { size: 8.5, color: COL.soft });
+  gap(ctx, 6);
 
-  // Column geometry.
-  const xItem = MARGIN + 4;
-  const xAmount = PAGE_W - MARGIN - 4; // right edge
-  const wAmount = 70;
-  const wRate = 60;
-  const wQty = 55;
-  const xQty = xAmount - wAmount - wRate - wQty;
-  const xRate = xAmount - wAmount - wRate;
-  const rowH = 14;
+  // Column edges.
+  const x0 = MARGIN;
+  const x1 = MARGIN + CONTENT_W * 0.5; // service description | area
+  const x2 = MARGIN + CONTENT_W * 0.7; // area | price
+  const x3 = MARGIN + CONTENT_W * 0.83; // price | total
+  const xEnd = MARGIN + CONTENT_W;
+  const padX = 6;
 
-  // Header band.
-  ensure(ctx, rowH + 4);
-  ctx.page.drawRectangle({
-    x: MARGIN,
-    y: ctx.y - rowH,
-    width: CONTENT_W,
-    height: rowH,
-    color: COL.band,
-  });
-  const head = (s: string, x: number, right = false) =>
-    ctx.page.drawText(s, {
-      x: right ? x - ctx.bold.widthOfTextAtSize(s, 8) : x,
-      y: ctx.y - rowH + 4,
-      size: 8,
-      font: ctx.bold,
-      color: COL.ink,
+  const drawHeader = () => {
+    const headerH = 26;
+    ensure(ctx, headerH + 4);
+    const top = ctx.y;
+    ctx.page.drawRectangle({
+      x: x0,
+      y: top - headerH,
+      width: CONTENT_W,
+      height: headerH,
+      color: COL.green,
     });
-  head("Item", xItem);
-  head("Qty", xQty + wQty, true);
-  head("Rate", xRate + wRate, true);
-  head("Amount", xAmount, true);
-  ctx.y -= rowH;
+    const hcol = (s: string, xL: number, xR: number, center: boolean) => {
+      const lines = wrap(ctx.bold, s, 8.5, xR - xL - padX * 2);
+      let ty = top - 11 - (lines.length === 1 ? 3 : 0);
+      for (const ln of lines) {
+        const w = ctx.bold.widthOfTextAtSize(ln, 8.5);
+        const tx = center ? (xL + xR) / 2 - w / 2 : xL + padX;
+        ctx.page.drawText(ln, { x: tx, y: ty, size: 8.5, font: ctx.bold, color: rgb(1, 1, 1) });
+        ty -= 10;
+      }
+    };
+    hcol("Service description", x0, x1, false);
+    hcol("Total Area in Sq.ft", x1, x2, true);
+    hcol("Price per sq.ft", x2, x3, true);
+    hcol("Total Value", x3, xEnd, true);
+    ctx.y = top - headerH;
+  };
+
+  drawHeader();
 
   for (const it of q.items) {
-    ensure(ctx, rowH);
-    const cell = (
-      s: string,
-      x: number,
-      right = false,
-      color = COL.ink,
-    ) =>
-      ctx.page.drawText(sanitize(s), {
-        x: right ? x - ctx.font.widthOfTextAtSize(sanitize(s), 8) : x,
-        y: ctx.y - rowH + 4,
-        size: 8,
-        font: ctx.font,
-        color,
-      });
-    // Item name (truncated to fit the item column).
-    const nameMax = xQty - xItem - 6;
-    let name = it.name;
-    while (
-      ctx.font.widthOfTextAtSize(sanitize(name), 8) > nameMax &&
-      name.length > 4
-    ) {
-      name = name.slice(0, -2);
+    const descMax = x1 - x0 - padX * 2;
+    const nameLines = wrap(ctx.bold, sanitize(it.name), 8.5, descMax);
+    const descLines = it.desc ? wrap(ctx.font, sanitize(it.desc), 7.5, descMax) : [];
+    const contentH =
+      8 + nameLines.length * 10 + (descLines.length ? 2 + descLines.length * 9 : 0) + 4;
+    const rowH = Math.max(22, contentH);
+
+    // Keep the row whole; repeat the header when it spills to a new page.
+    if (ctx.y - rowH < MARGIN + 36) {
+      newPage(ctx);
+      sectionTitle(ctx, `Quotation ${q.number} (continued)`);
+      drawHeader();
     }
-    cell(name, xItem);
-    if (it.qty != null)
-      cell(
-        `${Math.round(it.qty).toLocaleString("en-IN")}${it.unit ? ` ${it.unit}` : ""}`,
-        xQty + wQty,
-        true,
-        COL.soft,
-      );
-    if (it.rate != null)
-      cell(`Rs ${it.rate.toLocaleString("en-IN")}`, xRate + wRate, true, COL.soft);
-    cell(`Rs ${it.total.toLocaleString("en-IN")}`, xAmount, true);
-    ctx.y -= rowH;
-    // Optional per-line description under the item name.
-    if (it.desc) {
-      ensure(ctx, 11);
-      for (const line of wrap(ctx.font, sanitize(it.desc), 7.5, nameMax)) {
-        ctx.page.drawText(line, {
-          x: xItem + 4,
-          y: ctx.y - 9,
-          size: 7.5,
-          font: ctx.font,
-          color: COL.faint,
-        });
-        ctx.y -= 10;
+    const top = ctx.y;
+
+    // Service description — name (bold) then the full wrapped description.
+    let ty = top - 12;
+    for (const ln of nameLines) {
+      ctx.page.drawText(ln, { x: x0 + padX, y: ty, size: 8.5, font: ctx.bold, color: COL.ink });
+      ty -= 10;
+    }
+    if (descLines.length) {
+      ty -= 2;
+      for (const ln of descLines) {
+        ctx.page.drawText(ln, { x: x0 + padX, y: ty, size: 7.5, font: ctx.font, color: COL.soft });
+        ty -= 9;
       }
     }
+
+    // Area / price / total, right-aligned in their columns.
+    const rcell = (s: string, xR: number, bold = false) => {
+      const f = bold ? ctx.bold : ctx.font;
+      const w = f.widthOfTextAtSize(sanitize(s), 8.5);
+      ctx.page.drawText(sanitize(s), {
+        x: xR - padX - w,
+        y: top - 12,
+        size: 8.5,
+        font: f,
+        color: COL.ink,
+      });
+    };
+    const areaStr =
+      it.qty != null
+        ? `${Math.round(it.qty).toLocaleString("en-IN")}${it.unit ? ` ${it.unit}` : ""}`
+        : "-";
+    rcell(areaStr, x2);
+    rcell(it.rate != null ? it.rate.toLocaleString("en-IN") : "-", x3);
+    rcell(`Rs ${it.total.toLocaleString("en-IN")}`, xEnd, true);
+
+    // Grid: row bottom border + column separators.
+    ctx.page.drawLine({
+      start: { x: x0, y: top - rowH },
+      end: { x: xEnd, y: top - rowH },
+      thickness: 0.5,
+      color: COL.line,
+    });
+    for (const vx of [x0, x1, x2, x3, xEnd]) {
+      ctx.page.drawLine({
+        start: { x: vx, y: top },
+        end: { x: vx, y: top - rowH },
+        thickness: 0.5,
+        color: COL.line,
+      });
+    }
+    ctx.y = top - rowH;
   }
-  gap(ctx, 4);
+
+  gap(ctx, 6);
   drawTotalLine(ctx, "Subtotal", q.subtotal);
   drawTotalLine(ctx, "GST", q.gst);
   drawTotalLine(ctx, "Grand total", q.grandTotal, true);

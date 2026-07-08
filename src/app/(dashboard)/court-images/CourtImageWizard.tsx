@@ -3186,6 +3186,155 @@ function Step1(props: {
 //  Step 3 — Quotation (seed name / notes / line items → combined PDF)
 // ─────────────────────────────────────────────────────────────────────
 
+type ExistingQuoteRow = {
+  id: string;
+  number: string;
+  customerName: string;
+  grandTotal: string;
+  status: string;
+  sport: string;
+  sentAt: string | null;
+  createdAt: string;
+};
+
+// Pull a previously-created/sent quotation into this design so the two can be
+// sent together (e.g. we quoted the customer earlier, now they want the
+// design + that same quote in one PDF). Loads the saved line items in place.
+function ExistingQuotePicker({
+  onLoad,
+}: {
+  onLoad: (q: {
+    number: string;
+    notes: string;
+    items: QuoteLineItem[];
+  }) => void;
+}) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState<ExistingQuoteRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && list.length === 0) {
+      setLoading(true);
+      try {
+        const r = await fetch("/api/quotations");
+        const j = await r.json().catch(() => ({ quotations: [] }));
+        setList(j.quotations ?? []);
+      } finally {
+        setLoading(false);
+      }
+    }
+  }
+
+  async function pick(id: string, number: string) {
+    setLoadingId(id);
+    try {
+      const r = await fetch(`/api/quotations/${id}`);
+      if (!r.ok) {
+        toast.error("Couldn't load that quotation");
+        return;
+      }
+      const j = await r.json();
+      const q = j.quotation ?? {};
+      const items: QuoteLineItem[] = (q.lineItems ?? []).map(
+        (li: {
+          name?: string;
+          description?: string;
+          areaSqFt?: number;
+          ratePerSqFt?: number;
+          gstPercent?: number;
+          included?: boolean;
+        }) => ({
+          id: newQuoteLineId(),
+          name: li.name ?? "",
+          desc: li.description ?? "",
+          qty: Number(li.areaSqFt) || 0,
+          unit: "sq.ft",
+          rate: Number(li.ratePerSqFt) || 0,
+          gst: Number(li.gstPercent) || 18,
+          included: li.included !== false,
+        }),
+      );
+      if (items.length === 0) {
+        toast.error("That quotation has no line items");
+        return;
+      }
+      onLoad({ number: q.number ?? number, notes: q.notes ?? "", items });
+      toast.success(`Loaded quotation ${q.number ?? number}`);
+      setOpen(false);
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs text-slate-600">
+          Already quoted this customer? Pull that quote in so the design + the
+          same quotation go out as one PDF.
+        </div>
+        <button
+          type="button"
+          onClick={toggle}
+          className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+        >
+          {open ? "Close" : "📎 Attach an existing quotation"}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white divide-y divide-slate-100">
+          {loading ? (
+            <div className="px-3 py-3 text-xs text-slate-500 italic">Loading…</div>
+          ) : list.length === 0 ? (
+            <div className="px-3 py-3 text-xs text-slate-500 italic">
+              No saved quotations yet.
+            </div>
+          ) : (
+            list.map((q) => (
+              <button
+                key={q.id}
+                type="button"
+                disabled={loadingId === q.id}
+                onClick={() => pick(q.id, q.number)}
+                className="w-full text-left px-3 py-2 hover:bg-slate-50 disabled:opacity-50 flex items-center justify-between gap-3"
+              >
+                <span className="min-w-0">
+                  <span className="text-xs font-semibold text-slate-800">
+                    {q.number}
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    {" "}
+                    · {q.customerName} · {cap(q.sport)}
+                  </span>
+                </span>
+                <span className="shrink-0 flex items-center gap-2">
+                  <span className="text-xs text-slate-700 tabular-nums">
+                    ₹{Number(q.grandTotal).toLocaleString("en-IN")}
+                  </span>
+                  <span
+                    className={`text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase ${
+                      q.status === "sent"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {q.status}
+                  </span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StepQuotation({
   layout,
   customerName,
@@ -3244,7 +3393,7 @@ function StepQuotation({
 
   return (
     <div className="h-full overflow-y-auto bg-slate-50">
-      <div className="max-w-3xl mx-auto p-5 space-y-4">
+      <div className="max-w-5xl mx-auto p-5 sm:p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-slate-900">
@@ -3276,6 +3425,14 @@ function StepQuotation({
           </div>
         ) : (
           <>
+            {/* Attach a previously-created quotation instead of starting fresh */}
+            <ExistingQuotePicker
+              onLoad={({ number, notes, items }) => {
+                setQuoteNumber(number);
+                if (notes) setQuoteNotes(notes);
+                setQuoteItems(items);
+              }}
+            />
             {/* Header fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="block">
@@ -3329,7 +3486,7 @@ function StepQuotation({
               </div>
 
               {/* Column header (desktop) */}
-              <div className="hidden sm:grid grid-cols-[auto_1fr_5rem_4rem_6rem_6rem_auto] gap-2 px-3 py-1.5 text-[10px] font-medium text-slate-400 uppercase tracking-wide">
+              <div className="hidden sm:grid grid-cols-[auto_1fr_6rem_5rem_7rem_7rem_auto] gap-2.5 px-4 py-2 text-[11px] font-medium text-slate-400 uppercase tracking-wide">
                 <span></span>
                 <span>Item</span>
                 <span className="text-right">Qty</span>
@@ -3350,7 +3507,7 @@ function StepQuotation({
                     return (
                       <div
                         key={it.id}
-                        className="grid grid-cols-2 sm:grid-cols-[auto_1fr_5rem_4rem_6rem_6rem_auto] gap-2 px-3 py-2 items-center"
+                        className="grid grid-cols-2 sm:grid-cols-[auto_1fr_6rem_5rem_7rem_7rem_auto] gap-2.5 px-4 py-3 items-center"
                       >
                         <input
                           type="checkbox"
@@ -3366,15 +3523,16 @@ function StepQuotation({
                             value={it.name}
                             onChange={(e) => patch(it.id, { name: e.target.value })}
                             placeholder="Item name"
-                            className={`w-full px-2 py-1 text-[12px] border border-slate-200 rounded ${
+                            className={`w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded ${
                               it.included ? "text-slate-800" : "text-slate-400"
                             }`}
                           />
-                          <input
+                          <textarea
                             value={it.desc}
                             onChange={(e) => patch(it.id, { desc: e.target.value })}
                             placeholder="Description (optional)"
-                            className="mt-1 w-full px-2 py-0.5 text-[10.5px] text-slate-500 border border-transparent hover:border-slate-200 focus:border-slate-200 rounded"
+                            rows={2}
+                            className="mt-1.5 w-full px-2.5 py-1 text-xs text-slate-500 border border-slate-200 hover:border-slate-300 focus:border-slate-300 rounded resize-y"
                           />
                         </div>
                         <input
@@ -3383,12 +3541,12 @@ function StepQuotation({
                           onChange={(e) =>
                             patch(it.id, { qty: Number(e.target.value) || 0 })
                           }
-                          className="w-full px-1.5 py-1 text-[12px] text-right border border-slate-200 rounded"
+                          className="w-full px-2 py-1.5 text-sm text-right border border-slate-200 rounded"
                         />
                         <input
                           value={it.unit}
                           onChange={(e) => patch(it.id, { unit: e.target.value })}
-                          className="w-full px-1.5 py-1 text-[12px] border border-slate-200 rounded"
+                          className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded"
                         />
                         <input
                           type="number"
@@ -3396,9 +3554,9 @@ function StepQuotation({
                           onChange={(e) =>
                             patch(it.id, { rate: Number(e.target.value) || 0 })
                           }
-                          className="w-full px-1.5 py-1 text-[12px] text-right border border-slate-200 rounded"
+                          className="w-full px-2 py-1.5 text-sm text-right border border-slate-200 rounded"
                         />
-                        <span className="text-[12px] text-right text-slate-700 tabular-nums">
+                        <span className="text-sm text-right text-slate-700 tabular-nums">
                           ₹{amount.toLocaleString("en-IN")}
                         </span>
                         <button

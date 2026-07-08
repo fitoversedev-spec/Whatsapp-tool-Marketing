@@ -16,13 +16,25 @@ type Item = {
   optional?: boolean;
 };
 
-type Sport = "football" | "basketball" | "multisport" | "pickleball";
+type Sport =
+  | "football"
+  | "basketball"
+  | "multisport"
+  | "pickleball"
+  | "tennis"
+  | "volleyball"
+  | "cricket"
+  | "badminton";
 
 const SPORTS: { id: Sport; label: string }[] = [
   { id: "football", label: "Football Turf" },
   { id: "basketball", label: "Basketball Court" },
   { id: "multisport", label: "Multisport" },
   { id: "pickleball", label: "Pickleball" },
+  { id: "tennis", label: "Tennis" },
+  { id: "volleyball", label: "Volleyball" },
+  { id: "cricket", label: "Cricket" },
+  { id: "badminton", label: "Badminton (Indoor)" },
 ];
 
 export default function RatesEditorClient({

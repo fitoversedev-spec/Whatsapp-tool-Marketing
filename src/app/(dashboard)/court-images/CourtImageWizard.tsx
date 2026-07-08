@@ -515,7 +515,16 @@ export default function CourtImageWizard({
     if (quoteItems.length > 0 && !force) return;
     const L = layout.plot.lengthFt;
     const W = layout.plot.widthFt;
-    const supported = ["football", "basketball", "multisport", "pickleball"];
+    const supported = [
+      "football",
+      "basketball",
+      "multisport",
+      "pickleball",
+      "tennis",
+      "volleyball",
+      "cricket",
+      "badminton",
+    ];
     const primary = layout.sports[0];
     const rateSport = supported.includes(primary) ? primary : "multisport";
     try {

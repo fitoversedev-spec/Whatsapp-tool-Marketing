@@ -11,8 +11,25 @@
 
 import { prisma } from "@/lib/prisma";
 
-export type Sport = "football" | "basketball" | "multisport" | "pickleball";
-export const SUPPORTED_SPORTS: Sport[] = ["football", "basketball", "multisport", "pickleball"];
+export type Sport =
+  | "football"
+  | "basketball"
+  | "multisport"
+  | "pickleball"
+  | "tennis"
+  | "volleyball"
+  | "cricket"
+  | "badminton";
+export const SUPPORTED_SPORTS: Sport[] = [
+  "football",
+  "basketball",
+  "multisport",
+  "pickleball",
+  "tennis",
+  "volleyball",
+  "cricket",
+  "badminton",
+];
 
 export type AreaMode = "plot" | "wrap" | "per_piece" | "perimeter";
 
@@ -29,6 +46,16 @@ export type RateSheetItem = {
 };
 
 export const FOOTBALL_DEFAULTS: RateSheetItem[] = [
+  {
+    id: "chemical_treatment",
+    name: "Chemical Treatment",
+    description:
+      "Chemical treatment of the entire area to make the land infertile, applied manually by spraying of the required chemicals.",
+    areaMode: "plot",
+    defaultRate: 1,
+    gstPercent: 18,
+    optional: true,
+  },
   {
     id: "sub_base",
     name: "Sub Base",
@@ -90,6 +117,16 @@ export const FOOTBALL_DEFAULTS: RateSheetItem[] = [
 // Group of Institutions quote (Mysuru). Posts and lighting are billed per
 // piece; flooring/sub-base/fencing use the plot area.
 export const BASKETBALL_DEFAULTS: RateSheetItem[] = [
+  {
+    id: "chemical_treatment",
+    name: "Chemical Treatment",
+    description:
+      "Chemical treatment of the entire area to make the land infertile, applied manually by spraying of the required chemicals.",
+    areaMode: "plot",
+    defaultRate: 2,
+    gstPercent: 18,
+    optional: true,
+  },
   {
     id: "basketball_post",
     name: "Basketball Movable Post with Board (Pair)",
@@ -222,11 +259,277 @@ export const PICKLEBALL_DEFAULTS: RateSheetItem[] = [
   },
 ];
 
+// Tennis turnkey defaults — outdoor acrylic hard court on an asphalt base.
+// Rates from the client "SAMPLE QUOTES CLIENT RATES" sheet (Tennis, 7200
+// sq.ft). Toe wall + drain are per running ft (perimeter); LED converted
+// to per sq.ft to match the tool's other lighting lines.
+export const TENNIS_DEFAULTS: RateSheetItem[] = [
+  {
+    id: "tennis_chemical",
+    name: "Chemical Treatment",
+    description:
+      "Chemical treatment of the entire area to make the land infertile, applied manually by spraying.",
+    areaMode: "plot",
+    defaultRate: 3,
+    gstPercent: 18,
+    optional: true,
+  },
+  {
+    id: "tennis_subbase",
+    name: "Sub Base (Asphalt)",
+    description:
+      "Subgrade excavation (~22.5 cm), grading to ≤0.2% slope, compaction to Proctor 98%, then a bitumen base — 100mm WMM + 50mm asphalt + seal coat.",
+    areaMode: "plot",
+    defaultRate: 97,
+    gstPercent: 5,
+  },
+  {
+    id: "tennis_acrylic",
+    name: "Acrylic Sports Surface (ITF, 8-layer)",
+    description:
+      "Pacecourt ITF-certified 8-layer acrylic system: primer ×1, resurfacer (asphalt transformer) ×3, cushion ×2, colour ×2, with international line marking.",
+    areaMode: "plot",
+    defaultRate: 57,
+    gstPercent: 5,
+  },
+  {
+    id: "tennis_toe_wall",
+    name: "Toe Wall (per running ft)",
+    description:
+      "Toe wall around the court, exposed face painted with cement paint in two coats. Priced per running foot.",
+    areaMode: "perimeter",
+    defaultRate: 280,
+    gstPercent: 18,
+    optional: true,
+  },
+  {
+    id: "tennis_drain",
+    name: 'Open Saucer Drain (6") (per running ft)',
+    description:
+      '6-inch open saucer drain with MS jali cover. Priced per running foot.',
+    areaMode: "perimeter",
+    defaultRate: 220,
+    gstPercent: 18,
+    optional: true,
+  },
+  {
+    id: "tennis_fencing",
+    name: "Chain Link Fence (12 ft)",
+    description:
+      "MS pipe 50×50mm chain-link fencing, 12 ft height on concrete foundation 2 ft below ground, 35mm ties at top & bottom, red oxide + 2 coats oil paint, one 7'×3' door.",
+    areaMode: "plot",
+    defaultRate: 118,
+    gstPercent: 18,
+  },
+  {
+    id: "tennis_post",
+    name: "Tennis Post (fixed, with net)",
+    description:
+      "Fixed-type tennis post with brass ratchet, 450×450×450mm foundation below floor level, suitable net and centre tape.",
+    areaMode: "per_piece",
+    defaultRate: 49500,
+    gstPercent: 18,
+  },
+  {
+    id: "tennis_lights",
+    name: "LED Flood Lights",
+    description:
+      "150W LED floodlights with a weatherproof double-door distribution board, earthing electrode and full wiring from board to fixtures.",
+    areaMode: "plot",
+    defaultRate: 19,
+    gstPercent: 18,
+  },
+];
+
+// Volleyball / throwball turnkey defaults — 50mm FIFA turf on a PCC base
+// with Garware nets. Rates from the client sheet (Volleyball, 4056 sq.ft).
+export const VOLLEYBALL_DEFAULTS: RateSheetItem[] = [
+  {
+    id: "volleyball_chemical",
+    name: "Chemical Treatment",
+    description:
+      "Chemical treatment of the entire area to make the land infertile, applied manually by spraying.",
+    areaMode: "plot",
+    defaultRate: 4,
+    gstPercent: 18,
+    optional: true,
+  },
+  {
+    id: "volleyball_subbase",
+    name: "Sub Base (PCC M20)",
+    description:
+      "Excavation + disposal, grading to ≤0.2% slope, compaction to Proctor 98%, then 100mm compacted PCC in M20 grade.",
+    areaMode: "plot",
+    defaultRate: 96,
+    gstPercent: 18,
+  },
+  {
+    id: "volleyball_turf",
+    name: "Sports Flooring — 50mm FIFA-Quality Turf",
+    description:
+      "FIFA-quality 50mm monofilament artificial turf (pile 50mm, gauge 5/8\", ~8850 tufts/m², 1530 g/m² pile weight, UV-stabilised), installed.",
+    areaMode: "plot",
+    defaultRate: 113,
+    gstPercent: 5,
+  },
+  {
+    id: "volleyball_fabrication",
+    name: "Fabrication & Net Framing (25 ft)",
+    description:
+      "MS structure — 3\"×3\"×3mm verticals, 2\"×2\"×2mm horizontals, entry gate, base plates, 25 ft height, colour & painting.",
+    areaMode: "plot",
+    defaultRate: 92,
+    gstPercent: 18,
+  },
+  {
+    id: "volleyball_side_nets",
+    name: "Garware Side Nets (50×50×2.5mm)",
+    description:
+      "Side Garware nets 50×50×2.5mm installed with dodge clips, hooks, steel wire ropes and accessories.",
+    areaMode: "plot",
+    defaultRate: 15,
+    gstPercent: 18,
+  },
+  {
+    id: "volleyball_top_nets",
+    name: "Garware Top Nets (25×25×1.5mm)",
+    description:
+      "Top Garware nets 25×25×1.5mm installed with dodge clips, hooks, steel wire ropes and accessories.",
+    areaMode: "plot",
+    defaultRate: 15,
+    gstPercent: 18,
+  },
+  {
+    id: "volleyball_lights",
+    name: "LED Flood Lights (200W)",
+    description:
+      "200W LED floodlights with a weatherproof double-door distribution board, earthing electrode and full wiring.",
+    areaMode: "plot",
+    defaultRate: 36,
+    gstPercent: 18,
+  },
+];
+
+// Cricket practice-pitch turnkey defaults — 13mm cricket turf on a PCC
+// base with Garware nets. Rates from the client sheet (Cricket, 2460 sq.ft).
+export const CRICKET_DEFAULTS: RateSheetItem[] = [
+  {
+    id: "cricket_chemical",
+    name: "Chemical Treatment",
+    description:
+      "Chemical treatment of the entire area to make the land infertile, applied manually by spraying.",
+    areaMode: "plot",
+    defaultRate: 4,
+    gstPercent: 18,
+    optional: true,
+  },
+  {
+    id: "cricket_subbase",
+    name: "Sub Base (PCC M20)",
+    description:
+      "Excavation + disposal, grading to ≤0.2% slope, compaction to Proctor 98%, then 100mm compacted PCC in M20 grade.",
+    areaMode: "plot",
+    defaultRate: 96,
+    gstPercent: 18,
+  },
+  {
+    id: "cricket_turf",
+    name: "Sports Flooring — 13mm Cricket Turf (ITF)",
+    description:
+      "ITF-quality 13mm cricket turf (stitch 320/m, Dtex 6600, gauge 1/4\", PE curly yarn, 3-layer backing) with European seam tape & glue.",
+    areaMode: "plot",
+    defaultRate: 98,
+    gstPercent: 5,
+  },
+  {
+    id: "cricket_fabrication",
+    name: "Fabrication & Net Framing (15 ft)",
+    description:
+      "MS structure — 3\"×3\"×3mm verticals, 2\"×2\"×2mm horizontals, entry gate, base plates, 15 ft height, colour & painting.",
+    areaMode: "plot",
+    defaultRate: 92,
+    gstPercent: 18,
+  },
+  {
+    id: "cricket_side_nets",
+    name: "Garware Side Nets (35×35×2.5mm)",
+    description:
+      "Side Garware nets 35×35×2.5mm installed with dodge clips, hooks, steel wire ropes and accessories.",
+    areaMode: "plot",
+    defaultRate: 16,
+    gstPercent: 18,
+  },
+  {
+    id: "cricket_top_nets",
+    name: "Garware Top Nets (35×35×2.5mm)",
+    description:
+      "Top Garware nets 35×35×2.5mm installed with dodge clips, hooks, steel wire ropes and accessories.",
+    areaMode: "plot",
+    defaultRate: 16,
+    gstPercent: 18,
+  },
+  {
+    id: "cricket_lights",
+    name: "LED Flood Lights (200W)",
+    description:
+      "200W LED floodlights with a weatherproof double-door distribution board, earthing electrode and full wiring.",
+    areaMode: "plot",
+    defaultRate: 59,
+    gstPercent: 18,
+  },
+];
+
+// Indoor badminton turnkey defaults — a covered hall: BWF vinyl flooring
+// per sq.ft, plus the MS shell, civil works and lighting as lump sums
+// (edit per court count). Rates from "INDOOR BADMINTON 1" (4-court hall).
+export const BADMINTON_DEFAULTS: RateSheetItem[] = [
+  {
+    id: "badminton_flooring",
+    name: "BWF Vinyl Sports Flooring",
+    description:
+      "BWF-compliant synthetic vinyl sports flooring — 0.5mm playing layer, dual-cushion multi-layer shock absorption, crystal-sand grip finish, UV-stable.",
+    areaMode: "plot",
+    defaultRate: 122,
+    gstPercent: 18,
+  },
+  {
+    id: "badminton_structure",
+    name: "Indoor Shell — MS Structure & Roofing",
+    description:
+      "MS structure: base plates, foundation bolts, 150×5mm SHS pillars, 60×40 trusses, 80×40×2.4mm purlins, connecting plates & gussets, with 0.5mm colour-coated roof and side cladding. Lump sum for the hall.",
+    areaMode: "per_piece",
+    defaultRate: 2430000,
+    gstPercent: 18,
+  },
+  {
+    id: "badminton_civil",
+    name: "Civil Works (footings, plinth, walls, plastering)",
+    description:
+      "Footing excavation + PCC, isolated footings & pedestals (Fe550 TMT, M25), plinth beam (M20), 6\" solid-block walls, two-side plastering, RCC sub-flooring and painting. Lump sum for the hall.",
+    areaMode: "per_piece",
+    defaultRate: 2360000,
+    gstPercent: 18,
+  },
+  {
+    id: "badminton_lighting",
+    name: "BWF Lighting (150W linear, 6 per court)",
+    description:
+      "BWF-recommended 150W linear lights (6 per court) with full wiring, IP65 weatherproof DBs/MCBs & main board, surge protection and Osram LED drivers. Lump sum.",
+    areaMode: "per_piece",
+    defaultRate: 750000,
+    gstPercent: 18,
+  },
+];
+
 const SPORT_DEFAULTS: Record<Sport, RateSheetItem[]> = {
   football: FOOTBALL_DEFAULTS,
   basketball: BASKETBALL_DEFAULTS,
   multisport: MULTISPORT_DEFAULTS,
   pickleball: PICKLEBALL_DEFAULTS,
+  tennis: TENNIS_DEFAULTS,
+  volleyball: VOLLEYBALL_DEFAULTS,
+  cricket: CRICKET_DEFAULTS,
+  badminton: BADMINTON_DEFAULTS,
 };
 
 function settingKeyForSport(sport: Sport): string {

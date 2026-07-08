@@ -53,8 +53,10 @@ const SPORTS = [
   { id: "basketball", label: "Basketball", enabled: true },
   { id: "multisport", label: "Multisport", enabled: true },
   { id: "pickleball", label: "Pickleball", enabled: true },
-  { id: "cricket", label: "Cricket", enabled: false },
-  { id: "tennis", label: "Tennis", enabled: false },
+  { id: "cricket", label: "Cricket", enabled: true },
+  { id: "tennis", label: "Tennis", enabled: true },
+  { id: "volleyball", label: "Volleyball", enabled: true },
+  { id: "badminton", label: "Badminton", enabled: true },
 ];
 
 export default function QuoteWizard({ open, onClose, onComplete, prefill }: Props) {
@@ -172,7 +174,16 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
       customerName.trim().length > 0 &&
       lengthFt > 0 &&
       widthFt > 0 &&
-      ["football", "basketball", "multisport", "pickleball"].includes(sport)
+      [
+        "football",
+        "basketball",
+        "multisport",
+        "pickleball",
+        "tennis",
+        "volleyball",
+        "cricket",
+        "badminton",
+      ].includes(sport)
     );
   }
 

@@ -84,7 +84,12 @@ export default function CourtImagesClient({
   }
 
   async function deleteRow(id: string) {
-    if (!confirm("Delete this draft? This cannot be undone.")) return;
+    const row = rows.find((x) => x.id === id);
+    const wasSent = row?.status === "sent";
+    const message = wasSent
+      ? `Delete design ${row?.number}? It was already SENT to ${row?.contactPhone ?? "the customer"} — the record will be permanently removed. This cannot be undone.`
+      : "Delete this design? This cannot be undone.";
+    if (!confirm(message)) return;
     const res = await fetch(`/api/court-images/${id}`, { method: "DELETE" });
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
@@ -92,7 +97,7 @@ export default function CourtImagesClient({
       return;
     }
     setRows((prev) => prev.filter((r) => r.id !== id));
-    toast.success("Draft deleted");
+    toast.success("Design deleted");
   }
 
   async function resend(id: string) {
@@ -231,14 +236,16 @@ export default function CourtImagesClient({
                         >
                           Edit
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteRow(r.id)}
-                          className="text-xs text-red-600 hover:bg-red-50 rounded px-2 py-1"
-                          title="Delete draft"
-                        >
-                          🗑
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => deleteRow(r.id)}
+                            className="text-xs text-red-600 hover:bg-red-50 rounded px-2 py-1"
+                            title="Delete design (admin only)"
+                          >
+                            🗑
+                          </button>
+                        )}
                       </>
                     )}
                     {r.status === "sent" && (
@@ -261,6 +268,16 @@ export default function CourtImagesClient({
                         >
                           ↗ Re-send
                         </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => deleteRow(r.id)}
+                            className="text-xs text-red-600 hover:bg-red-50 rounded px-2 py-1"
+                            title="Delete sent design (admin only)"
+                          >
+                            🗑
+                          </button>
+                        )}
                       </>
                     )}
                   </div>

@@ -120,18 +120,19 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const row = await prisma.courtImage.findUnique({ where: { id: params.id } });
-  if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  if (user.role !== "admin" && row.createdByUserId !== user.id) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-  if (row.status === "sent") {
+  // Deleting a design — including one that was already sent — is an
+  // admin-only action. (Sales can no longer delete; they clone or archive.)
+  if (user.role !== "admin") {
     return NextResponse.json(
-      { error: "already_sent", message: "Sent designs cannot be deleted." },
-      { status: 409 }
+      { error: "forbidden", message: "Only an admin can delete a design." },
+      { status: 403 }
     );
   }
 
+  const row = await prisma.courtImage.findUnique({ where: { id: params.id } });
+  if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  // Admins may delete even a sent design (e.g. a mistaken send / test run).
   await prisma.courtImage.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });
 }

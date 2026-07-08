@@ -1901,8 +1901,15 @@ function DesignInfoPanel({
 }) {
   const FT_M = 0.3048;
   const SQFT_SQM = 0.092903;
+  // Feet to 1 decimal (drop a trailing .0), metres to 2 decimals so the readout
+  // matches the governing-body reference exactly (e.g. 180 × 120 ft ·
+  // 54.86 × 36.58 m) rather than rounding a 7-a-side pitch to "54.9".
+  const ft = (v: number) => {
+    const r = Math.round(v * 10) / 10;
+    return Number.isInteger(r) ? r.toFixed(0) : r.toFixed(1);
+  };
   const dim = (l: number, w: number) =>
-    `${Math.round(l)} × ${Math.round(w)} ft  (${(l * FT_M).toFixed(1)} × ${(w * FT_M).toFixed(1)} m)`;
+    `${ft(l)} × ${ft(w)} ft  (${(l * FT_M).toFixed(2)} × ${(w * FT_M).toFixed(2)} m)`;
   const areaStr = (sqft: number) =>
     `${Math.round(sqft).toLocaleString("en-IN")} sq.ft  (${Math.round(
       sqft * SQFT_SQM,

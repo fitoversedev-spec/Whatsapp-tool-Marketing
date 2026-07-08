@@ -2892,9 +2892,9 @@ function Step1(props: {
             <div className="flex gap-2 mt-1">
               {(
                 [
-                  { side: 5, play: "131 × 66 ft · 40 × 20 m", plotL: 151, plotW: 85 },
+                  { side: 5, play: "131.2 × 65.6 ft · 40 × 20 m", plotL: 151, plotW: 85 },
                   { side: 7, play: "180 × 120 ft · 54.86 × 36.58 m", plotL: 193, plotW: 133 },
-                  { side: 11, play: "344 × 223 ft · 105 × 68 m", plotL: 358, plotW: 236 },
+                  { side: 11, play: "344.5 × 223.1 ft · 105 × 68 m", plotL: 358, plotW: 236 },
                 ] as const
               ).map(({ side, play, plotL, plotW }) => {
                 const active = footballASide === side;

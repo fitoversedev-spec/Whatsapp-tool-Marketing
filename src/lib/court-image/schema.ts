@@ -971,6 +971,23 @@ function fitCourtToPlot(
   return { courtW, courtH: courtW / courtAspect };
 }
 
+// Draw the court at its EXACT regulation playing-area size (governing-body
+// dimensions), only scaling DOWN if the plot is smaller than the court — never
+// scaling up to "fill" the plot. This keeps the marked playing area precise
+// (e.g. a 7-a-side pitch stays 180 × 120 ft / 54.86 × 36.58 m), with the plot's
+// leftover space forming the run-off. When the plot equals a preset's total
+// (playing area + the governing-body run-off), the run-off comes out exactly
+// right too.
+function courtExactSize(
+  playLengthFt: number,
+  playWidthFt: number,
+  longFt: number,
+  shortFt: number,
+): { courtW: number; courtH: number } {
+  const scale = Math.min(1, longFt / playLengthFt, shortFt / playWidthFt);
+  return { courtW: playLengthFt * scale, courtH: playWidthFt * scale };
+}
+
 // Regulation court sizes (ft) per sport — used to work out how many courts a
 // plot can hold and to size tiled courts. Mirrors the multisport REG table.
 const COURT_REG: Partial<Record<Sport, { l: number; w: number }>> = {
@@ -1113,13 +1130,10 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   const longFt = Math.max(plot.lengthFt, plot.widthFt);
   const shortFt = Math.min(plot.lengthFt, plot.widthFt);
   const baseRotation = isPortrait ? 90 : 0;
-  // Fixed 3 m non-playing run-off on EVERY side of the court, for every sport
-  // (both sides ⇒ 6 m removed from each plot dimension). Sales asked for a
-  // consistent 3 m safety border between the playing lines and the plot
-  // boundary instead of the old variable margin. Capped on tiny plots so the
-  // court never collapses.
-  const RUNOFF_PER_SIDE_FT = 3 / 0.3048; // 3 m ≈ 9.843 ft per side
-  const courtRunoffMargin = Math.min(RUNOFF_PER_SIDE_FT * 2, shortFt * 0.5);
+  // Courts are drawn at their EXACT governing-body playing-area size
+  // (courtExactSize), so the run-off is simply the plot's leftover space
+  // around them — no fixed margin needed. When the plot equals a preset's
+  // total, that leftover comes out to the exact governing-body run-off.
 
   // Largest sport renders on the bottom of the stack. Football and the
   // other full-court sports compete for "base"; cricket is always an
@@ -1138,25 +1152,24 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     //   5-a-side  : 40 × 20 m ≈ 131 × 66 ft
     //   7-a-side  : 60 × 40 m ≈ 197 × 131 ft
     //   11-a-side : 105 × 68 m ≈ 344 × 223 ft
-    // Playing-area sizes (ft) per format, from the Fitoverse dimensions
-    // reference: 5-a-side futsal 40 × 20 m, FA 7-a-side 54.86 × 36.58 m,
-    // FIFA 11-a-side 105 × 68 m.
+    // Playing-area sizes (ft) per format, exact from the dimensions
+    // reference: futsal 40 × 20 m, FA 7-a-side 54.86 × 36.58 m, FIFA
+    // 11-a-side 105 × 68 m (metric → ft, so the drawn pitch matches to <0.1 m).
     const playSizes: Record<5 | 7 | 11, { l: number; w: number }> = {
-      5: { l: 131, w: 66 },
+      5: { l: 131.23, w: 65.62 },
       7: { l: 180, w: 120 },
-      11: { l: 344, w: 223 },
+      11: { l: 344.49, w: 223.1 },
     };
     const ps = playSizes[aSide];
-    // Scale the FIFA playing area to fit the entered plot so the pitch
-    // actually reflects the customer's dimensions instead of getting
-    // clamped at the regulation size (which left huge empty run-off on
+    // Draw the pitch at its EXACT playing area (see courtExactSize) — the
+    // plot's leftover forms the run-off. Old note (pre-exact-size): scaled
+    // the FIFA playing area to fill the plot, which left the run-off on
     // custom plots).
-    const { courtW: pitchL, courtH: pitchW } = fitCourtToPlot(
+    const { courtW: pitchL, courtH: pitchW } = courtExactSize(
       ps.l,
       ps.w,
       longFt,
       shortFt,
-      courtRunoffMargin,
     );
     elements.push({
       id: newId("football"),
@@ -1184,12 +1197,11 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     // fill the entered plot.
     const playLength = halfCourt ? 49.21 : 91.86;
     const playWidth = halfCourt ? 36.09 : 49.21;
-    const { courtW, courtH } = fitCourtToPlot(
+    const { courtW, courtH } = courtExactSize(
       playLength,
       playWidth,
       longFt,
       shortFt,
-      courtRunoffMargin,
     );
     elements.push({
       id: newId("basketball"),
@@ -1257,7 +1269,7 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   if (hasPickleball) {
     // Pickleball regulation is 44 × 20 ft — used for the aspect ratio.
     // Court fills the entered plot preserving that aspect.
-    const { courtW, courtH } = fitCourtToPlot(44, 20, longFt, shortFt, courtRunoffMargin);
+    const { courtW, courtH } = courtExactSize(44, 20, longFt, shortFt);
     elements.push({
       id: newId("pickleball"),
       type: "pickleball-court",
@@ -1295,24 +1307,25 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     netHeightFt: number;
   }> = [];
   if (sports.includes("tennis")) {
+    // Exact governing-body playing areas (ft): ITF 23.77 × 10.97 m,
+    // BWF doubles 13.4 × 6.1 m, FIVB 18 × 9 m.
     netTargets.push({ sport: "tennis", width: 78, height: 36, netHeightFt: 3.5 });
   }
   if (sports.includes("badminton")) {
-    netTargets.push({ sport: "badminton", width: 44, height: 20, netHeightFt: 5 });
+    netTargets.push({ sport: "badminton", width: 43.96, height: 20.01, netHeightFt: 5 });
   }
   if (sports.includes("volleyball")) {
-    netTargets.push({ sport: "volleyball", width: 59, height: 30, netHeightFt: 7.9 });
+    netTargets.push({ sport: "volleyball", width: 59.06, height: 29.53, netHeightFt: 7.9 });
   }
   for (const t of netTargets) {
     // Fill the plot preserving the sport's regulation aspect ratio so
     // custom-size plots don't get a tiny regulation court centred with
     // dead space around it.
-    const { courtW: w, courtH: h } = fitCourtToPlot(
+    const { courtW: w, courtH: h } = courtExactSize(
       t.width,
       t.height,
       longFt,
       shortFt,
-      courtRunoffMargin,
     );
     elements.push({
       id: newId(t.sport),

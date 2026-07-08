@@ -896,11 +896,60 @@ export type InitialLayoutInput = {
 // 4 ft) so markings don't touch the plot edge.
 //
 // Called by buildInitialLayout for every sport. Previously each sport
-// used Math.min(regulation, plot - margin), which capped the court at
-// regulation size — so a customer's 113 × 67 ft plot got the full-court
-// FIBA rectangle (91.86 × 49.21) centred with a lot of empty run-off.
-// Sales asked for the court to actually fill their entered dimensions
-// while still looking proportional.
+// Court/field footprint element types — the drawn playing surfaces. Used to
+// report court size + the non-playing area (plot minus court) on every design.
+const COURT_FOOTPRINT_TYPES = new Set<string>([
+  "football-field",
+  "basketball-court",
+  "pickleball-court",
+  "generic-court",
+]);
+
+export type DesignAreas = {
+  plot: { lengthFt: number; widthFt: number; areaSqFt: number };
+  courts: Array<{ lengthFt: number; widthFt: number; areaSqFt: number }>;
+  courtCount: number;
+  courtAreaSqFt: number;
+  nonPlayingSqFt: number;
+};
+
+// Plot size (entered), court size(s) (drawn playing surface) and the
+// non-playing area = plot − court. Shown as a readout on every canvas design.
+export function computeDesignAreas(layout: CourtLayout): DesignAreas {
+  const lengthFt = layout.plot.lengthFt;
+  const widthFt = layout.plot.widthFt;
+  const plotAreaSqFt = lengthFt * widthFt;
+
+  const courts = layout.elements
+    .filter((e) => COURT_FOOTPRINT_TYPES.has(e.type))
+    .map((e) => {
+      const w = "width" in e ? (e as { width?: number }).width ?? 0 : 0;
+      const h = "height" in e ? (e as { height?: number }).height ?? 0 : 0;
+      return {
+        lengthFt: Math.max(w, h),
+        widthFt: Math.min(w, h),
+        areaSqFt: w * h,
+      };
+    })
+    .filter((c) => c.areaSqFt > 0);
+
+  // Concentric multisport courts overlap, so their footprint is the LARGEST
+  // court, not the sum. Side-by-side courts of a single sport don't overlap,
+  // so sum them.
+  const concentric = layout.sports.length > 1;
+  const courtAreaSqFt = concentric
+    ? courts.reduce((m, c) => Math.max(m, c.areaSqFt), 0)
+    : courts.reduce((s, c) => s + c.areaSqFt, 0);
+
+  return {
+    plot: { lengthFt, widthFt, areaSqFt: plotAreaSqFt },
+    courts,
+    courtCount: courts.length,
+    courtAreaSqFt,
+    nonPlayingSqFt: Math.max(0, plotAreaSqFt - courtAreaSqFt),
+  };
+}
+
 function fitCourtToPlot(
   playLength: number,
   playWidth: number,
@@ -920,6 +969,130 @@ function fitCourtToPlot(
   // Plot is narrower (or equal) — fit to the long side.
   const courtW = availableL;
   return { courtW, courtH: courtW / courtAspect };
+}
+
+// Regulation court sizes (ft) per sport — used to work out how many courts a
+// plot can hold and to size tiled courts. Mirrors the multisport REG table.
+const COURT_REG: Partial<Record<Sport, { l: number; w: number }>> = {
+  football: { l: 197, w: 131 },
+  basketball: { l: 91.86, w: 49.21 },
+  tennis: { l: 78, w: 36 },
+  volleyball: { l: 59, w: 30 },
+  pickleball: { l: 44, w: 20 },
+  badminton: { l: 44, w: 20 },
+};
+
+// How many regulation courts of a sport fit in the plot (best of either
+// orientation), leaving ~4 m of shared run-off / walkway between them.
+export function courtCapacity(
+  plotLengthFt: number,
+  plotWidthFt: number,
+  sport: Sport,
+): number {
+  const reg = COURT_REG[sport];
+  if (!reg) return 1;
+  const GAP = 13;
+  const fit = (plotDim: number, courtDim: number) =>
+    Math.max(1, Math.floor((plotDim + GAP) / (courtDim + GAP)));
+  const a = fit(plotLengthFt, reg.l) * fit(plotWidthFt, reg.w);
+  const b = fit(plotLengthFt, reg.w) * fit(plotWidthFt, reg.l);
+  return Math.max(1, a, b);
+}
+
+// Choose the columns × rows grid (cols*rows >= count) that lets regulation-
+// aspect courts fill their cells best.
+function chooseCourtGrid(
+  plotLengthFt: number,
+  plotWidthFt: number,
+  reg: { l: number; w: number },
+  count: number,
+): { cols: number; rows: number } {
+  let best = { cols: count, rows: 1, cov: -1 };
+  for (let cols = 1; cols <= count; cols++) {
+    const rows = Math.ceil(count / cols);
+    const cellW = plotLengthFt / cols;
+    const cellH = plotWidthFt / rows;
+    const { courtW, courtH } = fitCourtToPlot(reg.l, reg.w, cellW, cellH, 8);
+    const cov = (courtW * courtH) / (cellW * cellH);
+    if (cov > best.cov) best = { cols, rows, cov };
+  }
+  return { cols: best.cols, rows: best.rows };
+}
+
+// Re-lay the primary sport as `count` regulation courts tiled across the plot,
+// each independently editable. Keeps user-added elements; drops the old court
+// surface(s) + their auto hoops/nets. For basketball, re-adds a hoop at each
+// court end so every court still looks complete.
+export function retileCourts(layout: CourtLayout, count: number): CourtLayout {
+  const courtEls = layout.elements.filter((e) =>
+    COURT_FOOTPRINT_TYPES.has(e.type),
+  );
+  if (courtEls.length === 0) return layout;
+  const template = courtEls[0];
+  const sport = (layout.primarySport ?? layout.sports[0]) as Sport;
+  const reg = COURT_REG[sport];
+  if (!reg) return layout;
+
+  const plotL = layout.plot.lengthFt;
+  const plotW = layout.plot.widthFt;
+  const n = Math.max(1, Math.min(count, courtCapacity(plotL, plotW, sport)));
+  const { cols, rows } = chooseCourtGrid(plotL, plotW, reg, n);
+  const cellW = plotL / cols;
+  const cellH = plotW / rows;
+  const margin = Math.min(cellW, cellH) * 0.14;
+
+  // Keep everything except the old court surfaces + their auto equipment.
+  const kept = layout.elements.filter(
+    (e) =>
+      !COURT_FOOTPRINT_TYPES.has(e.type) &&
+      e.type !== "basketball-hoop" &&
+      e.type !== "net",
+  );
+
+  const isBasketball = template.type === "basketball-court";
+  const halfCourt =
+    isBasketball && (template as { halfCourt?: boolean }).halfCourt === true;
+
+  const added: Element[] = [];
+  let z = 1;
+  for (let i = 0; i < n; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const ccx = (col + 0.5) * cellW;
+    const ccy = (row + 0.5) * cellH;
+    const { courtW, courtH } = fitCourtToPlot(reg.l, reg.w, cellW, cellH, margin);
+    // Copy the template court so sport-specific props (halfCourt, aSide,
+    // surfaceColor…) carry over; override position/size + reset rotation.
+    added.push({
+      ...(template as unknown as Record<string, unknown>),
+      id: newId(sport),
+      x: ccx,
+      y: ccy,
+      rotation: 0,
+      width: courtW,
+      height: courtH,
+      z: z++,
+    } as unknown as Element);
+
+    if (isBasketball) {
+      const basketFromBaselineFt = 5.17;
+      const dirs = halfCourt ? [1] : [-1, 1];
+      for (const dir of dirs) {
+        added.push({
+          id: newId("hoop"),
+          type: "basketball-hoop",
+          x: ccx + (dir * courtW) / 2 - dir * basketFromBaselineFt,
+          y: ccy,
+          rotation: dir < 0 ? -90 : 90,
+          poleHeightFt: 10,
+          backboardWidthFt: 6,
+          z: z + 40,
+        } as unknown as Element);
+      }
+    }
+  }
+
+  return { ...layout, elements: [...kept, ...added] };
 }
 
 export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {

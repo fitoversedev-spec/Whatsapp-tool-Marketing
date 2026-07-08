@@ -24,6 +24,9 @@ import type { CourtCanvasHandle } from "@/components/court-image/CourtCanvas";
 import type { CourtCanvas3DHandle, CourtView } from "@/components/court-image/CourtCanvas3D";
 import {
   buildInitialLayout,
+  courtCapacity,
+  retileCourts,
+  computeDesignAreas,
   buildPlotPolygon,
   buildMultiCutPolygon,
   surfaceFromProduct,
@@ -116,6 +119,63 @@ function newQuoteLineId() {
 
 function cap(s: string) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+// When a single-sport plot is big enough for more than one court, offer to
+// lay out extra courts (each editable). Hidden for multisport designs and for
+// plots that only fit one court.
+function MultiCourtBanner({
+  layout,
+  onSetCount,
+}: {
+  layout: CourtLayout;
+  onSetCount: (count: number) => void;
+}) {
+  const primarySport = layout.primarySport ?? layout.sports[0];
+  if (!primarySport || layout.sports.length !== 1) return null;
+  const courtCount = Math.max(1, computeDesignAreas(layout).courtCount);
+  const capacity = courtCapacity(
+    layout.plot.lengthFt,
+    layout.plot.widthFt,
+    primarySport as Sport,
+  );
+  if (capacity <= 1 || capacity <= courtCount) return null;
+
+  const label = SPORT_LABEL[primarySport] ?? cap(primarySport);
+  const btn =
+    "text-xs font-medium px-2.5 py-1.5 rounded-md border border-wa-green/40 bg-white text-wa-dark hover:bg-wa-green/10";
+  return (
+    <div className="rounded-lg border border-wa-green/40 bg-wa-green/5 p-3 space-y-2">
+      <div className="text-xs font-semibold text-wa-dark">
+        This plot can fit up to {capacity} {label} courts
+      </div>
+      <div className="text-[11px] text-slate-600 leading-snug">
+        You have {courtCount} right now. Add more and they&apos;re tiled across
+        the plot — each court stays fully editable (drag to reposition).
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {capacity >= courtCount + 1 && (
+          <button type="button" className={btn} onClick={() => onSetCount(courtCount + 1)}>
+            + Add 1 more court
+          </button>
+        )}
+        {capacity >= courtCount + 2 && (
+          <button type="button" className={btn} onClick={() => onSetCount(courtCount + 2)}>
+            + Add 2 more courts
+          </button>
+        )}
+        {courtCount > 1 && (
+          <button
+            type="button"
+            className="text-xs font-medium px-2.5 py-1.5 rounded-md text-slate-500 hover:text-slate-700 underline"
+            onClick={() => onSetCount(1)}
+          >
+            Reset to 1 court
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // Human-friendly default quotation number, e.g. "FIT-2026-4821".
@@ -1310,6 +1370,13 @@ export default function CourtImageWizard({
 
                 {sidebarTab === "design" && (
                   <>
+                {/* Offer to tile extra courts when the plot is big enough. */}
+                <MultiCourtBanner
+                  layout={layout}
+                  onSetCount={(count) =>
+                    setLayout((l) => (l ? retileCourts(l, count) : l))
+                  }
+                />
                 {/* When a highlight zone is selected, surface the colour
                     prompt right at the top so sales sees "what colour?"
                     immediately after picking an area. */}

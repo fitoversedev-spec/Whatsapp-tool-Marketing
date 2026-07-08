@@ -64,8 +64,10 @@ import {
   shadeHexColor,
   runOffFactor,
   HIGHLIGHT_PRESETS,
+  computeDesignAreas,
   type HighlightSectionPreset,
   type SurfaceFinish,
+  type DesignAreas,
 } from "@/lib/court-image/schema";
 
 export type CourtCanvasHandle = {
@@ -356,6 +358,13 @@ export default function CourtCanvas({
             plotPxHeight={plotPxHeight}
             plotLengthFt={layout.plot.lengthFt}
             plotWidthFt={layout.plot.widthFt}
+          />
+          <DesignInfoPanel
+            areas={computeDesignAreas(layout)}
+            plotOriginX={plotOriginX}
+            plotOriginY={plotOriginY}
+            plotPxWidth={plotPxWidth}
+            plotPxHeight={plotPxHeight}
           />
         </Layer>
       )}
@@ -1873,6 +1882,91 @@ function BasketballHoopShape({
 // edge shows length, left edge shows width. Each label has tick marks at
 // the corners + the dimension text. Uses a high-contrast white drop-shadow
 // so they read on both grass and earth-coloured backgrounds.
+// Compact dimensions readout in the bottom-left corner of every design:
+// plot size, court size (the drawn playing surface), and the non-playing area
+// (plot − court) — each in feet AND metres. Drawn on the canvas so it also
+// appears in the exported PNG the customer receives.
+function DesignInfoPanel({
+  areas,
+  plotOriginX,
+  plotOriginY,
+  plotPxWidth,
+  plotPxHeight,
+}: {
+  areas: DesignAreas;
+  plotOriginX: number;
+  plotOriginY: number;
+  plotPxWidth: number;
+  plotPxHeight: number;
+}) {
+  const FT_M = 0.3048;
+  const SQFT_SQM = 0.092903;
+  const dim = (l: number, w: number) =>
+    `${Math.round(l)} × ${Math.round(w)} ft  (${(l * FT_M).toFixed(1)} × ${(w * FT_M).toFixed(1)} m)`;
+  const areaStr = (sqft: number) =>
+    `${Math.round(sqft).toLocaleString("en-IN")} sq.ft  (${Math.round(
+      sqft * SQFT_SQM,
+    ).toLocaleString("en-IN")} sq.m)`;
+
+  const c = areas.courts;
+  const courtLine =
+    areas.courtCount === 0
+      ? "Court: not placed yet"
+      : areas.courtCount === 1
+        ? `Court: ${dim(c[0].lengthFt, c[0].widthFt)}`
+        : `Courts: ${areas.courtCount} × ${dim(c[0].lengthFt, c[0].widthFt)}`;
+
+  const lines = [
+    `Plot: ${dim(areas.plot.lengthFt, areas.plot.widthFt)}`,
+    courtLine,
+    `Non-playing: ${areaStr(areas.nonPlayingSqFt)}`,
+  ];
+
+  const fontSize = Math.max(
+    9,
+    Math.min(14, Math.min(plotPxWidth, plotPxHeight) * 0.02),
+  );
+  const pad = fontSize * 0.8;
+  const lineH = fontSize * 1.55;
+  const boxW = Math.min(plotPxWidth - fontSize, fontSize * 25);
+  const boxH = pad * 2 + lineH * lines.length;
+  const x = plotOriginX + fontSize * 0.6;
+  const y = plotOriginY + plotPxHeight - boxH - fontSize * 0.6;
+
+  return (
+    <Group listening={false}>
+      <Rect
+        x={x}
+        y={y}
+        width={boxW}
+        height={boxH}
+        fill="rgba(255,255,255,0.92)"
+        stroke="#0f172a"
+        strokeWidth={1}
+        cornerRadius={fontSize * 0.3}
+        shadowColor="rgba(0,0,0,0.25)"
+        shadowBlur={fontSize * 0.4}
+        shadowOffsetY={1}
+      />
+      {lines.map((ln, i) => (
+        <Text
+          key={i}
+          text={ln}
+          x={x + pad}
+          y={y + pad + i * lineH}
+          width={boxW - pad * 2}
+          fontSize={fontSize}
+          fontFamily="system-ui, -apple-system, sans-serif"
+          fontStyle={i === 0 ? "600" : "400"}
+          fill="#0f172a"
+          wrap="none"
+          ellipsis
+        />
+      ))}
+    </Group>
+  );
+}
+
 function PlotDimensions({
   plotOriginX,
   plotOriginY,

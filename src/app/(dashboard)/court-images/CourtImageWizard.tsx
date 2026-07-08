@@ -534,6 +534,7 @@ export default function CourtImageWizard({
         (it: {
           id: string;
           name: string;
+          description?: string;
           areaMode: string;
           defaultRate: number;
           gstPercent: number;
@@ -549,7 +550,10 @@ export default function CourtImageWizard({
           return {
             id: newQuoteLineId(),
             name: it.name,
-            desc: "",
+            // Seed the same default description the standalone Quotation
+            // module uses, so it carries into the sent PDF (sales can still
+            // edit or clear it per line).
+            desc: it.description ?? "",
             qty,
             unit,
             rate: it.defaultRate,

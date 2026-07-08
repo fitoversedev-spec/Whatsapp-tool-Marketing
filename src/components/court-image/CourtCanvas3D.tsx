@@ -851,7 +851,7 @@ function makeGenericCourt(
   layout: CourtLayout,
   yOffset: number
 ): THREE.Object3D {
-  const tex = genericCourtTexture(el);
+  const tex = genericCourtTexture(el, layout);
   const mat = surfaceMaterial(tex, 0.6);
   const geo = new THREE.PlaneGeometry(el.width, el.height);
   const mesh = new THREE.Mesh(geo, mat);
@@ -1424,7 +1424,13 @@ function basketballTexture(el: BasketballCourtElement, layout: CourtLayout): THR
   c.width = w;
   c.height = h;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = el.surfaceColor ?? layout.style.basketballSurfaceColor;
+  // Honour the picked surface colour (global override) so the 3D court
+  // matches the 2D plan — 2D resolves el.surfaceColor ?? surfaceColorOverride
+  // ?? sport default, so 3D must too.
+  ctx.fillStyle =
+    el.surfaceColor ??
+    layout.style.surfaceColorOverride ??
+    layout.style.basketballSurfaceColor;
   ctx.fillRect(0, 0, w, h);
   ctx.strokeStyle = el.lineColor ?? "#fff5e6";
   ctx.lineWidth = 5;
@@ -1467,7 +1473,10 @@ function pickleballTexture(el: PickleballCourtElement, layout: CourtLayout): THR
   c.width = w;
   c.height = h;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = el.surfaceColor ?? layout.style.pickleballSurfaceColor;
+  ctx.fillStyle =
+    el.surfaceColor ??
+    layout.style.surfaceColorOverride ??
+    layout.style.pickleballSurfaceColor;
   ctx.fillRect(0, 0, w, h);
   ctx.strokeStyle = el.lineColor ?? "#ffffff";
   ctx.lineWidth = 5;
@@ -1494,7 +1503,10 @@ function pickleballTexture(el: PickleballCourtElement, layout: CourtLayout): THR
   return tex;
 }
 
-function genericCourtTexture(el: GenericCourtElement): THREE.CanvasTexture {
+function genericCourtTexture(
+  el: GenericCourtElement,
+  layout: CourtLayout,
+): THREE.CanvasTexture {
   const aspect = el.width / el.height;
   const h = 600;
   const w = Math.round(h * aspect);
@@ -1502,7 +1514,10 @@ function genericCourtTexture(el: GenericCourtElement): THREE.CanvasTexture {
   c.width = w;
   c.height = h;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = el.surfaceColor ?? "#5a8a6c";
+  // Tennis / volleyball / badminton and other generic hard courts also
+  // follow the picked surface colour, matching the 2D plan.
+  ctx.fillStyle =
+    el.surfaceColor ?? layout.style.surfaceColorOverride ?? "#5a8a6c";
   ctx.fillRect(0, 0, w, h);
   ctx.strokeStyle = el.lineColor ?? "#ffffff";
   ctx.lineWidth = 5;

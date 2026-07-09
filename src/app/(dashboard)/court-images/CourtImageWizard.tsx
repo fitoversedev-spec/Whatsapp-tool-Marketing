@@ -1956,10 +1956,16 @@ export default function CourtImageWizard({
                     )
                   }
                 />
-                {layout.sports.includes("pickleball") && (
+                {layout.sports.some(
+                  (s) =>
+                    s === "pickleball" ||
+                    s === "tennis" ||
+                    s === "badminton" ||
+                    s === "volleyball",
+                ) && (
                   <ColorPickerSection
-                    title="Kitchen / non-volley zone"
-                    hint="Highlight the pickleball kitchen (the central non-volley zone)."
+                    title="Kitchen / net zone"
+                    hint="Highlight the net zone — the pickleball kitchen, tennis service band, volleyball attack zone or badminton service band around the net."
                     presets={COURT_COLORS}
                     value={layout.style.kitchenColor}
                     fallback="#EA580C"

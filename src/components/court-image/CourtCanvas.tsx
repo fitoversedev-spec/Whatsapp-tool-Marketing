@@ -1347,10 +1347,35 @@ function GenericCourtShape({
           : defaultFill);
   const line = el.lineColor ?? "#ffffff";
   const lineWidth = Math.max(1, Math.min(w, h) * 0.005);
+  // Net / non-volley zone as a fraction of the FULL court length, centred on
+  // the net. Tennis = service-box band (service line 21 ft of 39 ft half),
+  // volleyball = attack zones (3 m of 9 m), badminton = short-service band.
+  const netZoneFrac =
+    el.sport === "tennis"
+      ? 0.538
+      : el.sport === "volleyball"
+        ? 0.333
+        : el.sport === "badminton"
+          ? 0.3
+          : 0;
 
   return (
     <>
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
+      {/* Net / non-volley zone highlight (kitchen equivalent) — the band
+          around the net, filled translucently. Tennis / badminton / volleyball;
+          driven by the same style.kitchenColor control as pickleball. */}
+      {style.kitchenColor && netZoneFrac > 0 && (
+        <Rect
+          x={(-w * netZoneFrac) / 2}
+          y={-h / 2}
+          width={w * netZoneFrac}
+          height={h}
+          fill={style.kitchenColor}
+          opacity={0.55}
+          listening={false}
+        />
+      )}
       {/* Outer boundary */}
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} />
       {/* Sport-specific line pattern */}
@@ -2676,7 +2701,11 @@ function PlotSurface({
             listening={false}
           />
         </>
-      ) : turf && stripes ? (
+      ) : turf && stripes && !runOffColorOverride ? (
+        // Turf: mowed light/dark stripes across the plot. Skipped when a
+        // run-off colour is chosen — then the plot renders that solid colour
+        // (below) so the non-playing area is highlighted, with the sport's
+        // own grass pitch still drawn on top.
         <>
           <Rect
             x={plotOriginX}

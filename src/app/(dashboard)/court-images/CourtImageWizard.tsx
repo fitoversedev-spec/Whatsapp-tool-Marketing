@@ -227,6 +227,7 @@ function buildQuotePayload(
         qty: i.qty,
         unit: i.unit || null,
         rate: i.rate,
+        gst: i.gst,
         total: Math.round(i.qty * i.rate),
       })),
     subtotal: t.subtotal,
@@ -3354,11 +3355,11 @@ function ExistingQuotePicker({
               >
                 <span className="min-w-0">
                   <span className="text-xs font-semibold text-slate-800">
-                    {q.number}
+                    {q.customerName}
                   </span>
                   <span className="text-[11px] text-slate-500">
                     {" "}
-                    · {q.customerName} · {cap(q.sport)}
+                    · {q.number} · {cap(q.sport)}
                   </span>
                 </span>
                 <span className="shrink-0 flex items-center gap-2">

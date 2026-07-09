@@ -67,6 +67,9 @@ export type CombinedPdfInput = {
   // the customer gets one PDF with the spec sheets inside (not a link).
   tdsPdfs?: Array<{ name: string; bytes: Uint8Array }>;
   quote?: CombinedQuote | null;
+  // Pre-rendered stand-alone quotation PDF (renderQuotationPdf). When present,
+  // its pages are merged in so the quote section matches a quote sent alone.
+  quotePdf?: Uint8Array | null;
 };
 
 function sanitize(s: string): string {
@@ -302,8 +305,26 @@ export async function renderCombinedPdf(
     }
   }
 
-  // ── Quotation — its own page, last ──
-  if (input.quote) {
+  // ── Quotation — merge the stand-alone quote PDF pages so the quote section
+  //    is identical to a quote sent on its own. Fall back to the built-in
+  //    table only if the PDF wasn't provided / failed to load. ──
+  if (input.quotePdf) {
+    try {
+      const src = await PDFDocument.load(input.quotePdf);
+      const copied = await doc.copyPages(src, src.getPageIndices());
+      for (const pg of copied) {
+        doc.addPage(pg);
+        // The quote PDF carries its own header/footer — skip the combined
+        // footer on these pages (same set the merged TDS pages use).
+        mergedTdsPages.add(pg);
+      }
+    } catch {
+      if (input.quote) {
+        newPage(ctx);
+        drawQuote(ctx, input.quote);
+      }
+    }
+  } else if (input.quote) {
     newPage(ctx);
     drawQuote(ctx, input.quote);
   }

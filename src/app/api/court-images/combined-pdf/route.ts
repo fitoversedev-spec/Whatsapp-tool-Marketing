@@ -32,7 +32,9 @@ import {
   buildInitialLineItems,
   recompute,
   buildQuotationNumber,
+  type QuoteLineItem,
 } from "@/lib/quotation/calculator";
+import { renderQuotationPdf } from "@/lib/quotation/pdf";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 
 export const runtime = "nodejs";
@@ -158,6 +160,62 @@ export async function POST(req: NextRequest) {
     };
   }
 
+  // Render the quotation with the SAME layout as a stand-alone quote PDF
+  // (renderQuotationPdf) and merge those pages into the combined document, so
+  // the quote section is identical to a quote sent on its own. Falls back to
+  // the built-in drawQuote if this fails or no quote was given.
+  let quotePdf: Uint8Array | null = null;
+  if (body.quote && Array.isArray(body.quote.items) && body.quote.items.length > 0) {
+    try {
+      const qLineItems: QuoteLineItem[] = body.quote.items
+        .filter((it: { name?: unknown }) => it && typeof it.name === "string")
+        .map(
+          (
+            it: {
+              name: string;
+              desc?: string | null;
+              qty?: number;
+              rate?: number;
+              gst?: number;
+              total?: number;
+            },
+            idx: number,
+          ) => {
+            const g = Number(it.gst);
+            return {
+              id: `ci-${idx}`,
+              name: it.name,
+              description: typeof it.desc === "string" ? it.desc : "",
+              areaSqFt: Number(it.qty) || 0,
+              ratePerSqFt: Number(it.rate) || 0,
+              gstPercent: isFinite(g) ? g : 18,
+              total: Number(it.total) || 0,
+              included: true,
+            };
+          },
+        );
+      const buf = await renderQuotationPdf({
+        number: String(
+          body.quote.number ?? buildQuotationNumber(new Date().getFullYear(), 0),
+        ),
+        customerName: String(body.customerName ?? ""),
+        sport: sports[0] ?? "multisport",
+        lengthFt: Math.round(lengthFt),
+        widthFt: Math.round(widthFt),
+        lineItems: qLineItems,
+        subtotal: Number(body.quote.subtotal) || 0,
+        gstAmount: Number(body.quote.gst) || 0,
+        grandTotal: Number(body.quote.grandTotal) || 0,
+        notes: typeof body.quote.notes === "string" ? body.quote.notes : null,
+        quoteDate: new Date(),
+        validityDays: 30,
+      });
+      quotePdf = new Uint8Array(buf);
+    } catch (e) {
+      console.error("[combined-pdf] quotation pdf render failed", e);
+    }
+  }
+
   const input: CombinedPdfInput = {
     customerName: String(body.customerName ?? ""),
     plotLabel: String(body.plotLabel ?? ""),
@@ -171,6 +229,7 @@ export async function POST(req: NextRequest) {
     tds,
     tdsPdfs,
     quote,
+    quotePdf,
   };
 
   let pdfBytes: Uint8Array;

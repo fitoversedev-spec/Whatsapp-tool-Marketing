@@ -13,6 +13,7 @@
 // scene builder.
 
 import { polygonAreaSqFt } from "./turf-shapes";
+import { predictCapacity } from "./packing";
 
 export type Sport =
   | "football"
@@ -1012,22 +1013,16 @@ const COURT_REG: Partial<Record<Sport, { l: number; w: number }>> = {
 
 // How many regulation courts of a sport fit in the plot (best of either
 // orientation), leaving ~4 m of shared run-off / walkway between them.
+// Max courts of a sport a plot can hold, at the recreational (tight-but-
+// playable) preset. Delegates to the packing predictor so tiling and the
+// capacity banner share one source of truth (both orientations, per-sport
+// run-off). predictCapacity also exposes the competition count + tight flag.
 export function courtCapacity(
   plotLengthFt: number,
   plotWidthFt: number,
   sport: Sport,
 ): number {
-  const reg = COURT_REG[sport];
-  if (!reg) return 1;
-  // ~2 m shared run-off between adjacent courts. N courts of size S with a gap
-  // G between them fit a plot dim L when N*S + (N-1)*G <= L, i.e.
-  // N <= (L+G)/(S+G). (e.g. a ~7,000 sq.ft plot fits 4 × 44×20 badminton.)
-  const GAP = 6.56;
-  const fit = (plotDim: number, courtDim: number) =>
-    Math.max(1, Math.floor((plotDim + GAP) / (courtDim + GAP)));
-  const a = fit(plotLengthFt, reg.l) * fit(plotWidthFt, reg.w);
-  const b = fit(plotLengthFt, reg.w) * fit(plotWidthFt, reg.l);
-  return Math.max(1, a, b);
+  return predictCapacity(plotLengthFt, plotWidthFt, sport).recreational;
 }
 
 // Choose the columns × rows grid (cols*rows >= count) that lets regulation-

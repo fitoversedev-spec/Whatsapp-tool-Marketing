@@ -24,7 +24,6 @@ import type { CourtCanvasHandle } from "@/components/court-image/CourtCanvas";
 import type { CourtCanvas3DHandle, CourtView } from "@/components/court-image/CourtCanvas3D";
 import {
   buildInitialLayout,
-  courtCapacity,
   retileCourts,
   computeDesignAreas,
   buildPlotPolygon,
@@ -60,6 +59,7 @@ import {
   buildTurfShapePolygon,
   type TurfShapeKind,
 } from "@/lib/court-image/turf-shapes";
+import { predictCapacity } from "@/lib/court-image/packing";
 import { useUserUnit } from "@/lib/units/useUserUnit";
 import { toFeet, toUnit, FT_TO_M } from "@/lib/units";
 
@@ -140,27 +140,41 @@ function MultiCourtBanner({
   if (!primarySport || layout.sports.length !== 1) return null;
   const areas = computeDesignAreas(layout);
   const courtCount = Math.max(1, areas.courtCount);
-  const capacity = courtCapacity(
+  const capacity = predictCapacity(
     layout.plot.lengthFt,
     layout.plot.widthFt,
     primarySport as Sport,
   );
-  if (capacity <= 1) return null;
+  if (capacity.recreational <= 1) return null;
 
   const label = SPORT_LABEL[primarySport] ?? cap(primarySport);
   const c0 = areas.courts[0];
   const sizeStr = c0
     ? `${Math.round(c0.lengthFt)} × ${Math.round(c0.widthFt)} ft`
     : "";
+  const hasRange =
+    capacity.tight &&
+    capacity.competition >= 1 &&
+    capacity.competition < capacity.recreational;
+  const rangeStr = hasRange
+    ? `${capacity.competition}–${capacity.recreational}`
+    : `${capacity.recreational}`;
   // One button per count (1 = single). Capped so the row never runs away.
-  const maxShown = Math.min(capacity, 8);
+  const maxShown = Math.min(capacity.recreational, 8);
   const counts = Array.from({ length: maxShown }, (_, i) => i + 1);
   return (
     <div className="rounded-lg border border-wa-green/40 bg-wa-green/5 p-3 space-y-2">
       <div className="text-xs font-semibold text-wa-dark">
-        This plot fits up to {capacity} {label} courts
+        This plot fits {rangeStr} {label} court{capacity.recreational > 1 ? "s" : ""}
         {sizeStr ? ` (${sizeStr} each)` : ""}
       </div>
+      {capacity.tight && (
+        <div className="text-[11px] text-amber-700 leading-snug">
+          {capacity.competition >= 1
+            ? `${capacity.competition} with full competition run-off; up to ${capacity.recreational} packed tighter (recreational spacing).`
+            : `${capacity.recreational} at recreational spacing — tighter than governing-body run-off.`}
+        </div>
+      )}
       <div className="text-[11px] text-slate-600 leading-snug">
         Pick how many to lay out — they&apos;re tiled at regulation size across
         the plot, each fully editable (drag to reposition).

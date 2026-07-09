@@ -301,8 +301,8 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-3xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-stretch justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1400px] max-h-full overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-5 sm:px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <div>
@@ -332,7 +332,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 w-full max-w-5xl mx-auto">
           {step === 1 && (
             <div className="space-y-4">
               <div>
@@ -523,13 +523,13 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                           <input
                             value={item.name}
                             onChange={(e) => updateLineItem(item.id, "name", e.target.value)}
-                            className="w-full text-sm font-semibold text-slate-900 bg-transparent border-0 border-b border-transparent hover:border-slate-300 focus:border-wa-green focus:outline-none focus:ring-0 px-0 py-0.5"
+                            className="w-full text-base font-semibold text-slate-900 bg-transparent border-0 border-b border-transparent hover:border-slate-300 focus:border-wa-green focus:outline-none focus:ring-0 px-0 py-1"
                           />
                           <textarea
                             value={item.description}
                             onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
-                            rows={2}
-                            className="w-full mt-1 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded p-1.5 focus:outline-none focus:ring-1 focus:ring-wa-green/30 focus:border-wa-green resize-none"
+                            rows={5}
+                            className="w-full mt-1.5 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2.5 focus:outline-none focus:ring-1 focus:ring-wa-green/30 focus:border-wa-green resize-y leading-relaxed min-h-[6rem]"
                           />
                           <div className="grid grid-cols-4 gap-2 mt-2">
                             <div>
@@ -542,7 +542,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                 value={item.areaSqFt}
                                 onChange={(e) => updateLineItem(item.id, "areaSqFt", parseFloat(e.target.value) || 0)}
                                 disabled={!item.included}
-                                className="w-full px-2 py-1 text-sm border border-slate-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
                               />
                             </div>
                             <div>
@@ -555,7 +555,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                 value={item.ratePerSqFt}
                                 onChange={(e) => updateLineItem(item.id, "ratePerSqFt", parseFloat(e.target.value) || 0)}
                                 disabled={!item.included}
-                                className="w-full px-2 py-1 text-sm border border-slate-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
                               />
                             </div>
                             <div>
@@ -569,7 +569,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                 value={item.gstPercent}
                                 onChange={(e) => updateLineItem(item.id, "gstPercent", parseFloat(e.target.value) || 0)}
                                 disabled={!item.included}
-                                className="w-full px-2 py-1 text-sm border border-slate-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
                               />
                             </div>
                             <div>

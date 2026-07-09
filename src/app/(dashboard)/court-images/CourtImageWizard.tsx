@@ -3346,12 +3346,9 @@ function ExistingQuotePicker({
             </div>
           ) : (
             list.map((q) => (
-              <button
+              <div
                 key={q.id}
-                type="button"
-                disabled={loadingId === q.id}
-                onClick={() => pick(q.id, q.number)}
-                className="w-full text-left px-3 py-2 hover:bg-slate-50 disabled:opacity-50 flex items-center justify-between gap-3"
+                className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50"
               >
                 <span className="min-w-0">
                   <span className="text-xs font-semibold text-slate-800">
@@ -3375,8 +3372,25 @@ function ExistingQuotePicker({
                   >
                     {q.status}
                   </span>
+                  {/* View the quote as a PDF first, then Attach to confirm. */}
+                  <a
+                    href={`/api/quotations/${q.id}/pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] font-medium text-slate-700 border border-slate-300 rounded px-2 py-1 hover:bg-white whitespace-nowrap"
+                  >
+                    👁 View
+                  </a>
+                  <button
+                    type="button"
+                    disabled={loadingId === q.id}
+                    onClick={() => pick(q.id, q.number)}
+                    className="text-[11px] font-medium text-white bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 rounded px-2.5 py-1"
+                  >
+                    {loadingId === q.id ? "…" : "Attach"}
+                  </button>
                 </span>
-              </button>
+              </div>
             ))
           )}
         </div>
@@ -3581,8 +3595,8 @@ function StepQuotation({
                             value={it.desc}
                             onChange={(e) => patch(it.id, { desc: e.target.value })}
                             placeholder="Description (optional)"
-                            rows={3}
-                            className="mt-2 w-full px-3 py-2 text-sm text-slate-600 border border-slate-300 hover:border-slate-400 focus:border-slate-400 rounded-md resize-y leading-snug"
+                            rows={6}
+                            className="mt-2 w-full px-3 py-2.5 text-sm text-slate-600 border border-slate-300 hover:border-slate-400 focus:border-slate-400 rounded-md resize-y leading-relaxed min-h-[7rem]"
                           />
                         </div>
                         <input

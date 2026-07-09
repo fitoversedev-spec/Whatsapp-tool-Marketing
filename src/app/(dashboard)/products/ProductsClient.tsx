@@ -369,6 +369,19 @@ function ProductCard({
   );
 }
 
+// Shared field styling. The page has no global `.input` rule (that class is
+// only defined inside other pages' styled-jsx), so fields must carry their
+// own border/padding/focus styles or they render as bare unstyled text.
+const FIELD =
+  "w-full mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm " +
+  "text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 " +
+  "focus:ring-wa-green/30 focus:border-wa-green transition";
+const FIELD_LABEL =
+  "text-[11px] font-semibold text-slate-500 uppercase tracking-wide";
+const SECTION_BOX = "rounded-xl border border-slate-200 bg-slate-50/40 p-4";
+const SECTION_TITLE =
+  "text-xs font-semibold text-slate-700 uppercase tracking-wide mb-3";
+
 function ProductForm({
   types,
   defaultType,
@@ -474,68 +487,62 @@ function ProductForm({
       </h3>
 
       {/* Basic info */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <label className="block">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-            Name
-          </span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Football Turf 50mm FIFA"
-            className="input mt-1"
-          />
-        </label>
-        {types.length > 1 ? (
+      <section className={SECTION_BOX}>
+        <div className={SECTION_TITLE}>Basic info</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="block">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-              Type
-            </span>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as ProductType)}
-              className="input mt-1"
-            >
-              {types.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <label className="block">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-              Category
-            </span>
+            <span className={FIELD_LABEL}>Name</span>
             <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="e.g. goal, net, machine"
-              className="input mt-1"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Football Turf 50mm FIFA"
+              className={FIELD}
             />
           </label>
-        )}
-      </div>
+          {types.length > 1 ? (
+            <label className="block">
+              <span className={FIELD_LABEL}>Type</span>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as ProductType)}
+                className={FIELD}
+              >
+                {types.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="block">
+              <span className={FIELD_LABEL}>Category</span>
+              <input
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="e.g. goal, net, machine"
+                className={FIELD}
+              />
+            </label>
+          )}
+        </div>
 
-      <label className="block">
-        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-          Description
-        </span>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={5}
-          placeholder="Specs, dimensions, key features… (catalogue HTML tables are kept as-is)"
-          className="input mt-1 font-mono text-xs leading-relaxed"
-        />
-      </label>
+        <label className="block mt-4">
+          <span className={FIELD_LABEL}>Description</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={12}
+            placeholder="Specs, dimensions, key features… (catalogue HTML tables are kept as-is)"
+            className={`${FIELD} font-mono text-xs leading-relaxed resize-y min-h-[14rem]`}
+          />
+        </label>
+      </section>
 
-      <div>
-        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-          Sports (pick one or more)
-        </span>
-        <div className="flex flex-wrap gap-1.5 mt-1.5">
+      {/* Sports */}
+      <section className={SECTION_BOX}>
+        <div className={SECTION_TITLE}>Sports (pick one or more)</div>
+        <div className="flex flex-wrap gap-1.5">
           {SPORTS.map((s) => (
             <button
               key={s}
@@ -551,39 +558,37 @@ function ProductForm({
             </button>
           ))}
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label className="block">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-            Price ₹ (optional)
-          </span>
-          <input
-            type="number"
-            value={priceInr}
-            onChange={(e) => setPriceInr(e.target.value)}
-            placeholder="e.g. 112"
-            className="input mt-1"
-          />
-        </label>
-        <label className="block">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-            Unit (optional)
-          </span>
-          <input
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-            placeholder="sqft · piece · roll"
-            className="input mt-1"
-          />
-        </label>
-      </div>
+      {/* Pricing */}
+      <section className={SECTION_BOX}>
+        <div className={SECTION_TITLE}>Pricing</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label className="block">
+            <span className={FIELD_LABEL}>Price ₹ (optional)</span>
+            <input
+              type="number"
+              value={priceInr}
+              onChange={(e) => setPriceInr(e.target.value)}
+              placeholder="e.g. 112"
+              className={FIELD}
+            />
+          </label>
+          <label className="block">
+            <span className={FIELD_LABEL}>Unit (optional)</span>
+            <input
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              placeholder="sqft · piece · roll"
+              className={FIELD}
+            />
+          </label>
+        </div>
+      </section>
 
       {/* Media */}
-      <div className="border-t border-slate-100 pt-4">
-        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-          Media
-        </div>
+      <section className={SECTION_BOX}>
+        <div className={SECTION_TITLE}>Media</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="block min-w-0">
             <span className="text-[11px] text-slate-500">
@@ -608,14 +613,12 @@ function ProductForm({
             />
           </div>
         </div>
-      </div>
+      </section>
 
       {/* TDS sheet — travels with the product into the combined PDF. */}
-      <div className="border-t border-slate-100 pt-4">
-        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-          TDS sheet (PDF)
-        </div>
-        <p className="text-[11px] text-slate-500 mt-1 mb-2 leading-snug">
+      <section className={SECTION_BOX}>
+        <div className={SECTION_TITLE}>TDS sheet (PDF)</div>
+        <p className="text-[11px] text-slate-500 -mt-1 mb-2 leading-snug">
           The technical data sheet for this product. Add it now or later — when
           this product is added to a court design, its TDS is included in the
           combined PDF automatically.
@@ -653,9 +656,9 @@ function ProductForm({
           label={existingTds.length > 0 ? "Add another TDS PDF" : "Choose TDS PDF"}
           className="w-full"
         />
-      </div>
+      </section>
 
-      <div className="flex justify-end border-t border-slate-100 pt-4">
+      <div className="flex justify-end pt-1">
         <button
           type="submit"
           disabled={busy}

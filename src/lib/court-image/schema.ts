@@ -839,6 +839,17 @@ export const MULTISPORT_ZONE_COLOR: Record<Sport, string> = {
   multisport: "#6B7280", // grey
 };
 
+// Preset kitchen / non-volley (net-zone) colour per sport — shown by default
+// so the zone is always highlighted, and still overridable via the wizard's
+// "Kitchen / net zone" picker (style.kitchenColor wins when set). Sports with
+// no net zone (football / cricket / basketball) are absent.
+export const KITCHEN_DEFAULT_COLOR: Partial<Record<Sport, string>> = {
+  pickleball: "#C0563B", // terracotta kitchen (classic pickleball look)
+  tennis: "#2E5EAA", // blue service band
+  badminton: "#8A5A44", // brown service band
+  volleyball: "#B8862E", // ochre attack zone
+};
+
 // ─────────────────────────────────────────────────────────────────────
 //  Defaults + initial layout generator
 // ─────────────────────────────────────────────────────────────────────

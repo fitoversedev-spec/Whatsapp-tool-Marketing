@@ -64,6 +64,7 @@ import {
   shadeHexColor,
   runOffFactor,
   HIGHLIGHT_PRESETS,
+  KITCHEN_DEFAULT_COLOR,
   computeDesignAreas,
   type HighlightSectionPreset,
   type SurfaceFinish,
@@ -1315,14 +1316,15 @@ function PickleballCourtShape({
     <>
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
       {/* Kitchen / non-volley zone highlight — the central band around the
-          net. Filled translucently so the markings stay visible on top. */}
-      {style.kitchenColor && (
+          net. Uses the chosen colour, else the per-sport preset. Translucent
+          so the markings stay visible on top. */}
+      {(style.kitchenColor ?? KITCHEN_DEFAULT_COLOR.pickleball) && (
         <Rect
           x={-kitchenW}
           y={-h / 2}
           width={kitchenW * 2}
           height={h}
-          fill={style.kitchenColor}
+          fill={style.kitchenColor ?? KITCHEN_DEFAULT_COLOR.pickleball}
           opacity={0.55}
           listening={false}
         />
@@ -1392,19 +1394,20 @@ function GenericCourtShape({
     <>
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
       {/* Net / non-volley zone highlight (kitchen equivalent) — the band
-          around the net, filled translucently. Tennis / badminton / volleyball;
-          driven by the same style.kitchenColor control as pickleball. */}
-      {style.kitchenColor && netZoneFrac > 0 && (
-        <Rect
-          x={(-w * netZoneFrac) / 2}
-          y={-h / 2}
-          width={w * netZoneFrac}
-          height={h}
-          fill={style.kitchenColor}
-          opacity={0.55}
-          listening={false}
-        />
-      )}
+          around the net. Uses the chosen colour, else the per-sport preset.
+          Tennis / badminton / volleyball. */}
+      {(style.kitchenColor ?? KITCHEN_DEFAULT_COLOR[el.sport]) &&
+        netZoneFrac > 0 && (
+          <Rect
+            x={(-w * netZoneFrac) / 2}
+            y={-h / 2}
+            width={w * netZoneFrac}
+            height={h}
+            fill={style.kitchenColor ?? KITCHEN_DEFAULT_COLOR[el.sport]}
+            opacity={0.55}
+            listening={false}
+          />
+        )}
       {/* Outer boundary */}
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} />
       {/* Sport-specific line pattern */}

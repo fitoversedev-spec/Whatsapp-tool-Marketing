@@ -1575,6 +1575,9 @@ export default function CourtImageWizard({
                     const el = layout.elements.find((e) => e.id === id);
                     if (el) updateElement(id, { locked: !el.locked });
                   }}
+                  onSetColor={(id, color) =>
+                    updateElement(id, { surfaceColor: color })
+                  }
                 />
 
                 {/* Highlights — the "colour just one area" tools. Kept
@@ -4851,12 +4854,14 @@ function LayerList({
   onSelect,
   onToggleVisible,
   onToggleLocked,
+  onSetColor,
 }: {
   elements: Element[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onToggleVisible: (id: string) => void;
   onToggleLocked: (id: string) => void;
+  onSetColor: (id: string, color: string) => void;
 }) {
   // Sort by z DESC so visually top elements appear at the top of the list.
   const sorted = [...elements].sort((a, b) => (b.z ?? 0) - (a.z ?? 0));
@@ -4898,6 +4903,26 @@ function LayerList({
               {el.locked ? "🔒" : "🔓"}
             </button>
             <span className="flex-1 truncate">{shortLabel(el)}</span>
+            {/* Per-court colour swatch — set each court's fill independently
+                so overlaid sports (e.g. basketball + volleyball + pickleball)
+                read distinctly. */}
+            {(el.type === "basketball-court" ||
+              el.type === "pickleball-court" ||
+              el.type === "generic-court") && (
+              <input
+                type="color"
+                value={
+                  ("surfaceColor" in el && el.surfaceColor) || "#1E60A8"
+                }
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onSetColor(el.id, e.target.value);
+                }}
+                className="w-5 h-5 rounded border border-slate-300 cursor-pointer shrink-0 bg-white p-0"
+                title="Court colour"
+              />
+            )}
           </div>
         );
       })}

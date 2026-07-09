@@ -670,14 +670,28 @@ function applyScaleToDimensions(
 // ─────────────────────────────────────────────────────────────────────
 
 // Sport-name label for a court — a small dark pill + white text above the
-// court's top-left corner. Every court renders its own, so on a multi-sport
-// (concentric) design each court is identifiable at a glance.
-function CourtNameLabel({ w, h, name }: { w: number; h: number; name: string }) {
-  const fs = Math.min(22, Math.max(9, Math.min(w, h) * 0.05));
+// court's top-left corner, with the court's size on a second line. Every court
+// renders its own, so on a multi-sport (concentric) design each court is
+// identifiable AND its dimensions are shown.
+function CourtNameLabel({
+  w,
+  h,
+  name,
+  dims,
+}: {
+  w: number;
+  h: number;
+  name: string;
+  dims?: string;
+}) {
+  const fs = Math.min(20, Math.max(9, Math.min(w, h) * 0.05));
+  const dfs = fs * 0.82;
   const padX = fs * 0.55;
   const padY = fs * 0.3;
-  const boxW = name.length * fs * 0.62 + padX * 2;
-  const boxH = fs + padY * 2;
+  const line1W = name.length * fs * 0.62;
+  const line2W = dims ? dims.length * dfs * 0.6 : 0;
+  const boxW = Math.max(line1W, line2W) + padX * 2;
+  const boxH = fs + (dims ? dfs + 2 : 0) + padY * 2;
   const top = -h / 2 - boxH - 3;
   return (
     <>
@@ -686,7 +700,7 @@ function CourtNameLabel({ w, h, name }: { w: number; h: number; name: string }) 
         y={top}
         width={boxW}
         height={boxH}
-        fill="rgba(15,23,42,0.62)"
+        fill="rgba(15,23,42,0.66)"
         cornerRadius={3}
         listening={false}
       />
@@ -700,8 +714,23 @@ function CourtNameLabel({ w, h, name }: { w: number; h: number; name: string }) 
         letterSpacing={0.5}
         listening={false}
       />
+      {dims && (
+        <Text
+          x={-w / 2 + padX}
+          y={top + padY + fs + 2}
+          text={dims}
+          fontSize={dfs}
+          fill="#cbd5e1"
+          listening={false}
+        />
+      )}
     </>
   );
+}
+
+// "92 × 49 ft" for a court element's playing size.
+function courtDims(el: { width: number; height: number }): string {
+  return `${Math.round(el.width)} × ${Math.round(el.height)} ft`;
 }
 
 function FootballFieldShape({
@@ -911,7 +940,7 @@ function FootballFieldShape({
         stroke="#0f172a"
         strokeWidth={1}
       />
-      <CourtNameLabel w={w} h={h} name="FOOTBALL" />
+      <CourtNameLabel w={w} h={h} name="FOOTBALL" dims={courtDims(el)} />
     </>
   );
 }
@@ -1248,7 +1277,7 @@ function BasketballCourtShape({
           </Group>
         );
       })}
-      <CourtNameLabel w={w} h={h} name="BASKETBALL" />
+      <CourtNameLabel w={w} h={h} name="BASKETBALL" dims={courtDims(el)} />
     </>
   );
 }
@@ -1307,7 +1336,7 @@ function PickleballCourtShape({
       {/* Service court divider (between baseline and kitchen) */}
       <Line points={[-w / 2, 0, -kitchenW, 0]} stroke={line} strokeWidth={lineWidth} />
       <Line points={[kitchenW, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
-      <CourtNameLabel w={w} h={h} name="PICKLEBALL" />
+      <CourtNameLabel w={w} h={h} name="PICKLEBALL" dims={courtDims(el)} />
     </>
   );
 }
@@ -1397,7 +1426,7 @@ function GenericCourtShape({
             strokeWidth={lineWidth}
           />
         )}
-      <CourtNameLabel w={w} h={h} name={el.sport.toUpperCase()} />
+      <CourtNameLabel w={w} h={h} name={el.sport.toUpperCase()} dims={courtDims(el)} />
     </>
   );
 }

@@ -825,15 +825,18 @@ export type CourtLayout = {
 // layout has 2+ sports, buildInitialLayout applies these as each element's
 // surfaceColor so sales sees the colour-coded zones the customer will get.
 // Single-sport designs skip this so their existing look is unchanged.
+// Distinct fill per sport so overlaid courts never share a colour (the old
+// palette made volleyball + pickleball near-identical greys). Editable
+// per-court in the wizard's "Court colours" section.
 export const MULTISPORT_ZONE_COLOR: Record<Sport, string> = {
-  basketball: "#1E60A8",
-  volleyball: "#7A8894",
-  pickleball: "#8892A0",
-  tennis: "#3D7A47",
-  badminton: "#C4A66A",
-  football: "#3E8A47",
-  cricket: "#3E8A47",
-  multisport: "#6B7280",
+  basketball: "#1E60A8", // blue
+  volleyball: "#C0563B", // terracotta
+  pickleball: "#1E8A8A", // teal
+  tennis: "#3D7A47", // green
+  badminton: "#C4A66A", // sand
+  football: "#3E8A47", // turf green
+  cricket: "#3E8A47", // turf green
+  multisport: "#6B7280", // grey
 };
 
 // ─────────────────────────────────────────────────────────────────────

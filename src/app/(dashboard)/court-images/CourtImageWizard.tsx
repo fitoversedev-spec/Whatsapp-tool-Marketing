@@ -337,6 +337,108 @@ function CollapsibleSection({
   );
 }
 
+// Reusable swatch-based colour picker inside a collapsible section — used for
+// each design "factor" (line marking, border, run-off, kitchen). value is the
+// current hex (undefined = default); onChange(undefined) resets to default.
+function ColorPickerSection({
+  title,
+  hint,
+  presets,
+  value,
+  fallback,
+  onChange,
+  defaultOpen = false,
+}: {
+  title: string;
+  hint?: string;
+  presets: { name: string; hex: string }[];
+  value: string | undefined;
+  fallback: string;
+  onChange: (v: string | undefined) => void;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <CollapsibleSection title={title} hint={hint} defaultOpen={defaultOpen}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-5 gap-2">
+          {presets.map((c) => {
+            const active = (value ?? "").toLowerCase() === c.hex.toLowerCase();
+            return (
+              <button
+                key={c.hex}
+                type="button"
+                title={c.name}
+                onClick={() => onChange(c.hex)}
+                className={`h-9 rounded-md border-2 transition ${
+                  active
+                    ? "border-wa-green ring-2 ring-wa-green/40"
+                    : "border-slate-200 hover:border-slate-400"
+                }`}
+                style={{ backgroundColor: c.hex }}
+              />
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={value ?? fallback}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-9 h-9 rounded border border-slate-300 cursor-pointer bg-white shrink-0"
+            title="Custom colour"
+          />
+          <input
+            type="text"
+            value={value ?? ""}
+            placeholder="Custom hex e.g. #FFFFFF"
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              onChange(v.length === 0 ? undefined : v);
+            }}
+            className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+          />
+          {value && (
+            <button
+              type="button"
+              onClick={() => onChange(undefined)}
+              className="text-[10.5px] text-slate-500 hover:text-slate-700 underline whitespace-nowrap shrink-0"
+              title="Reset to default"
+            >
+              Default
+            </button>
+          )}
+        </div>
+      </div>
+    </CollapsibleSection>
+  );
+}
+
+// Palettes for the factor colour pickers.
+const MARKING_COLORS = [
+  { name: "White", hex: "#FFFFFF" },
+  { name: "Yellow", hex: "#EAB308" },
+  { name: "Red", hex: "#DC2626" },
+  { name: "Blue", hex: "#2563EB" },
+  { name: "Black", hex: "#111827" },
+  { name: "Green", hex: "#15803D" },
+  { name: "Orange", hex: "#EA580C" },
+  { name: "Sky", hex: "#0EA5E9" },
+  { name: "Purple", hex: "#7C3AED" },
+  { name: "Sand", hex: "#C4A66A" },
+];
+const BORDER_COLORS = [
+  { name: "Brown", hex: "#7A5B32" },
+  { name: "Dark brown", hex: "#5B4425" },
+  { name: "Black", hex: "#111827" },
+  { name: "White", hex: "#FFFFFF" },
+  { name: "Grey", hex: "#556070" },
+  { name: "Court green", hex: "#2F7D52" },
+  { name: "Blue", hex: "#1E60A8" },
+  { name: "Red", hex: "#B83227" },
+  { name: "Sand", hex: "#C4A66A" },
+  { name: "Teal", hex: "#1E8A8A" },
+];
+
 // Sports the wizard can lay out. "multisport" is a base surface; others
 // are stacked or substituted depending on combinations.
 const SPORTS: Sport[] = [
@@ -1809,6 +1911,64 @@ export default function CourtImageWizard({
                       </div>
                     </div>
                   </CollapsibleSection>
+                )}
+
+                {/* Per-factor colour pickers — each its own collapsible swatch
+                    section (like Court colour): line marking, plot border,
+                    run-off (non-playing), and the pickleball kitchen. */}
+                <ColorPickerSection
+                  title="Line marking colour"
+                  hint="Colour of the court lines / markings. Default is white."
+                  presets={MARKING_COLORS}
+                  value={layout.style.lineColor}
+                  fallback="#FFFFFF"
+                  onChange={(v) =>
+                    setLayout((l) =>
+                      l
+                        ? { ...l, style: { ...l.style, lineColor: v ?? "#ffffff" } }
+                        : l,
+                    )
+                  }
+                />
+                <ColorPickerSection
+                  title="Border colour"
+                  hint="Colour of the plot boundary frame. Default is the brown ground frame."
+                  presets={BORDER_COLORS}
+                  value={layout.style.borderColor}
+                  fallback="#7A5B32"
+                  onChange={(v) =>
+                    setLayout((l) =>
+                      l ? { ...l, style: { ...l.style, borderColor: v } } : l,
+                    )
+                  }
+                />
+                <ColorPickerSection
+                  title="Non-playing (run-off) colour"
+                  hint="Colour of the run-off / non-playing area around the court."
+                  presets={COURT_COLORS}
+                  value={layout.style.runOffColorOverride}
+                  fallback="#264d80"
+                  onChange={(v) =>
+                    setLayout((l) =>
+                      l
+                        ? { ...l, style: { ...l.style, runOffColorOverride: v } }
+                        : l,
+                    )
+                  }
+                />
+                {layout.sports.includes("pickleball") && (
+                  <ColorPickerSection
+                    title="Kitchen / non-volley zone"
+                    hint="Highlight the pickleball kitchen (the central non-volley zone)."
+                    presets={COURT_COLORS}
+                    value={layout.style.kitchenColor}
+                    fallback="#EA580C"
+                    onChange={(v) =>
+                      setLayout((l) =>
+                        l ? { ...l, style: { ...l.style, kitchenColor: v } } : l,
+                      )
+                    }
+                  />
                 )}
 
                 {/* Surface & colour — ONE collapsible category: the

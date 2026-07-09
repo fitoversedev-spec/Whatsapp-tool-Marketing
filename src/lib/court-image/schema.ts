@@ -758,6 +758,15 @@ export type Style = {
   // Hero image of the linked flooring product — shown in the canvas
   // callout so the customer sees the actual product they're getting.
   flooringProductImageUrl?: string;
+  // Optional plot-boundary (border) colour. When set, the plot outline /
+  // court-box border draws in this hex instead of the default brown frame.
+  // A dedicated "Border colour" control in the wizard sets it.
+  borderColor?: string;
+  // Optional highlight colour for the kitchen / non-volley zone (pickleball)
+  // — filled translucently so the zone reads at a glance. Only meaningful for
+  // sports that have a kitchen (pickleball, badminton service area); ignored
+  // by football / cricket / basketball.
+  kitchenColor?: string;
   // Optional watermark (logo URL + opacity).
   watermarkUrl?: string;
   watermarkOpacity?: number;

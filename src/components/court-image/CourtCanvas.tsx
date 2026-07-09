@@ -294,6 +294,7 @@ export default function CourtCanvas({
           calloutTopY={calloutTopY}
           canvasHeight={canvasHeight}
           canvasWidth={canvasWidth}
+          borderColor={layout.style.borderColor}
         />
         {showGrid && (
           <GridLines
@@ -668,6 +669,41 @@ function applyScaleToDimensions(
 //  Shape renderers — one per element type
 // ─────────────────────────────────────────────────────────────────────
 
+// Sport-name label for a court — a small dark pill + white text above the
+// court's top-left corner. Every court renders its own, so on a multi-sport
+// (concentric) design each court is identifiable at a glance.
+function CourtNameLabel({ w, h, name }: { w: number; h: number; name: string }) {
+  const fs = Math.min(22, Math.max(9, Math.min(w, h) * 0.05));
+  const padX = fs * 0.55;
+  const padY = fs * 0.3;
+  const boxW = name.length * fs * 0.62 + padX * 2;
+  const boxH = fs + padY * 2;
+  const top = -h / 2 - boxH - 3;
+  return (
+    <>
+      <Rect
+        x={-w / 2}
+        y={top}
+        width={boxW}
+        height={boxH}
+        fill="rgba(15,23,42,0.62)"
+        cornerRadius={3}
+        listening={false}
+      />
+      <Text
+        x={-w / 2 + padX}
+        y={top + padY}
+        text={name}
+        fontSize={fs}
+        fontStyle="700"
+        fill="#ffffff"
+        letterSpacing={0.5}
+        listening={false}
+      />
+    </>
+  );
+}
+
 function FootballFieldShape({
   el,
   pxPerFt,
@@ -875,6 +911,7 @@ function FootballFieldShape({
         stroke="#0f172a"
         strokeWidth={1}
       />
+      <CourtNameLabel w={w} h={h} name="FOOTBALL" />
     </>
   );
 }
@@ -1211,6 +1248,7 @@ function BasketballCourtShape({
           </Group>
         );
       })}
+      <CourtNameLabel w={w} h={h} name="BASKETBALL" />
     </>
   );
 }
@@ -1247,6 +1285,19 @@ function PickleballCourtShape({
   return (
     <>
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
+      {/* Kitchen / non-volley zone highlight — the central band around the
+          net. Filled translucently so the markings stay visible on top. */}
+      {style.kitchenColor && (
+        <Rect
+          x={-kitchenW}
+          y={-h / 2}
+          width={kitchenW * 2}
+          height={h}
+          fill={style.kitchenColor}
+          opacity={0.55}
+          listening={false}
+        />
+      )}
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} />
       {/* Net line (center) */}
       <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.2} />
@@ -1256,6 +1307,7 @@ function PickleballCourtShape({
       {/* Service court divider (between baseline and kitchen) */}
       <Line points={[-w / 2, 0, -kitchenW, 0]} stroke={line} strokeWidth={lineWidth} />
       <Line points={[kitchenW, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
+      <CourtNameLabel w={w} h={h} name="PICKLEBALL" />
     </>
   );
 }
@@ -1320,13 +1372,7 @@ function GenericCourtShape({
             strokeWidth={lineWidth}
           />
         )}
-      <Text
-        x={-w / 2}
-        y={-h / 2 - 14}
-        text={el.sport.toUpperCase()}
-        fontSize={Math.max(9, w * 0.025)}
-        fill={line}
-      />
+      <CourtNameLabel w={w} h={h} name={el.sport.toUpperCase()} />
     </>
   );
 }
@@ -2312,6 +2358,7 @@ function PlotSurface({
   calloutTopY,
   canvasHeight,
   canvasWidth,
+  borderColor,
 }: {
   plotOriginX: number;
   plotOriginY: number;
@@ -2354,7 +2401,11 @@ function PlotSurface({
   calloutTopY: number;
   canvasHeight: number;
   canvasWidth: number;
+  // Optional plot-boundary colour override (style.borderColor).
+  borderColor?: string;
 }) {
+  // Plot-frame stroke — the override, or the default brown frame.
+  const borderStroke = borderColor ?? "#7a5b32";
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [productImg, setProductImg] = useState<HTMLImageElement | null>(null);
   const [turfLightImg, setTurfLightImg] = useState<HTMLImageElement | null>(null);
@@ -2432,7 +2483,7 @@ function PlotSurface({
           points={polygonFlat}
           closed
           fill="#caa477"
-          stroke="#7a5b32"
+          stroke={borderStroke}
           strokeWidth={1.5}
         />
       );
@@ -2444,7 +2495,7 @@ function PlotSurface({
         width={plotPxWidth}
         height={plotPxHeight}
         fill="#caa477"
-        stroke="#7a5b32"
+        stroke={borderStroke}
         strokeWidth={1.5}
       />
     );
@@ -2588,7 +2639,7 @@ function PlotSurface({
           points={polygonFlat}
           closed
           fill={solidFill}
-          stroke="#7a5b32"
+          stroke={borderStroke}
           strokeWidth={1.5}
         />
       ) : turf && stripes && polygonFlat ? (
@@ -2602,7 +2653,7 @@ function PlotSurface({
             points={polygonFlat}
             closed
             fill={solidFill}
-            stroke="#7a5b32"
+            stroke={borderStroke}
             strokeWidth={1.5}
           />
           {stripes.map((s, i) => (
@@ -2620,7 +2671,7 @@ function PlotSurface({
           <Line
             points={polygonFlat}
             closed
-            stroke="#7a5b32"
+            stroke={borderStroke}
             strokeWidth={1.5}
             listening={false}
           />
@@ -2633,7 +2684,7 @@ function PlotSurface({
             width={plotPxWidth}
             height={plotPxHeight}
             fill={solidFill}
-            stroke="#7a5b32"
+            stroke={borderStroke}
             strokeWidth={1.5}
           />
           {stripes.map((s, i) => (
@@ -2652,7 +2703,7 @@ function PlotSurface({
             y={plotOriginY}
             width={plotPxWidth}
             height={plotPxHeight}
-            stroke="#7a5b32"
+            stroke={borderStroke}
             strokeWidth={1.5}
             listening={false}
           />
@@ -2664,7 +2715,7 @@ function PlotSurface({
           width={plotPxWidth}
           height={plotPxHeight}
           fill={solidFill}
-          stroke="#7a5b32"
+          stroke={borderStroke}
           strokeWidth={1.5}
         />
       )}

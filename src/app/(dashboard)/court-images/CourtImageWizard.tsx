@@ -8,7 +8,7 @@
 //
 // Same UX shape as QuoteWizard so sales gets a consistent flow.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import ElementInspector from "@/components/court-image/ElementInspector";
@@ -3261,21 +3261,36 @@ function ExistingQuotePicker({
   const [list, setList] = useState<ExistingQuoteRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
-  async function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && list.length === 0) {
-      setLoading(true);
-      try {
-        const r = await fetch("/api/quotations");
-        const j = await r.json().catch(() => ({ quotations: [] }));
-        setList(j.quotations ?? []);
-      } finally {
-        setLoading(false);
-      }
+  // Server-side search so this scales to thousands of quotes: the API filters
+  // by customer name / quote number / phone and returns the newest 200
+  // matches, instead of shipping the whole table to the browser.
+  const fetchList = useCallback(async (search: string) => {
+    setLoading(true);
+    try {
+      const qs = search.trim()
+        ? `?search=${encodeURIComponent(search.trim())}`
+        : "";
+      const r = await fetch(`/api/quotations${qs}`);
+      const j = await r.json().catch(() => ({ quotations: [] }));
+      setList(j.quotations ?? []);
+    } finally {
+      setLoading(false);
     }
+  }, []);
+
+  function toggle() {
+    setOpen((v) => !v);
   }
+
+  // Fetch on open, and again (debounced) on every search change. Empty query
+  // loads the most recent quotes so the list isn't blank before you type.
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => void fetchList(query), query ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [open, query, fetchList]);
 
   async function pick(id: string, number: string) {
     setLoadingId(id);
@@ -3334,12 +3349,23 @@ function ExistingQuotePicker({
         </button>
       </div>
       {open && (
-        <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white divide-y divide-slate-100">
+        <div className="mt-2">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="🔍  Search by customer name or quote no…"
+            autoFocus
+            className="w-full text-xs px-3 py-2 mb-2 rounded-md border border-slate-300 bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-wa-green"
+          />
+          <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white divide-y divide-slate-100">
           {loading ? (
             <div className="px-3 py-3 text-xs text-slate-500 italic">Loading…</div>
           ) : list.length === 0 ? (
             <div className="px-3 py-3 text-xs text-slate-500 italic">
-              No saved quotations yet.
+              {query
+                ? `No quotations match "${query}".`
+                : "No saved quotations yet."}
             </div>
           ) : (
             list.map((q) => (
@@ -3389,6 +3415,13 @@ function ExistingQuotePicker({
                 </span>
               </div>
             ))
+          )}
+          </div>
+          {list.length >= 200 && (
+            <div className="mt-1 text-[10px] text-slate-400">
+              Showing the first 200 — type a customer name or quote no. to
+              narrow it down.
+            </div>
           )}
         </div>
       )}

@@ -293,6 +293,7 @@ export default function CourtCanvas({
           productImageUrl={layout.style.flooringProductImageUrl}
           calloutTopY={calloutTopY}
           canvasHeight={canvasHeight}
+          canvasWidth={canvasWidth}
         />
         {showGrid && (
           <GridLines
@@ -2310,6 +2311,7 @@ function PlotSurface({
   productImageUrl,
   calloutTopY,
   canvasHeight,
+  canvasWidth,
 }: {
   plotOriginX: number;
   plotOriginY: number;
@@ -2347,10 +2349,11 @@ function PlotSurface({
   productName?: string;
   productImageUrl?: string;
   // Absolute canvas-y where the material/product callout starts (directly
-  // below the DIMENSIONS card). Plus the canvas height so the sample photo
-  // can be clamped to fit above the bottom-right watermark.
+  // below the DIMENSIONS card). Plus the canvas size so the callout can be
+  // aligned to the right-hand column and clamped above the bottom watermark.
   calloutTopY: number;
   canvasHeight: number;
+  canvasWidth: number;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [productImg, setProductImg] = useState<HTMLImageElement | null>(null);
@@ -2488,14 +2491,17 @@ function PlotSurface({
   // Max sample-photo size; shrunk below this when the right column is short
   // (wide plots) so the callout always fits above the watermark.
   const calloutMax = 132;
-  const calloutGap = 14;
-  const sampleX = plotOriginX + plotPxWidth + calloutGap;
+  // The callout shares the DIMENSIONS card's column (flush-right), so the
+  // card + photo + info read as one aligned right-hand stack no matter where
+  // the plot's right edge falls. (Anchoring to the plot edge left the callout
+  // floating mid-canvas for plots narrower than the canvas, e.g. a football
+  // field that's height-constrained.)
+  const colX = canvasWidth - RIGHT_COL_W + 6;
+  const colW = RIGHT_COL_W - 14;
   // Callout starts directly below the DIMENSIONS card (absolute canvas y).
   const sampleY = calloutTopY;
-  // Info panel widened beyond the sample photo so the material lines
-  // fit without wrapping mid-phrase.
-  const infoW = Math.max(calloutMax, 190);
-  const infoX = sampleX;
+  const infoW = colW;
+  const infoX = colX;
   const materialLines = tiled
     ? (() => {
         const c = ppeTileCount(plotLengthFt, plotWidthFt);
@@ -2545,6 +2551,9 @@ function PlotSurface({
   // logo is never overlapped except on an extremely short canvas.
   const calloutRoom = canvasHeight - sampleY - infoH - 8 - WATERMARK_RESERVE;
   const samplePx = Math.min(calloutMax, Math.max(48, calloutRoom));
+  // Centre the (variable-size) photo within the column so it sits above the
+  // full-width info box.
+  const sampleX = colX + (colW - samplePx) / 2;
 
   // Turf stripe geometry — VERTICAL mowed bands running along the
   // pitch length (top-to-bottom), alternating light + dark across the

@@ -65,10 +65,12 @@ import {
   runOffFactor,
   HIGHLIGHT_PRESETS,
   KITCHEN_DEFAULT_COLOR,
+  RUNOFF_DEFAULT_COLOR,
   computeDesignAreas,
   type HighlightSectionPreset,
   type SurfaceFinish,
   type DesignAreas,
+  type Sport,
 } from "@/lib/court-image/schema";
 
 export type CourtCanvasHandle = {
@@ -296,6 +298,7 @@ export default function CourtCanvas({
           canvasHeight={canvasHeight}
           canvasWidth={canvasWidth}
           borderColor={layout.style.borderColor}
+          primarySport={layout.primarySport ?? layout.sports[0]}
         />
         {showGrid && (
           <GridLines
@@ -2416,6 +2419,7 @@ function PlotSurface({
   canvasHeight,
   canvasWidth,
   borderColor,
+  primarySport,
 }: {
   plotOriginX: number;
   plotOriginY: number;
@@ -2460,6 +2464,8 @@ function PlotSurface({
   canvasWidth: number;
   // Optional plot-boundary colour override (style.borderColor).
   borderColor?: string;
+  // Primary sport — drives the per-sport run-off (non-playing) default colour.
+  primarySport?: Sport;
 }) {
   // Plot-frame stroke — the override, or the default brown frame.
   const borderStroke = borderColor ?? "#7a5b32";
@@ -2583,6 +2589,7 @@ function PlotSurface({
   // An explicit runOffColorOverride wins over the derived shade.
   const solidFill =
     runOffColorOverride ??
+    (primarySport ? RUNOFF_DEFAULT_COLOR[primarySport] : undefined) ??
     shadeHexColor(solidFillBase, runOffFactor(runOffTone));
   const tiled = isTiledSurface(surface);
   const acrylic = isAcrylicSurface(surface);

@@ -850,6 +850,20 @@ export const KITCHEN_DEFAULT_COLOR: Partial<Record<Sport, string>> = {
   volleyball: "#B8862E", // ochre attack zone
 };
 
+// Preset non-playing (run-off) ring colour per sport — auto-applied as the
+// plot-fill default so the run-off reads distinct from the court, and still
+// overridable via the wizard's "Non-playing (run-off) colour" picker
+// (style.runOffColorOverride wins). Darker tones of each sport's court colour
+// so court + surround read as one scheme. Turf sports (football / cricket)
+// keep their grass and are absent.
+export const RUNOFF_DEFAULT_COLOR: Partial<Record<Sport, string>> = {
+  basketball: "#2C4A6E", // deep blue
+  volleyball: "#6E3C2C", // deep terracotta
+  pickleball: "#1C5A5A", // deep teal
+  tennis: "#2C4A34", // deep green
+  badminton: "#5A4A2C", // deep sand
+};
+
 // ─────────────────────────────────────────────────────────────────────
 //  Defaults + initial layout generator
 // ─────────────────────────────────────────────────────────────────────

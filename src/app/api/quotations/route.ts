@@ -18,6 +18,7 @@ const lineItemSchema = z.object({
   gstPercent: z.number().min(0).max(100),
   total: z.number().min(0),
   included: z.boolean(),
+  imageUrl: z.string().url().nullable().optional(),
 });
 
 const createSchema = z.object({

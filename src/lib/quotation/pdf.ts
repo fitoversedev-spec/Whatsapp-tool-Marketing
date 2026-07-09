@@ -398,7 +398,36 @@ function drawInfoGrid(
   space(ctx, 8);
 }
 
-function drawItemsTable(ctx: Ctx, items: QuoteLineItem[]) {
+// Fetch + embed each line item's product photo (PNG/JPG only — pdf-lib can't
+// embed WEBP). Returns a map of item id -> embedded image. Any failure is
+// silently skipped so a broken URL never breaks the whole quote.
+async function embedLineItemImages(
+  doc: PDFDocument,
+  items: QuoteLineItem[],
+): Promise<Map<string, PDFImage>> {
+  const map = new Map<string, PDFImage>();
+  for (const it of items) {
+    if (!it.included || !it.imageUrl) continue;
+    try {
+      const res = await fetch(it.imageUrl);
+      if (!res.ok) continue;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      let img: PDFImage | null = null;
+      if (bytes[0] === 0x89 && bytes[1] === 0x50) img = await doc.embedPng(bytes);
+      else if (bytes[0] === 0xff && bytes[1] === 0xd8) img = await doc.embedJpg(bytes);
+      if (img) map.set(it.id, img);
+    } catch {
+      // ignore — the item just renders without a photo
+    }
+  }
+  return map;
+}
+
+function drawItemsTable(
+  ctx: Ctx,
+  items: QuoteLineItem[],
+  images: Map<string, PDFImage>,
+) {
   const cols = {
     desc: 290,
     area: 65,
@@ -441,12 +470,27 @@ function drawItemsTable(ctx: Ctx, items: QuoteLineItem[]) {
 
   // Body rows
   let rowIdx = 0;
+  const DESC_SIZE = 9; // was 8 — bumped for readability
+  const DESC_LH = 13; // line height for the description
+  const IMG_MAX_W = 155;
+  const IMG_MAX_H = 115;
   for (const item of items) {
     if (!item.included) continue;
 
-    // Estimate row height
-    const descLines = wordWrap(ctx.font, item.description, 9, cols.desc - 12);
-    const rowH = 10 + 14 + descLines.length * 12 + 12 + 10; // name + desc + gst tag + pads
+    // Optional product photo shown at the top of the description.
+    const img = images.get(item.id);
+    let imgW = 0;
+    let imgH = 0;
+    if (img) {
+      const s = Math.min(IMG_MAX_W / img.width, IMG_MAX_H / img.height, 1);
+      imgW = img.width * s;
+      imgH = img.height * s;
+    }
+
+    // Estimate row height: pad + name + [photo] + desc + gst tag + pad
+    const descLines = wordWrap(ctx.font, item.description, DESC_SIZE, cols.desc - 12);
+    const photoBlockH = img ? imgH + 10 : 0;
+    const rowH = 8 + 16 + photoBlockH + descLines.length * DESC_LH + 14 + 8;
     ensureSpace(ctx, rowH);
     if (rowIdx % 2 === 1) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
 
@@ -454,38 +498,58 @@ function drawItemsTable(ctx: Ctx, items: QuoteLineItem[]) {
     // Item name (bold)
     safeDraw(ctx.page, item.name, {
       x: colXs.desc + 6,
-      y: yFromTop(startY + 9),
-      size: 10,
+      y: yFromTop(startY + 10),
+      size: 10.5,
       font: ctx.bold,
       color: COL.text,
     });
-    // Description (wrapped)
-    let descY = startY + 22;
+    let cursorY = startY + 24; // below the name
+
+    // Product photo at the top of the description (with a thin frame).
+    if (img) {
+      ctx.page.drawImage(img, {
+        x: colXs.desc + 6,
+        y: yFromTop(cursorY + imgH),
+        width: imgW,
+        height: imgH,
+      });
+      ctx.page.drawRectangle({
+        x: colXs.desc + 6,
+        y: yFromTop(cursorY + imgH),
+        width: imgW,
+        height: imgH,
+        borderColor: COL.borderStrong,
+        borderWidth: 0.75,
+      });
+      cursorY += imgH + 10;
+    }
+
+    // Description (wrapped) — darker + larger + roomier for readability.
     for (const line of descLines) {
       safeDraw(ctx.page, line, {
         x: colXs.desc + 6,
-        y: yFromTop(descY + 8),
-        size: 8,
+        y: yFromTop(cursorY + DESC_SIZE),
+        size: DESC_SIZE,
         font: ctx.font,
-        color: COL.muted,
+        color: COL.textSoft,
       });
-      descY += 12;
+      cursorY += DESC_LH;
     }
     // GST tag
     safeDraw(ctx.page, `(GST ${item.gstPercent}%)`, {
       x: colXs.desc + 6,
-      y: yFromTop(descY + 8),
-      size: 7,
+      y: yFromTop(cursorY + 8),
+      size: 7.5,
       font: ctx.font,
       color: COL.muted,
     });
 
-    // Right-aligned numbers
+    // Right-aligned numbers (aligned with the item name)
     const drawNum = (text: string, colX: number, colW: number) => {
       const w = safeWidth(ctx.font, text, 9);
       safeDraw(ctx.page, text, {
         x: colX + colW - w - 6,
-        y: yFromTop(startY + 9),
+        y: yFromTop(startY + 10),
         size: 9,
         font: ctx.font,
         color: COL.text,
@@ -910,7 +974,8 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
     data.lengthFt,
     data.widthFt
   );
-  drawItemsTable(ctx, data.lineItems);
+  const itemImages = await embedLineItemImages(doc, data.lineItems);
+  drawItemsTable(ctx, data.lineItems, itemImages);
   drawTotals(ctx, data.subtotal, data.gstAmount, data.grandTotal);
 
   drawSectionTitle(ctx, "Notes");

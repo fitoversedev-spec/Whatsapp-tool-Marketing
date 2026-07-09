@@ -23,6 +23,9 @@ export type QuoteLineItem = {
   included: boolean; // false = excluded from totals (e.g. Padding off)
   // For "per_piece" items, areaSqFt is the quantity (kept on the same field
   // for schema simplicity).
+  // Optional product photo shown at the TOP of this item's description in the
+  // PDF. Set from the wizard's "Products" step (auto-matched, reassignable).
+  imageUrl?: string | null;
 };
 
 export function computeAreaForItem(

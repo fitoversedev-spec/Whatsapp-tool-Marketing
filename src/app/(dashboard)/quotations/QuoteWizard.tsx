@@ -9,7 +9,7 @@
 // user cancels at Step 3, the draft remains in DB (cleanable from the
 // /quotations page filter "Drafts").
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 import { useUserUnit } from "@/lib/units/useUserUnit";
 import { toFeet, toUnit } from "@/lib/units";
@@ -34,7 +34,61 @@ type LineItem = {
   gstPercent: number;
   total: number;
   included: boolean;
+  // Optional product photo shown at the top of this item's description in the
+  // PDF. Set from the "Products" step (auto-matched, reassignable).
+  imageUrl?: string | null;
 };
+
+// Catalogue product row (subset of ProductDTO) shown in the Products step.
+type ProductRow = {
+  id: string;
+  name: string;
+  sports: string[];
+  heroImageUrl: string | null;
+};
+
+// A product picked in the Products step, plus which line item shows its photo.
+type PickedProduct = {
+  productId: string;
+  name: string;
+  imageUrl: string;
+  lineItemId: string | null;
+};
+
+// Auto-match a product to the most relevant line item by shared words
+// (singular/plural-insensitive), so e.g. a "…Turf…" product lands on the
+// "Artificial Turf…" line rather than "Sub Base".
+function tokenize(s: string): Set<string> {
+  return new Set(
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2)
+      .map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w)),
+  );
+}
+function bestLineItemId(
+  productName: string,
+  items: { id: string; name: string; included: boolean }[],
+): string | null {
+  const a = tokenize(productName);
+  let bestId: string | null = null;
+  let bestScore = 0;
+  for (const it of items) {
+    if (!it.included) continue;
+    const b = tokenize(it.name);
+    let n = 0;
+    for (const t of a) if (b.has(t)) n++;
+    if (n > bestScore) {
+      bestScore = n;
+      bestId = it.id;
+    }
+  }
+  // No word overlap → fall back to the first included item; the user can move
+  // the photo to the right line from the Products-photos panel.
+  return bestId ?? items.find((i) => i.included)?.id ?? null;
+}
 
 type Props = {
   open: boolean;
@@ -76,10 +130,20 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
   const [validityDays, setValidityDays] = useState(30);
   const [notes, setNotes] = useState("");
 
-  // Step 2 state
+  // Step 2 state — Products (pick catalogue products → their photos attach to
+  // line items in the next step)
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [productFilter, setProductFilter] = useState<string>("");
+  const [picked, setPicked] = useState<PickedProduct[]>([]);
+
+  // Step 3 state — line items / quote table
   const [rateSheet, setRateSheet] = useState<RateSheetItem[]>([]);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [loadingRates, setLoadingRates] = useState(false);
+  // Sport the current line items were built for — so re-entering the line-items
+  // step doesn't wipe edits unless the sport actually changed.
+  const ratesLoadedForSport = useRef<string | null>(null);
 
   // Step 3 state
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -102,13 +166,42 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
       setNotes("");
       setDraftId(null);
       setDraftNumber(null);
+      setPicked([]);
+      setProductFilter("");
+      ratesLoadedForSport.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Load rate sheet when entering Step 2. Re-fetches if sport changed.
+  // Load the product catalogue when entering the Products step; default the
+  // sport filter to the sport chosen in Step 1.
   useEffect(() => {
     if (step !== 2) return;
+    setProductFilter((f) => f || sport);
+    if (products.length > 0) return;
+    setLoadingProducts(true);
+    fetch("/api/products")
+      .then((r) => (r.ok ? r.json() : { products: [] }))
+      .then((d: { products: ProductRow[] }) => setProducts(d.products ?? []))
+      .finally(() => setLoadingProducts(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // Load rate sheet when entering the line-items step (Step 3). Keeps existing
+  // edits when the sport hasn't changed; only rebuilds on a fresh sport.
+  useEffect(() => {
+    if (step !== 3) return;
+    // Same sport + items already built → keep edits, just (re)attach photos.
+    if (ratesLoadedForSport.current === sport && lineItems.length > 0) {
+      setPicked((prev) =>
+        prev.map((p) =>
+          p.lineItemId && lineItems.some((li) => li.id === p.lineItemId)
+            ? p
+            : { ...p, lineItemId: bestLineItemId(p.name, lineItems) },
+        ),
+      );
+      return;
+    }
     setLoadingRates(true);
     fetch(`/api/quotations/rates?sport=${encodeURIComponent(sport)}`)
       .then((r) => (r.ok ? r.json() : { items: [] }))
@@ -136,6 +229,16 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
           };
         });
         setLineItems(initial);
+        ratesLoadedForSport.current = sport;
+        // Auto-match each picked product's photo to the best line item (keep a
+        // still-valid manual assignment if the item survived the rebuild).
+        setPicked((prev) =>
+          prev.map((p) =>
+            p.lineItemId && initial.some((li) => li.id === p.lineItemId)
+              ? p
+              : { ...p, lineItemId: bestLineItemId(p.name, initial) },
+          ),
+        );
       })
       .finally(() => setLoadingRates(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,6 +270,43 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         return next;
       })
     );
+  }
+
+  // Products step: filter by sport, toggle a product in/out of the shortlist.
+  const filteredProducts = useMemo(
+    () =>
+      products.filter(
+        (p) =>
+          !productFilter ||
+          productFilter === "all" ||
+          p.sports.includes(productFilter),
+      ),
+    [products, productFilter],
+  );
+
+  function togglePick(p: ProductRow) {
+    if (!p.heroImageUrl) return; // no photo → nothing to attach
+    setPicked((prev) =>
+      prev.some((x) => x.productId === p.id)
+        ? prev.filter((x) => x.productId !== p.id)
+        : [
+            ...prev,
+            {
+              productId: p.id,
+              name: p.name,
+              imageUrl: p.heroImageUrl!,
+              lineItemId: null,
+            },
+          ],
+    );
+  }
+
+  // Attach each picked product's photo to its assigned line item for the API.
+  function lineItemsForSubmit(): LineItem[] {
+    return lineItems.map((li) => ({
+      ...li,
+      imageUrl: picked.find((p) => p.lineItemId === li.id)?.imageUrl ?? null,
+    }));
   }
 
   function step1Valid(): boolean {
@@ -204,7 +344,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             sport,
             lengthFt,
             widthFt,
-            lineItems,
+            lineItems: lineItemsForSubmit(),
             notes: notes.trim() || undefined,
             quoteDate: new Date(quoteDate + "T12:00:00").toISOString(),
             validityDays,
@@ -259,7 +399,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
 
       setDraftId(data.quotation.id);
       setDraftNumber(data.quotation.number);
-      setStep(3);
+      setStep(4);
     } finally {
       setSubmitting(false);
     }
@@ -309,7 +449,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             <h2 className="text-lg sm:text-xl font-bold text-slate-900">
               📄 New Quotation
             </h2>
-            <div className="text-xs text-slate-500 mt-0.5">Step {step} of 3</div>
+            <div className="text-xs text-slate-500 mt-0.5">Step {step} of 4</div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -321,7 +461,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
 
         {/* Progress */}
         <div className="px-5 sm:px-6 py-2 flex gap-1.5">
-          {[1, 2, 3].map((s) => (
+          {[1, 2, 3, 4].map((s) => (
             <div
               key={s}
               className={`h-1 flex-1 rounded-full ${
@@ -495,6 +635,95 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
           )}
 
           {step === 2 && (
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600">
+                Optional — pick the products you&apos;re quoting. Each product&apos;s
+                photo is placed at the top of the best-matching line item&apos;s
+                description (you can move it in the next step). Skip if you
+                don&apos;t need photos.
+              </div>
+
+              {/* Sport filter (defaults to the sport chosen in Step 1) */}
+              <div className="flex flex-wrap gap-1.5">
+                {[{ id: "all", label: "All sports" }, ...SPORTS.map((s) => ({ id: s.id, label: s.label }))].map(
+                  (s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setProductFilter(s.id)}
+                      className={`px-3 py-1.5 text-xs rounded-full border transition ${
+                        (productFilter || sport) === s.id
+                          ? "bg-wa-green text-white border-wa-green"
+                          : "bg-white text-slate-600 border-slate-300 hover:border-slate-400"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ),
+                )}
+              </div>
+
+              {loadingProducts ? (
+                <div className="py-8 text-center text-sm text-slate-500">
+                  Loading products…
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="py-8 text-center text-sm text-slate-500">
+                  No products for this filter.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {filteredProducts.map((p) => {
+                    const isPicked = picked.some((x) => x.productId === p.id);
+                    const noPhoto = !p.heroImageUrl;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => togglePick(p)}
+                        disabled={noPhoto}
+                        className={`relative text-left rounded-lg border overflow-hidden transition ${
+                          isPicked
+                            ? "border-wa-green ring-2 ring-wa-green/30"
+                            : "border-slate-200 hover:border-slate-300"
+                        } ${noPhoto ? "opacity-50 cursor-not-allowed" : ""}`}
+                      >
+                        <div className="aspect-[4/3] bg-slate-100 flex items-center justify-center">
+                          {p.heroImageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={p.heroImageUrl}
+                              alt={p.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-[10px] text-slate-400">No photo</span>
+                          )}
+                        </div>
+                        <div className="px-2 py-1.5 text-xs font-medium text-slate-800 truncate">
+                          {p.name}
+                        </div>
+                        {isPicked && (
+                          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-wa-green text-white text-xs flex items-center justify-center shadow">
+                            ✓
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {picked.length > 0 && (
+                <div className="text-xs text-slate-500">
+                  {picked.length} product photo{picked.length > 1 ? "s" : ""} selected
+                  — they&apos;ll attach to the matching line items next.
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 3 && (
             <div className="space-y-3">
               {loadingRates ? (
                 <div className="py-8 text-center text-sm text-slate-500">Loading rates…</div>
@@ -503,6 +732,76 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   <div className="text-sm text-slate-600 mb-2">
                     Customize area, rate, description per item. Toggle off items not needed.
                   </div>
+
+                  {/* Product photos — auto-matched to a line item, reassignable */}
+                  {picked.length > 0 && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                      <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                        Product photos
+                      </div>
+                      <div className="text-[11px] text-slate-500 -mt-1">
+                        Each photo sits at the top of the chosen line item&apos;s
+                        description in the PDF. Move it if the match is wrong.
+                      </div>
+                      {picked.map((p) => (
+                        <div
+                          key={p.productId}
+                          className="flex items-center gap-3 bg-white border border-slate-200 rounded-md p-2"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={p.imageUrl}
+                            alt={p.name}
+                            className="w-12 h-12 object-cover rounded border border-slate-200 shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-slate-800 truncate">
+                              {p.name}
+                            </div>
+                            <div className="mt-1 flex items-center gap-1.5">
+                              <span className="text-[11px] text-slate-500 shrink-0">
+                                Show on:
+                              </span>
+                              <select
+                                value={p.lineItemId ?? ""}
+                                onChange={(e) =>
+                                  setPicked((prev) =>
+                                    prev.map((x) =>
+                                      x.productId === p.productId
+                                        ? { ...x, lineItemId: e.target.value || null }
+                                        : x,
+                                    ),
+                                  )
+                                }
+                                className="text-xs border border-slate-300 rounded px-2 py-1 bg-white min-w-0 flex-1"
+                              >
+                                <option value="">— none —</option>
+                                {lineItems
+                                  .filter((li) => li.included)
+                                  .map((li) => (
+                                    <option key={li.id} value={li.id}>
+                                      {li.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPicked((prev) =>
+                                prev.filter((x) => x.productId !== p.productId),
+                              )
+                            }
+                            className="text-xs text-red-500 hover:underline shrink-0"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {lineItems.map((item) => (
                     <div
                       key={item.id}
@@ -525,6 +824,12 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                             onChange={(e) => updateLineItem(item.id, "name", e.target.value)}
                             className="w-full text-base font-semibold text-slate-900 bg-transparent border-0 border-b border-transparent hover:border-slate-300 focus:border-wa-green focus:outline-none focus:ring-0 px-0 py-1"
                           />
+                          {picked.some((p) => p.lineItemId === item.id) && (
+                            <div className="text-[10px] text-wa-dark mt-0.5">
+                              📷 Product photo attached — shows at the top of this
+                              description in the PDF
+                            </div>
+                          )}
                           <textarea
                             value={item.description}
                             onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
@@ -645,7 +950,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             </div>
           )}
 
-          {step === 3 && draftId && (
+          {step === 4 && draftId && (
             <div className="space-y-3">
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-900">
                 ✓ Draft <strong>{draftNumber}</strong> created. Preview below — if everything looks
@@ -694,7 +999,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         {/* Footer */}
         <div className="px-5 sm:px-6 py-4 border-t border-slate-200 flex items-center justify-between gap-2 bg-white">
           <div>
-            {step > 1 && step < 3 && (
+            {step > 1 && step < 4 && (
               <button
                 onClick={() => setStep(step - 1)}
                 className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md"
@@ -702,9 +1007,9 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                 ← Back
               </button>
             )}
-            {step === 3 && (
+            {step === 4 && (
               <button
-                onClick={() => setStep(2)}
+                onClick={() => setStep(3)}
                 className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md"
               >
                 ← Edit
@@ -729,6 +1034,14 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             )}
             {step === 2 && (
               <button
+                onClick={() => setStep(3)}
+                className="px-5 py-2 text-sm font-medium bg-wa-green text-white rounded-md hover:bg-wa-green/90"
+              >
+                {picked.length > 0 ? "Next →" : "Skip →"}
+              </button>
+            )}
+            {step === 3 && (
+              <button
                 onClick={submitStep2}
                 disabled={submitting}
                 className="px-5 py-2 text-sm font-medium bg-wa-green text-white rounded-md disabled:opacity-50 hover:bg-wa-green/90"
@@ -736,7 +1049,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                 {submitting ? "Creating…" : "Generate Preview →"}
               </button>
             )}
-            {step === 3 && (
+            {step === 4 && (
               <button
                 onClick={send}
                 disabled={submitting || !prefill?.contactPhone}

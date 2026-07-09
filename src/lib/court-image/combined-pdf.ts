@@ -268,19 +268,9 @@ export async function renderCombinedPdf(
   //    a titled list only if the bytes couldn't be fetched. ──
   const mergedTdsPages = new Set<PDFPage>();
   if (input.tdsPdfs && input.tdsPdfs.length > 0) {
-    // One intro page lists the sheets, then every sheet's actual pages are
-    // merged in right after — no title-only divider page per sheet.
-    newPage(ctx);
-    sectionTitle(ctx, "Technical Data Sheets");
-    text(ctx, "Manufacturer spec sheets for the materials in this proposal:", {
-      color: COL.soft,
-      size: 10,
-    });
-    ctx.y -= 4;
-    for (const t of input.tdsPdfs) {
-      ensure(ctx, 16);
-      text(ctx, `-  ${t.name}`, { size: 10 });
-    }
+    // Merge each sheet's actual pages DIRECTLY — no separate intro/title page.
+    // A title-only divider page (just the product name) reads as a blank page
+    // before the real spec sheet, which is the issue sales flagged.
     for (const t of input.tdsPdfs) {
       try {
         const src = await PDFDocument.load(t.bytes);
@@ -290,7 +280,7 @@ export async function renderCombinedPdf(
           mergedTdsPages.add(pg);
         }
       } catch {
-        ensure(ctx, 16);
+        newPage(ctx);
         text(ctx, `(Could not embed "${t.name}" — please request the source PDF.)`, {
           color: COL.faint,
           size: 9,

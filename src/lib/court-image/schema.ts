@@ -379,6 +379,10 @@ export type HighlightZoneElement = CommonElementFields & {
   holeCy?: number;
   holeW?: number;
   holeH?: number;
+  // Multiple cutouts (one per court) for a multi-court run-off ring — every
+  // court is punched out of the tint so only the run-off around each shows.
+  // In the zone's LOCAL feet (offset from the zone centre).
+  holes?: Array<{ cx: number; cy: number; w: number; h: number }>;
 };
 
 // Chain-link / mesh fence drawn as a rectangle outline. In 2D the rect
@@ -1761,7 +1765,7 @@ export function highlightZoneFromPreset(
 // or resized, re-add the run-off highlight to refresh the cutout.
 export function newRunOffHighlightZone(
   plot: Plot,
-  court?: { x: number; y: number; width: number; height: number },
+  courts?: Array<{ x: number; y: number; width: number; height: number }>,
 ): HighlightZoneElement {
   const base = {
     id: newId("highlight"),
@@ -1775,17 +1779,26 @@ export function newRunOffHighlightZone(
     preset: "run-off",
     z: 6,
   };
-  if (!court) {
+  const list = (courts ?? []).filter(Boolean);
+  if (list.length === 0) {
     return { ...base, shape: "rect" };
   }
+  // Punch out EVERY court so only the run-off around each shows (multi-court).
+  const holes = list.map((c) => ({
+    cx: c.x - plot.lengthFt / 2,
+    cy: c.y - plot.widthFt / 2,
+    w: c.width,
+    h: c.height,
+  }));
   return {
     ...base,
     shape: "ring",
-    // Hole centre relative to the zone centre (plot centre).
-    holeCx: court.x - plot.lengthFt / 2,
-    holeCy: court.y - plot.widthFt / 2,
-    holeW: court.width,
-    holeH: court.height,
+    holes,
+    // Back-compat single-hole fields (first court) for any old reader.
+    holeCx: holes[0].cx,
+    holeCy: holes[0].cy,
+    holeW: holes[0].w,
+    holeH: holes[0].h,
   };
 }
 

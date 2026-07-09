@@ -1537,6 +1537,21 @@ function HighlightZoneShape({
   if (shape === "arc-left") {
     return <Path data={arcLeftPath(w, h)} fill={el.fill} listening={true} />;
   }
+  if (shape === "ring" && el.holes && el.holes.length > 0) {
+    // Rectangle minus EVERY court — one path: the outer rect clockwise, each
+    // court counter-clockwise, so the courts are punched out under the default
+    // (non-zero) fill rule. Multi-court friendly (each court's run-off shows,
+    // the courts stay clear).
+    let d = `M ${-w / 2} ${-h / 2} h ${w} v ${h} h ${-w} Z`;
+    for (const hole of el.holes) {
+      const hw = hole.w * pxPerFt;
+      const hh = hole.h * pxPerFt;
+      const hx = hole.cx * pxPerFt;
+      const hy = hole.cy * pxPerFt;
+      d += ` M ${hx - hw / 2} ${hy - hh / 2} v ${hh} h ${hw} v ${-hh} Z`;
+    }
+    return <Path data={d} fill={el.fill} listening={true} />;
+  }
   if (
     shape === "ring" &&
     el.holeW != null &&

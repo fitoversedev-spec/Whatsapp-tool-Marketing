@@ -799,9 +799,8 @@ export default function CourtImageWizard({
         newEl = newHighlightZone(layout.plot);
         break;
       case "highlight-runoff": {
-        // Cut the primary sport court out of the run-off highlight so
-        // only the ring around it gets tinted. Pick the largest court
-        // element as "primary".
+        // Cut EVERY court out of the run-off highlight so only the ring
+        // around each court gets tinted — not the courts themselves.
         const courts = layout.elements.filter(
           (e) =>
             e.type === "basketball-court" ||
@@ -809,19 +808,14 @@ export default function CourtImageWizard({
             e.type === "pickleball-court" ||
             e.type === "generic-court",
         ) as Array<Element & { x: number; y: number; width: number; height: number }>;
-        const primary = courts.sort(
-          (a, b) => b.width * b.height - a.width * a.height,
-        )[0];
         newEl = newRunOffHighlightZone(
           layout.plot,
-          primary
-            ? {
-                x: primary.x,
-                y: primary.y,
-                width: primary.width,
-                height: primary.height,
-              }
-            : undefined,
+          courts.map((c) => ({
+            x: c.x,
+            y: c.y,
+            width: c.width,
+            height: c.height,
+          })),
         );
         break;
       }

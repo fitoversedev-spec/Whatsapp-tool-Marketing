@@ -1518,6 +1518,46 @@ export default function CourtImageWizard({
                   </div>
                 </CollapsibleSection>
 
+                {/* Standard mode: cricket / football time-shared turf gets the
+                    cricket-first boundary shapes (pitch on the long axis, a
+                    football rectangle still inscribes). Full dual line-marking
+                    coexistence renders on the shape itself. */}
+                {designMode === "standard" &&
+                  layout.sports.some((s) => s === "cricket" || s === "football") && (
+                    <CollapsibleSection title="Turf shape (cricket / football)">
+                      <div className="text-[10px] text-slate-500 leading-relaxed mb-1">
+                        Cricket-first boundary shapes — the pitch stays on the
+                        long axis and a football rectangle fits inside.
+                        Rectangle = full football pitch.
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {TURF_SHAPES.filter(
+                          (s) =>
+                            s.cricketFirst ||
+                            s.kind === "rectangle" ||
+                            s.kind === "rounded-rect",
+                        ).map((s) => (
+                          <button
+                            key={s.kind}
+                            type="button"
+                            onClick={() => pickTurfShape(s.kind)}
+                            title={s.blurb}
+                            className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded border transition ${
+                              turfShape === s.kind
+                                ? "bg-wa-green/10 border-wa-green ring-1 ring-wa-green/40"
+                                : "bg-white border-slate-300 hover:border-slate-400"
+                            }`}
+                          >
+                            <ShapeThumb kind={s.kind} />
+                            <span className="text-[9px] leading-tight text-slate-700 text-center">
+                              {s.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </CollapsibleSection>
+                  )}
+
                 {/* Plot shape — only shown in non-standard (custom) mode.
                     Corner cuts stack (checkboxes): sales can click Cut
                     top-left AND Cut bottom-right to get both notches.

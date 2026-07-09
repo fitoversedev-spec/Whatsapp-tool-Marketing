@@ -348,6 +348,7 @@ function ColorPickerSection({
   fallback,
   onChange,
   defaultOpen = false,
+  allowNone = false,
 }: {
   title: string;
   hint?: string;
@@ -356,13 +357,19 @@ function ColorPickerSection({
   fallback: string;
   onChange: (v: string | undefined) => void;
   defaultOpen?: boolean;
+  // When true, offer a "None" option that turns the highlight OFF entirely
+  // (stored as the sentinel "none"), distinct from "Default" (the preset).
+  allowNone?: boolean;
 }) {
+  const isNone = value === "none";
+  const hexValue = !value || isNone ? "" : value;
   return (
     <CollapsibleSection title={title} hint={hint} defaultOpen={defaultOpen}>
       <div className="space-y-3">
         <div className="grid grid-cols-5 gap-2">
           {presets.map((c) => {
-            const active = (value ?? "").toLowerCase() === c.hex.toLowerCase();
+            const active =
+              !isNone && (value ?? "").toLowerCase() === c.hex.toLowerCase();
             return (
               <button
                 key={c.hex}
@@ -382,14 +389,14 @@ function ColorPickerSection({
         <div className="flex items-center gap-2">
           <input
             type="color"
-            value={value ?? fallback}
+            value={hexValue || fallback}
             onChange={(e) => onChange(e.target.value)}
             className="w-9 h-9 rounded border border-slate-300 cursor-pointer bg-white shrink-0"
             title="Custom colour"
           />
           <input
             type="text"
-            value={value ?? ""}
+            value={hexValue}
             placeholder="Custom hex e.g. #FFFFFF"
             onChange={(e) => {
               const v = e.target.value.trim();
@@ -397,14 +404,30 @@ function ColorPickerSection({
             }}
             className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
           />
-          {value && (
+        </div>
+        <div className="flex items-center gap-3">
+          {allowNone && (
+            <button
+              type="button"
+              onClick={() => onChange("none")}
+              className={`text-[10.5px] whitespace-nowrap ${
+                isNone
+                  ? "text-wa-dark font-semibold underline"
+                  : "text-slate-500 hover:text-slate-700 underline"
+              }`}
+              title="Turn this highlight off"
+            >
+              None (off)
+            </button>
+          )}
+          {value !== undefined && (
             <button
               type="button"
               onClick={() => onChange(undefined)}
-              className="text-[10.5px] text-slate-500 hover:text-slate-700 underline whitespace-nowrap shrink-0"
-              title="Reset to default"
+              className="text-[10.5px] text-slate-500 hover:text-slate-700 underline whitespace-nowrap"
+              title="Reset to the sport preset"
             >
-              Default
+              Default preset
             </button>
           )}
         </div>
@@ -1935,10 +1958,10 @@ export default function CourtImageWizard({
                 />
                 <ColorPickerSection
                   title="Border colour"
-                  hint="Colour of the plot boundary frame. Default is the brown ground frame."
+                  hint="Colour of the plot boundary frame. Default is black (matches the fenced-court look)."
                   presets={BORDER_COLORS}
                   value={layout.style.borderColor}
-                  fallback="#7A5B32"
+                  fallback="#111827"
                   onChange={(v) =>
                     setLayout((l) =>
                       l ? { ...l, style: { ...l.style, borderColor: v } } : l,
@@ -1947,10 +1970,11 @@ export default function CourtImageWizard({
                 />
                 <ColorPickerSection
                   title="Non-playing (run-off) colour"
-                  hint="Colour of the run-off / non-playing area around the court."
+                  hint="Colour of the run-off / non-playing area. Auto-preset per sport; 'None' turns the tint off."
                   presets={COURT_COLORS}
                   value={layout.style.runOffColorOverride}
                   fallback="#264d80"
+                  allowNone
                   onChange={(v) =>
                     setLayout((l) =>
                       l
@@ -1968,10 +1992,11 @@ export default function CourtImageWizard({
                 ) && (
                   <ColorPickerSection
                     title="Kitchen / net zone"
-                    hint="Highlight the net zone — the pickleball kitchen, tennis service band, volleyball attack zone or badminton service band around the net."
+                    hint="Highlight the net zone (pickleball kitchen, tennis service band, etc.). Auto-preset per sport; 'None' turns it off."
                     presets={COURT_COLORS}
                     value={layout.style.kitchenColor}
                     fallback="#EA580C"
+                    allowNone
                     onChange={(v) =>
                       setLayout((l) =>
                         l ? { ...l, style: { ...l.style, kitchenColor: v } } : l,

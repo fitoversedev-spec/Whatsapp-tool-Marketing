@@ -1321,17 +1321,18 @@ function PickleballCourtShape({
       {/* Kitchen / non-volley zone highlight — the central band around the
           net. Uses the chosen colour, else the per-sport preset. Translucent
           so the markings stay visible on top. */}
-      {(style.kitchenColor ?? KITCHEN_DEFAULT_COLOR.pickleball) && (
-        <Rect
-          x={-kitchenW}
-          y={-h / 2}
-          width={kitchenW * 2}
-          height={h}
-          fill={style.kitchenColor ?? KITCHEN_DEFAULT_COLOR.pickleball}
-          opacity={0.55}
-          listening={false}
-        />
-      )}
+      {style.kitchenColor !== "none" &&
+        (style.kitchenColor ?? KITCHEN_DEFAULT_COLOR.pickleball) && (
+          <Rect
+            x={-kitchenW}
+            y={-h / 2}
+            width={kitchenW * 2}
+            height={h}
+            fill={style.kitchenColor ?? KITCHEN_DEFAULT_COLOR.pickleball}
+            opacity={0.55}
+            listening={false}
+          />
+        )}
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} />
       {/* Net line (center) */}
       <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.2} />
@@ -1399,7 +1400,8 @@ function GenericCourtShape({
       {/* Net / non-volley zone highlight (kitchen equivalent) — the band
           around the net. Uses the chosen colour, else the per-sport preset.
           Tennis / badminton / volleyball. */}
-      {(style.kitchenColor ?? KITCHEN_DEFAULT_COLOR[el.sport]) &&
+      {style.kitchenColor !== "none" &&
+        (style.kitchenColor ?? KITCHEN_DEFAULT_COLOR[el.sport]) &&
         netZoneFrac > 0 && (
           <Rect
             x={(-w * netZoneFrac) / 2}
@@ -2468,7 +2470,7 @@ function PlotSurface({
   primarySport?: Sport;
 }) {
   // Plot-frame stroke — the override, or the default brown frame.
-  const borderStroke = borderColor ?? "#7a5b32";
+  const borderStroke = borderColor ?? "#111827"; // black frame by default
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [productImg, setProductImg] = useState<HTMLImageElement | null>(null);
   const [turfLightImg, setTurfLightImg] = useState<HTMLImageElement | null>(null);
@@ -2587,10 +2589,14 @@ function PlotSurface({
   // their playing-area rectangle, so the result is a two-tone: darker
   // ring around the court (run-off zone), full colour inside (playing).
   // An explicit runOffColorOverride wins over the derived shade.
+  // "none" turns the per-sport tint OFF (plain shade); a hex wins; undefined
+  // falls back to the per-sport preset, then the derived shade.
   const solidFill =
-    runOffColorOverride ??
-    (primarySport ? RUNOFF_DEFAULT_COLOR[primarySport] : undefined) ??
-    shadeHexColor(solidFillBase, runOffFactor(runOffTone));
+    runOffColorOverride === "none"
+      ? shadeHexColor(solidFillBase, runOffFactor(runOffTone))
+      : (runOffColorOverride ??
+        (primarySport ? RUNOFF_DEFAULT_COLOR[primarySport] : undefined) ??
+        shadeHexColor(solidFillBase, runOffFactor(runOffTone)));
   const tiled = isTiledSurface(surface);
   const acrylic = isAcrylicSurface(surface);
   const turf = isTurfSurface(surface);
@@ -2740,7 +2746,9 @@ function PlotSurface({
             listening={false}
           />
         </>
-      ) : turf && stripes && !runOffColorOverride ? (
+      ) : turf &&
+        stripes &&
+        (!runOffColorOverride || runOffColorOverride === "none") ? (
         // Turf: mowed light/dark stripes across the plot. Skipped when a
         // run-off colour is chosen — then the plot renders that solid colour
         // (below) so the non-playing area is highlighted, with the sport's

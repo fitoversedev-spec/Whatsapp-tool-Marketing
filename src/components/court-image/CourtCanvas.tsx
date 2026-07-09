@@ -2749,10 +2749,12 @@ function PlotSurface({
         />
       )}
 
-      {/* Sample callout on the RIGHT side of the plot. When a real
-          flooring product is linked, its photo takes over the whole
-          swatch so the customer sees the actual product. Otherwise we
-          show the generic material sample (tile / turf light+dark). */}
+      {/* Product callout on the RIGHT side of the plot — shown ONLY when a
+          flooring product is actually linked. With no product selected we
+          render nothing here (no generic material sample) per sales' ask:
+          no product selected means no product listed on the canvas. */}
+      {productName && (
+        <>
       {productImg ? (
         <KonvaImage
           image={productImg}
@@ -2835,6 +2837,8 @@ function PlotSurface({
               align="center"
             />
           ))}
+        </>
+      )}
         </>
       )}
     </>

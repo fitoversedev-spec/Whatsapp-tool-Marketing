@@ -152,6 +152,13 @@ export default function CourtCanvas({
     };
   }, [canvasWidth, canvasHeight, layout.plot.lengthFt, layout.plot.widthFt]);
 
+  // Right-column layout: the DIMENSIONS card is anchored at the canvas top
+  // (DIM_TOP), and the material/product callout drops directly below it.
+  // Computed here (not from the plot) so the stack never overlaps for short
+  // plots like a cricket strip.
+  const designAreas = computeDesignAreas(layout);
+  const calloutTopY = DIM_TOP + dimPanelHeight(designAreas) + 10;
+
   // Convert plot coords (origin bottom-left) to Konva canvas coords (origin
   // top-left). Used everywhere we draw or read positions.
   function toCanvasX(plotX: number): number {
@@ -284,7 +291,8 @@ export default function CourtCanvas({
           baseWork={layout.style.baseWork}
           productName={layout.style.flooringProductName}
           productImageUrl={layout.style.flooringProductImageUrl}
-          calloutTopOffset={plotPxHeight * 0.5 + 10}
+          calloutTopY={calloutTopY}
+          canvasHeight={canvasHeight}
         />
         {showGrid && (
           <GridLines
@@ -359,9 +367,8 @@ export default function CourtCanvas({
             plotWidthFt={layout.plot.widthFt}
           />
           <DesignInfoPanel
-            areas={computeDesignAreas(layout)}
-            plotOriginY={plotOriginY}
-            plotPxHeight={plotPxHeight}
+            areas={designAreas}
+            top={DIM_TOP}
             canvasWidth={canvasWidth}
           />
         </Layer>
@@ -1821,8 +1828,17 @@ function Watermark({
     };
   }, [url]);
   if (!img) return null;
-  const targetW = Math.min(180, canvasWidth * 0.14);
-  const targetH = (img.naturalHeight / img.naturalWidth) * targetW;
+  // Fixed-height logo box (WATERMARK_BOX_H) so the material callout above it
+  // can reserve exactly WATERMARK_RESERVE and never overlap. Width follows
+  // the aspect ratio, capped so a very wide logo stays inside the corner
+  // (capping shortens the height, which only shrinks the reserve — safe).
+  let targetH = WATERMARK_BOX_H;
+  let targetW = (img.naturalWidth / img.naturalHeight) * targetH;
+  const maxW = canvasWidth * 0.26;
+  if (targetW > maxW) {
+    targetW = maxW;
+    targetH = (img.naturalHeight / img.naturalWidth) * targetW;
+  }
   const margin = 14;
   return (
     <>
@@ -1903,19 +1919,44 @@ function BasketballHoopShape({
 // card (top) + the material callout (below it).
 const RIGHT_COL_W = 230;
 
+// Fixed metrics for the right-column stack. Everything on the right —
+// DIMENSIONS card, material/product callout, watermark — is positioned
+// relative to the CANVAS (a clean top→bottom stack), never relative to the
+// plot. A short plot (e.g. a 105 × 13 ft cricket strip) sits as a thin band
+// mid-canvas; the old plot-relative offsets collapsed for such plots and
+// made the card, callout and logo overlap. Anchoring to the canvas fixes
+// that for every plot shape.
+const DIM_TOP = 14; // card's top y (clears the top HTML controls in editor)
+const DIM_TITLE_H = 22;
+const DIM_ROW_H = 12;
+const DIM_PAD = 8;
+// Number of stacked sections in the DIMENSIONS card: Plot, [Playing area],
+// Non-playing, Total. Playing area only when the design has a court.
+function dimSectionCount(areas: DesignAreas): number {
+  return 3 + (areas.courtCount >= 1 ? 1 : 0);
+}
+// Deterministic card height so the render can place the callout directly
+// below it without prop-drilling the panel's internal layout.
+function dimPanelHeight(areas: DesignAreas): number {
+  return DIM_TITLE_H + DIM_PAD + dimSectionCount(areas) * 3 * DIM_ROW_H + DIM_PAD;
+}
+// Height the watermark box occupies at the bottom-right (logo 52 + margins).
+// The Watermark component renders to a fixed 52 px tall box so this reserve
+// is exact and the callout above can be clamped to never touch it.
+const WATERMARK_BOX_H = 52;
+const WATERMARK_RESERVE = WATERMARK_BOX_H + 36;
+
 // Prominent dimensions card — top-right of every design (baked into the
 // exported PNG) so sales + the customer read the sizes at a glance. Each of
 // Plot / Playing area / Non-playing shows "L × W ft = A sq.ft" and
 // "L × W m = A sq.m".
 function DesignInfoPanel({
   areas,
-  plotOriginY,
-  plotPxHeight,
+  top,
   canvasWidth,
 }: {
   areas: DesignAreas;
-  plotOriginY: number;
-  plotPxHeight: number;
+  top: number;
   canvasWidth: number;
 }) {
   const FT_M = 0.3048;
@@ -1971,14 +2012,14 @@ function DesignInfoPanel({
 
   const boxW = RIGHT_COL_W - 14;
   const x = canvasWidth - RIGHT_COL_W + 6;
-  const y = plotOriginY;
-  const titleH = 22;
-  const pad = 8;
-  // Fit the rows into the top portion of the right column.
-  const fitH = Math.max(150, plotPxHeight * 0.5);
-  const rowH = Math.max(11, Math.min(15, (fitH - titleH - pad * 2) / rows.length));
-  const fontSize = Math.min(11.5, rowH * 0.82);
-  const boxH = titleH + pad + rows.length * rowH + pad;
+  // Anchored at the canvas top (fixed), not the plot — so a short cricket
+  // strip doesn't push the card down into the callout + logo.
+  const y = top;
+  const titleH = DIM_TITLE_H;
+  const pad = DIM_PAD;
+  const rowH = DIM_ROW_H;
+  const fontSize = 10.5;
+  const boxH = dimPanelHeight(areas);
 
   return (
     <Group listening={false}>
@@ -2267,7 +2308,8 @@ function PlotSurface({
   baseWork,
   productName,
   productImageUrl,
-  calloutTopOffset = 0,
+  calloutTopY,
+  canvasHeight,
 }: {
   plotOriginX: number;
   plotOriginY: number;
@@ -2304,7 +2346,11 @@ function PlotSurface({
   // they're getting instead of only the generic material sample.
   productName?: string;
   productImageUrl?: string;
-  calloutTopOffset?: number;
+  // Absolute canvas-y where the material/product callout starts (directly
+  // below the DIMENSIONS card). Plus the canvas height so the sample photo
+  // can be clamped to fit above the bottom-right watermark.
+  calloutTopY: number;
+  canvasHeight: number;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [productImg, setProductImg] = useState<HTMLImageElement | null>(null);
@@ -2436,30 +2482,20 @@ function PlotSurface({
   // as soon as the image lands at /images/tiles/pvc-sports.jpg.
   const hasSamplePhoto = tiled || pvc;
   const labelFontSize = Math.max(11, Math.min(plotPxWidth, plotPxHeight) * 0.03);
-  // Callout sits OUTSIDE the plot in the reserved right-side area (the
-  // parent hook allocates ~140 px for it). Fixed-size box so the layout
-  // stays readable regardless of plot scale.
-  // Sample photo stays square (calloutSize) but the info box under it
-  // is a bit wider (infoW) so multi-word lines like "105 × 62 ft (32 ×
-  // 18.9 m)" don't wrap mid-phrase. Sales asked for the dimensions to
-  // read at a glance.
-  const calloutSize = 130;
+  // Callout sits OUTSIDE the plot in the reserved right-side area, directly
+  // below the DIMENSIONS card. The sample photo is square; the info box
+  // under it is a bit wider (infoW) so multi-word material lines don't wrap.
+  // Max sample-photo size; shrunk below this when the right column is short
+  // (wide plots) so the callout always fits above the watermark.
+  const calloutMax = 132;
   const calloutGap = 14;
   const sampleX = plotOriginX + plotPxWidth + calloutGap;
-  // Drop the material callout below the dimensions card that occupies the
-  // top of the right column.
-  const sampleY = plotOriginY + calloutTopOffset;
-  const samplePx = calloutSize;
-  // Info panel widened beyond the sample photo so the dims + metres
-  // line fits on one row.
-  const infoW = Math.max(calloutSize, 190);
+  // Callout starts directly below the DIMENSIONS card (absolute canvas y).
+  const sampleY = calloutTopY;
+  // Info panel widened beyond the sample photo so the material lines
+  // fit without wrapping mid-phrase.
+  const infoW = Math.max(calloutMax, 190);
   const infoX = sampleX;
-  // Plot dimensions in metres alongside feet — appended to every
-  // material callout so customers who think metric can read the
-  // plot at a glance. Q2.3 ask from sales.
-  const dimsLine = `${plotLengthFt} × ${plotWidthFt} ft (${(
-    plotLengthFt * 0.3048
-  ).toFixed(1)} × ${(plotWidthFt * 0.3048).toFixed(1)} m)`;
   const materialLines = tiled
     ? (() => {
         const c = ppeTileCount(plotLengthFt, plotWidthFt);
@@ -2499,9 +2535,16 @@ function PlotSurface({
   const nameLine = productName ? [productName] : [];
   const infoLines =
     materialLines.length > 0 || nameLine.length > 0
-      ? [...nameLine, ...materialLines, ...(materialLines.length ? [dimsLine] : [])]
+      ? [...nameLine, ...materialLines]
       : [];
   const infoH = labelFontSize * (infoLines.length * 1.6 + 0.8);
+  // Clamp the sample photo so the whole callout (photo + info box) stays
+  // above the bottom-right watermark. As big as calloutMax when there's
+  // room; shrinks when the right column is short (wide plots like a cricket
+  // strip) down to a 48 px legibility floor. Fit wins over the floor so the
+  // logo is never overlapped except on an extremely short canvas.
+  const calloutRoom = canvasHeight - sampleY - infoH - 8 - WATERMARK_RESERVE;
+  const samplePx = Math.min(calloutMax, Math.max(48, calloutRoom));
 
   // Turf stripe geometry — VERTICAL mowed bands running along the
   // pitch length (top-to-bottom), alternating light + dark across the

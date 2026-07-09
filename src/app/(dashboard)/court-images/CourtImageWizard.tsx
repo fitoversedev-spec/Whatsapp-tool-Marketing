@@ -2233,8 +2233,10 @@ export default function CourtImageWizard({
                 {/* Grid overlay toggle. Old designs default to grid ON
                     (matches historical look). New designs on continuous
                     surfaces start OFF because customers read the grid as
-                    a tile pattern on solid acrylic / turf / PVC. */}
-                <div className="absolute top-3 right-3 bg-white/90 backdrop-blur rounded-md px-2.5 py-1.5 text-[11px] shadow-sm flex items-center gap-2">
+                    a tile pattern on solid acrylic / turf / PVC.
+                    Bottom-left so it never covers the top-right DIMENSIONS
+                    card (this is an editor-only control, not exported). */}
+                <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur rounded-md px-2.5 py-1.5 text-[11px] shadow-sm flex items-center gap-2">
                   <label className="flex items-center gap-1.5 cursor-pointer select-none">
                     <input
                       type="checkbox"

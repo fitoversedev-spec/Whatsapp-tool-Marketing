@@ -9,3 +9,6 @@ node_modules/
 prisma/*.db
 prisma/*.db-journal
 *.tsbuildinfo
+
+# MS Office lock/temp files (e.g. ~$Fitoverse-Tool-Test-Focus-Areas.docx)
+~$*

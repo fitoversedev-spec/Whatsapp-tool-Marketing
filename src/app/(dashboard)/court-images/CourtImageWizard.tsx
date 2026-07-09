@@ -55,6 +55,11 @@ import {
   turfRollMeters,
   pvcRollCount,
 } from "@/lib/court-image/schema";
+import {
+  TURF_SHAPES,
+  buildTurfShapePolygon,
+  type TurfShapeKind,
+} from "@/lib/court-image/turf-shapes";
 import { useUserUnit } from "@/lib/units/useUserUnit";
 import { toFeet, toUnit, FT_TO_M } from "@/lib/units";
 
@@ -255,6 +260,29 @@ const COURT_COLORS: { name: string; hex: string }[] = [
 // Collapsible sidebar section — a titled header (with a chevron) that
 // expands/collapses its body. Used to categorise the Design panel so it
 // isn't one long messy scroll.
+// Small preview of a turf shape, generated from the same geometry the plot
+// uses so the picker matches exactly what gets drawn.
+function ShapeThumb({ kind }: { kind: TurfShapeKind }) {
+  const w = 46;
+  const h = 32;
+  const poly = buildTurfShapePolygon(w, h, kind) ?? [
+    { x: 0, y: 0 },
+    { x: w, y: 0 },
+    { x: w, y: h },
+    { x: 0, y: h },
+  ];
+  // Flip y: plot origin is bottom-left, SVG origin is top-left.
+  const d =
+    poly
+      .map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${(h - p.y).toFixed(1)}`)
+      .join(" ") + " Z";
+  return (
+    <svg viewBox={`-1 -1 ${w + 2} ${h + 2}`} width={w} height={h} aria-hidden>
+      <path d={d} fill="#3f7a34" stroke="#2c5824" strokeWidth={1.5} />
+    </svg>
+  );
+}
+
 function CollapsibleSection({
   title,
   hint,
@@ -362,6 +390,9 @@ export default function CourtImageWizard({
   const [exclusiveShape, setExclusiveShape] = useState<
     "rect" | "diag-top" | "diag-bot" | "l-tr" | "l-br"
   >("rect");
+  // Curved / cricket-first turf shape (oval, Cricket-D, teardrop…). Mutually
+  // exclusive with the corner-cut / diagonal presets above.
+  const [turfShape, setTurfShape] = useState<TurfShapeKind | null>(null);
 
   // Step 3 state
   const [caption, setCaption] = useState("");
@@ -851,6 +882,7 @@ export default function CourtImageWizard({
     const next = { ...activeCorners, [corner]: !activeCorners[corner] };
     setActiveCorners(next);
     setExclusiveShape("rect");
+    setTurfShape(null);
     recomputePolygon(next, "rect");
   }
 
@@ -1004,8 +1036,39 @@ export default function CourtImageWizard({
     const clearedCorners = { tl: false, tr: false, bl: false, br: false };
     setActiveCorners(clearedCorners);
     setExclusiveShape(shape);
+    setTurfShape(null);
     recomputePolygon(clearedCorners, shape);
   }
+
+  // Pick a curved / cricket-first turf shape. The polygon itself is generated
+  // by the effect below (also on plot-dimension change).
+  function pickTurfShape(kind: TurfShapeKind) {
+    setActiveCorners({ tl: false, tr: false, bl: false, br: false });
+    setExclusiveShape("rect");
+    setTurfShape(kind);
+  }
+
+  // Regenerate the turf-shape polygon whenever the shape or the plot
+  // dimensions change (the polygon is stored in absolute plot feet).
+  useEffect(() => {
+    if (!turfShape) return;
+    setLayout((l) =>
+      l
+        ? {
+            ...l,
+            plot: {
+              ...l.plot,
+              polygon: buildTurfShapePolygon(
+                l.plot.lengthFt,
+                l.plot.widthFt,
+                turfShape,
+              ),
+            },
+          }
+        : l,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turfShape, layout?.plot.lengthFt, layout?.plot.widthFt]);
 
   function toggleWatermark() {
     setLayout((prev) => {
@@ -1451,6 +1514,35 @@ export default function CourtImageWizard({
                 {designMode === "custom" && (
                   <CollapsibleSection title="Plot shape">
                     <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                      Turf shapes (curved · cricket-first)
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {TURF_SHAPES.map((s) => (
+                        <button
+                          key={s.kind}
+                          type="button"
+                          onClick={() => pickTurfShape(s.kind)}
+                          title={s.blurb}
+                          className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded border transition ${
+                            turfShape === s.kind
+                              ? "bg-wa-green/10 border-wa-green ring-1 ring-wa-green/40"
+                              : "bg-white border-slate-300 hover:border-slate-400"
+                          }`}
+                        >
+                          <ShapeThumb kind={s.kind} />
+                          <span className="text-[9px] leading-tight text-slate-700 text-center">
+                            {s.label}
+                          </span>
+                          <span className="text-[8px] text-slate-400">{s.utilPct}%</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="text-[10px] text-slate-500 leading-relaxed">
+                      Curved shapes keep the cricket pitch on the long axis. The
+                      % is indicative turf utilisation; the design shows the exact
+                      area. Or use the straight-edge presets below.
+                    </div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-2">
                       Corner cuts (multi-select)
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">

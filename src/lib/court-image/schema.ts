@@ -12,6 +12,8 @@
 // DEFAULT_STYLE, and a renderer branch in CourtCanvas + the (future) 3D
 // scene builder.
 
+import { polygonAreaSqFt } from "./turf-shapes";
+
 export type Sport =
   | "football"
   | "cricket"
@@ -922,7 +924,12 @@ export type DesignAreas = {
 export function computeDesignAreas(layout: CourtLayout): DesignAreas {
   const lengthFt = layout.plot.lengthFt;
   const widthFt = layout.plot.widthFt;
-  const plotAreaSqFt = lengthFt * widthFt;
+  // For a non-rectangular plot (curved / cut turf shape) the actual surfaced
+  // area is the polygon area, not the L × W bounding box — so turf quantity
+  // and the run-off readout stay correct for ovals, Cricket-D, etc.
+  const poly = layout.plot.polygon;
+  const plotAreaSqFt =
+    poly && poly.length >= 3 ? polygonAreaSqFt(poly) : lengthFt * widthFt;
 
   const courts = layout.elements
     .filter((e) => COURT_FOOTPRINT_TYPES.has(e.type))

@@ -51,21 +51,75 @@ const FOOTER_RESERVE = 30;
 // Polished palette — more contrast on titles, softer borders, dedicated
 // link colour. The two-tone accent (deep + soft) lets us layer cards and
 // dividers without everything looking flat.
+// Palette from the Fitoverse quotation design template — charcoal headers, a
+// blue primary accent, and a green→blue→dark-blue→magenta gradient rule.
 const COL = {
-  text: rgb(0.07, 0.09, 0.15),
+  text: rgb(0.169, 0.184, 0.212), // #2b2f36 ink
   textSoft: rgb(0.22, 0.27, 0.35),
-  muted: rgb(0.45, 0.5, 0.58),
-  accent: rgb(0.027, 0.369, 0.329), // #075E54 — Fitoverse dark green
-  accentSoft: rgb(0.86, 0.94, 0.91), // pale teal for card highlights
+  muted: rgb(0.361, 0.42, 0.455), // #5c6b74
+  charcoal: rgb(0.137, 0.149, 0.173), // #23262c — header bands / table head
+  blue: rgb(0.122, 0.525, 0.839), // #1f86d6 — primary accent
+  accent: rgb(0.137, 0.149, 0.173), // charcoal (header band + table header)
+  accentSoft: rgb(0.9, 0.94, 0.98), // pale blue for card highlights
   accentText: rgb(1, 1, 1),
-  light: rgb(0.96, 0.97, 0.99),
-  border: rgb(0.88, 0.9, 0.93),
+  light: rgb(0.933, 0.945, 0.961), // #eef1f5
+  border: rgb(0.898, 0.914, 0.933), // #e5e9ee
   borderStrong: rgb(0.78, 0.81, 0.85),
-  rowAlt: rgb(0.98, 0.985, 0.99),
-  green: rgb(0.86, 0.97, 0.78), // #DCF8C6
-  grandTotalBg: rgb(0.027, 0.369, 0.329),
-  link: rgb(0.09, 0.4, 0.75), // standard link blue
+  rowAlt: rgb(0.965, 0.976, 0.988), // #f6f9fc
+  green: rgb(0.86, 0.97, 0.78),
+  highlight: rgb(1, 0.953, 0.749), // #fff3bf highlighted value bg
+  highlightText: rgb(0.478, 0.361, 0), // #7a5c00
+  grandTotalBg: rgb(0.137, 0.149, 0.173), // charcoal
+  link: rgb(0.122, 0.525, 0.839),
 };
+
+// The 4-stop brand gradient (green → blue → dark-blue → magenta) at positions
+// matching the template's CSS.
+const GRAD_STOPS: Array<{ p: number; c: [number, number, number] }> = [
+  { p: 0.0, c: [0.122, 0.631, 0.294] }, // #1fa14b green
+  { p: 0.42, c: [0.122, 0.525, 0.839] }, // #1f86d6 blue
+  { p: 0.7, c: [0.153, 0.251, 0.651] }, // #2740a6 dark blue
+  { p: 1.0, c: [0.851, 0.169, 0.341] }, // #d92b57 magenta
+];
+
+function gradAt(t: number) {
+  const x = Math.max(0, Math.min(1, t));
+  for (let i = 0; i < GRAD_STOPS.length - 1; i++) {
+    const a = GRAD_STOPS[i];
+    const b = GRAD_STOPS[i + 1];
+    if (x >= a.p && x <= b.p) {
+      const f = (x - a.p) / (b.p - a.p || 1);
+      return rgb(
+        a.c[0] + (b.c[0] - a.c[0]) * f,
+        a.c[1] + (b.c[1] - a.c[1]) * f,
+        a.c[2] + (b.c[2] - a.c[2]) * f,
+      );
+    }
+  }
+  return rgb(...GRAD_STOPS[GRAD_STOPS.length - 1].c);
+}
+
+// Draw a horizontal gradient bar (approximated as thin strips) — the brand
+// accent rule used at the top of every page + on the grand-total border.
+function drawGradientBar(
+  page: PDFPage,
+  x: number,
+  yTop: number,
+  w: number,
+  h: number,
+) {
+  const segs = 64;
+  const sw = w / segs;
+  for (let i = 0; i < segs; i++) {
+    page.drawRectangle({
+      x: x + i * sw,
+      y: PAGE_H - yTop - h,
+      width: sw + 0.6,
+      height: h,
+      color: gradAt(i / (segs - 1)),
+    });
+  }
+}
 
 function inr(n: number): string {
   return n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
@@ -120,6 +174,7 @@ function newPage(ctx: Ctx) {
   ctx.page = ctx.doc.addPage(PageSizes.A4);
   ctx.y = MARGIN;
   ctx.pageNumber += 1;
+  drawGradientBar(ctx.page, 0, 0, PAGE_W, 5); // brand accent rule at the top
 }
 
 function ensureSpace(ctx: Ctx, needed: number) {
@@ -300,6 +355,8 @@ function drawHeader(ctx: Ctx, _customerName: string, logoImage: PDFImage | null)
     font: ctx.font,
     color: COL.accentText,
   });
+  // Brand gradient rule directly under the charcoal brand band.
+  drawGradientBar(ctx.page, MARGIN, ctx.y + 50, CONTENT_W, 3);
   ctx.y += 60;
 }
 
@@ -608,8 +665,9 @@ function drawTotals(ctx: Ctx, subtotal: number, gst: number, grandTotal: number)
   drawTotalRow("GST Amount", `₹ ${inr(gst)}`);
   space(ctx, 4);
 
-  // Grand total band
+  // Grand total band — charcoal with the brand gradient rule across its top.
   drawRect(ctx, x, ctx.y, totalsW, 24, { fill: COL.grandTotalBg });
+  drawGradientBar(ctx.page, x, ctx.y, totalsW, 3);
   safeDraw(ctx.page, "Grand Total", {
     x: x + 10,
     y: yFromTop(ctx.y + 16),
@@ -963,6 +1021,7 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   };
 
   // ── PAGE 1: header, line items, totals, notes ──
+  drawGradientBar(ctx.page, 0, 0, PAGE_W, 5); // brand accent rule at the top
   drawHeader(ctx, data.customerName, logoImage);
   drawTitle(ctx, data.sport);
   drawInfoGrid(

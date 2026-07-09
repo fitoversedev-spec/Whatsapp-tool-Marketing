@@ -3905,7 +3905,7 @@ function Step3({
           </div>
         )}
       </div>
-      <div className="border-l border-slate-200 p-5 overflow-y-auto space-y-5">
+      <div className="border-l border-slate-200 p-5 overflow-y-auto overflow-x-hidden space-y-5 min-w-0">
         <div>
           <h3 className="text-sm font-semibold text-slate-900 mb-2">Sending to</h3>
           <div className="text-sm text-slate-700">{customerName}</div>
@@ -4156,7 +4156,9 @@ function CombinedPdfBlock({
   // has been generated). The PDF carries the court from all angles as
   // still images; the video shows it spinning.
   const [alsoSendVideo, setAlsoSendVideo] = useState(true);
-  const [busy, setBusy] = useState<"" | "download" | "send" | "email">("");
+  const [busy, setBusy] = useState<
+    "" | "view" | "download" | "send" | "email"
+  >("");
   const [progress, setProgress] = useState(0);
   const [email, setEmail] = useState("");
 
@@ -4172,7 +4174,7 @@ function CombinedPdfBlock({
   const quoteActive = quoteEnabled && includedCount > 0;
   const quoteTotals = computeQuoteTotals(quoteItems);
 
-  async function build(mode: "download" | "send" | "email") {
+  async function build(mode: "view" | "download" | "send" | "email") {
     setBusy(mode);
     setProgress(0);
     try {
@@ -4243,7 +4245,9 @@ function CombinedPdfBlock({
         }
       } else {
         window.open(j.url, "_blank");
-        toast.success("Combined PDF ready");
+        toast.success(
+          mode === "view" ? "Preview opened in a new tab" : "Combined PDF ready",
+        );
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed");
@@ -4344,40 +4348,47 @@ function CombinedPdfBlock({
           No quote attached. Go back to the Quotation step to add one.
         </div>
       )}
+      {/* View / download the combined PDF first, then send. */}
       <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => build("view")}
+          disabled={!!busy || !pngDataUrl2D}
+          className="flex-1 min-w-0 text-xs font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded-md px-2 py-2 disabled:opacity-50"
+        >
+          {busy === "view" ? "Building…" : "👁 View PDF"}
+        </button>
         <button
           type="button"
           onClick={() => build("download")}
           disabled={!!busy || !pngDataUrl2D}
-          className="flex-1 text-xs font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded-md px-3 py-2 disabled:opacity-50"
+          className="flex-1 min-w-0 text-xs font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded-md px-2 py-2 disabled:opacity-50"
         >
-          {busy === "download" ? "Building…" : "Download PDF"}
-        </button>
-        <button
-          type="button"
-          onClick={() => build("send")}
-          disabled={!!busy || !pngDataUrl2D || !contactPhone}
-          className="flex-1 text-xs font-medium bg-wa-green hover:bg-wa-green/90 text-white rounded-md px-3 py-2 disabled:opacity-50"
-        >
-          {busy === "send" ? "Sending…" : "Send on WhatsApp"}
+          {busy === "download" ? "Building…" : "⬇ Download"}
         </button>
       </div>
-      {/* Email delivery — sends the PDF as an attachment. Works once
-          RESEND_API_KEY is set; until then it falls back to opening the
-          download link. */}
+      <button
+        type="button"
+        onClick={() => build("send")}
+        disabled={!!busy || !pngDataUrl2D || !contactPhone}
+        className="w-full text-sm font-semibold bg-wa-green hover:bg-wa-green/90 text-white rounded-md px-3 py-2.5 disabled:opacity-50"
+      >
+        {busy === "send" ? "Sending…" : "📤 Send on WhatsApp"}
+      </button>
+      {/* Email delivery — sends the PDF as an attachment. */}
       <div className="flex gap-2">
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="customer@email.com"
-          className="flex-1 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+          className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
         />
         <button
           type="button"
           onClick={() => build("email")}
           disabled={!!busy || !pngDataUrl2D || !email.trim()}
-          className="text-xs font-medium border border-wa-green/40 text-wa-dark hover:bg-wa-green/10 rounded-md px-3 py-1.5 disabled:opacity-50 whitespace-nowrap"
+          className="shrink-0 text-xs font-medium border border-wa-green/40 text-wa-dark hover:bg-wa-green/10 rounded-md px-3 py-1.5 disabled:opacity-50 whitespace-nowrap"
         >
           {busy === "email" ? "Emailing…" : "Send by email"}
         </button>

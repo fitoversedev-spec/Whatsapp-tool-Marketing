@@ -409,7 +409,9 @@ async function embedLineItemImages(
   for (const it of items) {
     if (!it.included || !it.imageUrl) continue;
     try {
-      const res = await fetch(it.imageUrl);
+      // Bounded fetch so a slow/hung blob URL can't stall PDF generation —
+      // the item just renders without its photo instead.
+      const res = await fetch(it.imageUrl, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) continue;
       const bytes = new Uint8Array(await res.arrayBuffer());
       let img: PDFImage | null = null;
@@ -490,7 +492,8 @@ function drawItemsTable(
     // Estimate row height: pad + name + [photo] + desc + gst tag + pad
     const descLines = wordWrap(ctx.font, item.description, DESC_SIZE, cols.desc - 12);
     const photoBlockH = img ? imgH + 10 : 0;
-    const rowH = 8 + 16 + photoBlockH + descLines.length * DESC_LH + 14 + 8;
+    // 8 top pad + 24 name block + photo + description + 16 GST tag + 8 pad.
+    const rowH = 8 + 24 + photoBlockH + descLines.length * DESC_LH + 16 + 8;
     ensureSpace(ctx, rowH);
     if (rowIdx % 2 === 1) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
 

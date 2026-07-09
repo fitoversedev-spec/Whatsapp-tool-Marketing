@@ -4171,6 +4171,11 @@ function CombinedPdfBlock({
   async function build(mode: "view" | "download" | "send" | "email") {
     setBusy(mode);
     setProgress(0);
+    // Open the preview/download tab NOW, in the click gesture — otherwise the
+    // browser's popup blocker silently kills a window.open() that runs after
+    // the async build. We point it at the PDF url once it's ready.
+    const previewWin =
+      mode === "view" || mode === "download" ? window.open("", "_blank") : null;
     try {
       const image2d = pngDataUrl2D ?? undefined;
       // All-angle 3D — capture a turntable set of stills so the PDF shows
@@ -4238,12 +4243,28 @@ function CombinedPdfBlock({
           window.open(j.url, "_blank");
         }
       } else {
-        window.open(j.url, "_blank");
-        toast.success(
-          mode === "view" ? "Preview opened in a new tab" : "Combined PDF ready",
-        );
+        // Point the pre-opened tab at the PDF; if the pop-up was blocked, try
+        // once more and tell the user honestly if it's still blocked.
+        let opened = false;
+        if (previewWin && !previewWin.closed) {
+          previewWin.location.href = j.url;
+          opened = true;
+        } else {
+          opened = !!window.open(j.url, "_blank");
+        }
+        if (opened) {
+          toast.success(
+            mode === "view" ? "Preview opened in a new tab" : "Combined PDF ready",
+          );
+        } else {
+          toast.error(
+            "Pop-up blocked — allow pop-ups for this site, or use Download",
+          );
+        }
       }
     } catch (err) {
+      // Nothing to show — close the blank preview tab we optimistically opened.
+      previewWin?.close();
       toast.error(err instanceof Error ? err.message : "Failed");
     } finally {
       setBusy("");

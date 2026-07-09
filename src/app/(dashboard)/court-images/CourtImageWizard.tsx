@@ -133,46 +133,51 @@ function MultiCourtBanner({
 }) {
   const primarySport = layout.primarySport ?? layout.sports[0];
   if (!primarySport || layout.sports.length !== 1) return null;
-  const courtCount = Math.max(1, computeDesignAreas(layout).courtCount);
+  const areas = computeDesignAreas(layout);
+  const courtCount = Math.max(1, areas.courtCount);
   const capacity = courtCapacity(
     layout.plot.lengthFt,
     layout.plot.widthFt,
     primarySport as Sport,
   );
-  if (capacity <= 1 || capacity <= courtCount) return null;
+  if (capacity <= 1) return null;
 
   const label = SPORT_LABEL[primarySport] ?? cap(primarySport);
-  const btn =
-    "text-xs font-medium px-2.5 py-1.5 rounded-md border border-wa-green/40 bg-white text-wa-dark hover:bg-wa-green/10";
+  const c0 = areas.courts[0];
+  const sizeStr = c0
+    ? `${Math.round(c0.lengthFt)} × ${Math.round(c0.widthFt)} ft`
+    : "";
+  // One button per count (1 = single). Capped so the row never runs away.
+  const maxShown = Math.min(capacity, 8);
+  const counts = Array.from({ length: maxShown }, (_, i) => i + 1);
   return (
     <div className="rounded-lg border border-wa-green/40 bg-wa-green/5 p-3 space-y-2">
       <div className="text-xs font-semibold text-wa-dark">
-        This plot can fit up to {capacity} {label} courts
+        This plot fits up to {capacity} {label} courts
+        {sizeStr ? ` (${sizeStr} each)` : ""}
       </div>
       <div className="text-[11px] text-slate-600 leading-snug">
-        You have {courtCount} right now. Add more and they&apos;re tiled across
-        the plot — each court stays fully editable (drag to reposition).
+        Pick how many to lay out — they&apos;re tiled at regulation size across
+        the plot, each fully editable (drag to reposition).
       </div>
-      <div className="flex flex-wrap gap-2">
-        {capacity >= courtCount + 1 && (
-          <button type="button" className={btn} onClick={() => onSetCount(courtCount + 1)}>
-            + Add 1 more court
-          </button>
-        )}
-        {capacity >= courtCount + 2 && (
-          <button type="button" className={btn} onClick={() => onSetCount(courtCount + 2)}>
-            + Add 2 more courts
-          </button>
-        )}
-        {courtCount > 1 && (
-          <button
-            type="button"
-            className="text-xs font-medium px-2.5 py-1.5 rounded-md text-slate-500 hover:text-slate-700 underline"
-            onClick={() => onSetCount(1)}
-          >
-            Reset to 1 court
-          </button>
-        )}
+      <div className="flex flex-wrap gap-1.5">
+        {counts.map((n) => {
+          const active = n === courtCount;
+          return (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onSetCount(n)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-md border transition ${
+                active
+                  ? "border-wa-green bg-wa-green text-white"
+                  : "border-wa-green/40 bg-white text-wa-dark hover:bg-wa-green/10"
+              }`}
+            >
+              {n} {n === 1 ? "court" : "courts"}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -318,8 +323,8 @@ export default function CourtImageWizard({
   const [widthFt, setWidthFt] = useState(60);
   const [selectedSports, setSelectedSports] = useState<Sport[]>(["football"]);
   const [footballASide, setFootballASide] = useState<5 | 7 | 11 | null>(11);
-  const [cricketLengthPreset, setCricketLengthPreset] = useState<22 | 16 | 12 | "custom">(22);
-  const [cricketLengthCustom, setCricketLengthCustom] = useState(22);
+  // Cricket turf strip — the two Fitoverse build sizes: 2 × 10 m or 2 × 20 m.
+  const [cricketStripM, setCricketStripM] = useState<10 | 20>(20);
   const [cricketOrientation, setCricketOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [basketballHalfCourt, setBasketballHalfCourt] = useState(false);
   // Design mode: "standard" uses preset court dimensions per sport;
@@ -437,8 +442,7 @@ export default function CourtImageWizard({
       setLengthFt(80);
       setWidthFt(60);
       setSelectedSports(["football"]);
-      setCricketLengthPreset(22);
-      setCricketLengthCustom(22);
+      setCricketStripM(20);
       setCricketOrientation("horizontal");
       setFootballASide(11);
       setBasketballHalfCourt(false);
@@ -505,18 +509,16 @@ export default function CourtImageWizard({
       toast.error("Please fill all required fields");
       return;
     }
-    const cricketLengthFt =
-      cricketLengthPreset === "custom"
-        ? cricketLengthCustom * 3
-        : cricketLengthPreset * 3;
+    const M_TO_FT = 3.28084;
     const initial = buildInitialLayout({
       plot: { lengthFt, widthFt },
       sports: selectedSports,
       config: {
         football: { aSide: footballASide ?? undefined },
         cricket: {
-          pitchLengthFt: cricketLengthFt,
-          pitchWidthFt: 10,
+          // Turf strip: 2 m wide × 10 or 20 m long.
+          pitchLengthFt: cricketStripM * M_TO_FT,
+          pitchWidthFt: 2 * M_TO_FT,
           orientation: cricketOrientation,
         },
         basketball: { halfCourt: basketballHalfCourt },
@@ -1274,10 +1276,8 @@ export default function CourtImageWizard({
               setSelectedSports={setSelectedSports}
               footballASide={footballASide}
               setFootballASide={setFootballASide}
-              cricketLengthPreset={cricketLengthPreset}
-              setCricketLengthPreset={setCricketLengthPreset}
-              cricketLengthCustom={cricketLengthCustom}
-              setCricketLengthCustom={setCricketLengthCustom}
+              cricketStripM={cricketStripM}
+              setCricketStripM={setCricketStripM}
               cricketOrientation={cricketOrientation}
               setCricketOrientation={setCricketOrientation}
               basketballHalfCourt={basketballHalfCourt}
@@ -2490,10 +2490,8 @@ function Step1(props: {
   setSelectedSports: (v: Sport[]) => void;
   footballASide: 5 | 7 | 11 | null;
   setFootballASide: (v: 5 | 7 | 11 | null) => void;
-  cricketLengthPreset: 22 | 16 | 12 | "custom";
-  setCricketLengthPreset: (v: 22 | 16 | 12 | "custom") => void;
-  cricketLengthCustom: number;
-  setCricketLengthCustom: (v: number) => void;
+  cricketStripM: 10 | 20;
+  setCricketStripM: (v: 10 | 20) => void;
   cricketOrientation: "horizontal" | "vertical";
   setCricketOrientation: (v: "horizontal" | "vertical") => void;
   basketballHalfCourt: boolean;
@@ -2519,10 +2517,8 @@ function Step1(props: {
     setSelectedSports,
     footballASide,
     setFootballASide,
-    cricketLengthPreset,
-    setCricketLengthPreset,
-    cricketLengthCustom,
-    setCricketLengthCustom,
+    cricketStripM,
+    setCricketStripM,
     cricketOrientation,
     setCricketOrientation,
     basketballHalfCourt,
@@ -2972,50 +2968,33 @@ function Step1(props: {
           </h4>
           <div>
             <span className="text-[11px] text-slate-500 uppercase tracking-wide">
-              Pitch length
+              Turf strip size
             </span>
             <div className="flex gap-2 mt-1">
-              {[
-                { label: "22 yd", sub: "regulation", dim: "66 × 10 ft · 20.12 × 3.05 m", v: 22 as const },
-                { label: "16 yd", sub: "junior", dim: "48 × 10 ft · 14.6 × 3.05 m", v: 16 as const },
-                { label: "12 yd", sub: "compact", dim: "36 × 10 ft · 11 × 3.05 m", v: 12 as const },
-                { label: "Custom", sub: "set below", dim: "", v: "custom" as const },
-              ].map((opt) => (
+              {(
+                [
+                  { m: 10 as const, dim: "6.6 × 32.8 ft" },
+                  { m: 20 as const, dim: "6.6 × 65.6 ft" },
+                ]
+              ).map((opt) => (
                 <button
-                  key={String(opt.v)}
+                  key={opt.m}
                   type="button"
-                  onClick={() => setCricketLengthPreset(opt.v)}
-                  className={`flex-1 px-2 py-2 rounded border text-left ${
-                    cricketLengthPreset === opt.v
+                  onClick={() => setCricketStripM(opt.m)}
+                  className={`flex-1 px-3 py-2 rounded border text-left ${
+                    cricketStripM === opt.m
                       ? "border-wa-green bg-wa-green/10 text-wa-dark"
                       : "border-slate-300 text-slate-600 hover:bg-white"
                   }`}
                 >
-                  <div className="text-xs font-medium">{opt.label}</div>
+                  <div className="text-sm font-medium">2 × {opt.m} m pitch</div>
                   <div className="text-[9px] text-slate-500 leading-tight">
-                    {opt.dim || opt.sub}
+                    {opt.dim}
                   </div>
                 </button>
               ))}
             </div>
           </div>
-          {cricketLengthPreset === "custom" && (
-            <label className="block">
-              <span className="text-[11px] text-slate-500 uppercase tracking-wide">
-                Custom length (yards)
-              </span>
-              <input
-                type="number"
-                min={5}
-                max={30}
-                value={cricketLengthCustom}
-                onChange={(e) =>
-                  setCricketLengthCustom(parseFloat(e.target.value) || 0)
-                }
-                className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md"
-              />
-            </label>
-          )}
           <div>
             <span className="text-[11px] text-slate-500 uppercase tracking-wide">
               Orientation
@@ -3593,16 +3572,16 @@ function StepQuotation({
                             value={it.name}
                             onChange={(e) => patch(it.id, { name: e.target.value })}
                             placeholder="Item name"
-                            className={`w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded ${
-                              it.included ? "text-slate-800" : "text-slate-400"
+                            className={`w-full px-3 py-2 text-base font-semibold border border-slate-300 rounded-md ${
+                              it.included ? "text-slate-900" : "text-slate-400"
                             }`}
                           />
                           <textarea
                             value={it.desc}
                             onChange={(e) => patch(it.id, { desc: e.target.value })}
                             placeholder="Description (optional)"
-                            rows={2}
-                            className="mt-1.5 w-full px-2.5 py-1 text-xs text-slate-500 border border-slate-200 hover:border-slate-300 focus:border-slate-300 rounded resize-y"
+                            rows={3}
+                            className="mt-2 w-full px-3 py-2 text-sm text-slate-600 border border-slate-300 hover:border-slate-400 focus:border-slate-400 rounded-md resize-y leading-snug"
                           />
                         </div>
                         <input

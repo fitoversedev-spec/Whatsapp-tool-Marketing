@@ -1008,7 +1008,10 @@ export function courtCapacity(
 ): number {
   const reg = COURT_REG[sport];
   if (!reg) return 1;
-  const GAP = 13;
+  // ~2 m shared run-off between adjacent courts. N courts of size S with a gap
+  // G between them fit a plot dim L when N*S + (N-1)*G <= L, i.e.
+  // N <= (L+G)/(S+G). (e.g. a ~7,000 sq.ft plot fits 4 × 44×20 badminton.)
+  const GAP = 6.56;
   const fit = (plotDim: number, courtDim: number) =>
     Math.max(1, Math.floor((plotDim + GAP) / (courtDim + GAP)));
   const a = fit(plotLengthFt, reg.l) * fit(plotWidthFt, reg.w);
@@ -1056,7 +1059,6 @@ export function retileCourts(layout: CourtLayout, count: number): CourtLayout {
   const { cols, rows } = chooseCourtGrid(plotL, plotW, reg, n);
   const cellW = plotL / cols;
   const cellH = plotW / rows;
-  const margin = Math.min(cellW, cellH) * 0.14;
 
   // Keep everything except the old court surfaces + their auto equipment.
   const kept = layout.elements.filter(
@@ -1077,7 +1079,9 @@ export function retileCourts(layout: CourtLayout, count: number): CourtLayout {
     const row = Math.floor(i / cols);
     const ccx = (col + 0.5) * cellW;
     const ccy = (row + 0.5) * cellH;
-    const { courtW, courtH } = fitCourtToPlot(reg.l, reg.w, cellW, cellH, margin);
+    // Each tiled court at its EXACT regulation size (e.g. badminton 44×20);
+    // the cell's leftover is the run-off between courts.
+    const { courtW, courtH } = courtExactSize(reg.l, reg.w, cellW, cellH);
     // Copy the template court so sport-specific props (halfCourt, aSide,
     // surfaceColor…) carry over; override position/size + reset rotation.
     added.push({

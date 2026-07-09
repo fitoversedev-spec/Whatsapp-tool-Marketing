@@ -1940,6 +1940,12 @@ function DesignInfoPanel({
     ftLine: `${nf(areas.nonPlayingSqFt)} sq.ft`,
     mLine: `${nf(areas.nonPlayingSqFt * SQFT_SQM)} sq.m`,
   });
+  const totalSqFt = areas.courtAreaSqFt + areas.nonPlayingSqFt;
+  secs.push({
+    label: "Total area (playing + run-off)",
+    ftLine: `${nf(totalSqFt)} sq.ft`,
+    mLine: `${nf(totalSqFt * SQFT_SQM)} sq.m`,
+  });
 
   const rows: { text: string; kind: "label" | "val" }[] = [];
   for (const s of secs) {

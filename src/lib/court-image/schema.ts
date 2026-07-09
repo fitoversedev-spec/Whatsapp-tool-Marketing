@@ -839,6 +839,21 @@ export const MULTISPORT_ZONE_COLOR: Record<Sport, string> = {
   multisport: "#6B7280", // grey
 };
 
+// Distinct LINE-MARKING colour per sport on a multi-sport surface, so overlaid
+// courts' lines are told apart by colour (gym-floor convention). Bright/high-
+// contrast so they read on the coloured court fills. Applied per court in
+// buildInitialLayout; overridable via the per-court line colour.
+export const MULTISPORT_LINE_COLOR: Record<Sport, string> = {
+  basketball: "#EF4444", // red
+  volleyball: "#FDE047", // yellow
+  pickleball: "#38BDF8", // sky blue
+  tennis: "#F97316", // orange
+  badminton: "#FFFFFF", // white
+  football: "#FFFFFF", // white
+  cricket: "#FDE047", // yellow
+  multisport: "#FFFFFF",
+};
+
 // Preset kitchen / non-volley (net-zone) colour per sport — shown by default
 // so the zone is always highlighted, and still overridable via the wizard's
 // "Kitchen / net zone" picker (style.kitchenColor wins when set). Sports with
@@ -1464,12 +1479,17 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
   };
   if (isMultisport) {
     for (const el of elements) {
-      if ("surfaceColor" in el && el.surfaceColor) continue;
       const s = sportForType(el.type, "sport" in el ? el.sport : undefined);
       if (!s) continue;
-      const palette = MULTISPORT_ZONE_COLOR[s];
-      if (palette && "surfaceColor" in el) {
-        (el as { surfaceColor?: string }).surfaceColor = palette;
+      // Distinct fill per sport (skip if the element already has one).
+      if ("surfaceColor" in el && !(el as { surfaceColor?: string }).surfaceColor) {
+        const palette = MULTISPORT_ZONE_COLOR[s];
+        if (palette) (el as { surfaceColor?: string }).surfaceColor = palette;
+      }
+      // Distinct LINE colour per sport so overlaid courts' markings differ.
+      if ("lineColor" in el && !(el as { lineColor?: string }).lineColor) {
+        const lc = MULTISPORT_LINE_COLOR[s];
+        if (lc) (el as { lineColor?: string }).lineColor = lc;
       }
     }
 

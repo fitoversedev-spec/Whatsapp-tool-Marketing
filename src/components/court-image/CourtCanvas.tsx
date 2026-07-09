@@ -233,6 +233,30 @@ export default function CourtCanvas({
     [layout.elements]
   );
 
+  // Alternate each court's name/dimension label between the LEFT and RIGHT top
+  // corner, so overlaid same-size courts (e.g. pickleball + badminton) don't
+  // print their labels on top of each other. Largest court first = left.
+  const courtLabelSides = useMemo(() => {
+    const courtTypes = new Set([
+      "football-field",
+      "basketball-court",
+      "pickleball-court",
+      "generic-court",
+    ]);
+    const courts = layout.elements
+      .filter((e) => courtTypes.has(e.type))
+      .sort((a, b) => {
+        const az = "width" in a ? (a as { width?: number }).width ?? 0 : 0;
+        const bz = "width" in b ? (b as { width?: number }).width ?? 0 : 0;
+        return bz - az;
+      });
+    const map: Record<string, "left" | "right"> = {};
+    courts.forEach((e, i) => {
+      map[e.id] = i % 2 === 0 ? "left" : "right";
+    });
+    return map;
+  }, [layout.elements]);
+
   return (
     <Stage
       ref={stageRef}
@@ -348,6 +372,7 @@ export default function CourtCanvas({
             style={layout.style}
             isSelected={selectedId === el.id}
             readOnly={readOnly}
+            labelSide={courtLabelSides[el.id] ?? "left"}
             onSelect={() => onSelect(el.id)}
             onUpdate={(patch) => onUpdate(el.id, patch)}
             onSectionClick={onSectionClick}
@@ -437,6 +462,7 @@ type ElementShapeProps = {
   style: CourtLayout["style"];
   isSelected: boolean;
   readOnly: boolean;
+  labelSide?: "left" | "right";
   onSelect: () => void;
   onUpdate: (patch: Partial<Element>) => void;
   onSectionClick?: (
@@ -449,6 +475,7 @@ type ElementShapeProps = {
 function ElementShape({
   element,
   pxPerFt,
+  labelSide,
   onSectionClick,
   toCanvasX,
   toCanvasY,
@@ -513,7 +540,7 @@ function ElementShape({
     case "football-field":
       return (
         <Group {...commonGroupProps}>
-          <FootballFieldShape el={element} pxPerFt={pxPerFt} style={style} />
+          <FootballFieldShape el={element} pxPerFt={pxPerFt} style={style} labelSide={labelSide} />
         </Group>
       );
     case "cricket-pitch":
@@ -525,7 +552,7 @@ function ElementShape({
     case "basketball-court":
       return (
         <Group {...commonGroupProps}>
-          <BasketballCourtShape el={element} pxPerFt={pxPerFt} style={style} />
+          <BasketballCourtShape el={element} pxPerFt={pxPerFt} style={style} labelSide={labelSide} />
           {isSelected && onSectionClick && (
             <SectionClickOverlays
               presets={HIGHLIGHT_PRESETS["basketball-court"] ?? []}
@@ -539,7 +566,7 @@ function ElementShape({
     case "pickleball-court":
       return (
         <Group {...commonGroupProps}>
-          <PickleballCourtShape el={element} pxPerFt={pxPerFt} style={style} />
+          <PickleballCourtShape el={element} pxPerFt={pxPerFt} style={style} labelSide={labelSide} />
           {isSelected && onSectionClick && (
             <SectionClickOverlays
               presets={HIGHLIGHT_PRESETS["pickleball-court"] ?? []}
@@ -553,7 +580,7 @@ function ElementShape({
     case "generic-court":
       return (
         <Group {...commonGroupProps}>
-          <GenericCourtShape el={element} pxPerFt={pxPerFt} style={style} />
+          <GenericCourtShape el={element} pxPerFt={pxPerFt} style={style} labelSide={labelSide} />
           {isSelected && onSectionClick && (
             <SectionClickOverlays
               presets={HIGHLIGHT_PRESETS[`generic-court-${element.sport}`] ?? []}
@@ -682,11 +709,16 @@ function CourtNameLabel({
   h,
   name,
   dims,
+  side = "left",
 }: {
   w: number;
   h: number;
   name: string;
   dims?: string;
+  // Which top corner the label sits at. On overlaid same-size courts the
+  // parent puts one court's label on the LEFT and the other on the RIGHT so
+  // they don't collide.
+  side?: "left" | "right";
 }) {
   const fs = Math.min(20, Math.max(9, Math.min(w, h) * 0.05));
   const dfs = fs * 0.82;
@@ -697,10 +729,11 @@ function CourtNameLabel({
   const boxW = Math.max(line1W, line2W) + padX * 2;
   const boxH = fs + (dims ? dfs + 2 : 0) + padY * 2;
   const top = -h / 2 - boxH - 3;
+  const boxX = side === "right" ? w / 2 - boxW : -w / 2;
   return (
     <>
       <Rect
-        x={-w / 2}
+        x={boxX}
         y={top}
         width={boxW}
         height={boxH}
@@ -709,7 +742,7 @@ function CourtNameLabel({
         listening={false}
       />
       <Text
-        x={-w / 2 + padX}
+        x={boxX + padX}
         y={top + padY}
         text={name}
         fontSize={fs}
@@ -720,7 +753,7 @@ function CourtNameLabel({
       />
       {dims && (
         <Text
-          x={-w / 2 + padX}
+          x={boxX + padX}
           y={top + padY + fs + 2}
           text={dims}
           fontSize={dfs}
@@ -741,10 +774,12 @@ function FootballFieldShape({
   el,
   pxPerFt,
   style,
+  labelSide,
 }: {
   el: FootballFieldElement;
   pxPerFt: number;
   style: CourtLayout["style"];
+  labelSide?: "left" | "right";
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
@@ -944,7 +979,7 @@ function FootballFieldShape({
         stroke="#0f172a"
         strokeWidth={1}
       />
-      <CourtNameLabel w={w} h={h} name="FOOTBALL" dims={courtDims(el)} />
+      <CourtNameLabel w={w} h={h} name="FOOTBALL" dims={courtDims(el)} side={labelSide} />
     </>
   );
 }
@@ -1093,10 +1128,12 @@ function BasketballCourtShape({
   el,
   pxPerFt,
   style,
+  labelSide,
 }: {
   el: BasketballCourtElement;
   pxPerFt: number;
   style: CourtLayout["style"];
+  labelSide?: "left" | "right";
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
@@ -1281,7 +1318,7 @@ function BasketballCourtShape({
           </Group>
         );
       })}
-      <CourtNameLabel w={w} h={h} name="BASKETBALL" dims={courtDims(el)} />
+      <CourtNameLabel w={w} h={h} name="BASKETBALL" dims={courtDims(el)} side={labelSide} />
     </>
   );
 }
@@ -1290,10 +1327,12 @@ function PickleballCourtShape({
   el,
   pxPerFt,
   style,
+  labelSide,
 }: {
   el: PickleballCourtElement;
   pxPerFt: number;
   style: CourtLayout["style"];
+  labelSide?: "left" | "right";
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
@@ -1342,7 +1381,7 @@ function PickleballCourtShape({
       {/* Service court divider (between baseline and kitchen) */}
       <Line points={[-w / 2, 0, -kitchenW, 0]} stroke={line} strokeWidth={lineWidth} />
       <Line points={[kitchenW, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
-      <CourtNameLabel w={w} h={h} name="PICKLEBALL" dims={courtDims(el)} />
+      <CourtNameLabel w={w} h={h} name="PICKLEBALL" dims={courtDims(el)} side={labelSide} />
     </>
   );
 }
@@ -1351,10 +1390,12 @@ function GenericCourtShape({
   el,
   pxPerFt,
   style,
+  labelSide,
 }: {
   el: GenericCourtElement;
   pxPerFt: number;
   style: CourtLayout["style"];
+  labelSide?: "left" | "right";
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
@@ -1434,7 +1475,7 @@ function GenericCourtShape({
             strokeWidth={lineWidth}
           />
         )}
-      <CourtNameLabel w={w} h={h} name={el.sport.toUpperCase()} dims={courtDims(el)} />
+      <CourtNameLabel w={w} h={h} name={el.sport.toUpperCase()} dims={courtDims(el)} side={labelSide} />
     </>
   );
 }

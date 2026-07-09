@@ -2871,6 +2871,13 @@ function Step1(props: {
     setFlooringProduct,
   } = props;
 
+  // One selected dimension preset PER sport, so a multi-sport design can use a
+  // different size for each (e.g. pickleball recreational + badminton
+  // recommended). The plot is sized to fit them all.
+  const [presetBySport, setPresetBySport] = useState<Record<string, CourtPreset>>(
+    {},
+  );
+
   // Flooring products for the chosen sport(s), fetched from the internal
   // catalogue. Sales picks one as the design's flooring; the canvas
   // surface finish is inferred from it. Empty state falls back to the
@@ -3421,9 +3428,25 @@ function Step1(props: {
             unit={unit}
             currentLengthFt={lengthFt}
             currentWidthFt={widthFt}
+            selectedBySport={presetBySport}
             onPick={(p) => {
-              setLengthFt(Math.round(p.lengthFt));
-              setWidthFt(Math.round(p.widthFt));
+              const sport = p.sport ?? "";
+              setPresetBySport((prev) => {
+                const next = { ...prev, [sport]: p };
+                // Size the plot to fit EVERY selected sport's preset (courts
+                // are drawn concentric, so the plot = the largest in each
+                // dimension). Only count sports that are still selected.
+                let L = 0;
+                let W = 0;
+                for (const [sp, pp] of Object.entries(next)) {
+                  if (!selectedSports.includes(sp as Sport)) continue;
+                  L = Math.max(L, Math.round(pp.lengthFt));
+                  W = Math.max(W, Math.round(pp.widthFt));
+                }
+                setLengthFt(L);
+                setWidthFt(W);
+                return next;
+              });
             }}
           />
         </section>
@@ -5013,15 +5036,23 @@ function DimensionPresets({
   unit,
   currentLengthFt,
   currentWidthFt,
+  selectedBySport,
   onPick,
 }: {
   sports: Sport[];
   unit: "ft" | "m";
   currentLengthFt: number;
   currentWidthFt: number;
+  selectedBySport?: Record<string, CourtPreset>;
   onPick: (p: CourtPreset) => void;
 }) {
   const isActive = (p: CourtPreset) => {
+    // Once a preset is explicitly picked for its sport, THAT is the active one
+    // for that sport (even if the plot is the max across several sports).
+    if (p.sport && selectedBySport?.[p.sport]) {
+      return selectedBySport[p.sport].label === p.label;
+    }
+    // Fallback (single sport / not yet picked): match the current plot size.
     const pl = Math.round(p.lengthFt);
     const pw = Math.round(p.widthFt);
     return (

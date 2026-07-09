@@ -22,6 +22,9 @@ export type CourtPreset = {
   variant?: string;
   // One-line hint with the exact metric size / run-off note.
   hint?: string;
+  // Which sport this preset belongs to — set by presetsForSports so the UI
+  // can track ONE selected preset per sport on a multi-sport design.
+  sport?: string;
 };
 
 // 1. VOLLEYBALL — FIVB (18 × 9 m play; 3 m free zone min, 5/6.5 m for World).
@@ -105,25 +108,32 @@ export const SPORT_STANDARDS: Record<string, CourtPreset[]> = {
 export function presetsForSports(sports: string[]): CourtPreset[] {
   if (sports.length === 0) return [];
   if (sports.length === 1) {
-    return SPORT_STANDARDS[sports[0]] ?? [];
+    return (SPORT_STANDARDS[sports[0]] ?? []).map((p) => ({
+      ...p,
+      sport: sports[0],
+    }));
   }
   const out: CourtPreset[] = [];
   const seen = new Set<string>();
   // Prefix each preset with its sport so a mixed selection doesn't show two
-  // ambiguous "Playing area" chips.
-  function add(list: CourtPreset[] | undefined, prefix?: string) {
+  // ambiguous "Playing area" chips. Tag each with its sport so the UI can
+  // track one selection per sport.
+  function add(list: CourtPreset[] | undefined, sport: string, prefix?: string) {
     if (!list) return;
     for (const p of list) {
       const k = `${p.label}|${p.lengthFt}x${p.widthFt}`;
       if (seen.has(k)) continue;
       seen.add(k);
-      out.push(prefix ? { ...p, label: `${prefix} · ${p.label}` } : p);
+      out.push(
+        prefix ? { ...p, label: `${prefix} · ${p.label}`, sport } : { ...p, sport },
+      );
     }
   }
-  if (sports.includes("multisport")) add(SPORT_STANDARDS.multisport);
+  if (sports.includes("multisport"))
+    add(SPORT_STANDARDS.multisport, "multisport");
   for (const s of sports) {
     if (s === "multisport") continue;
-    add(SPORT_STANDARDS[s], s.charAt(0).toUpperCase() + s.slice(1));
+    add(SPORT_STANDARDS[s], s, s.charAt(0).toUpperCase() + s.slice(1));
   }
   return out;
 }

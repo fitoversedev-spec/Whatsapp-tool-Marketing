@@ -17,7 +17,7 @@ import {
   type PDFPage,
 } from "pdf-lib";
 import { htmlToPlainText, extractHtmlTables } from "@/lib/products/format";
-import type { ProductDTO, TdsDTO } from "@/lib/products/store";
+import type { ProductDTO } from "@/lib/products/store";
 
 const MARGIN = 40;
 const [PAGE_W, PAGE_H] = PageSizes.A4;
@@ -62,7 +62,8 @@ export type CombinedPdfInput = {
   angleImages?: Uint8Array[];
   products: ProductDTO[];
   equipment: ProductDTO[];
-  tds: TdsDTO[];
+  // Just the names, for the fallback list when the PDF bytes aren't merged.
+  tds: Array<{ name: string }>;
   // Actual TDS PDF bytes — their pages are merged into this document so
   // the customer gets one PDF with the spec sheets inside (not a link).
   tdsPdfs?: Array<{ name: string; bytes: Uint8Array }>;

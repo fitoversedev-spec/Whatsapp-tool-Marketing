@@ -56,14 +56,13 @@ export default function ProductsClient({
   const nav: Array<{ id: Section; label: string; icon: string; hint: string }> = [
     { id: "products", label: "Products", icon: "🟩", hint: "Floorings & materials" },
     { id: "equipment", label: "Sports equipment", icon: "🥅", hint: "Goal posts, nets…" },
-    { id: "tds", label: "TDS sheets", icon: "📄", hint: "PDF per sport" },
   ];
 
   return (
     <>
       <PageHeader
         title="Products"
-        description="Fitoverse's own catalogue — floorings, materials, equipment, and TDS sheets. The Court Designer and chatbot read from here."
+        description="Fitoverse's own catalogue — floorings, materials and equipment. Each item carries its own TDS (add it in the product form). The Court Designer and chatbot read from here."
       />
       <div className="flex flex-col lg:flex-row gap-4 p-4 sm:p-6 lg:p-8">
         {/* Sidebar sections */}
@@ -136,12 +135,6 @@ export default function ProductsClient({
               products={products.filter((p) => p.type === "equipment")}
               sportFilter={sportFilter}
               onChanged={reload}
-            />
-          )}
-          {section === "tds" && (
-            <TdsSection
-              sportFilter={sportFilter === "all" ? "football" : sportFilter}
-              products={products}
             />
           )}
         </div>
@@ -403,11 +396,19 @@ function ProductForm({
   const [unit, setUnit] = useState(product?.unit ?? "");
   const [hero, setHero] = useState<File | null>(null);
   const [video, setVideo] = useState<File | null>(null);
+  const [tdsFile, setTdsFile] = useState<File | null>(null);
+  const [existingTds, setExistingTds] = useState(product?.tdsFiles ?? []);
 
   function toggleSport(s: string) {
     setSports((prev) =>
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
     );
+  }
+
+  async function removeTdsFile(id: string) {
+    const r = await fetch(`/api/products/tds?id=${id}`, { method: "DELETE" });
+    if (r.ok) setExistingTds((prev) => prev.filter((t) => t.id !== id));
+    else toast.error("Couldn't remove TDS");
   }
 
   async function submit(e: React.FormEvent) {
@@ -434,22 +435,46 @@ function ProductForm({
     const r = editing
       ? await fetch(`/api/products/${product!.id}`, { method: "PATCH", body: form })
       : await fetch("/api/products", { method: "POST", body: form });
-    setBusy(false);
-    if (r.ok) {
-      toast.success(editing ? "Updated" : "Added");
-      onDone();
-    } else {
+    if (!r.ok) {
       const j = await r.json().catch(() => ({}));
+      setBusy(false);
       toast.error(j.error ?? "Save failed");
+      return;
     }
+    // Upload the TDS sheet (if chosen), linked to this product, so it travels
+    // with the product into the combined PDF.
+    const saved = await r.json().catch(() => ({}));
+    const productId: string | undefined = editing
+      ? product!.id
+      : saved.product?.id;
+    if (tdsFile && productId) {
+      const tf = new FormData();
+      tf.set("sport", sports[0] ?? "football");
+      tf.set(
+        "name",
+        tdsFile.name.replace(/\.pdf$/i, "").trim() || `${name.trim()} — TDS`,
+      );
+      tf.set("productId", productId);
+      tf.set("file", tdsFile);
+      const tr = await fetch("/api/products/tds", { method: "POST", body: tf });
+      if (!tr.ok) toast.error("Product saved, but the TDS upload failed");
+    }
+    setBusy(false);
+    toast.success(editing ? "Updated" : "Added");
+    onDone();
   }
 
   return (
     <form
       onSubmit={submit}
-      className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 space-y-3"
+      className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 space-y-5 shadow-sm"
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <h3 className="text-base font-semibold text-slate-900">
+        {editing ? "Edit product" : "New product"}
+      </h3>
+
+      {/* Basic info */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <label className="block">
           <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
             Name
@@ -500,9 +525,9 @@ function ProductForm({
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-          placeholder="Specs, dimensions, key features…"
-          className="input mt-1"
+          rows={5}
+          placeholder="Specs, dimensions, key features… (catalogue HTML tables are kept as-is)"
+          className="input mt-1 font-mono text-xs leading-relaxed"
         />
       </label>
 
@@ -554,34 +579,83 @@ function ProductForm({
         </label>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="block min-w-0">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-            Photo{editing ? " · leave blank to keep current" : ""}
-          </span>
-          <FilePicker
-            accept="image/*"
-            file={hero}
-            onPick={setHero}
-            label="Choose photo"
-            className="mt-1 w-full"
-          />
+      {/* Media */}
+      <div className="border-t border-slate-100 pt-4">
+        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+          Media
         </div>
-        <div className="block min-w-0">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-            Video (optional)
-          </span>
-          <FilePicker
-            accept="video/*"
-            file={video}
-            onPick={setVideo}
-            label="Choose video"
-            className="mt-1 w-full"
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="block min-w-0">
+            <span className="text-[11px] text-slate-500">
+              Photo{editing ? " · leave blank to keep current" : ""}
+            </span>
+            <FilePicker
+              accept="image/*"
+              file={hero}
+              onPick={setHero}
+              label="Choose photo"
+              className="mt-1 w-full"
+            />
+          </div>
+          <div className="block min-w-0">
+            <span className="text-[11px] text-slate-500">Video (optional)</span>
+            <FilePicker
+              accept="video/*"
+              file={video}
+              onPick={setVideo}
+              label="Choose video"
+              className="mt-1 w-full"
+            />
+          </div>
         </div>
       </div>
 
-      <div className="flex justify-end">
+      {/* TDS sheet — travels with the product into the combined PDF. */}
+      <div className="border-t border-slate-100 pt-4">
+        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+          TDS sheet (PDF)
+        </div>
+        <p className="text-[11px] text-slate-500 mt-1 mb-2 leading-snug">
+          The technical data sheet for this product. Add it now or later — when
+          this product is added to a court design, its TDS is included in the
+          combined PDF automatically.
+        </p>
+        {existingTds.length > 0 && (
+          <ul className="space-y-1.5 mb-2">
+            {existingTds.map((t) => (
+              <li
+                key={t.id}
+                className="flex items-center gap-2 text-sm bg-slate-50 border border-slate-200 rounded-md px-3 py-2"
+              >
+                <a
+                  href={t.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 min-w-0 text-wa-dark hover:underline truncate"
+                >
+                  📄 {t.name}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => removeTdsFile(t.id)}
+                  className="shrink-0 text-xs text-red-500 hover:underline"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <FilePicker
+          accept="application/pdf,.pdf"
+          file={tdsFile}
+          onPick={setTdsFile}
+          label={existingTds.length > 0 ? "Add another TDS PDF" : "Choose TDS PDF"}
+          className="w-full"
+        />
+      </div>
+
+      <div className="flex justify-end border-t border-slate-100 pt-4">
         <button
           type="submit"
           disabled={busy}

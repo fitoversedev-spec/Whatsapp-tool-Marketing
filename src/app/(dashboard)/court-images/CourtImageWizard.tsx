@@ -1297,15 +1297,16 @@ export default function CourtImageWizard({
                   canvas on mobile so the visual editor stays primary. */}
               <div className="order-2 md:order-1 w-full md:w-72 md:shrink-0 md:border-r border-slate-200 bg-slate-50 overflow-y-auto p-4 space-y-4 max-h-[45vh] md:max-h-none">
                 {/* Sidebar tabs — Design (edit the court) vs attach
-                    catalogue items (Products / Equipment / TDS) that go
-                    into the combined PDF. */}
-                <div className="grid grid-cols-4 gap-1 bg-slate-100 rounded-lg p-1 sticky top-0 z-10">
+                    catalogue items (Products / Equipment) that go into the
+                    combined PDF. Each product/equipment now carries its own
+                    TDS, so attaching it auto-includes the spec sheet — no
+                    separate TDS tab. */}
+                <div className="grid grid-cols-3 gap-1 bg-slate-100 rounded-lg p-1 sticky top-0 z-10">
                   {(
                     [
                       { id: "design", label: "Design" },
                       { id: "products", label: "Products" },
                       { id: "equipment", label: "Equip." },
-                      { id: "tds", label: "TDS" },
                     ] as const
                   ).map((t) => (
                     <button

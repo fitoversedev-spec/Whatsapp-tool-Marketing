@@ -80,15 +80,37 @@ export async function POST(req: NextRequest) {
     equipmentIds: [],
     tdsIds: [],
   };
-  const [flooringMaterials, equipment, tds] = await Promise.all([
+  const [flooringMaterials, equipment] = await Promise.all([
     getProductsByIds(attachments.productIds ?? []),
     getProductsByIds(attachments.equipmentIds ?? []),
-    getTdsByIds(attachments.tdsIds ?? []),
   ]);
   // Equipment IDs may have landed in productIds too — de-dup by type.
   const products: ProductDTO[] = flooringMaterials.filter(
     (p) => p.type !== "equipment",
   );
+
+  // TDS now travels WITH each product/equipment (product.tdsFiles), so
+  // attaching a product auto-includes its spec sheet — there's no separate
+  // TDS picker. Any legacy explicit tdsIds are still honoured.
+  const tdsSeen = new Set<string>();
+  const tds: Array<{ id: string; name: string; url: string }> = [];
+  for (const p of [...products, ...equipment]) {
+    for (const t of p.tdsFiles ?? []) {
+      if (t.url && !tdsSeen.has(t.id)) {
+        tdsSeen.add(t.id);
+        tds.push({ id: t.id, name: t.name, url: t.url });
+      }
+    }
+  }
+  if ((attachments.tdsIds ?? []).length > 0) {
+    const extra = await getTdsByIds(attachments.tdsIds);
+    for (const t of extra) {
+      if (t.url && !tdsSeen.has(t.id)) {
+        tdsSeen.add(t.id);
+        tds.push({ id: t.id, name: t.name, url: t.url });
+      }
+    }
+  }
 
   // Fetch the actual TDS PDF bytes so their pages can be merged into the
   // combined document (the customer gets one PDF with the spec sheets

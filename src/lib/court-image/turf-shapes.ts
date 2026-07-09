@@ -70,6 +70,17 @@ export function polygonAreaSqFt(poly: Pt[]): number {
   return Math.abs(a) / 2;
 }
 
+// Perimeter of a closed polygon (feet) — drives net/pole cost for a box build.
+export function polygonPerimeterFt(poly: Pt[]): number {
+  let p = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    p += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return p;
+}
+
 // Sample an elliptical arc (t = angle, standard math orientation).
 function ellipseArc(
   cx: number,

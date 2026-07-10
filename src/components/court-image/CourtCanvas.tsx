@@ -65,7 +65,6 @@ import {
   runOffFactor,
   HIGHLIGHT_PRESETS,
   KITCHEN_DEFAULT_COLOR,
-  RUNOFF_DEFAULT_COLOR,
   computeDesignAreas,
   type HighlightSectionPreset,
   type SurfaceFinish,
@@ -193,12 +192,23 @@ export default function CourtCanvas({
         // Deselect briefly so the export doesn't include handle overlays.
         transformerRef.current?.nodes([]);
         transformerRef.current?.getLayer()?.batchDraw();
+        // Hide the editor-only dashed section-click overlays AND the DIMENSIONS
+        // card so the exported 2D diagram is clean — the dimensions render as a
+        // dedicated table in the combined PDF instead.
+        const overlays = stage.find(".section-overlay");
+        const dimPanel = stage.find(".dim-panel");
+        overlays.forEach((n) => n.hide());
+        dimPanel.forEach((n) => n.hide());
+        stage.batchDraw();
         const url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });
+        overlays.forEach((n) => n.show());
+        dimPanel.forEach((n) => n.show());
         const sel = selectedIdRef.current;
         if (sel && shapeRefs.current[sel]) {
           transformerRef.current?.nodes([shapeRefs.current[sel]]);
           transformerRef.current?.getLayer()?.batchDraw();
         }
+        stage.batchDraw();
         return url;
       },
     };
@@ -1075,6 +1085,10 @@ function SectionClickOverlays({
         const shape = p.shape ?? "rect";
         const hovered = hoveredKey === p.key;
         const commonProps = {
+          // Named so the PNG export can hide these editor-only click targets
+          // before stage.toDataURL() — otherwise the dashed amber section
+          // overlays get baked into the customer-facing image.
+          name: "section-overlay",
           fill: hovered ? "rgba(255,193,7,0.30)" : "rgba(255,193,7,0.04)",
           stroke: hovered ? "#f59e0b" : "rgba(251,191,36,0.6)",
           strokeWidth: hovered ? 2 : 1,
@@ -1207,6 +1221,17 @@ function BasketballCourtShape({
   return (
     <>
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
+      {/* V1 per-area highlight fill — jump-ball / centre circle, behind the
+          markings so the lines stay legible. */}
+      {!el.halfCourt && style.basketballCircleColor && (
+        <Circle
+          x={0}
+          y={0}
+          radius={centerR}
+          fill={style.basketballCircleColor}
+          opacity={0.55}
+        />
+      )}
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} />
       {!el.halfCourt && (
         <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth} />
@@ -1244,6 +1269,46 @@ function BasketballCourtShape({
 
         return (
           <Group key={dir}>
+            {/* V1 per-area highlight fills — drawn largest-first, BEHIND the
+                markings. The 3-point area is the FULL region bounded by the
+                3-point line: the two corner straights (from the baseline) + the
+                arc. Tracing that closed polygon fills the corners behind the
+                hoop too (a plain pie sector left them uncovered). */}
+            {style.basketball3ptColor && (
+              <Line
+                points={(() => {
+                  const N = 24;
+                  const arc: number[] = [];
+                  let yStart = 0;
+                  let yEnd = 0;
+                  for (let k = 0; k <= N; k++) {
+                    const a =
+                      ((arcRotation + (arcAngle * k) / N) * Math.PI) / 180;
+                    const px = basketX + threeR * Math.cos(a);
+                    const py = threeR * Math.sin(a);
+                    if (k === 0) yStart = py;
+                    if (k === N) yEnd = py;
+                    arc.push(px, py);
+                  }
+                  // baseline corner → arc → baseline corner, closed along the
+                  // baseline.
+                  return [baselineX, yStart, ...arc, baselineX, yEnd];
+                })()}
+                closed
+                fill={style.basketball3ptColor}
+                opacity={0.55}
+              />
+            )}
+            {style.basketballKeyColor && (
+              <Rect
+                x={dir < 0 ? baselineX : baselineX - keyW}
+                y={-keyH / 2}
+                width={keyW}
+                height={keyH}
+                fill={style.basketballKeyColor}
+                opacity={0.55}
+              />
+            )}
             {/* Key (paint) — 4.90 × 4.90 m rectangle butted against the baseline */}
             <Rect
               x={dir < 0 ? baselineX : baselineX - keyW}
@@ -1430,37 +1495,14 @@ function GenericCourtShape({
           : defaultFill);
   const line = el.lineColor ?? "#ffffff";
   const lineWidth = Math.max(1, Math.min(w, h) * 0.005);
-  // Net / non-volley zone as a fraction of the FULL court length, centred on
-  // the net. Tennis = service-box band (service line 21 ft of 39 ft half),
-  // volleyball = attack zones (3 m of 9 m), badminton = short-service band.
-  const netZoneFrac =
-    el.sport === "tennis"
-      ? 0.538
-      : el.sport === "volleyball"
-        ? 0.333
-        : el.sport === "badminton"
-          ? 0.3
-          : 0;
 
   return (
     <>
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
-      {/* Net / non-volley zone highlight (kitchen equivalent) — the band
-          around the net. Uses the chosen colour, else the per-sport preset.
-          Tennis / badminton / volleyball. */}
-      {style.kitchenColor !== "none" &&
-        (style.kitchenColor ?? KITCHEN_DEFAULT_COLOR[el.sport]) &&
-        netZoneFrac > 0 && (
-          <Rect
-            x={(-w * netZoneFrac) / 2}
-            y={-h / 2}
-            width={w * netZoneFrac}
-            height={h}
-            fill={style.kitchenColor ?? KITCHEN_DEFAULT_COLOR[el.sport]}
-            opacity={0.55}
-            listening={false}
-          />
-        )}
+      {/* V1: the kitchen / non-volley filled zone was removed for tennis /
+          badminton / volleyball — only pickleball keeps a kitchen fill. The
+          sport's service / attack LINES below still render, so volleyball now
+          reads as a whole-court colour + run-off. */}
       {/* Outer boundary */}
       <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} />
       {/* Sport-specific line pattern */}
@@ -2087,10 +2129,50 @@ const DIM_TOP = 14; // card's top y (clears the top HTML controls in editor)
 const DIM_TITLE_H = 22;
 const DIM_ROW_H = 12;
 const DIM_PAD = 8;
-// Number of stacked sections in the DIMENSIONS card: Plot, [Playing area],
-// Non-playing, Total. Playing area only when the design has a court.
+// Group courts by (rounded) size so the DIMENSIONS card lists each DISTINCT
+// court size — a multi-sport plot has different-sized courts; a tiled
+// single-sport plot has one size shown as "×N".
+function courtSizeGroups(areas: DesignAreas): Array<{
+  label: string;
+  lengthFt: number;
+  widthFt: number;
+  count: number;
+  areaSqFt: number;
+}> {
+  const groups: Array<{
+    label: string;
+    lengthFt: number;
+    widthFt: number;
+    count: number;
+    areaSqFt: number;
+  }> = [];
+  for (const c of areas.courts) {
+    const g = groups.find(
+      (x) =>
+        x.label === c.label &&
+        Math.round(x.lengthFt) === Math.round(c.lengthFt) &&
+        Math.round(x.widthFt) === Math.round(c.widthFt),
+    );
+    if (g) {
+      g.count += 1;
+      g.areaSqFt += c.areaSqFt;
+    } else {
+      groups.push({
+        label: c.label,
+        lengthFt: c.lengthFt,
+        widthFt: c.widthFt,
+        count: 1,
+        areaSqFt: c.areaSqFt,
+      });
+    }
+  }
+  return groups;
+}
+// Number of stacked sections in the DIMENSIONS card: Plot, [one per named
+// court], [distance between courts], Non-playing, Total.
 function dimSectionCount(areas: DesignAreas): number {
-  return 3 + (areas.courtCount >= 1 ? 1 : 0);
+  const gapRow = areas.courtGapFt && areas.courtGapFt > 0 ? 1 : 0;
+  return 3 + courtSizeGroups(areas).length + gapRow;
 }
 // Deterministic card height so the render can place the callout directly
 // below it without prop-drilling the panel's internal layout.
@@ -2133,19 +2215,29 @@ function DesignInfoPanel({
     ftLine: `${ft(p.lengthFt)} × ${ft(p.widthFt)} ft = ${nf(p.areaSqFt)} sq.ft`,
     mLine: `${mt(p.lengthFt)} × ${mt(p.widthFt)} m = ${nf(p.areaSqFt * SQFT_SQM)} sq.m`,
   });
-  if (areas.courtCount >= 1) {
-    const c = areas.courts[0];
-    const n = areas.courtCount;
+  // One section per NAMED court, so a multi-sport plot shows each sport's own
+  // playing area (e.g. "Basketball — 92 × 49 ft").
+  for (const g of courtSizeGroups(areas)) {
+    const n = g.count;
     secs.push({
-      label: n === 1 ? "Playing area" : `Playing area (×${n})`,
+      label:
+        n === 1 ? `${g.label} — playing area` : `${g.label} — playing area (×${n})`,
       ftLine:
         n === 1
-          ? `${ft(c.lengthFt)} × ${ft(c.widthFt)} ft = ${nf(c.areaSqFt)} sq.ft`
-          : `${n} × ${ft(c.lengthFt)} × ${ft(c.widthFt)} ft = ${nf(areas.courtAreaSqFt)} sq.ft`,
+          ? `${ft(g.lengthFt)} × ${ft(g.widthFt)} ft = ${nf(g.areaSqFt)} sq.ft`
+          : `${n} × ${ft(g.lengthFt)} × ${ft(g.widthFt)} ft = ${nf(g.areaSqFt)} sq.ft`,
       mLine:
         n === 1
-          ? `${mt(c.lengthFt)} × ${mt(c.widthFt)} m = ${nf(c.areaSqFt * SQFT_SQM)} sq.m`
-          : `${n} × ${mt(c.lengthFt)} × ${mt(c.widthFt)} m = ${nf(areas.courtAreaSqFt * SQFT_SQM)} sq.m`,
+          ? `${mt(g.lengthFt)} × ${mt(g.widthFt)} m = ${nf(g.areaSqFt * SQFT_SQM)} sq.m`
+          : `${n} × ${mt(g.lengthFt)} × ${mt(g.widthFt)} m = ${nf(g.areaSqFt * SQFT_SQM)} sq.m`,
+    });
+  }
+  // Spacing between tiled courts, when the user set one.
+  if (areas.courtGapFt && areas.courtGapFt > 0) {
+    secs.push({
+      label: "Distance between courts",
+      ftLine: `${ft(areas.courtGapFt)} ft`,
+      mLine: `${mt(areas.courtGapFt)} m`,
     });
   }
   secs.push({
@@ -2179,7 +2271,7 @@ function DesignInfoPanel({
   const boxH = dimPanelHeight(areas);
 
   return (
-    <Group listening={false}>
+    <Group listening={false} name="dim-panel">
       <Rect
         x={x}
         y={y}
@@ -2517,8 +2609,9 @@ function PlotSurface({
   // Primary sport — drives the per-sport run-off (non-playing) default colour.
   primarySport?: Sport;
 }) {
-  // Plot-frame stroke — the override, or the default brown frame.
-  const borderStroke = borderColor ?? "#111827"; // black frame by default
+  // Plot-frame stroke — hardcoded black (V1: border colour is no longer a
+  // user-editable control; the borderColor prop is retained for back-compat).
+  const borderStroke = "#111827";
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [productImg, setProductImg] = useState<HTMLImageElement | null>(null);
   const [turfLightImg, setTurfLightImg] = useState<HTMLImageElement | null>(null);
@@ -2632,19 +2725,26 @@ function PlotSurface({
     SURFACE_SOLID_COLOR[surface] ??
     baseWorkColor ??
     "#caa477";
-  // Darken plot fill when run-off distinction is requested. The sport
-  // court shapes below still paint the FULL solidFillBase colour inside
-  // their playing-area rectangle, so the result is a two-tone: darker
-  // ring around the court (run-off zone), full colour inside (playing).
-  // An explicit runOffColorOverride wins over the derived shade.
-  // "none" turns the per-sport tint OFF (plain shade); a hex wins; undefined
-  // falls back to the per-sport preset, then the derived shade.
+  // Run-off (non-playing) area fill. Precedence:
+  //   explicit hex  → paint the run-off that colour (court repaints its
+  //                   playing area on top for non-tiled surfaces → two-tone)
+  //   runOffTone on → derived darker shade of the surface
+  //   default/none  → the REAL surface colour, NO tint
+  //
+  // The per-sport RUNOFF_DEFAULT_COLOR preset is deliberately NOT auto-applied
+  // to the plot base. The court only repaints its playing area for non-tiled
+  // surfaces, and never in the default runOffTone='off' state — so auto-tinting
+  // the base used to FLOOD the entire plot (playing area included) and hide the
+  // actual flooring on every default/tiled design. The preset is still one
+  // click away via the run-off colour picker's "Default preset" button (which
+  // sets runOffColorOverride); proper per-sport ring rendering that leaves the
+  // flooring untouched is the Phase-4 rework.
   const solidFill =
-    runOffColorOverride === "none"
-      ? shadeHexColor(solidFillBase, runOffFactor(runOffTone))
-      : (runOffColorOverride ??
-        (primarySport ? RUNOFF_DEFAULT_COLOR[primarySport] : undefined) ??
-        shadeHexColor(solidFillBase, runOffFactor(runOffTone)));
+    runOffColorOverride && runOffColorOverride !== "none"
+      ? runOffColorOverride
+      : runOffTone !== "off"
+        ? shadeHexColor(solidFillBase, runOffFactor(runOffTone))
+        : solidFillBase;
   // A real run-off COLOUR (not the auto shade, not "none") paints the plot
   // fill that solid colour. ONLY for football does the plot go solid — the
   // football pitch redraws its own grass on top, so just the run-off ring
@@ -2802,11 +2902,10 @@ function PlotSurface({
             listening={false}
           />
         </>
-      ) : turf && stripes && !footballRunOff ? (
-        // Turf: mowed light/dark stripes across the plot. Skipped when a
-        // run-off colour is chosen — then the plot renders that solid colour
-        // (below) so the non-playing area is highlighted, with the sport's
-        // own grass pitch still drawn on top.
+      ) : turf && stripes ? (
+        // Turf: mowed light/dark stripes across the WHOLE plot (playing area +
+        // run-off) — for football/cricket the run-off IS turf (the court design
+        // itself), never a separate colour. The pitch/markings draw on top.
         <>
           <Rect
             x={plotOriginX}

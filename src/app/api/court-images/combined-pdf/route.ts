@@ -119,7 +119,10 @@ export async function POST(req: NextRequest) {
   for (const t of tds) {
     if (!t.url) continue;
     try {
-      const r = await fetch(t.url);
+      // Cap each fetch so a hung TDS host can't stall the POST up to the 60s
+      // maxDuration and 504 with no PDF at all. A skipped sheet is still
+      // surfaced by the renderer's "available on request" fallback list.
+      const r = await fetch(t.url, { signal: AbortSignal.timeout(8000) });
       if (!r.ok) continue;
       tdsPdfs.push({ name: t.name, bytes: new Uint8Array(await r.arrayBuffer()) });
     } catch {
@@ -197,6 +200,7 @@ export async function POST(req: NextRequest) {
               name: string;
               desc?: string | null;
               qty?: number;
+              unit?: string | null;
               rate?: number;
               gst?: number;
               total?: number;
@@ -209,6 +213,9 @@ export async function POST(req: NextRequest) {
               name: it.name,
               description: typeof it.desc === "string" ? it.desc : "",
               areaSqFt: Number(it.qty) || 0,
+              // Preserve the unit ("nos" for per-piece rows) so a bare count
+              // doesn't misread as sq.ft in the quote table's Area column.
+              unit: typeof it.unit === "string" ? it.unit : null,
               ratePerSqFt: Number(it.rate) || 0,
               gstPercent: isFinite(g) ? g : 18,
               total: Number(it.total) || 0,
@@ -252,6 +259,7 @@ export async function POST(req: NextRequest) {
     tdsPdfs,
     quote,
     quotePdf,
+    dimensions: body.dimensions ?? null,
   };
 
   let pdfBytes: Uint8Array;

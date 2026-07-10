@@ -53,7 +53,30 @@ type PickedProduct = {
   name: string;
   imageUrl: string;
   lineItemId: string | null;
+  // True when the user explicitly chose "— none —" for this photo. Lets the
+  // auto-match on re-entering Step 3 tell a deliberate detach apart from a
+  // never-assigned photo, so it doesn't silently re-attach.
+  photoNone?: boolean;
 };
+
+// Derive a line item's area from the plot dimensions per its rate-sheet mode.
+// Returns null for per-piece / manual modes, which must not be auto-recomputed.
+function areaForRate(
+  r: RateSheetItem,
+  lengthFt: number,
+  widthFt: number,
+): number | null {
+  switch (r.areaMode) {
+    case "plot":
+      return lengthFt * widthFt;
+    case "wrap":
+      return (lengthFt + widthFt) * 2 * (r.wrapHeightFt ?? 35) + lengthFt * widthFt;
+    case "perimeter":
+      return (lengthFt + widthFt) * 2;
+    default:
+      return null;
+  }
+}
 
 // Auto-match a product to the most relevant line item by shared words
 // (singular/plural-insensitive), so e.g. a "…Turf…" product lands on the
@@ -193,9 +216,22 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
     if (step !== 3) return;
     // Same sport + items already built → keep edits, just (re)attach photos.
     if (ratesLoadedForSport.current === sport && lineItems.length > 0) {
+      // Recompute dimension-derived areas from the CURRENT plot size — the user
+      // may have gone Back to Step 1 and changed length/width since these items
+      // were built, which otherwise bills a stale (wrong-money) area/total.
+      setLineItems((prev) =>
+        prev.map((li) => {
+          const r = rateSheet.find((x) => x.id === li.id);
+          const area = r ? areaForRate(r, lengthFt, widthFt) : null;
+          return area == null
+            ? li
+            : { ...li, areaSqFt: area, total: area * li.ratePerSqFt };
+        }),
+      );
       setPicked((prev) =>
         prev.map((p) =>
-          p.lineItemId && lineItems.some((li) => li.id === p.lineItemId)
+          (p.lineItemId && lineItems.some((li) => li.id === p.lineItemId)) ||
+          p.photoNone
             ? p
             : { ...p, lineItemId: bestLineItemId(p.name, lineItems) },
         ),
@@ -209,14 +245,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         setRateSheet(data.items ?? []);
         // Build initial line items
         const initial = (data.items ?? []).map((r) => {
-          const area =
-            r.areaMode === "plot"
-              ? lengthFt * widthFt
-              : r.areaMode === "wrap"
-                ? (lengthFt + widthFt) * 2 * (r.wrapHeightFt ?? 35) + lengthFt * widthFt
-                : r.areaMode === "perimeter"
-                  ? (lengthFt + widthFt) * 2
-                  : 0;
+          const area = areaForRate(r, lengthFt, widthFt) ?? 0;
           return {
             id: r.id,
             name: r.name,
@@ -231,10 +260,11 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         setLineItems(initial);
         ratesLoadedForSport.current = sport;
         // Auto-match each picked product's photo to the best line item (keep a
-        // still-valid manual assignment if the item survived the rebuild).
+        // still-valid manual assignment, and an explicit "— none —", intact).
         setPicked((prev) =>
           prev.map((p) =>
-            p.lineItemId && initial.some((li) => li.id === p.lineItemId)
+            (p.lineItemId && initial.some((li) => li.id === p.lineItemId)) ||
+            p.photoNone
               ? p
               : { ...p, lineItemId: bestLineItemId(p.name, initial) },
           ),
@@ -270,6 +300,15 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         return next;
       })
     );
+    // Excluding a line detaches any product photo pinned to it, so the photo
+    // select, the "📷 attached" indicator and the submit payload stay in sync.
+    // (An excluded line is dropped from the PDF, so its photo would otherwise
+    // silently vanish while the UI still claimed it was attached.)
+    if (key === "included" && value === false) {
+      setPicked((prev) =>
+        prev.map((p) => (p.lineItemId === id ? { ...p, lineItemId: null } : p)),
+      );
+    }
   }
 
   // Products step: filter by sport, toggle a product in/out of the shortlist.
@@ -332,6 +371,16 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
       toast.error("Add at least one included line item");
       return;
     }
+    // Resolve the quote date up front. A cleared date input yields "", and
+    // `new Date("T12:00:00").toISOString()` throws a RangeError — which, when
+    // done inline in the fetch body below, was caught by the network catch and
+    // mis-reported as "Network error". Validate it here with a clear message.
+    const quoteDateObj = quoteDate ? new Date(`${quoteDate}T12:00:00`) : null;
+    if (!quoteDateObj || Number.isNaN(quoteDateObj.getTime())) {
+      toast.error("Please choose a valid quote date");
+      return;
+    }
+    const quoteDateIso = quoteDateObj.toISOString();
     setSubmitting(true);
     try {
       let res: Response;
@@ -346,7 +395,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             widthFt,
             lineItems: lineItemsForSubmit(),
             notes: notes.trim() || undefined,
-            quoteDate: new Date(quoteDate + "T12:00:00").toISOString(),
+            quoteDate: quoteDateIso,
             validityDays,
             conversationId: prefill?.conversationId ?? null,
             contactPhone: prefill?.contactPhone ?? null,
@@ -768,7 +817,14 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                   setPicked((prev) =>
                                     prev.map((x) =>
                                       x.productId === p.productId
-                                        ? { ...x, lineItemId: e.target.value || null }
+                                        ? {
+                                            ...x,
+                                            lineItemId: e.target.value || null,
+                                            // Empty value = user explicitly chose
+                                            // "— none —"; remember it so re-entering
+                                            // Step 3 doesn't auto-reattach a photo.
+                                            photoNone: e.target.value === "",
+                                          }
                                         : x,
                                     ),
                                   )

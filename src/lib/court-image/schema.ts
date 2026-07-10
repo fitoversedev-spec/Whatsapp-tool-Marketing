@@ -767,6 +767,14 @@ export type Style = {
   // sports that have a kitchen (pickleball, badminton service area); ignored
   // by football / cricket / basketball.
   kitchenColor?: string;
+  // V1: per-area highlight fills for basketball, rendered translucently
+  // BEHIND the court markings (like the line-marking colour). Undefined = no
+  // fill. These replaced the generic "Highlights" tool for basketball's three
+  // key areas — the 3-point D, the free-throw lane (key/paint), and the
+  // centre / jump-ball circle.
+  basketball3ptColor?: string;
+  basketballKeyColor?: string;
+  basketballCircleColor?: string;
   // Optional watermark (logo URL + opacity).
   watermarkUrl?: string;
   watermarkOpacity?: number;
@@ -782,6 +790,10 @@ export const DEFAULT_STYLE: Style = {
   grassStripes: true,
   showDimensions: true,
   surface: "plain",
+  // Ground/earth around the plot is white by default (V1 — hardcoded, no UI
+  // control). resolveGroundColor (2D) and the CourtCanvas3D switch both map
+  // "white" → #F1F3F5.
+  groundFinish: "white",
   // Fitoverse-branded layouts ship with the logo composited into the
   // bottom-right of every exported image / video. The user can clear
   // watermarkUrl in the wizard to remove it.
@@ -804,6 +816,11 @@ export type CourtLayout = {
   primarySport?: Sport;
   elements: Element[];
   style: Style;
+  // V1: user-set distance (ft) between tiled courts on a multi-court plot.
+  // Undefined = the original auto layout (leftover per cell = run-off). When
+  // set, retileCourts sizes courts to fit with this gap between them and
+  // centres the grid block.
+  courtGapFt?: number;
   // Optional title shown in the canvas header (the layout name the user
   // sees, e.g. "Dr Prabhusankar — 60x100 ft turf"). Persisted alongside
   // customerName on the CourtImage row.
@@ -856,13 +873,12 @@ export const MULTISPORT_LINE_COLOR: Record<Sport, string> = {
 
 // Preset kitchen / non-volley (net-zone) colour per sport — shown by default
 // so the zone is always highlighted, and still overridable via the wizard's
-// "Kitchen / net zone" picker (style.kitchenColor wins when set). Sports with
-// no net zone (football / cricket / basketball) are absent.
+// "Kitchen / net zone" picker (style.kitchenColor wins when set). V1: ONLY
+// pickleball keeps a filled kitchen zone. Tennis / badminton / volleyball no
+// longer highlight a service / attack band, and football / cricket / basketball
+// never had one.
 export const KITCHEN_DEFAULT_COLOR: Partial<Record<Sport, string>> = {
   pickleball: "#C0563B", // terracotta kitchen (classic pickleball look)
-  tennis: "#2E5EAA", // blue service band
-  badminton: "#8A5A44", // brown service band
-  volleyball: "#B8862E", // ochre attack zone
 };
 
 // Preset non-playing (run-off) ring colour per sport — auto-applied as the
@@ -966,10 +982,20 @@ const COURT_FOOTPRINT_TYPES = new Set<string>([
 
 export type DesignAreas = {
   plot: { lengthFt: number; widthFt: number; areaSqFt: number };
-  courts: Array<{ lengthFt: number; widthFt: number; areaSqFt: number }>;
+  // `label` names the sport (Basketball, Tennis…) so the dimensions readout can
+  // say WHICH court each playing area belongs to.
+  courts: Array<{
+    lengthFt: number;
+    widthFt: number;
+    areaSqFt: number;
+    label: string;
+  }>;
   courtCount: number;
   courtAreaSqFt: number;
   nonPlayingSqFt: number;
+  // User-set spacing between tiled courts (ft), surfaced in the dimensions
+  // readout. Undefined / 0 = the automatic layout.
+  courtGapFt?: number;
 };
 
 // Plot size (entered), court size(s) (drawn playing surface) and the
@@ -984,6 +1010,20 @@ export function computeDesignAreas(layout: CourtLayout): DesignAreas {
   const plotAreaSqFt =
     poly && poly.length >= 3 ? polygonAreaSqFt(poly) : lengthFt * widthFt;
 
+  // Name each court by its sport so the dimensions readout reads
+  // "Basketball — 92 × 49 ft" rather than a bare "Playing area".
+  const courtLabel = (e: Element): string => {
+    if (e.type === "basketball-court") return "Basketball";
+    if (e.type === "football-field") return "Football";
+    if (e.type === "pickleball-court") return "Pickleball";
+    if (e.type === "cricket-pitch") return "Cricket";
+    if (e.type === "generic-court" && "sport" in e) {
+      const s = String((e as { sport?: string }).sport ?? "");
+      return s ? s.charAt(0).toUpperCase() + s.slice(1) : "Court";
+    }
+    return "Court";
+  };
+
   const courts = layout.elements
     .filter((e) => COURT_FOOTPRINT_TYPES.has(e.type))
     .map((e) => {
@@ -993,6 +1033,7 @@ export function computeDesignAreas(layout: CourtLayout): DesignAreas {
         lengthFt: Math.max(w, h),
         widthFt: Math.min(w, h),
         areaSqFt: w * h,
+        label: courtLabel(e),
       };
     })
     .filter((c) => c.areaSqFt > 0);
@@ -1010,6 +1051,7 @@ export function computeDesignAreas(layout: CourtLayout): DesignAreas {
     courts,
     courtCount: courts.length,
     courtAreaSqFt,
+    courtGapFt: layout.courtGapFt,
     nonPlayingSqFt: Math.max(0, plotAreaSqFt - courtAreaSqFt),
   };
 }
@@ -1117,6 +1159,23 @@ export function retileCourts(layout: CourtLayout, count: number): CourtLayout {
   const { cols, rows } = chooseCourtGrid(plotL, plotW, reg, n);
   const cellW = plotL / cols;
   const cellH = plotW / rows;
+  // Optional user-set spacing between courts (ft). Default (null) keeps the
+  // original cell-centred layout (leftover per cell = auto run-off). When set,
+  // courts are sized to fit the space left after reserving `gapFt` between
+  // them, and the tight grid block is centred in the plot.
+  const gapFt =
+    layout.courtGapFt && layout.courtGapFt > 0 ? layout.courtGapFt : null;
+  const availW = gapFt ? (plotL - (cols - 1) * gapFt) / cols : cellW;
+  const availH = gapFt ? (plotW - (rows - 1) * gapFt) / rows : cellH;
+  const { courtW, courtH } = courtExactSize(reg.l, reg.w, availW, availH);
+  const blockW = cols * courtW + (gapFt ? (cols - 1) * gapFt : 0);
+  const blockH = rows * courtH + (gapFt ? (rows - 1) * gapFt : 0);
+  const startX = gapFt ? Math.max(0, (plotL - blockW) / 2) : 0;
+  const startY = gapFt ? Math.max(0, (plotW - blockH) / 2) : 0;
+  const centreX = (col: number) =>
+    gapFt ? startX + col * (courtW + gapFt) + courtW / 2 : (col + 0.5) * cellW;
+  const centreY = (row: number) =>
+    gapFt ? startY + row * (courtH + gapFt) + courtH / 2 : (row + 0.5) * cellH;
 
   // Keep everything except the old court surfaces + their auto equipment.
   const kept = layout.elements.filter(
@@ -1130,16 +1189,25 @@ export function retileCourts(layout: CourtLayout, count: number): CourtLayout {
   const halfCourt =
     isBasketball && (template as { halfCourt?: boolean }).halfCourt === true;
 
+  // Net sports keep a regulation net per court. The `kept` filter above strips
+  // the original nets, and only basketball used to re-add its equipment, so
+  // retiling a tennis/badminton/volleyball/pickleball design silently lost the
+  // net on every court. Re-add one centred on each tiled court.
+  const NET_HEIGHT_FT: Partial<Record<Sport, number>> = {
+    pickleball: 3,
+    tennis: 3.5,
+    badminton: 5,
+    volleyball: 7.9,
+  };
+  const netHeight = NET_HEIGHT_FT[sport];
+
   const added: Element[] = [];
   let z = 1;
   for (let i = 0; i < n; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    const ccx = (col + 0.5) * cellW;
-    const ccy = (row + 0.5) * cellH;
-    // Each tiled court at its EXACT regulation size (e.g. badminton 44×20);
-    // the cell's leftover is the run-off between courts.
-    const { courtW, courtH } = courtExactSize(reg.l, reg.w, cellW, cellH);
+    const ccx = centreX(col);
+    const ccy = centreY(row);
     // Copy the template court so sport-specific props (halfCourt, aSide,
     // surfaceColor…) carry over; override position/size + reset rotation.
     added.push({
@@ -1168,6 +1236,18 @@ export function retileCourts(layout: CourtLayout, count: number): CourtLayout {
           z: z + 40,
         } as unknown as Element);
       }
+    } else if (netHeight) {
+      // Net spans the court's short side (courtH), perpendicular to play.
+      added.push({
+        id: newId(`${sport}-net`),
+        type: "net",
+        x: ccx,
+        y: ccy,
+        rotation: 90,
+        widthFt: courtH,
+        heightFt: netHeight,
+        z: z + 30,
+      } as unknown as Element);
     }
   }
 
@@ -1481,13 +1561,16 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     for (const el of elements) {
       const s = sportForType(el.type, "sport" in el ? el.sport : undefined);
       if (!s) continue;
-      // Distinct fill per sport (skip if the element already has one).
-      if ("surfaceColor" in el && !(el as { surfaceColor?: string }).surfaceColor) {
+      // Distinct fill per sport (skip if the element already has one). NOTE:
+      // the court literals are created WITHOUT a surfaceColor/lineColor key, so
+      // a `"surfaceColor" in el` guard is always false and used to make this
+      // whole per-sport palette dead. Check the value only.
+      if (!(el as { surfaceColor?: string }).surfaceColor) {
         const palette = MULTISPORT_ZONE_COLOR[s];
         if (palette) (el as { surfaceColor?: string }).surfaceColor = palette;
       }
       // Distinct LINE colour per sport so overlaid courts' markings differ.
-      if ("lineColor" in el && !(el as { lineColor?: string }).lineColor) {
+      if (!(el as { lineColor?: string }).lineColor) {
         const lc = MULTISPORT_LINE_COLOR[s];
         if (lc) (el as { lineColor?: string }).lineColor = lc;
       }

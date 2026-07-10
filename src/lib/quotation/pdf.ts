@@ -273,7 +273,12 @@ function space(ctx: Ctx, n = 8) {
 }
 
 function drawFooter(ctx: Ctx) {
-  const y = PAGE_H - 20;
+  // pdf-lib's y-origin is the bottom-left corner, so a SMALL y sits near the
+  // bottom edge. This used to be `PAGE_H - 20`, which is ~20pt from the TOP —
+  // the footer + page number were rendering jammed against the top brand band
+  // while the reserved bottom strip stayed blank. y=20 puts it at the bottom;
+  // the divider (y+12) sits just above the footer text.
+  const y = 20;
   ctx.page.drawLine({
     start: { x: MARGIN, y: y + 12 },
     end: { x: PAGE_W - MARGIN, y: y + 12 },
@@ -375,6 +380,30 @@ function titleForSport(sport: string): string {
       return "Quotation for Pickleball Court Construction";
     default:
       return `Quotation for ${sport.charAt(0).toUpperCase() + sport.slice(1)} Sports Infrastructure`;
+  }
+}
+
+// The third payment milestone is tied to installing the sport's headline
+// fixture. Naming it per-sport stops a football / cricket / pickleball quote
+// from reading "installation of basketball poles."
+function installationMilestone(sport: string): string {
+  switch (sport) {
+    case "basketball":
+      return "installation of basketball poles";
+    case "football":
+      return "installation of goal posts & nets";
+    case "cricket":
+      return "installation of nets & fencing";
+    case "tennis":
+      return "installation of net posts & fencing";
+    case "badminton":
+    case "volleyball":
+    case "pickleball":
+      return "installation of net posts";
+    case "multisport":
+      return "installation of poles, nets & fixtures";
+    default:
+      return "installation of sports fixtures";
   }
 }
 
@@ -501,31 +530,39 @@ function drawItemsTable(
   };
   const headerH = 22;
 
-  // Header row
-  ensureSpace(ctx, headerH);
-  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.accent });
-  const headerY = yFromTop(ctx.y + 15);
-  safeDraw(ctx.page, "Service Description", {
-    x: colXs.desc + 6,
-    y: headerY,
-    size: 9,
-    font: ctx.bold,
-    color: COL.accentText,
-  });
-  const writeHeaderRight = (text: string, colX: number, colW: number) => {
-    const w = safeWidth(ctx.bold, text, 9);
-    safeDraw(ctx.page, text, {
-      x: colX + colW - w - 6,
+  // Column header — extracted so it can be RE-EMITTED after a page break. The
+  // body loop's ensureSpace() can start a new page mid-table; without redrawing
+  // this, the overflow rows on page 2+ rendered with no "Service Description /
+  // Area / Rate / Total" band, leaving the Area/Rate/Total columns unlabeled.
+  const drawTableHeader = () => {
+    ensureSpace(ctx, headerH);
+    drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.accent });
+    const headerY = yFromTop(ctx.y + 15);
+    safeDraw(ctx.page, "Service Description", {
+      x: colXs.desc + 6,
       y: headerY,
       size: 9,
       font: ctx.bold,
       color: COL.accentText,
     });
+    const writeHeaderRight = (text: string, colX: number, colW: number) => {
+      const w = safeWidth(ctx.bold, text, 9);
+      safeDraw(ctx.page, text, {
+        x: colX + colW - w - 6,
+        y: headerY,
+        size: 9,
+        font: ctx.bold,
+        color: COL.accentText,
+      });
+    };
+    writeHeaderRight("Area", colXs.area, cols.area);
+    writeHeaderRight("Rate ₹", colXs.rate, cols.rate);
+    writeHeaderRight("Total ₹", colXs.total, cols.total);
+    ctx.y += headerH;
   };
-  writeHeaderRight("Area", colXs.area, cols.area);
-  writeHeaderRight("Rate ₹", colXs.rate, cols.rate);
-  writeHeaderRight("Total ₹", colXs.total, cols.total);
-  ctx.y += headerH;
+
+  // Header row
+  drawTableHeader();
 
   // Body rows
   let rowIdx = 0;
@@ -551,7 +588,10 @@ function drawItemsTable(
     const photoBlockH = img ? imgH + 10 : 0;
     // 8 top pad + 24 name block + photo + description + 16 GST tag + 8 pad.
     const rowH = 8 + 24 + photoBlockH + descLines.length * DESC_LH + 16 + 8;
+    const pageBefore = ctx.pageNumber;
     ensureSpace(ctx, rowH);
+    // If this row forced a page break, re-emit the column header on top of it.
+    if (ctx.pageNumber !== pageBefore) drawTableHeader();
     if (rowIdx % 2 === 1) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
 
     const startY = ctx.y + 8;
@@ -615,7 +655,13 @@ function drawItemsTable(
         color: COL.text,
       });
     };
-    drawNum(inr(item.areaSqFt), colXs.area, cols.area);
+    // Per-piece rows ("nos") show the count with its unit so a bare "1"
+    // doesn't read as 1 sq.ft; area rows keep the plain number.
+    const areaLabel =
+      item.unit && item.unit !== "sq.ft"
+        ? `${inr(item.areaSqFt)} ${item.unit}`
+        : inr(item.areaSqFt);
+    drawNum(areaLabel, colXs.area, cols.area);
     drawNum(inr(item.ratePerSqFt), colXs.rate, cols.rate);
     drawNum(inr(item.areaSqFt * item.ratePerSqFt), colXs.total, cols.total);
 
@@ -1064,7 +1110,7 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   drawBullets(ctx, [
     "50% advance during purchase order.",
     "30% during flooring work.",
-    "15% after installation of basketball poles.",
+    `15% after ${installationMilestone(data.sport)}.`,
     "5% after completion of work.",
   ]);
   space(ctx, 4);

@@ -18,6 +18,7 @@ import {
 } from "pdf-lib";
 import { htmlToPlainText, extractHtmlTables } from "@/lib/products/format";
 import type { ProductDTO } from "@/lib/products/store";
+import type { DesignAreas } from "./schema";
 
 const MARGIN = 40;
 const [PAGE_W, PAGE_H] = PageSizes.A4;
@@ -71,6 +72,9 @@ export type CombinedPdfInput = {
   // Pre-rendered stand-alone quotation PDF (renderQuotationPdf). When present,
   // its pages are merged in so the quote section matches a quote sent alone.
   quotePdf?: Uint8Array | null;
+  // Structured plot / court dimensions, rendered as a dedicated table (the
+  // dimensions card is hidden from the 2D diagram so the diagram stays clean).
+  dimensions?: DesignAreas | null;
 };
 
 function sanitize(s: string): string {
@@ -82,7 +86,13 @@ function sanitize(s: string): string {
     .replace(/['']/g, "'")
     .replace(/[—–]/g, "-")
     .replace(/…/g, "...")
-    .replace(/[^\x00-\xFF]/g, "");
+    .replace(/[\t\n\r]+/g, " ")
+    // Keep ONLY printable Latin-1 (ASCII 0x20-0x7E + 0xA0-0xFF). This strips
+    // every control byte WinAnsi rejects — C0 (0x00-0x1F), DEL (0x7F) and C1
+    // (0x80-0x9F) — as well as anything above Latin-1. A single stray NUL or
+    // Windows-1252 mojibake byte from the MVPv2 import used to make drawText
+    // throw and produce NO PDF at all; this laundering prevents that.
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
 }
 
 async function tryEmbed(
@@ -237,13 +247,15 @@ export async function renderCombinedPdf(
     await drawImageFit(ctx, twoD.bytes, ctx.y - MARGIN - 24);
   }
 
-  // ── 3D — every angle, on its own dedicated page(s) ──
+  // ── Dimensions — a dedicated, easy-to-read table (kept OFF the 2D diagram) ──
+  if (input.dimensions) {
+    drawDimensionsTable(ctx, input.dimensions);
+  }
+
+  // ── 3D drone view — ONE static still on its own page (not every angle) ──
   if (input.angleImages && input.angleImages.length > 0) {
     newPage(ctx);
-    await drawAngleGrid(ctx, input.angleImages);
-    // ── 3D walkaround video — its own page (large poster + note) ──
-    newPage(ctx);
-    await drawVideoPage(ctx, input.angleImages[0]);
+    await drawSingle3DView(ctx, input.angleImages[0]);
   }
 
   // ── Products & equipment — flow together across page(s), packed tight
@@ -263,6 +275,11 @@ export async function renderCombinedPdf(
     }
   }
 
+  // ── Company portfolio — Connect with Fitoverse, before the attached PDFs ──
+  drawConnectWithFitoverse(ctx);
+
+  // ── Attached PDFs come LAST (per the proposal format): the TDS spec sheets,
+  //    then the quotation. ──
   // ── TDS — merge the actual PDF pages so the spec sheets live INSIDE
   //    this one document (a divider page introduces each). Falls back to
   //    a titled list only if the bytes couldn't be fetched. ──
@@ -285,6 +302,21 @@ export async function renderCombinedPdf(
           color: COL.faint,
           size: 9,
         });
+      }
+    }
+    // A TDS whose bytes never fetched (expired/403 URL, timeout) is present in
+    // the name list but absent from tdsPdfs. Without this it would vanish with
+    // zero indication as soon as ONE other TDS merged successfully — so list
+    // the missing ones instead of silently dropping the spec sheet.
+    const fetchedNames = new Set(input.tdsPdfs.map((t) => t.name));
+    const missing = input.tds.filter((t) => !fetchedNames.has(t.name));
+    if (missing.length > 0) {
+      ensure(ctx, 40);
+      gap(ctx, 8);
+      sectionTitle(ctx, "Additional technical data sheets (available on request)");
+      for (const t of missing) {
+        ensure(ctx, 16);
+        text(ctx, `- ${t.name}`, { size: 9.5 });
       }
     }
   } else if (input.tds.length > 0) {
@@ -335,6 +367,234 @@ export async function renderCombinedPdf(
   });
 
   return doc.save();
+}
+
+// Closing page — "Connect with Fitoverse": our website + social handles, so
+// the proposal ends with a clear way to reach us (the company portfolio /
+// contact section from the quotation template).
+function drawConnectWithFitoverse(ctx: Ctx) {
+  newPage(ctx);
+  sectionTitle(ctx, "Connect with Fitoverse");
+  gap(ctx, 4);
+  text(ctx, "Explore our work and reach us here:", {
+    color: COL.soft,
+    size: 10.5,
+  });
+  gap(ctx, 8);
+  const links: Array<[string, string]> = [
+    ["Website", "https://fitoverse.com/"],
+    ["Instagram", "https://www.instagram.com/fito.verse/"],
+    ["Facebook", "https://www.facebook.com/profile.php?id=100077279349300"],
+    ["Twitter (X)", "https://x.com/fitoverse"],
+  ];
+  for (const [label, url] of links) {
+    ensure(ctx, 18);
+    ctx.page.drawText(sanitize(`${label}:  ${url}`), {
+      x: MARGIN,
+      y: ctx.y - 11,
+      size: 10.5,
+      font: ctx.bold,
+      color: COL.ink,
+    });
+    ctx.y -= 20;
+  }
+  gap(ctx, 10);
+  text(ctx, "Fitoverse Private Limited   ·   +91 93638 63382", {
+    color: COL.soft,
+    size: 10,
+  });
+}
+
+// Dedicated Dimensions page — a big, clear two-column table (Area | Size) with
+// imperial + metric on separate lines. Kept off the 2D diagram so the diagram
+// stays clean.
+function drawDimensionsTable(ctx: Ctx, areas: DesignAreas) {
+  newPage(ctx);
+  sectionTitle(ctx, "Dimensions");
+  gap(ctx, 10);
+  const FT_M = 0.3048;
+  const SQFT_SQM = 0.092903;
+  const nf = (n: number) => Math.round(n).toLocaleString("en-IN");
+  const ftv = (v: number) => {
+    const r = Math.round(v * 10) / 10;
+    return Number.isInteger(r) ? r.toFixed(0) : r.toFixed(1);
+  };
+  const mtv = (v: number) => (v * FT_M).toFixed(2);
+
+  // Group courts by sport + size so a multi-sport plot lists each named court.
+  const groups: Array<{
+    label: string;
+    l: number;
+    w: number;
+    count: number;
+    area: number;
+  }> = [];
+  for (const c of areas.courts) {
+    const g = groups.find(
+      (x) =>
+        x.label === c.label &&
+        Math.round(x.l) === Math.round(c.lengthFt) &&
+        Math.round(x.w) === Math.round(c.widthFt),
+    );
+    if (g) {
+      g.count += 1;
+      g.area += c.areaSqFt;
+    } else {
+      groups.push({
+        label: c.label,
+        l: c.lengthFt,
+        w: c.widthFt,
+        count: 1,
+        area: c.areaSqFt,
+      });
+    }
+  }
+
+  const rows: Array<{ label: string; imperial: string; metric: string }> = [];
+  const p = areas.plot;
+  rows.push({
+    label: "Plot",
+    imperial: `${ftv(p.lengthFt)} x ${ftv(p.widthFt)} ft  =  ${nf(p.areaSqFt)} sq.ft`,
+    metric: `${mtv(p.lengthFt)} x ${mtv(p.widthFt)} m  =  ${nf(p.areaSqFt * SQFT_SQM)} sq.m`,
+  });
+  for (const g of groups) {
+    rows.push({
+      label:
+        g.count === 1
+          ? `${g.label} - playing area`
+          : `${g.label} - playing area (x${g.count})`,
+      imperial:
+        g.count === 1
+          ? `${ftv(g.l)} x ${ftv(g.w)} ft  =  ${nf(g.area)} sq.ft`
+          : `${g.count} x ${ftv(g.l)} x ${ftv(g.w)} ft  =  ${nf(g.area)} sq.ft`,
+      metric:
+        g.count === 1
+          ? `${mtv(g.l)} x ${mtv(g.w)} m  =  ${nf(g.area * SQFT_SQM)} sq.m`
+          : `${g.count} x ${mtv(g.l)} x ${mtv(g.w)} m  =  ${nf(g.area * SQFT_SQM)} sq.m`,
+    });
+  }
+  // Spacing between tiled courts, when the user set one.
+  if (areas.courtGapFt && areas.courtGapFt > 0) {
+    rows.push({
+      label: "Distance between courts",
+      imperial: `${ftv(areas.courtGapFt)} ft`,
+      metric: `${mtv(areas.courtGapFt)} m`,
+    });
+  }
+  const totalSqFt = areas.courtAreaSqFt + areas.nonPlayingSqFt;
+  rows.push({
+    label: "Non-playing (run-off)",
+    imperial: `${nf(areas.nonPlayingSqFt)} sq.ft`,
+    metric: `${nf(areas.nonPlayingSqFt * SQFT_SQM)} sq.m`,
+  });
+  rows.push({
+    label: "Total area",
+    imperial: `${nf(totalSqFt)} sq.ft`,
+    metric: `${nf(totalSqFt * SQFT_SQM)} sq.m`,
+  });
+
+  const tableX = MARGIN;
+  const tableW = CONTENT_W;
+  const labelW = 160;
+  const headH = 26;
+  const rowH = 44;
+  ensure(ctx, headH + rows.length * rowH + 10);
+
+  // Header band
+  ctx.page.drawRectangle({
+    x: tableX,
+    y: ctx.y - headH,
+    width: tableW,
+    height: headH,
+    color: COL.ink,
+  });
+  ctx.page.drawText("Area", {
+    x: tableX + 10,
+    y: ctx.y - 17,
+    size: 12,
+    font: ctx.bold,
+    color: rgb(1, 1, 1),
+  });
+  ctx.page.drawText("Size", {
+    x: tableX + labelW + 10,
+    y: ctx.y - 17,
+    size: 12,
+    font: ctx.bold,
+    color: rgb(1, 1, 1),
+  });
+  ctx.y -= headH;
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (i % 2 === 1) {
+      ctx.page.drawRectangle({
+        x: tableX,
+        y: ctx.y - rowH,
+        width: tableW,
+        height: rowH,
+        color: COL.band,
+      });
+    }
+    ctx.page.drawRectangle({
+      x: tableX,
+      y: ctx.y - rowH,
+      width: tableW,
+      height: rowH,
+      borderColor: COL.line,
+      borderWidth: 0.75,
+    });
+    ctx.page.drawText(sanitize(r.label), {
+      x: tableX + 10,
+      y: ctx.y - rowH / 2 - 4,
+      size: 12,
+      font: ctx.bold,
+      color: COL.ink,
+    });
+    ctx.page.drawText(sanitize(r.imperial), {
+      x: tableX + labelW + 10,
+      y: ctx.y - 18,
+      size: 11.5,
+      font: ctx.font,
+      color: COL.ink,
+    });
+    ctx.page.drawText(sanitize(r.metric), {
+      x: tableX + labelW + 10,
+      y: ctx.y - 33,
+      size: 10,
+      font: ctx.font,
+      color: COL.soft,
+    });
+    ctx.y -= rowH;
+  }
+}
+
+// One large 3D drone still on its own page — sales asked for a single hero 3D
+// image, not the multi-angle grid.
+async function drawSingle3DView(ctx: Ctx, image: Uint8Array) {
+  sectionTitle(ctx, "3D drone view");
+  gap(ctx, 4);
+  const img = await tryEmbed(ctx.doc, image);
+  if (!img) {
+    text(ctx, "(3D preview unavailable.)", { color: COL.faint, size: 9 });
+    return;
+  }
+  const availW = CONTENT_W;
+  const availH = ctx.y - MARGIN - 44;
+  const scale = Math.min(availW / img.width, availH / img.height);
+  const w = img.width * scale;
+  const h = img.height * scale;
+  ctx.page.drawImage(img, {
+    x: MARGIN + (availW - w) / 2,
+    y: ctx.y - h - 6,
+    width: w,
+    height: h,
+  });
+  ctx.y -= h + 16;
+  text(
+    ctx,
+    "A 6-second spinning 3D walkaround is sent to you as a separate WhatsApp video.",
+    { color: COL.soft, size: 9.5 },
+  );
 }
 
 // 3D turntable grid — the captured angle stills laid out 2-per-row so the
@@ -436,14 +696,20 @@ async function drawProduct(ctx: Ctx, p: ProductDTO) {
     if (bytes) {
       const img = await tryEmbed(ctx.doc, bytes);
       if (img) {
-        const size = 56;
+        // Fit within a 56x56 box preserving aspect ratio, then centre —
+        // catalogue hero photos are almost never square, so forcing them
+        // to 56x56 visibly stretched/squished the flooring thumbnails.
+        const box = 56;
+        const scale = Math.min(box / img.width, box / img.height);
+        const iw = img.width * scale;
+        const ih = img.height * scale;
         ctx.page.drawImage(img, {
-          x: MARGIN,
-          y: startY - size,
-          width: size,
-          height: size,
+          x: MARGIN + (box - iw) / 2,
+          y: startY - box + (box - ih) / 2,
+          width: iw,
+          height: ih,
         });
-        textX = MARGIN + size + 10;
+        textX = MARGIN + box + 10;
       }
     }
   }

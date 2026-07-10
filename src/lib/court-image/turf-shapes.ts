@@ -246,13 +246,17 @@ export function buildTurfShapePolygon(
 
     case "cricket-d": {
       // Flat end at the left (football goal), semicircular deep field at the
-      // right (cricket). Needs L > W/2; clamp for extreme plots.
+      // right (cricket). The bulge's y-radius is W/2 (full width); its x-depth
+      // is clamped so the arc NEVER extends past L — on a portrait plot (L <
+      // W/2) it degrades to a shallow half-ellipse instead of spilling out of
+      // the plot box (which used to over-report the turf area 2-3x).
       const r = W / 2;
-      const flatX = Math.max(r * 0.4, L - r);
+      const flatX = Math.max(0, L - r);
+      const rx = Math.min(r, L - flatX); // x-depth, bounded to the plot length
       return [
         { x: 0, y: 0 },
         { x: flatX, y: 0 },
-        ...ellipseArc(flatX, cy, r, r, -Math.PI / 2, Math.PI / 2, 32),
+        ...ellipseArc(flatX, cy, rx, r, -Math.PI / 2, Math.PI / 2, 32),
         { x: flatX, y: W },
         { x: 0, y: W },
       ];

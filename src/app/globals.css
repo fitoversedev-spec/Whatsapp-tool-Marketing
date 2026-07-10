@@ -12,6 +12,13 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
+/* V1: larger base font across the whole app. Tailwind's rem-based text +
+   spacing utilities scale from the root, so this enlarges the UI
+   proportionally. The pixel-based court canvas (Konva) is unaffected. */
+html {
+  font-size: 17px;
+}
+
 /* ─── Dark mode ─────────────────────────────────────────────────────────────
  * Class-driven (html.dark). Rather than touching every component's classes
  * we override the common Tailwind utilities used across the app. Each rule

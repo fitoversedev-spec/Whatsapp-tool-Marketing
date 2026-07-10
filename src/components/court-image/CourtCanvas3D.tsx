@@ -366,6 +366,9 @@ export default function CourtCanvas3D({
     const sorted = [...layout.elements].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
 
     sorted.forEach((el, i) => {
+      // Parity: honour the 2D visibility toggle — an element hidden in 2D must
+      // NOT reappear in the 3D preview or export.
+      if ((el as { visible?: boolean }).visible === false) return;
       const obj = buildElement(el, layout, i * 0.01);
       if (!obj) return;
       // Plot-space (x,y) → world (X, Z). Y is up, so plot Y maps to Z
@@ -427,20 +430,30 @@ export default function CourtCanvas3D({
   useEffect(() => {
     if (!handleRef) return;
     handleRef.current = {
-      toDataURL() {
+      toDataURL(pixelRatio = 1) {
         const renderer = rendererRef.current;
         const scene = sceneRef.current;
         const camera = cameraRef.current;
         if (!renderer || !scene || !camera) return null;
-        // Render one fresh frame before reading so the snapshot is current
-        // (preserveDrawingBuffer + sync render = always-fresh capture).
+        // Render at pixelRatio × the live buffer for a crisp export (the arg
+        // used to be ignored, so a 2× request exported at preview resolution on
+        // non-retina displays). Aspect is preserved, so no camera update is
+        // needed; the live size is restored afterwards.
+        const size = new THREE.Vector2();
+        renderer.getSize(size);
+        const ratio = Math.max(1, Math.min(pixelRatio || 1, 4));
+        if (ratio !== 1) renderer.setSize(size.x * ratio, size.y * ratio, false);
         renderer.render(scene, camera);
         const wmImg = watermarkImgRef.current;
         const wmOpacity = layoutRef.current.style.watermarkOpacity ?? 0.9;
-        if (!wmImg) {
-          return renderer.domElement.toDataURL("image/png");
+        const url = !wmImg
+          ? renderer.domElement.toDataURL("image/png")
+          : compositeWithWatermark(renderer.domElement, wmImg, wmOpacity);
+        if (ratio !== 1) {
+          renderer.setSize(size.x, size.y, false);
+          renderer.render(scene, camera); // refresh the live canvas
         }
-        return compositeWithWatermark(renderer.domElement, wmImg, wmOpacity);
+        return url;
       },
       async recordOrbitMP4(options) {
         const renderer = rendererRef.current;
@@ -470,11 +483,20 @@ export default function CourtCanvas3D({
         cancelAnimationFrame(animationIdRef.current);
 
         const canvas = renderer.domElement;
-        const width = canvas.width;
-        const height = canvas.height;
-        // Even dimensions required for H.264 — round down if needed.
-        const w = width - (width % 2);
-        const h = height - (height % 2);
+        // Cap the recorded resolution: scale to fit a MAX_DIM box (keeps the
+        // MP4 small + WhatsApp-friendly) and force EVEN dimensions. Combined
+        // with the higher AVC level below, this fixes the "coded area exceeds
+        // the maximum coded area supported by the AVC level" encode error that
+        // hit on larger / high-DPI canvases.
+        const MAX_DIM = 1280;
+        const srcScale = Math.min(
+          1,
+          MAX_DIM / Math.max(canvas.width, canvas.height),
+        );
+        let w = Math.round(canvas.width * srcScale);
+        let h = Math.round(canvas.height * srcScale);
+        w -= w % 2;
+        h -= h % 2;
 
         const { Muxer, ArrayBufferTarget } = await import("mp4-muxer");
         const muxer = new Muxer({
@@ -483,18 +505,16 @@ export default function CourtCanvas3D({
           fastStart: "in-memory",
         });
 
-        // Build the watermark composite canvas once if a logo is set, so
-        // we don't allocate one per frame. The encoder reads this canvas
-        // each frame instead of the raw WebGL canvas so the watermark is
-        // baked into every output frame.
+        // Every frame is drawn into a 2D canvas at the (capped) target size —
+        // this scales the WebGL canvas down to the recording resolution and
+        // bakes in the watermark. Reading from this fixed-size canvas is what
+        // keeps the encoder within its AVC level regardless of the live canvas.
         const wmImg = watermarkImgRef.current;
         const wmOpacity = layoutRef.current.style.watermarkOpacity ?? 0.9;
-        const composite = wmImg ? document.createElement("canvas") : null;
-        const compositeCtx = composite ? composite.getContext("2d") : null;
-        if (composite && compositeCtx) {
-          composite.width = w;
-          composite.height = h;
-        }
+        const frameCanvas = document.createElement("canvas");
+        frameCanvas.width = w;
+        frameCanvas.height = h;
+        const frameCtx = frameCanvas.getContext("2d")!;
 
         let encoderError: unknown = null;
         const encoder = new window.VideoEncoder({
@@ -504,7 +524,7 @@ export default function CourtCanvas3D({
           },
         });
         encoder.configure({
-          codec: "avc1.42E01E", // H.264 Baseline profile, level 3.0
+          codec: "avc1.42E028", // H.264 Baseline profile, level 4.0 — ample coded-area headroom
           width: w,
           height: h,
           bitrate: 3_000_000,
@@ -532,13 +552,11 @@ export default function CourtCanvas3D({
             // When a watermark is set, draw the WebGL canvas → 2D composite
             // and overlay the logo. The encoder then takes the composite
             // canvas as its source.
-            let sourceCanvas: HTMLCanvasElement = canvas;
-            if (composite && compositeCtx && wmImg) {
-              compositeCtx.drawImage(canvas, 0, 0, w, h);
-              drawWatermarkOn(compositeCtx, wmImg, w, h, wmOpacity);
-              sourceCanvas = composite;
-            }
-            const frame = new window.VideoFrame(sourceCanvas, {
+            // Scale the WebGL canvas into the fixed-size frame canvas, then
+            // overlay the watermark if one is set.
+            frameCtx.drawImage(canvas, 0, 0, w, h);
+            if (wmImg) drawWatermarkOn(frameCtx, wmImg, w, h, wmOpacity);
+            const frame = new window.VideoFrame(frameCanvas, {
               timestamp: (i * 1_000_000) / fps,
               duration: 1_000_000 / fps,
             });
@@ -1311,15 +1329,22 @@ function footballTexture(el: FootballFieldElement, layout: CourtLayout): THREE.C
   c.width = w;
   c.height = h;
   const ctx = c.getContext("2d")!;
-  const grassColor = el.grassColor ?? layout.style.grassColor;
+  const grassColor =
+    layout.style.surfaceColorOverride ?? el.grassColor ?? layout.style.grassColor;
   const lineColor = el.lineColor ?? layout.style.lineColor;
   const lineWidth = Math.max(4, w * 0.0045);
-  // Mowed-stripe pattern
-  const stripes = 10;
-  const stripeW = w / stripes;
-  for (let i = 0; i < stripes; i++) {
-    ctx.fillStyle = i % 2 === 0 ? grassColor : darken(grassColor, 0.1);
-    ctx.fillRect(i * stripeW, 0, stripeW, h);
+  // Mowed-stripe pattern — parity with 2D: honour the grassStripes toggle
+  // (solid fill when off) and the picked surface colour above.
+  if (layout.style.grassStripes === false) {
+    ctx.fillStyle = grassColor;
+    ctx.fillRect(0, 0, w, h);
+  } else {
+    const stripes = 10;
+    const stripeW = w / stripes;
+    for (let i = 0; i < stripes; i++) {
+      ctx.fillStyle = i % 2 === 0 ? grassColor : darken(grassColor, 0.1);
+      ctx.fillRect(i * stripeW, 0, stripeW, h);
+    }
   }
   ctx.strokeStyle = lineColor;
   ctx.lineWidth = lineWidth;
@@ -1432,6 +1457,16 @@ function basketballTexture(el: BasketballCourtElement, layout: CourtLayout): THR
     layout.style.surfaceColorOverride ??
     layout.style.basketballSurfaceColor;
   ctx.fillRect(0, 0, w, h);
+  // Per-area highlight fill (parity with 2D) — jump-ball / centre circle,
+  // behind the markings, at 55% so the surface shows through.
+  if (!el.halfCourt && layout.style.basketballCircleColor) {
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = layout.style.basketballCircleColor;
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, Math.min(w, h) * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
   ctx.strokeStyle = el.lineColor ?? "#fff5e6";
   ctx.lineWidth = 5;
   ctx.strokeRect(0, 0, w, h);
@@ -1451,6 +1486,31 @@ function basketballTexture(el: BasketballCourtElement, layout: CourtLayout): THR
   (el.halfCourt ? [1] : [-1, 1]).forEach((dir) => {
     const cx = dir < 0 ? 0 : w;
     const keyX = dir < 0 ? 0 : w - keyW;
+    // Per-area highlight fills (parity with 2D) — 3-point D + free-throw key,
+    // behind the markings.
+    if (layout.style.basketball3ptColor) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = layout.style.basketball3ptColor;
+      ctx.beginPath();
+      ctx.moveTo(cx, h / 2);
+      ctx.arc(
+        cx,
+        h / 2,
+        threeR,
+        dir < 0 ? -Math.PI / 2 : Math.PI / 2,
+        dir < 0 ? Math.PI / 2 : -Math.PI / 2,
+        false,
+      );
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    if (layout.style.basketballKeyColor) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = layout.style.basketballKeyColor;
+      ctx.fillRect(keyX, (h - keyH) / 2, keyW, keyH);
+      ctx.globalAlpha = 1;
+    }
     ctx.strokeRect(keyX, (h - keyH) / 2, keyW, keyH);
     ctx.beginPath();
     ctx.arc(dir < 0 ? keyW : w - keyW, h / 2, ftR, 0, Math.PI * 2);
@@ -1478,6 +1538,19 @@ function pickleballTexture(el: PickleballCourtElement, layout: CourtLayout): THR
     layout.style.surfaceColorOverride ??
     layout.style.pickleballSurfaceColor;
   ctx.fillRect(0, 0, w, h);
+  // Kitchen (non-volley zone) fill — parity with 2D. The band around the net;
+  // "none" turns it off, else the chosen colour / pickleball default.
+  const kitchenColor =
+    layout.style.kitchenColor === "none"
+      ? null
+      : layout.style.kitchenColor ?? "#C0563B";
+  if (kitchenColor) {
+    const kb = w * 0.16;
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = kitchenColor;
+    ctx.fillRect(w / 2 - kb, 0, kb * 2, h);
+    ctx.globalAlpha = 1;
+  }
   ctx.strokeStyle = el.lineColor ?? "#ffffff";
   ctx.lineWidth = 5;
   ctx.strokeRect(0, 0, w, h);

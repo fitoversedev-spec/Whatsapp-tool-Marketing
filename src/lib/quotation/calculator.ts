@@ -23,6 +23,10 @@ export type QuoteLineItem = {
   included: boolean; // false = excluded from totals (e.g. Padding off)
   // For "per_piece" items, areaSqFt is the quantity (kept on the same field
   // for schema simplicity).
+  // Unit for the Area column — "sq.ft" (default) or "nos" for per-piece rows.
+  // Without it, a per-piece qty like "1" renders as a bare number that reads
+  // as 1 sq.ft in the PDF's Area column.
+  unit?: string | null;
   // Optional product photo shown at the TOP of this item's description in the
   // PDF. Set from the wizard's "Products" step (auto-matched, reassignable).
   imageUrl?: string | null;
@@ -62,6 +66,7 @@ export function buildInitialLineItems(
       name: r.name,
       description: r.description,
       areaSqFt: area,
+      unit: r.areaMode === "per_piece" ? "nos" : "sq.ft",
       ratePerSqFt: r.defaultRate,
       gstPercent: r.gstPercent,
       total: area * r.defaultRate,

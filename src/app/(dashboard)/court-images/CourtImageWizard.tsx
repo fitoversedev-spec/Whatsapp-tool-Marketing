@@ -132,10 +132,15 @@ function cap(s: string) {
 function MultiCourtBanner({
   layout,
   onSetCount,
+  onSetGap,
 }: {
   layout: CourtLayout;
   onSetCount: (count: number) => void;
+  onSetGap: (gapFt: number) => void;
 }) {
+  // Draft for the gap input so it only re-tiles on blur / Enter (not on every
+  // keystroke). Declared before the early returns to satisfy Rules of Hooks.
+  const [gapDraft, setGapDraft] = useState<string | null>(null);
   const primarySport = layout.primarySport ?? layout.sports[0];
   if (!primarySport || layout.sports.length !== 1) return null;
   const areas = computeDesignAreas(layout);
@@ -198,6 +203,33 @@ function MultiCourtBanner({
           );
         })}
       </div>
+      {/* V1: user-set spacing between the tiled courts. Blank = auto layout. */}
+      {courtCount >= 2 && (
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-[11px] text-slate-600">
+            Distance between courts (ft):
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={60}
+            value={gapDraft ?? (layout.courtGapFt ?? "")}
+            placeholder="auto"
+            onChange={(e) => setGapDraft(e.target.value)}
+            onBlur={() => {
+              if (gapDraft === null) return;
+              const v = gapDraft.trim();
+              onSetGap(v === "" ? 0 : Math.max(0, Number(v) || 0));
+              setGapDraft(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+            className="w-16 px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+          />
+          <span className="text-[10px] text-slate-400">Enter to apply</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -337,9 +369,86 @@ function CollapsibleSection({
   );
 }
 
+// Resolve a user-typed colour to a normalized colour string the renderer +
+// PDF understand. Accepts hex (#abc / #aabbcc), rgb()/rgba(), hsl(), and CSS
+// colour NAMES (e.g. "skyblue", "tomato") by delegating to the browser's own
+// parser via a canvas 2D context. Returns null for anything that isn't a valid
+// CSS colour, so callers can ignore invalid text instead of storing garbage.
+function colorFromInput(input: string): string | null {
+  const v = input.trim();
+  if (!v) return null;
+  if (typeof document === "undefined") return v; // SSR guard (never hit in handlers)
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (!ctx) return v;
+  // Probe with two different baselines: an INVALID value leaves fillStyle at
+  // whatever it was, so the two probes disagree; a VALID value normalizes to
+  // the same string both times (e.g. "skyblue" → "#87ceeb").
+  ctx.fillStyle = "#000000";
+  ctx.fillStyle = v;
+  const a = ctx.fillStyle;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = v;
+  const b = ctx.fillStyle;
+  return a === b ? a : null;
+}
+
+// A native colour swatch + a free-text box that accepts hex OR a CSS colour
+// name (resolved on blur / Enter via colorFromInput; invalid text is ignored).
+// Returns a fragment so it slots into an existing flex row. onCommit(undefined)
+// clears the value.
+function ColorTextField({
+  value,
+  fallback,
+  onCommit,
+  swatchClassName = "w-8 h-8 rounded border border-slate-300 cursor-pointer bg-white shrink-0 p-0",
+  textClassName = "flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30",
+}: {
+  value: string | undefined;
+  fallback: string;
+  onCommit: (v: string | undefined) => void;
+  swatchClassName?: string;
+  textClassName?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const isHex = (s: string) => /^#[0-9a-fA-F]{6}$/.test(s);
+  return (
+    <>
+      <input
+        type="color"
+        value={value && isHex(value) ? value : fallback}
+        onChange={(e) => onCommit(e.target.value)}
+        className={swatchClassName}
+        title="Custom colour"
+      />
+      <input
+        type="text"
+        value={draft ?? (value ?? "")}
+        placeholder="Hex or name e.g. skyblue"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft === null) return;
+          const raw = draft.trim();
+          if (raw.length === 0) onCommit(undefined);
+          else {
+            const r = colorFromInput(raw);
+            if (r) onCommit(r);
+          }
+          setDraft(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className={textClassName}
+      />
+    </>
+  );
+}
+
 // Reusable swatch-based colour picker inside a collapsible section — used for
 // each design "factor" (line marking, border, run-off, kitchen). value is the
 // current hex (undefined = default); onChange(undefined) resets to default.
+// The free-text box accepts hex OR CSS colour names (resolved on blur via
+// colorFromInput); invalid text is ignored and the field reverts.
 function ColorPickerSection({
   title,
   hint,
@@ -363,6 +472,9 @@ function ColorPickerSection({
 }) {
   const isNone = value === "none";
   const hexValue = !value || isNone ? "" : value;
+  // Draft text for the free-text box — lets the user type a colour name
+  // without it being normalized/wiped mid-keystroke. Resolved on blur / Enter.
+  const [draft, setDraft] = useState<string | null>(null);
   return (
     <CollapsibleSection title={title} hint={hint} defaultOpen={defaultOpen}>
       <div className="space-y-3">
@@ -396,11 +508,24 @@ function ColorPickerSection({
           />
           <input
             type="text"
-            value={hexValue}
-            placeholder="Custom hex e.g. #FFFFFF"
-            onChange={(e) => {
-              const v = e.target.value.trim();
-              onChange(v.length === 0 ? undefined : v);
+            value={draft ?? hexValue}
+            placeholder="Hex or name e.g. #38BDF8 or skyblue"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+              if (draft === null) return; // untouched
+              const raw = draft.trim();
+              if (raw.length === 0) {
+                onChange(undefined);
+              } else {
+                const resolved = colorFromInput(raw);
+                // Commit a valid colour (normalized); ignore invalid text and
+                // revert to the committed value.
+                if (resolved) onChange(resolved);
+              }
+              setDraft(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
             }}
             className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
           />
@@ -436,6 +561,16 @@ function ColorPickerSection({
   );
 }
 
+// Cricket pitch presets — Blue + Red lead (per V1), plus the classic clay /
+// green / sand options.
+const CRICKET_PITCH_COLORS = [
+  { name: "Blue", hex: "#1E60A8" },
+  { name: "Red", hex: "#B83227" },
+  { name: "Green", hex: "#2F7D52" },
+  { name: "Clay", hex: "#B1683A" },
+  { name: "Sand", hex: "#C4A66A" },
+];
+
 // Palettes for the factor colour pickers.
 const MARKING_COLORS = [
   { name: "White", hex: "#FFFFFF" },
@@ -448,18 +583,6 @@ const MARKING_COLORS = [
   { name: "Sky", hex: "#0EA5E9" },
   { name: "Purple", hex: "#7C3AED" },
   { name: "Sand", hex: "#C4A66A" },
-];
-const BORDER_COLORS = [
-  { name: "Brown", hex: "#7A5B32" },
-  { name: "Dark brown", hex: "#5B4425" },
-  { name: "Black", hex: "#111827" },
-  { name: "White", hex: "#FFFFFF" },
-  { name: "Grey", hex: "#556070" },
-  { name: "Court green", hex: "#2F7D52" },
-  { name: "Blue", hex: "#1E60A8" },
-  { name: "Red", hex: "#B83227" },
-  { name: "Sand", hex: "#C4A66A" },
-  { name: "Teal", hex: "#1E8A8A" },
 ];
 
 // Line-marking colour control. Single court → one picker (global lineColor).
@@ -525,22 +648,93 @@ function LineMarkingSection({
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={c.lineColor ?? globalColor}
-                  onChange={(e) => onSetCourt(c.id, e.target.value)}
-                  className="w-7 h-7 rounded border border-slate-300 cursor-pointer bg-white shrink-0 p-0"
-                  title="Custom colour"
-                />
-                <input
-                  type="text"
-                  value={c.lineColor ?? ""}
-                  placeholder="Custom hex e.g. #FFFFFF"
-                  onChange={(e) => {
-                    const v = e.target.value.trim();
+                <ColorTextField
+                  value={c.lineColor}
+                  fallback={globalColor}
+                  onCommit={(v) => {
                     if (v) onSetCourt(c.id, v);
                   }}
-                  className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                  swatchClassName="w-7 h-7 rounded border border-slate-300 cursor-pointer bg-white shrink-0 p-0"
+                  textClassName="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </CollapsibleSection>
+  );
+}
+
+// Court-colour control — mirrors LineMarkingSection. A single court shows one
+// global picker (surfaceColorOverride); a multi-sport plot shows one picker PER
+// sport so each overlaid court can take its own surface colour.
+function CourtColourSection({
+  courts,
+  overrideColor,
+  fallback,
+  onSetGlobal,
+  onSetCourt,
+}: {
+  courts: { id: string; label: string; surfaceColor?: string }[];
+  overrideColor: string | undefined;
+  fallback: string;
+  onSetGlobal: (c: string | undefined) => void;
+  onSetCourt: (id: string, c: string) => void;
+}) {
+  if (courts.length <= 1) {
+    return (
+      <ColorPickerSection
+        title="Court colour"
+        defaultOpen
+        hint="The playing-surface colour, shown in both the 2D plan and the 3D render. Pick a preset or type any hex / CSS name. Football & cricket use the grass colour instead."
+        presets={COURT_COLORS}
+        value={overrideColor}
+        fallback={fallback}
+        onChange={onSetGlobal}
+      />
+    );
+  }
+  const base = overrideColor ?? fallback;
+  return (
+    <CollapsibleSection
+      title="Court colour"
+      defaultOpen
+      hint="Each sport's court can take its own surface colour so overlaid courts read distinctly. Pick a preset or type any hex / CSS name."
+    >
+      <div className="space-y-3">
+        {courts.map((c) => {
+          const cur = (c.surfaceColor ?? base).toLowerCase();
+          return (
+            <div key={c.id} className="space-y-1.5">
+              <div className="text-[11px] font-semibold text-slate-700">
+                {c.label}
+              </div>
+              <div className="grid grid-cols-5 gap-1.5">
+                {COURT_COLORS.map((mc) => (
+                  <button
+                    key={mc.hex}
+                    type="button"
+                    title={mc.name}
+                    onClick={() => onSetCourt(c.id, mc.hex)}
+                    className={`h-7 rounded-md border-2 transition ${
+                      cur === mc.hex.toLowerCase()
+                        ? "border-wa-green ring-2 ring-wa-green/40"
+                        : "border-slate-200 hover:border-slate-400"
+                    }`}
+                    style={{ backgroundColor: mc.hex }}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <ColorTextField
+                  value={c.surfaceColor}
+                  fallback={base}
+                  onCommit={(v) => {
+                    if (v) onSetCourt(c.id, v);
+                  }}
+                  swatchClassName="w-7 h-7 rounded border border-slate-300 cursor-pointer bg-white shrink-0 p-0"
+                  textClassName="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
                 />
               </div>
             </div>
@@ -679,6 +873,16 @@ export default function CourtImageWizard({
   // Reset on open
   useEffect(() => {
     if (!open) return;
+    // Clear picker/session-scoped state that is NOT per-design, so it can't
+    // leak into the next design opened in the same page session. turfShape in
+    // particular used to survive a close/reopen and, via the regenerate
+    // effect, stamp the previous design's curved polygon onto a fresh or
+    // edited (rectangular) plot with no visible control to undo it.
+    setTurfShape(null);
+    setDesignMode("standard");
+    setInitialSurface("plain");
+    setActiveCorners({ tl: false, tr: false, bl: false, br: false });
+    setExclusiveShape("rect");
     if (editingId) {
       // Editing — fetch existing
       fetch(`/api/court-images/${editingId}`)
@@ -793,6 +997,11 @@ export default function CourtImageWizard({
       initial.style = { ...initial.style, surface: initialSurface };
     } else if (selectedSports.length === 1 && selectedSports[0] === "basketball") {
       initial.style = { ...initial.style, surface: "ppe_tile_red" };
+    } else if (selectedSports.some((s) => s === "football" || s === "cricket")) {
+      // Football / cricket are turf sports — default to turf so the WHOLE plot
+      // (playing area + non-playing run-off) reads as continuous turf / the
+      // court design itself, not a bare tan base.
+      initial.style = { ...initial.style, surface: "turf_40mm" };
     }
     // Grid overlay default: OFF for continuous-surface finishes
     // (acrylic, turf, PVC) because customers read the grid as a tile
@@ -1298,6 +1507,22 @@ export default function CourtImageWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turfShape, layout?.plot.lengthFt, layout?.plot.widthFt]);
 
+  // V1: standard dimensions never carry a turf / plot shape. Whenever the
+  // design switches (back) to standard mode, reset the shape pickers and clear
+  // any plot polygon so a standard football/cricket plot stays a plain
+  // rectangle — curved / cut turf shapes are custom-mode only.
+  useEffect(() => {
+    if (designMode !== "standard") return;
+    setTurfShape(null);
+    setActiveCorners({ tl: false, tr: false, bl: false, br: false });
+    setExclusiveShape("rect");
+    setLayout((l) =>
+      l && l.plot.polygon
+        ? { ...l, plot: { ...l.plot, polygon: undefined } }
+        : l,
+    );
+  }, [designMode]);
+
   function toggleWatermark() {
     setLayout((prev) => {
       if (!prev) return prev;
@@ -1527,11 +1752,26 @@ export default function CourtImageWizard({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-stretch justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1400px] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-stretch justify-center">
+      {/* V1: the Court Designer fills the entire browser (no max-width cap,
+          no rounded corners) so the canvas has maximum room. */}
+      <div className="bg-white shadow-2xl w-full h-full max-w-none flex flex-col overflow-hidden">
         {/* Header — title + step indicator + close */}
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-4">
+            {/* V1: explicit Back button (exits to the list) now that the
+                designer is full-screen. The X on the right also closes. */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 rounded-md px-2 py-1 hover:bg-slate-100"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12" />
+                <polyline points="12 19 5 12 12 5" />
+              </svg>
+              Back
+            </button>
             <div className="font-semibold text-slate-900">Court Designer</div>
             <StepDots current={step} />
           </div>
@@ -1663,6 +1903,16 @@ export default function CourtImageWizard({
                   onSetCount={(count) =>
                     setLayout((l) => (l ? retileCourts(l, count) : l))
                   }
+                  onSetGap={(gapFt) =>
+                    setLayout((l) =>
+                      l
+                        ? retileCourts(
+                            { ...l, courtGapFt: gapFt },
+                            computeDesignAreas(l).courtCount,
+                          )
+                        : l,
+                    )
+                  }
                 />
                 {/* When a highlight zone is selected, surface the colour
                     prompt right at the top so sales sees "what colour?"
@@ -1692,34 +1942,11 @@ export default function CourtImageWizard({
                   }
                 />
 
-                {/* Highlights — the "colour just one area" tools. Kept
-                    open + near the top because sales reaches for these a
-                    lot (this is the per-area counterpart to the whole-court
-                    colour under Colour & surface). */}
-                <CollapsibleSection
-                  title="Highlights (colour one area)"
-                  defaultOpen
-                  hint="Drop a coloured rectangle you drag, resize, and recolour from the inspector — to fill a basketball key, service box, pickleball kitchen, etc. Renders UNDER the markings so lines stay legible."
-                >
-                  <button
-                    type="button"
-                    onClick={() => addElement("highlight")}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-xs font-medium text-amber-900 transition"
-                  >
-                    <span className="inline-block w-3 h-3 rounded-sm bg-amber-400" />
-                    <span className="flex-1 text-left">+ Highlight zone</span>
-                    <span className="text-[10px] text-amber-700">colour · drag · resize</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => addElement("highlight-runoff")}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-xs font-medium text-amber-900 transition"
-                  >
-                    <span className="inline-block w-3 h-3 rounded-sm bg-amber-500 opacity-60" />
-                    <span className="flex-1 text-left">+ Highlight run-off area</span>
-                    <span className="text-[10px] text-amber-700">outside the court</span>
-                  </button>
-                </CollapsibleSection>
+                {/* Highlights section removed (V1) — the generic per-area
+                    highlight tool + the on-canvas section-click are gone for
+                    ALL sports. Basketball's three key areas (3-point D,
+                    free-throw lane, jump-ball circle) now have dedicated
+                    colour pickers under "Colour & surface" below. */}
 
                 {/* Add element — objects dropped onto the plot. */}
                 <CollapsibleSection title="Add element">
@@ -1735,45 +1962,11 @@ export default function CourtImageWizard({
                   </div>
                 </CollapsibleSection>
 
-                {/* Standard mode: cricket / football time-shared turf gets the
-                    cricket-first boundary shapes (pitch on the long axis, a
-                    football rectangle still inscribes). Full dual line-marking
-                    coexistence renders on the shape itself. */}
-                {designMode === "standard" &&
-                  layout.sports.some((s) => s === "cricket" || s === "football") && (
-                    <CollapsibleSection title="Turf shape (cricket / football)">
-                      <div className="text-[10px] text-slate-500 leading-relaxed mb-1">
-                        Cricket-first boundary shapes — the pitch stays on the
-                        long axis and a football rectangle fits inside.
-                        Rectangle = full football pitch.
-                      </div>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {TURF_SHAPES.filter(
-                          (s) =>
-                            s.cricketFirst ||
-                            s.kind === "rectangle" ||
-                            s.kind === "rounded-rect",
-                        ).map((s) => (
-                          <button
-                            key={s.kind}
-                            type="button"
-                            onClick={() => pickTurfShape(s.kind)}
-                            title={s.blurb}
-                            className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded border transition ${
-                              turfShape === s.kind
-                                ? "bg-wa-green/10 border-wa-green ring-1 ring-wa-green/40"
-                                : "bg-white border-slate-300 hover:border-slate-400"
-                            }`}
-                          >
-                            <ShapeThumb kind={s.kind} />
-                            <span className="text-[9px] leading-tight text-slate-700 text-center">
-                              {s.label}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </CollapsibleSection>
-                  )}
+                {/* V1: turf shapes are NON-STANDARD only. The standard-mode
+                    cricket/football turf-shape picker was removed — curved / cut
+                    turf boundaries now live solely under the "Plot shape"
+                    section in custom (non-standard) mode below. Standard-
+                    dimension football/cricket designs stay a plain rectangle. */}
 
                 {/* Plot shape — only shown in non-standard (custom) mode.
                     Corner cuts stack (checkboxes): sales can click Cut
@@ -1907,125 +2100,47 @@ export default function CourtImageWizard({
                   </CollapsibleSection>
                 )}
 
-                {/* Court colour — the dedicated, easy control for the
-                    playing-surface colour. Sets surfaceColorOverride, which
-                    both the 2D plan and the 3D render honour. Hidden for pure
-                    turf sports (football / cricket) — those use the grass
-                    colour instead. */}
+                {/* Court colour — one picker for a single court, or ONE PER
+                    SPORT on a multi-sport plot (like line marking). Hidden for
+                    pure turf sports (football / cricket), which use grass. */}
                 {layout.sports.some(
                   (s) => s !== "football" && s !== "cricket",
                 ) && (
-                  <CollapsibleSection
-                    title="Court colour"
-                    defaultOpen
-                    hint="The playing-surface colour, shown in both the 2D plan and the 3D render. Pick a preset or type any hex. Football & cricket use the grass colour instead."
-                  >
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-5 gap-2">
-                        {COURT_COLORS.map((c) => {
-                          const active =
-                            (
-                              layout.style.surfaceColorOverride ?? ""
-                            ).toLowerCase() === c.hex.toLowerCase();
-                          return (
-                            <button
-                              key={c.hex}
-                              type="button"
-                              title={c.name}
-                              onClick={() =>
-                                setLayout((l) =>
-                                  l
-                                    ? {
-                                        ...l,
-                                        style: {
-                                          ...l.style,
-                                          surfaceColorOverride: c.hex,
-                                        },
-                                      }
-                                    : l,
-                                )
-                              }
-                              className={`h-9 rounded-md border-2 transition ${
-                                active
-                                  ? "border-wa-green ring-2 ring-wa-green/40"
-                                  : "border-slate-200 hover:border-slate-400"
-                              }`}
-                              style={{ backgroundColor: c.hex }}
-                            />
-                          );
-                        })}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={layout.style.surfaceColorOverride ?? "#1E60A8"}
-                          onChange={(e) =>
-                            setLayout((l) =>
-                              l
-                                ? {
-                                    ...l,
-                                    style: {
-                                      ...l.style,
-                                      surfaceColorOverride: e.target.value,
-                                    },
-                                  }
-                                : l,
-                            )
-                          }
-                          className="w-9 h-9 rounded border border-slate-300 cursor-pointer bg-white shrink-0"
-                          title="Custom colour"
-                        />
-                        <input
-                          type="text"
-                          value={layout.style.surfaceColorOverride ?? ""}
-                          placeholder="Custom hex e.g. #1E60A8"
-                          onChange={(e) => {
-                            const v = e.target.value.trim();
-                            setLayout((l) =>
-                              l
-                                ? {
-                                    ...l,
-                                    style: {
-                                      ...l.style,
-                                      surfaceColorOverride:
-                                        v.length === 0 ? undefined : v,
-                                    },
-                                  }
-                                : l,
-                            );
-                          }}
-                          className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
-                        />
-                        {layout.style.surfaceColorOverride && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setLayout((l) =>
-                                l
-                                  ? {
-                                      ...l,
-                                      style: {
-                                        ...l.style,
-                                        surfaceColorOverride: undefined,
-                                      },
-                                    }
-                                  : l,
-                              )
-                            }
-                            className="text-[10.5px] text-slate-500 hover:text-slate-700 underline whitespace-nowrap shrink-0"
-                            title="Use the finish's default colour"
-                          >
-                            Default
-                          </button>
-                        )}
-                      </div>
-                      <div className="text-[10.5px] text-slate-500 leading-snug">
-                        Applies to the whole playing surface. To colour just one
-                        area (a key, service box, kitchen), use “+ Highlight
-                        zone” under Highlights above.
-                      </div>
-                    </div>
-                  </CollapsibleSection>
+                  <CourtColourSection
+                    courts={layout.elements
+                      .filter((e) =>
+                        [
+                          "basketball-court",
+                          "pickleball-court",
+                          "generic-court",
+                        ].includes(e.type),
+                      )
+                      .map((e) => ({
+                        id: e.id,
+                        label:
+                          e.type === "basketball-court"
+                            ? SPORT_LABEL.basketball
+                            : e.type === "pickleball-court"
+                              ? SPORT_LABEL.pickleball
+                              : "sport" in e
+                                ? SPORT_LABEL[e.sport as Sport] ?? cap(e.sport)
+                                : "Court",
+                        surfaceColor:
+                          "surfaceColor" in e
+                            ? (e as { surfaceColor?: string }).surfaceColor
+                            : undefined,
+                      }))}
+                    overrideColor={layout.style.surfaceColorOverride}
+                    fallback="#1E60A8"
+                    onSetGlobal={(c) =>
+                      setLayout((l) =>
+                        l
+                          ? { ...l, style: { ...l.style, surfaceColorOverride: c } }
+                          : l,
+                      )
+                    }
+                    onSetCourt={(id, c) => updateElement(id, { surfaceColor: c })}
+                  />
                 )}
 
                 {/* Per-factor colour pickers — each its own collapsible swatch
@@ -2067,51 +2182,119 @@ export default function CourtImageWizard({
                   }
                   onSetCourt={(id, c) => updateElement(id, { lineColor: c })}
                 />
-                <ColorPickerSection
-                  title="Border colour"
-                  hint="Colour of the plot boundary frame. Default is black (matches the fenced-court look)."
-                  presets={BORDER_COLORS}
-                  value={layout.style.borderColor}
-                  fallback="#111827"
-                  onChange={(v) =>
-                    setLayout((l) =>
-                      l ? { ...l, style: { ...l.style, borderColor: v } } : l,
-                    )
-                  }
-                />
-                <ColorPickerSection
-                  title="Non-playing (run-off) colour"
-                  hint="Colour of the run-off / non-playing area. Auto-preset per sport; 'None' turns the tint off."
-                  presets={COURT_COLORS}
-                  value={layout.style.runOffColorOverride}
-                  fallback="#264d80"
-                  allowNone
-                  onChange={(v) =>
-                    setLayout((l) =>
-                      l
-                        ? { ...l, style: { ...l.style, runOffColorOverride: v } }
-                        : l,
-                    )
-                  }
-                />
-                {layout.sports.some(
-                  (s) =>
-                    s === "pickleball" ||
-                    s === "tennis" ||
-                    s === "badminton" ||
-                    s === "volleyball",
+                {/* Border colour picker removed (V1) — the plot frame is
+                    hardcoded black in CourtCanvas. */}
+                {/* V1: basketball's three key areas get dedicated colour
+                    pickers (the replacement for the removed Highlights tool),
+                    rendered directly on the court like the line-marking colour.
+                    "Default preset" clears a fill. */}
+                {layout.sports.includes("basketball") && (
+                  <>
+                    <ColorPickerSection
+                      title="3-point area colour"
+                      hint="Fills the 3-point D at each end, behind the lines. Clear with 'Default preset'."
+                      presets={MARKING_COLORS}
+                      value={layout.style.basketball3ptColor}
+                      fallback="#EF4444"
+                      onChange={(v) =>
+                        setLayout((l) =>
+                          l
+                            ? { ...l, style: { ...l.style, basketball3ptColor: v } }
+                            : l,
+                        )
+                      }
+                    />
+                    <ColorPickerSection
+                      title="Free-throw lane colour"
+                      hint="Fills the key / paint box at each end."
+                      presets={MARKING_COLORS}
+                      value={layout.style.basketballKeyColor}
+                      fallback="#2563EB"
+                      onChange={(v) =>
+                        setLayout((l) =>
+                          l
+                            ? { ...l, style: { ...l.style, basketballKeyColor: v } }
+                            : l,
+                        )
+                      }
+                    />
+                    <ColorPickerSection
+                      title="Jump-ball circle colour"
+                      hint="Fills the centre / jump-ball circle."
+                      presets={MARKING_COLORS}
+                      value={layout.style.basketballCircleColor}
+                      fallback="#15803D"
+                      onChange={(v) =>
+                        setLayout((l) =>
+                          l
+                            ? { ...l, style: { ...l.style, basketballCircleColor: v } }
+                            : l,
+                        )
+                      }
+                    />
+                  </>
+                )}
+                {/* Run-off colour — hidden for pure football/cricket, where
+                    the run-off IS turf (the court design itself), not a colour. */}
+                {!layout.sports.every(
+                  (s) => s === "football" || s === "cricket",
                 ) && (
                   <ColorPickerSection
-                    title="Kitchen / net zone"
-                    hint="Highlight the net zone (pickleball kitchen, tennis service band, etc.). Auto-preset per sport; 'None' turns it off."
+                    title="Non-playing (run-off) colour"
+                    hint="Colour of the run-off / non-playing area. 'None' turns the tint off; accepts any hex / CSS name."
+                    presets={COURT_COLORS}
+                    value={layout.style.runOffColorOverride}
+                    fallback="#264d80"
+                    allowNone
+                    onChange={(v) =>
+                      setLayout((l) =>
+                        l
+                          ? { ...l, style: { ...l.style, runOffColorOverride: v } }
+                          : l,
+                      )
+                    }
+                  />
+                )}
+                {/* V1: kitchen zone is pickleball-only now. */}
+                {layout.sports.includes("pickleball") && (
+                  <ColorPickerSection
+                    title="Kitchen zone (pickleball)"
+                    hint="Colour of the pickleball non-volley 'kitchen' zone. 'None' turns it off; accepts any hex / CSS colour name."
                     presets={COURT_COLORS}
                     value={layout.style.kitchenColor}
-                    fallback="#EA580C"
+                    fallback="#C0563B"
                     allowNone
                     onChange={(v) =>
                       setLayout((l) =>
                         l ? { ...l, style: { ...l.style, kitchenColor: v } } : l,
                       )
+                    }
+                  />
+                )}
+                {/* V1: cricket pitch colour — Blue / Red presets + custom. Sets
+                    the style default AND patches any cricket-pitch element so
+                    the strip repaints even if it carried its own colour. */}
+                {layout.sports.includes("cricket") && (
+                  <ColorPickerSection
+                    title="Cricket pitch colour"
+                    hint="Colour of the cricket pitch strip. Blue / Red presets, or any hex / CSS colour name."
+                    presets={CRICKET_PITCH_COLORS}
+                    value={layout.style.cricketPitchColor}
+                    fallback="#b1683a"
+                    onChange={(v) =>
+                      setLayout((l) => {
+                        if (!l) return l;
+                        const color = v ?? "#b1683a";
+                        return {
+                          ...l,
+                          style: { ...l.style, cricketPitchColor: color },
+                          elements: l.elements.map((e) =>
+                            e.type === "cricket-pitch"
+                              ? { ...e, pitchColor: color }
+                              : e,
+                          ),
+                        };
+                      })
                     }
                   />
                 )}
@@ -2122,44 +2305,16 @@ export default function CourtImageWizard({
                     isn't split across the panel. Per-area colouring is the
                     separate Highlights section above. */}
                 <CollapsibleSection
-                  title="Surface finish & run-off"
+                  title="Flooring options"
                   defaultOpen
-                  hint="The material finish, the ground/base colour and the run-off convention. The main court colour is now its own “Court colour” section above; per-area colours are under Highlights."
+                  hint="Pick the flooring / surface finish. The grid overlay auto-shows for PP tile only."
                 >
                   <div className="space-y-2">
-                  <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                    Surface finish
-                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {(
-                      [
-                        { id: "plain", label: "Plain", group: "any" },
-                        { id: "ppe_tile_red", label: "PPE tile — Red", group: "hard" },
-                        { id: "acrylic_blue", label: "Acrylic — Blue", group: "hard" },
-                        { id: "acrylic_green", label: "Acrylic — Green", group: "hard" },
-                        { id: "turf_40mm", label: "Turf — 40 mm", group: "turf" },
-                        { id: "turf_50mm", label: "Turf — 50 mm", group: "turf" },
-                      ] as const
-                    )
-                      .filter((opt) => {
-                        // Only offer finishes that suit the sport: turf for
-                        // football/cricket, hard-court (PPE / acrylic) for the
-                        // court sports, everything for multisport. "Plain"
-                        // always shows.
-                        if (opt.group === "any") return true;
-                        const s = layout.sports;
-                        const turf =
-                          s.includes("multisport") ||
-                          s.some((x) => x === "football" || x === "cricket");
-                        const hard =
-                          s.includes("multisport") ||
-                          s.some(
-                            (x) =>
-                              !["football", "cricket", "multisport"].includes(x),
-                          );
-                        return opt.group === "turf" ? turf : hard;
-                      })
-                      .map((opt) => (
+                    {/* Step-2 finishes come from the SAME surface↔sport matrix
+                        as Step 1 (surfaceOptionsForSports / SPORT_SURFACES), so
+                        the two pickers can never disagree. */}
+                    {surfaceOptionsForSports(layout.sports as Sport[]).map((opt) => (
                       <button
                         key={opt.id}
                         type="button"
@@ -2255,154 +2410,18 @@ export default function CourtImageWizard({
                   )}
                   </div>
 
-                  <div>
-                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                      Ground finish
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          { id: undefined, label: "Sand (default)" },
-                          { id: "concrete", label: "Concrete grey" },
-                          { id: "grass", label: "Grass green" },
-                          { id: "white", label: "White" },
-                        ] as const
-                      ).map((opt) => {
-                        const active =
-                          (layout.style.groundFinish ?? undefined) === opt.id;
-                        return (
-                          <button
-                            key={opt.label}
-                            type="button"
-                            onClick={() =>
-                              setLayout((l) =>
-                                l
-                                  ? {
-                                      ...l,
-                                      style: {
-                                        ...l.style,
-                                        groundFinish: opt.id,
-                                        // Clear any custom override
-                                        // when a preset is chosen so
-                                        // the preset actually applies.
-                                        groundColorOverride: undefined,
-                                      },
-                                    }
-                                  : l,
-                              )
-                            }
-                            className={`px-3 py-1.5 text-xs rounded-md border transition ${
-                              active
-                                ? "bg-wa-green text-white border-wa-green"
-                                : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {/* Custom hex — override the preset with an exact
-                        colour when the customer wants a specific
-                        outdoor tone. */}
-                    <div className="flex items-center gap-2 mt-2">
-                      <input
-                        type="color"
-                        value={layout.style.groundColorOverride ?? "#9c845b"}
-                        onChange={(e) =>
-                          setLayout((l) =>
-                            l
-                              ? {
-                                  ...l,
-                                  style: {
-                                    ...l.style,
-                                    groundColorOverride: e.target.value,
-                                  },
-                                }
-                              : l,
-                          )
-                        }
-                        className="w-8 h-8 rounded border border-slate-300 cursor-pointer bg-white"
-                        title="Ground colour override"
-                      />
-                      <input
-                        type="text"
-                        value={layout.style.groundColorOverride ?? ""}
-                        placeholder="Custom hex (any colour)"
-                        onChange={(e) => {
-                          const v = e.target.value.trim();
-                          setLayout((l) =>
-                            l
-                              ? {
-                                  ...l,
-                                  style: {
-                                    ...l.style,
-                                    groundColorOverride:
-                                      v.length === 0 ? undefined : v,
-                                  },
-                                }
-                              : l,
-                          );
-                        }}
-                        className="flex-1 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
-                      />
-                    </div>
-                  </div>
+                  {/* Ground finish control removed (V1) — the ground/earth is
+                      hardcoded white (DEFAULT_STYLE.groundFinish = "white"). */}
 
                   {/* Court playing-surface colour now lives in its own
                       dedicated "Court colour" section above (presets + custom
                       hex). This section keeps the material finish, the ground
                       colour and the run-off convention. */}
 
-                  <div>
-                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                      Run-off zone tone
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          { id: "off", label: "Off (single tone)" },
-                          { id: "subtle", label: "Subtle" },
-                          { id: "distinct", label: "Distinct" },
-                        ] as const
-                      ).map((opt) => {
-                        const current = layout.style.runOffTone ?? "off";
-                        const active = current === opt.id;
-                        return (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() =>
-                              setLayout((l) =>
-                                l
-                                  ? {
-                                      ...l,
-                                      style: {
-                                        ...l.style,
-                                        runOffTone: opt.id,
-                                      },
-                                    }
-                                  : l,
-                              )
-                            }
-                            className={`px-3 py-1.5 text-xs rounded-md border transition ${
-                              active
-                                ? "bg-wa-green text-white border-wa-green"
-                                : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="text-[10.5px] text-slate-500 mt-1.5 leading-snug">
-                      Splits the plot fill into a playing area (full colour)
-                      and a run-off zone (darker shade of the same colour).
-                      Useful when showing customers the FIBA / FIFA run-off
-                      convention around the sport court.
-                    </div>
-                  </div>
+                  {/* V1: the "Run-off zone tone" control (Off / Subtle /
+                      Distinct) was removed for all sports. runOffTone stays
+                      "off"; the run-off area is coloured only via the explicit
+                      "Non-playing (run-off) colour" picker above. */}
 
                   {/* Optional colour override for the run-off zone. Only
                       offered when a run-off tone is active. Sales and
@@ -2522,19 +2541,20 @@ export default function CourtImageWizard({
                               return el.sport as Sport;
                             return null;
                           };
-                          const elements = [...l.elements].sort((a, b) => {
-                            const aCourt = isCourt(a.type);
-                            const bCourt = isCourt(b.type);
-                            if (aCourt && bCourt) {
-                              const aPrimary = sportFor(a) === next ? 1 : 0;
-                              const bPrimary = sportFor(b) === next ? 1 : 0;
-                              return aPrimary - bPrimary;
-                            }
-                            // Non-court elements always render on top of
-                            // courts (existing behaviour).
-                            if (aCourt !== bCourt) return aCourt ? -1 : 1;
-                            return 0;
-                          });
+                          // The canvas renders strictly by z-order, so a plain
+                          // array re-sort was ignored. Bump the primary sport's
+                          // court(s) just above the OTHER COURTS so they render
+                          // as the hero — but NOT above non-court elements
+                          // (nets, hoops), which must stay visible on top.
+                          const maxCourtZ = l.elements.reduce(
+                            (m, e) => (isCourt(e.type) ? Math.max(m, e.z ?? 0) : m),
+                            0,
+                          );
+                          const elements = l.elements.map((el) =>
+                            isCourt(el.type) && sportFor(el) === next
+                              ? { ...el, z: maxCourtZ + 1 }
+                              : el,
+                          );
                           return {
                             ...l,
                             primarySport: next,
@@ -2592,26 +2612,6 @@ export default function CourtImageWizard({
                       onDelete={() => removeElement(selectedElement.id)}
                       onDuplicate={() => duplicateElement(selectedElement.id)}
                       onMoveZ={(d) => moveZ(selectedElement.id, d)}
-                      onAddHighlightFromPreset={(preset) => {
-                        // Court elements have x, y, rotation, width, height —
-                        // that's what highlightZoneFromPreset needs. We
-                        // gate this callback on court types below in
-                        // ElementInspector so we can safely cast.
-                        const court = selectedElement as unknown as {
-                          x: number;
-                          y: number;
-                          rotation: number;
-                          width: number;
-                          height: number;
-                        };
-                        const zone = highlightZoneFromPreset(court, preset);
-                        setLayout((prev) =>
-                          prev
-                            ? { ...prev, elements: [...prev.elements, zone] }
-                            : prev,
-                        );
-                        setSelectedId(zone.id);
-                      }}
                     />
                   </div>
                 )}
@@ -2638,23 +2638,7 @@ export default function CourtImageWizard({
                   onUpdate={updateElement}
                   canvasWidth={canvasSize.width}
                   canvasHeight={canvasSize.height}
-                  showGrid={layout.style.showGrid ?? true}
-                  onSectionClick={(court, preset) => {
-                    const c = court as unknown as {
-                      x: number;
-                      y: number;
-                      rotation: number;
-                      width: number;
-                      height: number;
-                    };
-                    const zone = highlightZoneFromPreset(c, preset);
-                    setLayout((prev) =>
-                      prev
-                        ? { ...prev, elements: [...prev.elements, zone] }
-                        : prev,
-                    );
-                    setSelectedId(zone.id);
-                  }}
+                  showGrid={isTiledSurface(layout.style.surface)}
                 />
                 <div className="absolute top-3 left-3 bg-white/90 backdrop-blur rounded-md px-2.5 py-1 text-[11px] text-slate-700 shadow-sm">
                   <div>
@@ -2681,31 +2665,9 @@ export default function CourtImageWizard({
                     );
                   })()}
                 </div>
-                {/* Grid overlay toggle. Old designs default to grid ON
-                    (matches historical look). New designs on continuous
-                    surfaces start OFF because customers read the grid as
-                    a tile pattern on solid acrylic / turf / PVC.
-                    Bottom-left so it never covers the top-right DIMENSIONS
-                    card (this is an editor-only control, not exported). */}
-                <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur rounded-md px-2.5 py-1.5 text-[11px] shadow-sm flex items-center gap-2">
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={layout.style.showGrid ?? true}
-                      onChange={(e) =>
-                        setLayout({
-                          ...layout,
-                          style: {
-                            ...layout.style,
-                            showGrid: e.target.checked,
-                          },
-                        })
-                      }
-                      className="accent-wa-green"
-                    />
-                    <span className="text-slate-700">Grid overlay</span>
-                  </label>
-                </div>
+                {/* V1: the manual "Grid overlay" toggle was removed. The grid
+                    is auto-derived — ON only for PP tile (where it maps to real
+                    tile edges), OFF for every other flooring. */}
               </div>
             </div>
           )}
@@ -2886,7 +2848,8 @@ type Step1SurfaceOption =
   | "pvc_sports";
 
 const ALL_SURFACE_OPTIONS: Array<{ id: Step1SurfaceOption; label: string }> = [
-  { id: "plain", label: "Plain / undecided" },
+  // "plain" is intentionally NOT selectable (V1) — it stays valid as the
+  // internal default SurfaceFinish, but sales always picks a real finish.
   { id: "ppe_tile_red", label: "PPE tile — Red" },
   { id: "acrylic_blue", label: "Acrylic — Blue" },
   { id: "acrylic_green", label: "Acrylic — Green" },
@@ -2899,13 +2862,18 @@ const ALL_SURFACE_OPTIONS: Array<{ id: Step1SurfaceOption; label: string }> = [
 // picker only offers relevant options (football → turf, basketball →
 // tile/acrylic, racket sports → pvc/acrylic, etc.). "plain" is always
 // offered. Multi-sport shows the union.
+// V1 surface↔sport matrix (a sport not listed keeps the full option set):
+//   PVC       → badminton, basketball, pickleball, volleyball
+//   Acrylic   → basketball, pickleball, tennis, volleyball  (blue + green)
+//   PP Tiles  → the PVC set + football, tennis
+//   Turf      → football, cricket  (40 mm + 50 mm)
 const SPORT_SURFACES: Record<string, Step1SurfaceOption[]> = {
-  football: ["turf_40mm", "turf_50mm"],
+  football: ["ppe_tile_red", "turf_40mm", "turf_50mm"],
   cricket: ["turf_40mm", "turf_50mm"],
-  basketball: ["ppe_tile_red", "acrylic_blue", "acrylic_green"],
-  tennis: ["acrylic_blue", "acrylic_green"],
-  volleyball: ["pvc_sports", "acrylic_blue", "acrylic_green"],
-  badminton: ["pvc_sports"],
+  basketball: ["pvc_sports", "acrylic_blue", "acrylic_green", "ppe_tile_red"],
+  tennis: ["acrylic_blue", "acrylic_green", "ppe_tile_red"],
+  volleyball: ["pvc_sports", "acrylic_blue", "acrylic_green", "ppe_tile_red"],
+  badminton: ["pvc_sports", "ppe_tile_red"],
   pickleball: ["pvc_sports", "acrylic_blue", "acrylic_green", "ppe_tile_red"],
   multisport: [
     "ppe_tile_red",
@@ -2921,7 +2889,7 @@ function surfaceOptionsForSports(
   sports: Sport[],
 ): Array<{ id: Step1SurfaceOption; label: string }> {
   if (sports.length === 0) return ALL_SURFACE_OPTIONS;
-  const allowed = new Set<Step1SurfaceOption>(["plain"]);
+  const allowed = new Set<Step1SurfaceOption>();
   for (const s of sports) {
     for (const surf of SPORT_SURFACES[s] ?? []) allowed.add(surf);
   }
@@ -3563,35 +3531,9 @@ function Step1(props: {
         </section>
       )}
 
-      {/* Base work — sub-base under the flooring. Informational; shows
-          in the combined PDF / quote. */}
-      <section>
-        <h3 className="text-sm font-semibold text-slate-900 mb-3">
-          Base work
-        </h3>
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
-              { id: "", label: "Not decided" },
-              { id: "concrete", label: "Concrete" },
-              { id: "asphalt", label: "Asphalt" },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.label}
-              type="button"
-              onClick={() => setBaseWork(opt.id)}
-              className={`px-3 py-2 text-xs rounded-md border transition ${
-                baseWork === opt.id
-                  ? "bg-wa-green/10 border-wa-green text-wa-dark font-medium"
-                  : "bg-white border-slate-300 text-slate-700 hover:border-slate-400"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </section>
+      {/* Base work control removed (V1) — kept internally (state defaults to
+          "" / not decided; goStep2 omits it). Consumers no-op on an empty
+          value, so the flooring/3D pad + PDF are unaffected. */}
 
       {/* Flooring — driven by the internal product catalogue, filtered
           by the primary sport. Picking a product records it on the
@@ -4711,6 +4653,8 @@ function CombinedPdfBlock({
         plotLabel: `${layout.plot.lengthFt} × ${layout.plot.widthFt} ft`,
         lengthFt: layout.plot.lengthFt,
         widthFt: layout.plot.widthFt,
+        // Structured dimensions for the PDF's dedicated Dimensions table.
+        dimensions: computeDesignAreas(layout),
         baseWork: layout.style.baseWork ?? null,
         flooringName: layout.style.flooringProductName ?? null,
         sports: layout.sports,

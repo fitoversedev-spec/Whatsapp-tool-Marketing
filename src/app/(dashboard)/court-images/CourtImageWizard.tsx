@@ -462,6 +462,95 @@ const BORDER_COLORS = [
   { name: "Teal", hex: "#1E8A8A" },
 ];
 
+// Line-marking colour control. Single court → one picker (global lineColor).
+// Multiple courts → one compact picker PER court, labelled by sport, so each
+// sport's overlaid markings can be recoloured independently.
+function LineMarkingSection({
+  courts,
+  globalColor,
+  onSetGlobal,
+  onSetCourt,
+}: {
+  courts: { id: string; label: string; lineColor?: string }[];
+  globalColor: string;
+  onSetGlobal: (c: string) => void;
+  onSetCourt: (id: string, c: string) => void;
+}) {
+  if (courts.length <= 1) {
+    const only = courts[0];
+    return (
+      <ColorPickerSection
+        title="Line marking colour"
+        hint="Colour of the court lines / markings. Default is white."
+        presets={MARKING_COLORS}
+        value={only?.lineColor ?? globalColor}
+        fallback="#FFFFFF"
+        onChange={(v) => {
+          const c = v ?? "#ffffff";
+          // Set the court's own line colour so it always renders; fall back to
+          // the global style colour when there's no court (e.g. cricket turf).
+          if (only) onSetCourt(only.id, c);
+          else onSetGlobal(c);
+        }}
+      />
+    );
+  }
+  return (
+    <CollapsibleSection
+      title="Line marking colour"
+      hint="Each sport's court lines can have their own colour so overlaid markings are easy to tell apart."
+    >
+      <div className="space-y-3">
+        {courts.map((c) => {
+          const cur = (c.lineColor ?? globalColor).toLowerCase();
+          return (
+            <div key={c.id} className="space-y-1.5">
+              <div className="text-[11px] font-semibold text-slate-700">
+                {c.label}
+              </div>
+              <div className="grid grid-cols-5 gap-1.5">
+                {MARKING_COLORS.map((mc) => (
+                  <button
+                    key={mc.hex}
+                    type="button"
+                    title={mc.name}
+                    onClick={() => onSetCourt(c.id, mc.hex)}
+                    className={`h-7 rounded-md border-2 transition ${
+                      cur === mc.hex.toLowerCase()
+                        ? "border-wa-green ring-2 ring-wa-green/40"
+                        : "border-slate-200 hover:border-slate-400"
+                    }`}
+                    style={{ backgroundColor: mc.hex }}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={c.lineColor ?? globalColor}
+                  onChange={(e) => onSetCourt(c.id, e.target.value)}
+                  className="w-7 h-7 rounded border border-slate-300 cursor-pointer bg-white shrink-0 p-0"
+                  title="Custom colour"
+                />
+                <input
+                  type="text"
+                  value={c.lineColor ?? ""}
+                  placeholder="Custom hex e.g. #FFFFFF"
+                  onChange={(e) => {
+                    const v = e.target.value.trim();
+                    if (v) onSetCourt(c.id, v);
+                  }}
+                  className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </CollapsibleSection>
+  );
+}
+
 // Sports the wizard can lay out. "multisport" is a base surface; others
 // are stacked or substituted depending on combinations.
 const SPORTS: Sport[] = [
@@ -1941,20 +2030,42 @@ export default function CourtImageWizard({
 
                 {/* Per-factor colour pickers — each its own collapsible swatch
                     section (like Court colour): line marking, plot border,
-                    run-off (non-playing), and the pickleball kitchen. */}
-                <ColorPickerSection
-                  title="Line marking colour"
-                  hint="Colour of the court lines / markings. Default is white."
-                  presets={MARKING_COLORS}
-                  value={layout.style.lineColor}
-                  fallback="#FFFFFF"
-                  onChange={(v) =>
+                    run-off (non-playing), and the pickleball kitchen. Line
+                    marking lists one picker PER sport on a multi-sport design. */}
+                <LineMarkingSection
+                  courts={layout.elements
+                    .filter((e) =>
+                      [
+                        "football-field",
+                        "basketball-court",
+                        "pickleball-court",
+                        "generic-court",
+                      ].includes(e.type),
+                    )
+                    .map((e) => ({
+                      id: e.id,
+                      label:
+                        e.type === "football-field"
+                          ? SPORT_LABEL.football
+                          : e.type === "basketball-court"
+                            ? SPORT_LABEL.basketball
+                            : e.type === "pickleball-court"
+                              ? SPORT_LABEL.pickleball
+                              : "sport" in e
+                                ? SPORT_LABEL[e.sport as Sport] ?? cap(e.sport)
+                                : "Court",
+                      lineColor:
+                        "lineColor" in e
+                          ? (e as { lineColor?: string }).lineColor
+                          : undefined,
+                    }))}
+                  globalColor={layout.style.lineColor}
+                  onSetGlobal={(c) =>
                     setLayout((l) =>
-                      l
-                        ? { ...l, style: { ...l.style, lineColor: v ?? "#ffffff" } }
-                        : l,
+                      l ? { ...l, style: { ...l.style, lineColor: c } } : l,
                     )
                   }
+                  onSetCourt={(id, c) => updateElement(id, { lineColor: c })}
                 />
                 <ColorPickerSection
                   title="Border colour"

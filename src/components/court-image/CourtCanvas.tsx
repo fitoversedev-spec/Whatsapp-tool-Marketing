@@ -808,7 +808,14 @@ function FootballFieldShape({
   // mismatched stripe directions. So skip the field grass fill when a
   // surface is set — let the plot surface show through, markings on
   // top. On a "plain" plot the field draws its own grass as before.
-  const drawOwnGrass = style.surface === "plain";
+  //
+  // EXCEPTION: when a run-off colour is set, the plot fill becomes that solid
+  // colour (stripes skipped). If the pitch stayed transparent it would show
+  // the run-off colour too — so the pitch draws its own turf, keeping the
+  // playing area green while ONLY the run-off ring takes the colour.
+  const runOffColored =
+    !!style.runOffColorOverride && style.runOffColorOverride !== "none";
+  const drawOwnGrass = style.surface === "plain" || runOffColored;
 
   return (
     <>
@@ -2638,6 +2645,14 @@ function PlotSurface({
       : (runOffColorOverride ??
         (primarySport ? RUNOFF_DEFAULT_COLOR[primarySport] : undefined) ??
         shadeHexColor(solidFillBase, runOffFactor(runOffTone)));
+  // A real run-off COLOUR (not the auto shade, not "none") paints the plot
+  // fill that solid colour. ONLY for football does the plot go solid — the
+  // football pitch redraws its own grass on top, so just the run-off ring
+  // takes the colour. Cricket (and any turf without a covering pitch element)
+  // keeps its turf so the colour never wipes the whole flooring.
+  const runOffColored =
+    !!runOffColorOverride && runOffColorOverride !== "none";
+  const footballRunOff = runOffColored && primarySport === "football";
   const tiled = isTiledSurface(surface);
   const acrylic = isAcrylicSurface(surface);
   const turf = isTurfSurface(surface);
@@ -2787,9 +2802,7 @@ function PlotSurface({
             listening={false}
           />
         </>
-      ) : turf &&
-        stripes &&
-        (!runOffColorOverride || runOffColorOverride === "none") ? (
+      ) : turf && stripes && !footballRunOff ? (
         // Turf: mowed light/dark stripes across the plot. Skipped when a
         // run-off colour is chosen — then the plot renders that solid colour
         // (below) so the non-playing area is highlighted, with the sport's

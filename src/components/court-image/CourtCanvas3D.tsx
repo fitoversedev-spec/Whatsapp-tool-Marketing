@@ -46,10 +46,18 @@ import type {
   BasketballHoopElement,
   HighlightZoneElement,
 } from "@/lib/court-image/schema";
-import { aSideProps } from "@/lib/court-image/schema";
+import {
+  aSideProps,
+  isTurfSurface,
+  isTiledSurface,
+  SURFACE_SOLID_COLOR,
+} from "@/lib/court-image/schema";
 
 export type CourtCanvas3DHandle = {
   toDataURL: (pixelRatio?: number) => string | null;
+  // A straight overhead "drone" still (camera looking straight down, framing
+  // the whole plot). Used for the PDF's 3D view. Restores the live camera.
+  captureTopDown: (pixelRatio?: number) => string | null;
   // Records a 360° auto-orbit of the camera around the court and returns
   // an MP4 H.264 blob suitable for WhatsApp Cloud API. Uses WebCodecs +
   // mp4-muxer in-browser so we don't need ffmpeg.wasm. Calls onProgress
@@ -361,6 +369,12 @@ export default function CourtCanvas3D({
     const cx = layout.plot.lengthFt / 2;
     const cy = layout.plot.widthFt / 2;
 
+    // Plot-surface base (turf / acrylic / tile) filling the whole plot — matches
+    // the 2D plan so bare-pitch cricket + football run-off show flooring, not
+    // grey ground. Added under the court elements.
+    const plotSurf = makePlotSurface(layout);
+    if (plotSurf) group.add(plotSurf);
+
     // Sort by z so larger fields render under overlays (cricket pitch
     // should be on top of the football field).
     const sorted = [...layout.elements].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
@@ -453,6 +467,54 @@ export default function CourtCanvas3D({
           renderer.setSize(size.x, size.y, false);
           renderer.render(scene, camera); // refresh the live canvas
         }
+        return url;
+      },
+      captureTopDown(pixelRatio = 2) {
+        // A straight overhead "drone" still (for the PDF's 3D view). Positions
+        // the camera high on Y, looking straight down, frames the whole plot,
+        // captures, then restores the live camera.
+        const renderer = rendererRef.current;
+        const scene = sceneRef.current;
+        const camera = cameraRef.current;
+        const controls = controlsRef.current;
+        const currentLayout = layoutRef.current;
+        if (!renderer || !scene || !camera) return null;
+        const prevPos = camera.position.clone();
+        const prevTarget = controls
+          ? controls.target.clone()
+          : new THREE.Vector3(0, 0, 0);
+        const prevAutoRotate = controls?.autoRotate ?? false;
+        if (controls) controls.autoRotate = false;
+        // Overhead height scaled to the plot so the whole court fits; a tiny
+        // x/z offset avoids gimbal-lock in lookAt.
+        const plotL = currentLayout.plot.lengthFt;
+        const plotW = currentLayout.plot.widthFt;
+        const height = Math.max(plotL, plotW) * 1.4;
+        camera.position.set(0.01, height, 0.01);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+        const size = new THREE.Vector2();
+        renderer.getSize(size);
+        const ratio = Math.max(1, Math.min(pixelRatio || 1, 4));
+        if (ratio !== 1) renderer.setSize(size.x * ratio, size.y * ratio, false);
+        renderer.render(scene, camera);
+        const wmImg = watermarkImgRef.current;
+        const wmOpacity = layoutRef.current.style.watermarkOpacity ?? 0.9;
+        const url = !wmImg
+          ? renderer.domElement.toDataURL("image/png")
+          : compositeWithWatermark(renderer.domElement, wmImg, wmOpacity);
+        // Restore live camera + size.
+        if (ratio !== 1) renderer.setSize(size.x, size.y, false);
+        camera.position.copy(prevPos);
+        if (controls) {
+          controls.target.copy(prevTarget);
+          controls.autoRotate = prevAutoRotate;
+          controls.update();
+        } else {
+          camera.lookAt(prevTarget);
+        }
+        camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
         return url;
       },
       async recordOrbitMP4(options) {
@@ -1274,6 +1336,68 @@ function surfaceMaterial(
     metalness: 0.0,
     envMapIntensity: 0.5,
   });
+}
+
+// Plot-surface base — the whole plot rendered in its chosen flooring (turf
+// stripes / acrylic / tile), matching the 2D PlotSurface. Without it, bare-
+// pitch sports (cricket) and football run-off show grey ground in 3D instead
+// of the turf/flooring the 2D plan draws. Returns null for "plain" earth.
+function makePlotSurface(layout: CourtLayout): THREE.Object3D | null {
+  const surface = layout.style.surface;
+  if (!surface || surface === "plain") return null;
+  const turf = isTurfSurface(surface);
+  const baseColor =
+    layout.style.surfaceColorOverride ??
+    (turf ? layout.style.grassColor : SURFACE_SOLID_COLOR[surface]) ??
+    "#2f8c3e";
+  const Lft = layout.plot.lengthFt;
+  const Wft = layout.plot.widthFt;
+  const aspect = Lft / Math.max(1, Wft);
+  const cw = 1600;
+  const ch = Math.max(1, Math.round(cw / aspect));
+  const c = document.createElement("canvas");
+  c.width = cw;
+  c.height = ch;
+  const cx = c.getContext("2d")!;
+  if (turf && layout.style.grassStripes !== false) {
+    // Mowed-stripe turf (parity with the 2D plan + the football field tone).
+    const stripes = 12;
+    const sw = cw / stripes;
+    for (let i = 0; i < stripes; i++) {
+      cx.fillStyle = i % 2 === 0 ? baseColor : darken(baseColor, 0.1);
+      cx.fillRect(i * sw, 0, sw + 1, ch);
+    }
+  } else {
+    cx.fillStyle = baseColor;
+    cx.fillRect(0, 0, cw, ch);
+    if (isTiledSurface(surface)) {
+      // Faint tile grid for PPE tile flooring.
+      cx.strokeStyle = "rgba(0,0,0,0.14)";
+      cx.lineWidth = 2;
+      const cell = cw / 20;
+      for (let x = cell; x < cw; x += cell) {
+        cx.beginPath();
+        cx.moveTo(x, 0);
+        cx.lineTo(x, ch);
+        cx.stroke();
+      }
+      for (let y = cell; y < ch; y += cell) {
+        cx.beginPath();
+        cx.moveTo(0, y);
+        cx.lineTo(cw, y);
+        cx.stroke();
+      }
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  const mat = surfaceMaterial(tex, turf ? 0.92 : 0.6);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(Lft, Wft), mat);
+  mesh.rotation.x = -Math.PI / 2;
+  // Just below the court elements (which sit at local y >= 0) and above both
+  // the base-work pad top (~ -0.04) and the ground plane (world y = -0.05).
+  mesh.position.y = -0.02;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 // Subtle tonal break-up for the surrounding earth so the big ground

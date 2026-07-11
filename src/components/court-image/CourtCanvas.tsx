@@ -334,17 +334,6 @@ export default function CourtCanvas({
           borderColor={layout.style.borderColor}
           primarySport={layout.primarySport ?? layout.sports[0]}
         />
-        {showGrid && (
-          <GridLines
-            pxPerFt={pxPerFt}
-            plotOriginX={plotOriginX}
-            plotOriginY={plotOriginY}
-            plotPxWidth={plotPxWidth}
-            plotPxHeight={plotPxHeight}
-            plotLengthFt={layout.plot.lengthFt}
-            plotWidthFt={layout.plot.widthFt}
-          />
-        )}
       </Layer>
 
       {/* Element layer — sorted by z so cricket pitch sits above football.
@@ -393,6 +382,25 @@ export default function CourtCanvas({
           />
         ))}
       </Layer>
+
+      {/* Tile grid overlay — drawn ABOVE the courts so the PP-tile grid stays
+          visible even when a court is given an opaque colour (the bug was the
+          coloured court fill hiding the base-layer grid). The lines are faint
+          white, so they read as tile edges over coloured areas and vanish over
+          the white court markings. Only shown for tiled surfaces (showGrid). */}
+      {showGrid && (
+        <Layer listening={false}>
+          <GridLines
+            pxPerFt={pxPerFt}
+            plotOriginX={plotOriginX}
+            plotOriginY={plotOriginY}
+            plotPxWidth={plotPxWidth}
+            plotPxHeight={plotPxHeight}
+            plotLengthFt={layout.plot.lengthFt}
+            plotWidthFt={layout.plot.widthFt}
+          />
+        </Layer>
+      )}
 
       {/* Dimensions layer — drawn AFTER elements so the width/length
           labels are never hidden by an oversized pitch or fence. Listening
@@ -730,8 +738,10 @@ function CourtNameLabel({
   // they don't collide.
   side?: "left" | "right";
 }) {
-  const fs = Math.min(20, Math.max(9, Math.min(w, h) * 0.05));
-  const dfs = fs * 0.82;
+  // Bumped the minimum so labels never render tiny/blurry on thin courts
+  // (e.g. a cricket pitch, where the short side drives the size).
+  const fs = Math.min(20, Math.max(12, Math.min(w, h) * 0.055));
+  const dfs = fs * 0.85;
   const padX = fs * 0.55;
   const padY = fs * 0.3;
   const line1W = name.length * fs * 0.62;
@@ -747,7 +757,7 @@ function CourtNameLabel({
         y={top}
         width={boxW}
         height={boxH}
-        fill="rgba(15,23,42,0.66)"
+        fill="rgba(15,23,42,0.85)"
         cornerRadius={3}
         listening={false}
       />
@@ -1046,6 +1056,14 @@ function CricketPitchShape({
           ))}
         </Group>
       ))}
+      {/* Size label — cricket has pitchLengthFt/pitchWidthFt (not width/height),
+          so the dims string is built from those directly. */}
+      <CourtNameLabel
+        w={w}
+        h={h}
+        name="CRICKET PITCH"
+        dims={`${Math.round(el.pitchLengthFt)} × ${Math.round(el.pitchWidthFt)} ft (${(el.pitchLengthFt * 0.3048).toFixed(1)} × ${(el.pitchWidthFt * 0.3048).toFixed(1)} m)`}
+      />
     </>
   );
 }
@@ -2219,6 +2237,15 @@ function DesignInfoPanel({
   // playing area (e.g. "Basketball — 92 × 49 ft").
   for (const g of courtSizeGroups(areas)) {
     const n = g.count;
+    // Cricket pitch: spell out width + length in both units for clarity.
+    if (g.label === "Cricket pitch") {
+      secs.push({
+        label: "Cricket pitch",
+        ftLine: `${Math.round(g.widthFt)} ft width × ${Math.round(g.lengthFt)} ft length`,
+        mLine: `${Math.round(g.widthFt * 0.3048)} m width × ${Math.round(g.lengthFt * 0.3048)} m length`,
+      });
+      continue;
+    }
     secs.push({
       label:
         n === 1 ? `${g.label} — playing area` : `${g.label} — playing area (×${n})`,

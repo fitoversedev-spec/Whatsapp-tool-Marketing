@@ -30,6 +30,19 @@ export type QuoteLineItem = {
   // Optional product photo shown at the TOP of this item's description in the
   // PDF. Set from the wizard's "Products" step (auto-matched, reassignable).
   imageUrl?: string | null;
+  // ── Optional presentation metadata (drives the reference quotation layout) ──
+  // Section subheader the row groups under in the particulars table
+  // (e.g. "A  Ground Preparation  (common to all options)"). Same value =
+  // same group. Null/undefined = ungrouped.
+  section?: string | null;
+  // Mutually-exclusive option tag (e.g. "B1"). When any included items carry a
+  // tag, the quote renders a "choose one option" comparison instead of a single
+  // grand total, and each tagged row shows an option chip.
+  optionTag?: string | null;
+  optionColor?: "blue" | "green" | "red" | null; // chip colour
+  optionShort?: string | null; // short label for comparison header / spec card
+  // Structured specs for the "Specifications" cards (pile height, gauge, …).
+  specs?: Array<{ label: string; value: string }> | null;
 };
 
 export function computeAreaForItem(

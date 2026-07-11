@@ -12,25 +12,48 @@ import {
   StandardFonts,
   rgb,
   PageSizes,
+  PDFString,
+  PDFName,
   type PDFFont,
   type PDFImage,
   type PDFPage,
 } from "pdf-lib";
+import fs from "fs";
+import path from "path";
 import { htmlToPlainText, extractHtmlTables } from "@/lib/products/format";
 import type { ProductDTO } from "@/lib/products/store";
 import type { DesignAreas } from "./schema";
 
+// Fitoverse logo — loaded once at module load (mirrors quotation/pdf.ts).
+// Guarded so a missing file degrades to text rather than 500-ing the render.
+let LOGO_BYTES: Buffer | null = null;
+try {
+  LOGO_BYTES = fs.readFileSync(
+    path.join(process.cwd(), "public", "quotation-assets", "image1.png"),
+  );
+} catch {
+  LOGO_BYTES = null;
+}
+
 const MARGIN = 40;
 const [PAGE_W, PAGE_H] = PageSizes.A4;
 const CONTENT_W = PAGE_W - MARGIN * 2;
+// Reserved top-of-page band for the logo, so content never overlaps it.
+const LOGO_BAND = 44;
 
+// Fit O Verse brand palette (green #159341 · blue #73caf0 · red #c81124) on a
+// clean light document. Green is the headline accent, blue for links, red kept
+// for sparing emphasis.
 const COL = {
-  ink: rgb(0.05, 0.07, 0.13),
-  soft: rgb(0.28, 0.33, 0.41),
-  faint: rgb(0.55, 0.6, 0.67),
-  line: rgb(0.85, 0.88, 0.92),
-  green: rgb(0.07, 0.55, 0.44),
-  band: rgb(0.94, 0.96, 0.98),
+  ink: rgb(0.098, 0.129, 0.18), // charcoal text
+  soft: rgb(0.3, 0.35, 0.42), // secondary grey
+  faint: rgb(0.55, 0.6, 0.67), // faint grey
+  line: rgb(0.85, 0.88, 0.92), // hairline
+  green: rgb(0.082, 0.576, 0.255), // brand green #159341
+  blue: rgb(0.451, 0.792, 0.941), // brand blue #73caf0
+  red: rgb(0.784, 0.067, 0.141), // brand red #c81124
+  band: rgb(0.937, 0.969, 0.949), // faint green-tinted section band
+  link: rgb(0.09, 0.45, 0.78), // readable link blue
 };
 
 export type CombinedQuote = {
@@ -120,7 +143,9 @@ type Ctx = {
 
 function newPage(ctx: Ctx) {
   ctx.page = ctx.doc.addPage([PAGE_W, PAGE_H]);
-  ctx.y = PAGE_H - MARGIN;
+  // Start below the reserved logo band so page content never sits under the
+  // top-left logo drawn on every page.
+  ctx.y = PAGE_H - MARGIN - LOGO_BAND;
 }
 
 function ensure(ctx: Ctx, needed: number) {
@@ -185,6 +210,7 @@ function gap(ctx: Ctx, n = 8) {
 function sectionTitle(ctx: Ctx, title: string) {
   ensure(ctx, 30);
   gap(ctx, 10);
+  // Faint band with a brand-green accent bar on the left.
   ctx.page.drawRectangle({
     x: MARGIN,
     y: ctx.y - 18,
@@ -192,8 +218,15 @@ function sectionTitle(ctx: Ctx, title: string) {
     height: 20,
     color: COL.band,
   });
+  ctx.page.drawRectangle({
+    x: MARGIN,
+    y: ctx.y - 18,
+    width: 4,
+    height: 20,
+    color: COL.green,
+  });
   ctx.page.drawText(sanitize(title), {
-    x: MARGIN + 8,
+    x: MARGIN + 12,
     y: ctx.y - 14,
     size: 11,
     font: ctx.bold,
@@ -211,27 +244,21 @@ export async function renderCombinedPdf(
   const ctx: Ctx = {
     doc,
     page: doc.addPage([PAGE_W, PAGE_H]),
-    y: PAGE_H - MARGIN,
+    y: PAGE_H - MARGIN - LOGO_BAND,
     font,
     bold,
   };
 
-  // ── Cover / header ──
-  ctx.page.drawText("Fitoverse", {
+  // ── Cover / header ── The Fitoverse logo is drawn top-left on EVERY page in
+  //    the post-pass below, so the cover just carries the proposal title.
+  ctx.page.drawText("Court Design Proposal", {
     x: MARGIN,
     y: ctx.y - 20,
-    size: 20,
+    size: 18,
     font: bold,
     color: COL.green,
   });
-  ctx.page.drawText("Court Design Proposal", {
-    x: MARGIN,
-    y: ctx.y - 38,
-    size: 12,
-    font,
-    color: COL.soft,
-  });
-  ctx.y -= 54;
+  ctx.y -= 34;
   text(ctx, `Customer: ${input.customerName || "-"}`, { size: 11, bold: true });
   text(ctx, `Sport: ${input.sports.map((s) => cap(s)).join(", ") || "-"}`, {
     color: COL.soft,
@@ -240,11 +267,13 @@ export async function renderCombinedPdf(
   if (input.baseWork) text(ctx, `Base work: ${cap(input.baseWork)}`, { color: COL.soft });
   if (input.flooringName) text(ctx, `Flooring: ${input.flooringName}`, { color: COL.soft });
 
-  // ── Page 1 — 2D court plan, filling the page under the header ──
+  // ── 2D court plan — on the COVER page, right under the customer details and
+  //    as large as the remaining space + page width allow (customer request). ──
   const twoD = input.designImages[0];
   if (twoD) {
+    ctx.y -= 8;
     sectionTitle(ctx, "2D court plan");
-    await drawImageFit(ctx, twoD.bytes, ctx.y - MARGIN - 24);
+    await drawImageFit(ctx, twoD.bytes, ctx.y - MARGIN, { wide: true });
   }
 
   // ── Dimensions — a dedicated, easy-to-read table (kept OFF the 2D diagram) ──
@@ -354,16 +383,34 @@ export async function renderCombinedPdf(
 
   // ── Footer on every page (skip merged TDS pages so it doesn't overlap
   //    the original spec-sheet layout) ──
+  // Logo (top-left, bigger) + footer on every combined page. Merged quote/TDS
+  // pages keep their own header/footer, so skip them.
+  let logoImage: PDFImage | null = null;
+  if (LOGO_BYTES) {
+    try {
+      logoImage = await doc.embedPng(LOGO_BYTES);
+    } catch {
+      logoImage = null;
+    }
+  }
   const pages = doc.getPages();
   pages.forEach((pg, i) => {
     if (mergedTdsPages.has(pg)) return;
-    pg.drawText(sanitize(`Fitoverse - +91 93638 63382   ·   Page ${i + 1} of ${pages.length}`), {
-      x: MARGIN,
-      y: 24,
-      size: 8,
-      font,
-      color: COL.faint,
-    });
+    if (logoImage) {
+      const dims = logoImage.scaleToFit(150, 34);
+      pg.drawImage(logoImage, {
+        x: MARGIN,
+        y: PAGE_H - 16 - dims.height,
+        width: dims.width,
+        height: dims.height,
+      });
+    }
+    pg.drawText(
+      sanitize(
+        `Fitoverse - +91 63815 02055   ·   Page ${i + 1} of ${pages.length}`,
+      ),
+      { x: MARGIN, y: 24, size: 8, font, color: COL.faint },
+    );
   });
 
   return doc.save();
@@ -372,6 +419,43 @@ export async function renderCombinedPdf(
 // Closing page — "Connect with Fitoverse": our website + social handles, so
 // the proposal ends with a clear way to reach us (the company portfolio /
 // contact section from the quotation template).
+// Clickable link — brand-blue underlined text + a real URI annotation. The
+// combined-pdf cursor is already bottom-origin, so the baseline is ctx.y - size.
+function drawLink(ctx: Ctx, url: string, x: number, size: number): number {
+  const text = sanitize(url);
+  const textW = ctx.font.widthOfTextAtSize(text, size);
+  const baseline = ctx.y - size;
+  ctx.page.drawLine({
+    start: { x, y: baseline - 1 },
+    end: { x: x + textW, y: baseline - 1 },
+    color: COL.link,
+    thickness: 0.6,
+  });
+  ctx.page.drawText(text, {
+    x,
+    y: baseline,
+    size,
+    font: ctx.font,
+    color: COL.link,
+  });
+  const annot = ctx.doc.context.register(
+    ctx.doc.context.obj({
+      Type: "Annot",
+      Subtype: "Link",
+      Rect: [x, baseline - 2, x + textW, baseline + size],
+      Border: [0, 0, 0],
+      A: { Type: "Action", S: "URI", URI: PDFString.of(url) },
+    }),
+  );
+  const existing = ctx.page.node.get(PDFName.of("Annots"));
+  if (existing && "push" in (existing as unknown as { push?: unknown })) {
+    (existing as unknown as { push: (a: unknown) => void }).push(annot);
+  } else {
+    ctx.page.node.set(PDFName.of("Annots"), ctx.doc.context.obj([annot]));
+  }
+  return textW;
+}
+
 function drawConnectWithFitoverse(ctx: Ctx) {
   newPage(ctx);
   sectionTitle(ctx, "Connect with Fitoverse");
@@ -387,19 +471,23 @@ function drawConnectWithFitoverse(ctx: Ctx) {
     ["Facebook", "https://www.facebook.com/profile.php?id=100077279349300"],
     ["Twitter (X)", "https://x.com/fitoverse"],
   ];
+  const size = 10.5;
   for (const [label, url] of links) {
-    ensure(ctx, 18);
-    ctx.page.drawText(sanitize(`${label}:  ${url}`), {
+    ensure(ctx, 22);
+    const labelText = sanitize(`${label}:`);
+    ctx.page.drawText(labelText, {
       x: MARGIN,
-      y: ctx.y - 11,
-      size: 10.5,
+      y: ctx.y - size,
+      size,
       font: ctx.bold,
       color: COL.ink,
     });
-    ctx.y -= 20;
+    const labelW = ctx.bold.widthOfTextAtSize(labelText, size);
+    drawLink(ctx, url, MARGIN + labelW + 8, size);
+    ctx.y -= 22;
   }
   gap(ctx, 10);
-  text(ctx, "Fitoverse Private Limited   ·   +91 93638 63382", {
+  text(ctx, "Fitoverse Private Limited   ·   +91 63815 02055", {
     color: COL.soft,
     size: 10,
   });
@@ -458,6 +546,15 @@ function drawDimensionsTable(ctx: Ctx, areas: DesignAreas) {
     metric: `${mtv(p.lengthFt)} x ${mtv(p.widthFt)} m  =  ${nf(p.areaSqFt * SQFT_SQM)} sq.m`,
   });
   for (const g of groups) {
+    // Cricket pitch: spell out width + length in both units for clarity.
+    if (g.label === "Cricket pitch") {
+      rows.push({
+        label: "Cricket pitch",
+        imperial: `${Math.round(g.w)} ft width x ${Math.round(g.l)} ft length`,
+        metric: `${Math.round(g.w * 0.3048)} m width x ${Math.round(g.l * 0.3048)} m length`,
+      });
+      continue;
+    }
     rows.push({
       label:
         g.count === 1
@@ -590,100 +687,31 @@ async function drawSingle3DView(ctx: Ctx, image: Uint8Array) {
     height: h,
   });
   ctx.y -= h + 16;
-  text(
-    ctx,
-    "A 6-second spinning 3D walkaround is sent to you as a separate WhatsApp video.",
-    { color: COL.soft, size: 9.5 },
-  );
-}
-
-// 3D turntable grid — the captured angle stills laid out 2-per-row so the
-// customer sees the court from every side in the static document.
-async function drawAngleGrid(ctx: Ctx, images: Uint8Array[]) {
-  sectionTitle(ctx, "3D views — every angle");
-  const cols = 2;
-  const gapX = 10;
-  const gapY = 10;
-  const cellW = (CONTENT_W - gapX * (cols - 1)) / cols;
-  const rows = Math.max(1, Math.ceil(images.length / cols));
-  // Size the rows to fill the space left under the title — every captured
-  // angle shares one full, balanced page instead of spilling a half-empty
-  // second page.
-  const availH = ctx.y - MARGIN - 18;
-  const cellH = (availH - gapY * (rows - 1)) / rows;
-  for (let i = 0; i < images.length; i += cols) {
-    const rowTop = ctx.y;
-    for (let c = 0; c < cols; c++) {
-      const bytes = images[i + c];
-      if (!bytes) break;
-      const embedded = await tryEmbed(ctx.doc, bytes);
-      if (!embedded) continue;
-      const x = MARGIN + c * (cellW + gapX);
-      const scale = Math.min(cellW / embedded.width, cellH / embedded.height);
-      const w = embedded.width * scale;
-      const h = embedded.height * scale;
-      ctx.page.drawImage(embedded, {
-        x: x + (cellW - w) / 2,
-        y: rowTop - cellH + (cellH - h) / 2,
-        width: w,
-        height: h,
-      });
-    }
-    ctx.y = rowTop - cellH - gapY;
-  }
 }
 
 // Draw one image centred, scaled to the content width and a max height —
 // used for the full-page 2D plan and the 3D video poster.
-async function drawImageFit(ctx: Ctx, bytes: Uint8Array, maxH: number) {
+async function drawImageFit(ctx: Ctx, bytes: Uint8Array, maxH: number, opts: { wide?: boolean } = {}) {
   const embedded = await tryEmbed(ctx.doc, bytes);
   if (!embedded) {
     text(ctx, "(image could not be embedded)", { color: COL.faint, size: 9 });
     return;
   }
-  const availH = Math.max(120, Math.min(maxH, ctx.y - MARGIN - 30));
-  const scale = Math.min(CONTENT_W / embedded.width, availH / embedded.height);
+  // The 2D plan uses a wider box (closer to the page edges) so it renders as
+  // large as possible; other images stay within the normal content column.
+  const boxX = opts.wide ? 18 : MARGIN;
+  const boxW = opts.wide ? PAGE_W - 36 : CONTENT_W;
+  const availH = Math.max(120, Math.min(maxH, ctx.y - MARGIN - 20));
+  const scale = Math.min(boxW / embedded.width, availH / embedded.height);
   const w = embedded.width * scale;
   const h = embedded.height * scale;
   ctx.page.drawImage(embedded, {
-    x: MARGIN + (CONTENT_W - w) / 2,
+    x: boxX + (boxW - w) / 2,
     y: ctx.y - h,
     width: w,
     height: h,
   });
   ctx.y -= h + 6;
-}
-
-// A dedicated "3D walkaround video" page — the poster still with a play
-// badge, and a note that the actual video arrives as a WhatsApp message
-// (a PDF can't play video).
-async function drawVideoPage(ctx: Ctx, posterBytes: Uint8Array) {
-  sectionTitle(ctx, "3D walkaround video");
-  const embedded = await tryEmbed(ctx.doc, posterBytes);
-  if (embedded) {
-    const availH = ctx.y - MARGIN - 50;
-    const scale = Math.min(CONTENT_W / embedded.width, availH / embedded.height);
-    const w = embedded.width * scale;
-    const h = embedded.height * scale;
-    const x = MARGIN + (CONTENT_W - w) / 2;
-    const y = ctx.y - h;
-    ctx.page.drawImage(embedded, { x, y, width: w, height: h });
-    // Play badge — a translucent dark disc with a white triangle.
-    const bx = x + w / 2;
-    const by = y + h / 2;
-    ctx.page.drawCircle({ x: bx, y: by, size: 24, color: rgb(0, 0, 0), opacity: 0.5 });
-    ctx.page.drawSvgPath("M 0 -11 L 0 11 L 16 0 Z", {
-      x: bx - 4,
-      y: by,
-      color: rgb(1, 1, 1),
-    });
-    ctx.y = y - 10;
-  }
-  text(
-    ctx,
-    "A 6-second spinning 3D walkaround of this court is sent to you as a separate WhatsApp video.",
-    { color: COL.soft, size: 9.5 },
-  );
 }
 
 async function drawProduct(ctx: Ctx, p: ProductDTO) {

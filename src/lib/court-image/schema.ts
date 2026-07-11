@@ -1016,7 +1016,7 @@ export function computeDesignAreas(layout: CourtLayout): DesignAreas {
     if (e.type === "basketball-court") return "Basketball";
     if (e.type === "football-field") return "Football";
     if (e.type === "pickleball-court") return "Pickleball";
-    if (e.type === "cricket-pitch") return "Cricket";
+    if (e.type === "cricket-pitch") return "Cricket pitch";
     if (e.type === "generic-court" && "sport" in e) {
       const s = String((e as { sport?: string }).sport ?? "");
       return s ? s.charAt(0).toUpperCase() + s.slice(1) : "Court";
@@ -1025,10 +1025,20 @@ export function computeDesignAreas(layout: CourtLayout): DesignAreas {
   };
 
   const courts = layout.elements
-    .filter((e) => COURT_FOOTPRINT_TYPES.has(e.type))
+    // The cricket-pitch is included too — it stores pitchLengthFt/pitchWidthFt
+    // (not width/height), so it needs its own size read to appear in the table.
+    .filter((e) => COURT_FOOTPRINT_TYPES.has(e.type) || e.type === "cricket-pitch")
     .map((e) => {
-      const w = "width" in e ? (e as { width?: number }).width ?? 0 : 0;
-      const h = "height" in e ? (e as { height?: number }).height ?? 0 : 0;
+      let w: number;
+      let h: number;
+      if (e.type === "cricket-pitch") {
+        const cp = e as { pitchLengthFt?: number; pitchWidthFt?: number };
+        w = cp.pitchLengthFt ?? 0;
+        h = cp.pitchWidthFt ?? 0;
+      } else {
+        w = "width" in e ? (e as { width?: number }).width ?? 0 : 0;
+        h = "height" in e ? (e as { height?: number }).height ?? 0 : 0;
+      }
       return {
         lengthFt: Math.max(w, h),
         widthFt: Math.min(w, h),

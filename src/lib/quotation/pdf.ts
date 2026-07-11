@@ -53,24 +53,30 @@ const FOOTER_RESERVE = 30;
 // dividers without everything looking flat.
 // Palette from the Fitoverse quotation design template — charcoal headers, a
 // blue primary accent, and a green→blue→dark-blue→magenta gradient rule.
+// Brand-green palette matching the reference quotation: green #159341 for
+// section heads / table head / accents; blue + red used only for option chips
+// and links; dark-slate ink; soft neutrals for cards and rows.
 const COL = {
-  text: rgb(0.169, 0.184, 0.212), // #2b2f36 ink
-  textSoft: rgb(0.22, 0.27, 0.35),
-  muted: rgb(0.361, 0.42, 0.455), // #5c6b74
-  charcoal: rgb(0.137, 0.149, 0.173), // #23262c — header bands / table head
-  blue: rgb(0.122, 0.525, 0.839), // #1f86d6 — primary accent
-  accent: rgb(0.137, 0.149, 0.173), // charcoal (header band + table header)
-  accentSoft: rgb(0.9, 0.94, 0.98), // pale blue for card highlights
+  text: rgb(0.114, 0.157, 0.192), // #1d2831 dark slate ink
+  textSoft: rgb(0.275, 0.325, 0.375),
+  muted: rgb(0.451, 0.502, 0.549), // #737f8c labels / footer
+  charcoal: rgb(0.114, 0.157, 0.192), // (legacy alias) → dark slate
+  blue: rgb(0.098, 0.522, 0.851), // #1985d9 — option B1 chip / links
+  red: rgb(0.784, 0.067, 0.141), // #c81124 — option B3 chip
+  accent: rgb(0.082, 0.576, 0.255), // #159341 brand green — the primary accent
+  green: rgb(0.082, 0.576, 0.255), // #159341 (alias for readability)
+  greenDeep: rgb(0.043, 0.42, 0.184), // #0b6b2f — grand-total / emphasis text
+  greenSoft: rgb(0.914, 0.957, 0.929), // #e9f4ed — pale green band (project, A/B subhead)
+  accentSoft: rgb(0.914, 0.957, 0.929), // pale green card highlight
   accentText: rgb(1, 1, 1),
-  light: rgb(0.933, 0.945, 0.961), // #eef1f5
-  border: rgb(0.898, 0.914, 0.933), // #e5e9ee
-  borderStrong: rgb(0.78, 0.81, 0.85),
-  rowAlt: rgb(0.965, 0.976, 0.988), // #f6f9fc
-  green: rgb(0.86, 0.97, 0.78),
+  light: rgb(0.957, 0.965, 0.973), // #f4f6f8 info card
+  border: rgb(0.851, 0.871, 0.894), // #d9dee4
+  borderStrong: rgb(0.72, 0.75, 0.79),
+  rowAlt: rgb(0.972, 0.98, 0.988), // #f8fafc alt row
   highlight: rgb(1, 0.953, 0.749), // #fff3bf highlighted value bg
   highlightText: rgb(0.478, 0.361, 0), // #7a5c00
-  grandTotalBg: rgb(0.137, 0.149, 0.173), // charcoal
-  link: rgb(0.122, 0.525, 0.839),
+  grandTotalBg: rgb(0.082, 0.576, 0.255), // #159341 green grand-total band
+  link: rgb(0.098, 0.522, 0.851),
 };
 
 // The 4-stop brand gradient (green → blue → dark-blue → magenta) at positions
@@ -125,6 +131,11 @@ function inr(n: number): string {
   return n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
 
+// Rates keep up to 2 decimals (e.g. 91.35) but drop trailing zeros (23,100).
+function inrRate(n: number): string {
+  return n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
 // pdf-lib's built-in Helvetica fonts use the WinAnsi character set, which
 // excludes any Unicode beyond Western European glyphs. Anything outside the
 // set throws "WinAnsi cannot encode" at draw time. We pre-replace the
@@ -168,13 +179,26 @@ type Ctx = {
   y: number; // current cursor — distance from TOP of page (we convert to pdf-y on draw)
   quoteNumber: string;
   pageNumber: number;
+  logo: PDFImage | null; // drawn top-left on every page
 };
 
 function newPage(ctx: Ctx) {
   ctx.page = ctx.doc.addPage(PageSizes.A4);
   ctx.y = MARGIN;
   ctx.pageNumber += 1;
-  drawGradientBar(ctx.page, 0, 0, PAGE_W, 5); // brand accent rule at the top
+  // Logo top-left on every page (the reference has no top colour bar).
+  if (ctx.logo) {
+    const f = ctx.logo.scaleToFit(140, 34);
+    ctx.page.drawImage(ctx.logo, {
+      x: MARGIN,
+      y: yFromTop(ctx.y + f.height),
+      width: f.width,
+      height: f.height,
+    });
+    ctx.y += f.height + 14;
+  } else {
+    ctx.y += 6;
+  }
 }
 
 function ensureSpace(ctx: Ctx, needed: number) {
@@ -273,28 +297,26 @@ function space(ctx: Ctx, n = 8) {
 }
 
 function drawFooter(ctx: Ctx) {
-  // pdf-lib's y-origin is the bottom-left corner, so a SMALL y sits near the
-  // bottom edge. This used to be `PAGE_H - 20`, which is ~20pt from the TOP —
-  // the footer + page number were rendering jammed against the top brand band
-  // while the reserved bottom strip stayed blank. y=20 puts it at the bottom;
-  // the divider (y+12) sits just above the footer text.
-  const y = 20;
+  // Centered brand footer on every page (matches the reference — no page number
+  // or quote number). pdf-lib's y-origin is bottom-left, so a small y sits near
+  // the bottom edge; the divider (y+12) sits just above the footer text.
+  const y = 22;
   ctx.page.drawLine({
     start: { x: MARGIN, y: y + 12 },
     end: { x: PAGE_W - MARGIN, y: y + 12 },
     color: COL.border,
     thickness: 0.5,
   });
-  safeDraw(ctx.page, 
-    `FITOVERSE PRIVATE LIMITED  |  ${ctx.quoteNumber}  |  Page ${ctx.pageNumber}`,
-    {
-      x: MARGIN,
-      y,
-      size: 7,
-      font: ctx.font,
-      color: COL.muted,
-    }
-  );
+  const text =
+    "Fitoverse Pvt. Ltd., SALEM · CHENNAI · BANGALORE      |      PHONE [6381502055]";
+  const w = safeWidth(ctx.font, text, 7.5);
+  safeDraw(ctx.page, text, {
+    x: (PAGE_W - w) / 2,
+    y,
+    size: 7.5,
+    font: ctx.font,
+    color: COL.muted,
+  });
 }
 
 // ─── Sections ────────────────────────────────────────────────────────────────
@@ -379,7 +401,7 @@ function titleForSport(sport: string): string {
     case "pickleball":
       return "Quotation for Pickleball Court Construction";
     default:
-      return `Quotation for ${sport.charAt(0).toUpperCase() + sport.slice(1)} Sports Infrastructure`;
+      return `Quotation for ${sport ? sport.charAt(0).toUpperCase() + sport.slice(1) : "Sports"} Sports Infrastructure`;
   }
 }
 
@@ -482,6 +504,116 @@ function drawInfoGrid(
   }
   ctx.y += blockH;
   space(ctx, 8);
+}
+
+// ── Reference-style page-1 masthead: logo top-left, "Quotation for <subject>",
+// a From / To / Quoted-on block, and a green Project accent band. Replaces the
+// old charcoal brand band + centered title + grey info grid. No image for now
+// (a real sport photo may be slotted in later — never the 2D plan). ──
+
+function projectLabelForSport(sport: string): string {
+  switch (sport) {
+    case "football":
+      return "Football Turf";
+    case "cricket":
+      return "Cricket Turf";
+    case "basketball":
+      return "Basketball Court";
+    case "pickleball":
+      return "Pickleball Court";
+    case "tennis":
+      return "Tennis Court";
+    case "badminton":
+      return "Badminton Court";
+    case "volleyball":
+      return "Volleyball Court";
+    case "multisport":
+      return "Multisport Arena";
+    default:
+      return sport ? sport.charAt(0).toUpperCase() + sport.slice(1) : "Sports Court";
+  }
+}
+
+function drawBrandLogo(ctx: Ctx, logoImage: PDFImage | null) {
+  if (logoImage) {
+    const f = logoImage.scaleToFit(160, 44);
+    ctx.page.drawImage(logoImage, {
+      x: MARGIN,
+      y: yFromTop(ctx.y + f.height),
+      width: f.width,
+      height: f.height,
+    });
+    ctx.y += f.height;
+  } else {
+    safeDraw(ctx.page, "FIT O VERSE", {
+      x: MARGIN,
+      y: yFromTop(ctx.y + 22),
+      size: 20,
+      font: ctx.bold,
+      color: COL.green,
+    });
+    ctx.y += 24;
+  }
+  space(ctx, 16);
+}
+
+function drawQuoteTitle(ctx: Ctx, sport: string) {
+  safeDraw(ctx.page, "Quotation for", {
+    x: MARGIN,
+    y: yFromTop(ctx.y + 11),
+    size: 11,
+    font: ctx.font,
+    color: COL.muted,
+  });
+  ctx.y += 18;
+  const subject = titleForSport(sport).replace(/^Quotation for\s+/i, "");
+  drawText(ctx, subject, {
+    x: MARGIN,
+    size: 22,
+    bold: true,
+    color: COL.text,
+    maxWidth: CONTENT_W,
+  });
+  space(ctx, 16);
+}
+
+function drawFromTo(ctx: Ctx, customerName: string, quoteDate: string) {
+  const parts = (customerName ?? "").split(",");
+  const toName = (parts[0] ?? "").trim();
+  const city = parts.slice(1).join(",").trim();
+  const colW = CONTENT_W / 2;
+  const s = ctx.y;
+  ensureSpace(ctx, 84);
+  // From (left)
+  safeDraw(ctx.page, "From", { x: MARGIN, y: yFromTop(s + 9), size: 9, font: ctx.font, color: COL.muted });
+  safeDraw(ctx.page, "Fitoverse Private Limited", { x: MARGIN, y: yFromTop(s + 26), size: 13, font: ctx.bold, color: COL.text });
+  safeDraw(ctx.page, "Phone: 6381502055", { x: MARGIN, y: yFromTop(s + 40), size: 9, font: ctx.font, color: COL.textSoft });
+  safeDraw(ctx.page, "GSTIN: 33AAECF8905G1ZQ", { x: MARGIN, y: yFromTop(s + 52), size: 9, font: ctx.font, color: COL.textSoft });
+  // To (right)
+  const rx = MARGIN + colW;
+  safeDraw(ctx.page, "To", { x: rx, y: yFromTop(s + 9), size: 9, font: ctx.font, color: COL.muted });
+  safeDraw(ctx.page, toName, { x: rx, y: yFromTop(s + 26), size: 13, font: ctx.bold, color: COL.text });
+  if (city) safeDraw(ctx.page, city, { x: rx, y: yFromTop(s + 40), size: 9, font: ctx.font, color: COL.textSoft });
+  safeDraw(ctx.page, "Quoted on", { x: rx, y: yFromTop(s + 60), size: 9, font: ctx.font, color: COL.muted });
+  safeDraw(ctx.page, quoteDate, { x: rx, y: yFromTop(s + 74), size: 12, font: ctx.bold, color: COL.text });
+  ctx.y = s + 84;
+  space(ctx, 8);
+}
+
+function drawProjectLine(ctx: Ctx, sport: string, lengthFt: number, widthFt: number, city: string) {
+  const h = 28;
+  ensureSpace(ctx, h);
+  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, h, { fill: COL.greenSoft });
+  drawRect(ctx, MARGIN, ctx.y, 3, h, { fill: COL.accent });
+  const area = lengthFt * widthFt;
+  const prefix = "Project:  ";
+  const detail = `${projectLabelForSport(sport)} - ${lengthFt} ft x ${widthFt} ft (${inr(area)} sq ft)${city ? ", " + city : ""}`;
+  const baseY = yFromTop(ctx.y + 18);
+  safeDraw(ctx.page, prefix, { x: MARGIN + 12, y: baseY, size: 10, font: ctx.font, color: COL.muted });
+  const px = MARGIN + 12 + safeWidth(ctx.font, prefix, 10);
+  safeDraw(ctx.page, detail, { x: px, y: baseY, size: 10, font: ctx.bold, color: COL.text });
+  ctx.y += h;
+  space(ctx, 10);
 }
 
 // Fetch + embed each line item's product photo (PNG/JPG only — pdf-lib can't
@@ -711,9 +843,8 @@ function drawTotals(ctx: Ctx, subtotal: number, gst: number, grandTotal: number)
   drawTotalRow("GST Amount", `₹ ${inr(gst)}`);
   space(ctx, 4);
 
-  // Grand total band — charcoal with the brand gradient rule across its top.
+  // Grand total band — brand green.
   drawRect(ctx, x, ctx.y, totalsW, 24, { fill: COL.grandTotalBg });
-  drawGradientBar(ctx.page, x, ctx.y, totalsW, 3);
   safeDraw(ctx.page, "Grand Total", {
     x: x + 10,
     y: yFromTop(ctx.y + 16),
@@ -888,7 +1019,7 @@ function drawTerm(ctx: Ctx, title: string, body: string) {
 function drawBankBlock(ctx: Ctx) {
   const blockH = 75;
   ensureSpace(ctx, blockH);
-  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, blockH, { fill: COL.green });
+  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, blockH, { fill: COL.greenSoft, border: COL.border });
   const startY = ctx.y + 8;
   const rows = [
     ["Account Name", "FITOVERSE PVT LTD"],
@@ -1020,6 +1151,345 @@ function safeWidth(font: PDFFont, rawText: string, size: number): number {
   return font.widthOfTextAtSize(sanitize(rawText), size);
 }
 
+// ─── Reference-style quote body: particulars table, option comparison, spec
+// cards, and the full-page Advantage + Connect closers. ───────────────────────
+
+function drawCentered(
+  ctx: Ctx,
+  text: string,
+  x0: number,
+  w: number,
+  yTop: number,
+  size: number,
+  font: PDFFont,
+  color: ReturnType<typeof rgb>,
+) {
+  const tw = safeWidth(font, text, size);
+  safeDraw(ctx.page, text, { x: x0 + (w - tw) / 2, y: yFromTop(yTop + size), size, font, color });
+}
+
+function gstLabel(g: number): string {
+  return g > 0 ? `${g}%` : "Nil";
+}
+
+function optionFill(color?: string | null) {
+  return color === "green" ? COL.accent : color === "red" ? COL.red : COL.blue;
+}
+
+function drawOptionChip(ctx: Ctx, x: number, yTop: number, tag: string, color?: string | null): number {
+  const label = `OPTION ${tag}`;
+  const fs = 6.5;
+  const padX = 4;
+  const w = safeWidth(ctx.bold, label, fs) + padX * 2;
+  const h = 12;
+  ctx.page.drawRectangle({ x, y: yFromTop(yTop + h), width: w, height: h, color: optionFill(color) });
+  safeDraw(ctx.page, label, { x: x + padX, y: yFromTop(yTop + h - 3), size: fs, font: ctx.bold, color: rgb(1, 1, 1) });
+  return w;
+}
+
+// Six-column particulars table (PARTICULARS · UNIT · QTY · RATE · GST · AMOUNT)
+// with optional A/B section subheaders and option chips.
+function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[]) {
+  const cols = { part: 264, unit: 44, qty: 48, rate: 55, gst: 42, amt: 70 };
+  const x = {
+    part: MARGIN,
+    unit: MARGIN + cols.part,
+    qty: MARGIN + cols.part + cols.unit,
+    rate: MARGIN + cols.part + cols.unit + cols.qty,
+    gst: MARGIN + cols.part + cols.unit + cols.qty + cols.rate,
+    amt: MARGIN + cols.part + cols.unit + cols.qty + cols.rate + cols.gst,
+  };
+  const headerH = 20;
+  const centerAt = (t: string, cx0: number, cw: number, size: number, font: PDFFont, color: ReturnType<typeof rgb>, y: number) => {
+    const w = safeWidth(font, t, size);
+    safeDraw(ctx.page, t, { x: cx0 + (cw - w) / 2, y, size, font, color });
+  };
+  const rightAt = (t: string, cx0: number, cw: number, size: number, font: PDFFont, color: ReturnType<typeof rgb>, y: number) => {
+    const w = safeWidth(font, t, size);
+    safeDraw(ctx.page, t, { x: cx0 + cw - w - 6, y, size, font, color });
+  };
+  const drawHead = () => {
+    ensureSpace(ctx, headerH);
+    drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.accent });
+    const hy = yFromTop(ctx.y + 13.5);
+    safeDraw(ctx.page, "PARTICULARS", { x: x.part + 8, y: hy, size: 8.5, font: ctx.bold, color: COL.accentText });
+    centerAt("UNIT", x.unit, cols.unit, 8.5, ctx.bold, COL.accentText, hy);
+    rightAt("QTY", x.qty, cols.qty, 8.5, ctx.bold, COL.accentText, hy);
+    rightAt("RATE", x.rate, cols.rate, 8.5, ctx.bold, COL.accentText, hy);
+    centerAt("GST", x.gst, cols.gst, 8.5, ctx.bold, COL.accentText, hy);
+    rightAt("AMOUNT", x.amt, cols.amt, 8.5, ctx.bold, COL.accentText, hy);
+    ctx.y += headerH;
+  };
+  drawHead();
+  let lastSection: string | null = null;
+  let rowIdx = 0;
+  for (const item of items) {
+    if (!item.included) continue;
+    const sec = item.section ?? null;
+    if (sec && sec !== lastSection) {
+      const subH = 17;
+      const pb = ctx.pageNumber;
+      ensureSpace(ctx, subH + 30);
+      if (ctx.pageNumber !== pb) drawHead();
+      drawRect(ctx, MARGIN, ctx.y, CONTENT_W, subH, { fill: COL.greenSoft });
+      safeDraw(ctx.page, sec, { x: x.part + 8, y: yFromTop(ctx.y + 12), size: 8.5, font: ctx.bold, color: COL.greenDeep });
+      ctx.y += subH;
+      lastSection = sec;
+      rowIdx = 0;
+    }
+    const descLines = wordWrap(ctx.font, item.description, 8, cols.part - 16);
+    const rowH = 8 + 13 + descLines.length * 10 + 8;
+    const pb = ctx.pageNumber;
+    ensureSpace(ctx, rowH);
+    if (ctx.pageNumber !== pb) { drawHead(); lastSection = null; }
+    if (rowIdx % 2 === 1) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
+    const sy = ctx.y + 8;
+    const nameY = yFromTop(sy + 9);
+    safeDraw(ctx.page, item.name, { x: x.part + 8, y: nameY, size: 9.5, font: ctx.bold, color: COL.text });
+    if (item.optionTag) {
+      const nameW = safeWidth(ctx.bold, item.name, 9.5);
+      drawOptionChip(ctx, x.part + 8 + nameW + 8, sy, item.optionTag, item.optionColor);
+    }
+    let cy = sy + 15;
+    for (const ln of descLines) {
+      safeDraw(ctx.page, ln, { x: x.part + 8, y: yFromTop(cy + 8), size: 8, font: ctx.font, color: COL.textSoft });
+      cy += 10;
+    }
+    const amt = item.areaSqFt * item.ratePerSqFt;
+    centerAt(item.unit ?? "sq ft", x.unit, cols.unit, 8.5, ctx.font, COL.text, nameY);
+    rightAt(inr(item.areaSqFt), x.qty, cols.qty, 9, ctx.font, COL.text, nameY);
+    rightAt(inrRate(item.ratePerSqFt), x.rate, cols.rate, 9, ctx.font, COL.text, nameY);
+    centerAt(gstLabel(item.gstPercent), x.gst, cols.gst, 8.5, ctx.font, COL.text, nameY);
+    rightAt(inr(amt), x.amt, cols.amt, 9, ctx.font, COL.text, nameY);
+    ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y + rowH) }, end: { x: PAGE_W - MARGIN, y: yFromTop(ctx.y + rowH) }, color: COL.border, thickness: 0.5 });
+    ctx.y += rowH;
+    rowIdx++;
+  }
+  space(ctx, 6);
+}
+
+function anyOptions(items: QuoteLineItem[]): boolean {
+  return items.some((i) => i.included && !!i.optionTag);
+}
+
+// "Total Payable — choose one option" comparison. Common (untagged) items form
+// the base; each tagged item is one alternative column.
+function drawComparisonTable(ctx: Ctx, items: QuoteLineItem[]) {
+  const common = items.filter((i) => i.included && !i.optionTag);
+  const opts = items.filter((i) => i.included && i.optionTag);
+  const commonAmt = common.reduce((s, i) => s + i.areaSqFt * i.ratePerSqFt, 0);
+  const commonGst = common.reduce((s, i) => s + (i.areaSqFt * i.ratePerSqFt * i.gstPercent) / 100, 0);
+  const headerH = 32;
+  // Keep the section title with its table (don't orphan the title at a page end).
+  ensureSpace(ctx, 30 + headerH + 5 * 20 + 12);
+  drawSectionTitle(ctx, "Total Payable - choose one option");
+  const labelW = 156;
+  const optW = (CONTENT_W - labelW) / opts.length;
+  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.accent });
+  safeDraw(ctx.page, "Amount Details", { x: MARGIN + 8, y: yFromTop(ctx.y + 19), size: 9, font: ctx.bold, color: COL.accentText });
+  opts.forEach((o, i) => {
+    const cx = MARGIN + labelW + i * optW;
+    const t1 = `Option ${o.optionTag}`;
+    const w1 = safeWidth(ctx.bold, t1, 9);
+    safeDraw(ctx.page, t1, { x: cx + optW - w1 - 8, y: yFromTop(ctx.y + 13), size: 9, font: ctx.bold, color: COL.accentText });
+    let sub = o.optionShort ?? o.name ?? "";
+    while (sub.length > 3 && safeWidth(ctx.font, sub, 7) > optW - 14) sub = sub.slice(0, -1);
+    const w2 = safeWidth(ctx.font, sub, 7);
+    safeDraw(ctx.page, sub, { x: cx + optW - w2 - 8, y: yFromTop(ctx.y + 25), size: 7, font: ctx.font, color: COL.accentText });
+  });
+  ctx.y += headerH;
+  const rowH = 20;
+  const drawRow = (label: string, valueFor: (o: QuoteLineItem) => number, o2: { bold?: boolean; band?: boolean } = {}) => {
+    const h = o2.band ? rowH + 4 : rowH;
+    if (o2.band) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, h, { fill: COL.grandTotalBg });
+    const ty = yFromTop(ctx.y + (o2.band ? 16 : 13));
+    const size = o2.bold ? 10 : 9;
+    const font = o2.bold ? ctx.bold : ctx.font;
+    const col = o2.band ? COL.accentText : COL.text;
+    safeDraw(ctx.page, label, { x: MARGIN + 8, y: ty, size, font, color: col });
+    opts.forEach((o, i) => {
+      const cx = MARGIN + labelW + i * optW;
+      const v = inr(valueFor(o));
+      const w = safeWidth(font, v, size);
+      safeDraw(ctx.page, v, { x: cx + optW - w - 8, y: ty, size, font, color: col });
+    });
+    if (!o2.band) {
+      ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y + rowH) }, end: { x: PAGE_W - MARGIN, y: yFromTop(ctx.y + rowH) }, color: COL.border, thickness: 0.5 });
+    }
+    ctx.y += h;
+  };
+  const turf = (o: QuoteLineItem) => o.areaSqFt * o.ratePerSqFt;
+  const turfGst = (o: QuoteLineItem) => (o.areaSqFt * o.ratePerSqFt * o.gstPercent) / 100;
+  drawRow("Ground preparation", () => commonAmt);
+  drawRow("Flooring / Turf", turf);
+  drawRow("Sub Total (without GST)", (o) => commonAmt + turf(o), { bold: true });
+  drawRow("GST (nil on ground prep)", (o) => commonGst + turfGst(o));
+  drawRow("Grand Total (Rs)", (o) => commonAmt + turf(o) + commonGst + turfGst(o), { bold: true, band: true });
+  space(ctx, 6);
+}
+
+function specSectionTitle(sport: string): string {
+  return sport === "football" || sport === "cricket" ? "Turf Specifications" : "Product Specifications";
+}
+
+// Up to three side-by-side spec cards (title + bullet specs).
+function drawSpecCards(ctx: Ctx, items: QuoteLineItem[]) {
+  const cards = items.slice(0, 3);
+  const n = cards.length;
+  const gap = 12;
+  const cardW = (CONTENT_W - gap * (n - 1)) / n;
+  const titleSize = 9.5;
+  const bulletSize = 8;
+  const lh = 12;
+  const prepared = cards.map((it) => {
+    const lines: string[] = [];
+    for (const s of it.specs ?? []) {
+      const wrapped = wordWrap(ctx.font, `${s.label}: ${s.value}`, bulletSize, cardW - 26);
+      wrapped.forEach((w, idx) => lines.push((idx === 0 ? "- " : "  ") + w));
+    }
+    return { it, lines };
+  });
+  const maxLines = prepared.reduce((m, c) => Math.max(m, c.lines.length), 0);
+  const cardH = 16 + 20 + maxLines * lh + 10;
+  ensureSpace(ctx, cardH + 6);
+  const top = ctx.y;
+  prepared.forEach((c, i) => {
+    const cx = MARGIN + i * (cardW + gap);
+    drawRect(ctx, cx, top, cardW, cardH, { fill: rgb(1, 1, 1), border: COL.border });
+    let title = c.it.optionShort ?? c.it.name ?? "";
+    while (title.length > 4 && safeWidth(ctx.bold, title, titleSize) > cardW - 20) title = title.slice(0, -1);
+    safeDraw(ctx.page, title, { x: cx + 12, y: yFromTop(top + 20), size: titleSize, font: ctx.bold, color: COL.green });
+    let yy = top + 34;
+    for (const ln of c.lines) {
+      safeDraw(ctx.page, ln, { x: cx + 12, y: yFromTop(yy + 8), size: bulletSize, font: ctx.font, color: COL.textSoft });
+      yy += lh;
+    }
+  });
+  ctx.y = top + cardH;
+  space(ctx, 6);
+}
+
+function drawNumbered(ctx: Ctx, lines: string[]) {
+  lines.forEach((line, i) => {
+    const num = `${i + 1}.`;
+    const wrapped = wordWrap(ctx.font, line, 9, CONTENT_W - 28);
+    ensureSpace(ctx, wrapped.length * 12 + 2);
+    safeDraw(ctx.page, num, { x: MARGIN + 4, y: yFromTop(ctx.y + 8), size: 9, font: ctx.font, color: COL.text });
+    let ly = ctx.y;
+    for (const w of wrapped) {
+      safeDraw(ctx.page, w, { x: MARGIN + 22, y: yFromTop(ly + 8), size: 9, font: ctx.font, color: COL.text });
+      ly += 12;
+    }
+    ctx.y = ly + 2;
+  });
+}
+
+function drawSubheading(ctx: Ctx, title: string) {
+  space(ctx, 6);
+  ensureSpace(ctx, 16);
+  safeDraw(ctx.page, title, { x: MARGIN, y: yFromTop(ctx.y + 10), size: 10, font: ctx.bold, color: COL.green });
+  ctx.y += 16;
+}
+
+function drawPaymentTerms(ctx: Ctx, sport: string) {
+  const parts: Array<[string, string]> = [
+    ["50%", "advance during purchase order"],
+    ["30%", "during flooring work"],
+    ["15%", `after ${installationMilestone(sport)}`],
+    ["5%", "after completion of work"],
+  ];
+  for (const [pct, rest] of parts) {
+    ensureSpace(ctx, 15);
+    safeDraw(ctx.page, pct, { x: MARGIN + 4, y: yFromTop(ctx.y + 9), size: 9.5, font: ctx.bold, color: COL.green });
+    const pw = safeWidth(ctx.bold, pct, 9.5);
+    safeDraw(ctx.page, "  " + rest, { x: MARGIN + 4 + pw, y: yFromTop(ctx.y + 9), size: 9.5, font: ctx.font, color: COL.text });
+    ctx.y += 15;
+  }
+}
+
+// ── Phase F: full-page "The Fitoverse Advantage" ──
+function drawAdvantagePage(ctx: Ctx) {
+  space(ctx, 6);
+  safeDraw(ctx.page, "The Fitoverse Advantage", { x: MARGIN, y: yFromTop(ctx.y + 22), size: 22, font: ctx.bold, color: COL.text });
+  ctx.y += 30;
+  ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y) }, end: { x: MARGIN + 64, y: yFromTop(ctx.y) }, color: COL.accent, thickness: 2.5 });
+  space(ctx, 16);
+  const paras = [
+    "Fitoverse Sports Infra is synonymous with world-class sports construction. We bridge the gap between natural playability and modern engineering, offering surfaces that replicate the best qualities of natural fields while significantly reducing maintenance costs and eliminating game cancellations due to weather or uneven terrain.",
+    "We pride ourselves on being a single-source provider. When you partner with Fitoverse, you engage a team capable of handling the entire project lifecycle - from planning, design, and subfloor construction to professional lighting and precision installation.",
+    "Our commitment to quality is validated by our adherence to the rigorous standards set by global governing bodies, including FIFA, World Rugby, FIH, ITF, and FIBA.",
+  ];
+  for (const p of paras) {
+    drawText(ctx, p, { x: MARGIN, size: 10, maxWidth: CONTENT_W, color: COL.textSoft });
+    space(ctx, 8);
+  }
+  space(ctx, 14);
+  const cardW = (CONTENT_W - 16) / 2;
+  const cardH = 74;
+  ensureSpace(ctx, cardH + 20);
+  const top = ctx.y;
+  drawRect(ctx, MARGIN, top, cardW, cardH, { fill: COL.light, border: COL.border });
+  drawCentered(ctx, "PROUD MEMBERS OF", MARGIN, cardW, top + 16, 10, ctx.bold, COL.text);
+  drawCentered(ctx, "IAKS   ·   SFBA India", MARGIN, cardW, top + 42, 13, ctx.bold, COL.green);
+  const c2 = MARGIN + cardW + 16;
+  drawRect(ctx, c2, top, cardW, cardH, { fill: COL.light, border: COL.border });
+  drawCentered(ctx, "WE USE FLOORINGS AUTHORIZED BY", c2, cardW, top + 16, 10, ctx.bold, COL.text);
+  drawCentered(ctx, "FIFA Quality   ·   FIFA Quality Pro", c2, cardW, top + 42, 13, ctx.bold, COL.green);
+  ctx.y = top + cardH;
+  space(ctx, 18);
+  const statH = 66;
+  ensureSpace(ctx, statH);
+  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, statH, { fill: COL.greenSoft });
+  const statTop = ctx.y;
+  const halfW = CONTENT_W / 2;
+  drawCentered(ctx, "65+", MARGIN, halfW, statTop + 18, 26, ctx.bold, COL.green);
+  drawCentered(ctx, "infra projects", MARGIN, halfW, statTop + 46, 10, ctx.font, COL.muted);
+  drawCentered(ctx, "4 Lakh+", MARGIN + halfW, halfW, statTop + 18, 26, ctx.bold, COL.green);
+  drawCentered(ctx, "Sq. Ft. Covered", MARGIN + halfW, halfW, statTop + 46, 10, ctx.font, COL.muted);
+  ctx.y += statH;
+}
+
+// ── Phase G: full-page "Connect With Us" (final page) ──
+function drawConnectPage(ctx: Ctx) {
+  space(ctx, 34);
+  if (ctx.logo) {
+    const f = ctx.logo.scaleToFit(240, 74);
+    ctx.page.drawImage(ctx.logo, { x: (PAGE_W - f.width) / 2, y: yFromTop(ctx.y + f.height), width: f.width, height: f.height });
+    ctx.y += f.height;
+  }
+  space(ctx, 26);
+  drawCentered(ctx, "Connect With Us", MARGIN, CONTENT_W, ctx.y, 22, ctx.bold, COL.text);
+  ctx.y += 30;
+  drawCentered(ctx, "Reach out for a site visit, a detailed quote, or a walkthrough of our work.", MARGIN, CONTENT_W, ctx.y, 10, ctx.font, COL.muted);
+  ctx.y += 34;
+  const rows: Array<[string, string, string | null]> = [
+    ["Phone", "+91 63815 02055   ·   +91 93638 63382", null],
+    ["Website", "fitoverse.com", "https://fitoverse.com/"],
+    ["Instagram", "fito.verse", "https://www.instagram.com/fito.verse/"],
+    ["LinkedIn", "Fitoverse", "https://www.linkedin.com/company/fitoverse/"],
+    ["Facebook", "Fitoverse", "https://www.facebook.com/profile.php?id=100077279349300"],
+  ];
+  const panelW = 380;
+  const px = (PAGE_W - panelW) / 2;
+  const panelH = rows.length * 26 + 20;
+  drawRect(ctx, px, ctx.y, panelW, panelH, { fill: COL.greenSoft, border: COL.border });
+  let ry = ctx.y + 14;
+  for (const [label, value, url] of rows) {
+    safeDraw(ctx.page, label, { x: px + 24, y: yFromTop(ry + 10), size: 10, font: ctx.bold, color: COL.green });
+    if (url) {
+      drawLink(ctx, value, url, { x: px + 130, y: ry, size: 10 });
+    } else {
+      safeDraw(ctx.page, value, { x: px + 130, y: yFromTop(ry + 10), size: 10, font: ctx.font, color: COL.text });
+    }
+    ry += 26;
+  }
+  ctx.y += panelH;
+  space(ctx, 24);
+  drawCentered(ctx, "Fitoverse Private Limited   ·   SALEM · CHENNAI · BANGALORE", MARGIN, CONTENT_W, ctx.y, 9, ctx.font, COL.muted);
+  ctx.y += 16;
+  drawCentered(ctx, "GSTIN 33AAECF8905G1ZQ   ·   CIN U92490TZ2022PTC038004", MARGIN, CONTENT_W, ctx.y, 8, ctx.font, COL.muted);
+}
+
 // ─── Public entry point ─────────────────────────────────────────────────────
 
 export type QuotationPdfData = {
@@ -1064,128 +1534,73 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
     y: MARGIN,
     quoteNumber: data.number,
     pageNumber: 1,
+    logo: logoImage,
   };
 
-  // ── PAGE 1: header, line items, totals, notes ──
-  drawGradientBar(ctx.page, 0, 0, PAGE_W, 5); // brand accent rule at the top
-  drawHeader(ctx, data.customerName, logoImage);
-  drawTitle(ctx, data.sport);
-  drawInfoGrid(
-    ctx,
-    data.number,
-    data.customerName,
-    data.quoteDate.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }),
-    data.lengthFt,
-    data.widthFt
-  );
-  const itemImages = await embedLineItemImages(doc, data.lineItems);
-  drawItemsTable(ctx, data.lineItems, itemImages);
-  drawTotals(ctx, data.subtotal, data.gstAmount, data.grandTotal);
+  // ── PAGE 1: masthead (logo + From/To + project), line items, totals, notes ──
+  const quoteDateStr = data.quoteDate
+    .toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
+    .replace(/\//g, " / ");
+  const cityFromName = (data.customerName ?? "").split(",").slice(1).join(",").trim();
+  space(ctx, 6);
+  drawBrandLogo(ctx, logoImage);
+  drawQuoteTitle(ctx, data.sport);
+  drawFromTo(ctx, data.customerName, quoteDateStr);
+  drawProjectLine(ctx, data.sport, data.lengthFt, data.widthFt, cityFromName);
+  space(ctx, 6);
+  const hasOptions = anyOptions(data.lineItems);
+  drawSectionTitle(ctx, "Commercial Quotation");
+  const surface = data.sport === "football" || data.sport === "cricket" ? "turf" : "flooring";
+  const introBase = `Turnkey ${projectLabelForSport(data.sport).toLowerCase()} for a ${data.lengthFt} x ${data.widthFt} ft (${inr(data.lengthFt * data.widthFt)} sq ft) ground${cityFromName ? " at " + cityFromName : ""}.`;
+  const intro = hasOptions
+    ? `${introBase} Ground preparation is common to all options; the ${surface} is a choose-one selection across the grades below. GST is charged extra on ${surface} only (no GST on ground preparation).`
+    : `${introBase} Rates are inclusive of installation. GST is charged extra as applicable and shown separately.`;
+  drawText(ctx, intro, { x: MARGIN, size: 9.5, maxWidth: CONTENT_W, color: COL.textSoft });
+  space(ctx, 8);
+  drawParticularsTable(ctx, data.lineItems);
+  if (hasOptions) drawComparisonTable(ctx, data.lineItems);
+  else drawTotals(ctx, data.subtotal, data.gstAmount, data.grandTotal);
 
-  drawSectionTitle(ctx, "Notes");
-  drawBullets(ctx, [
-    "Installation charges are included in the above rates.",
-    "GST is included in the above rates.",
-    "Freight charges extra for materials at actuals.",
-    "Client's scope: Leveled ground to be provided.",
-    "Food and stay for installation team on client scope.",
-    "Transport for goods on client scope.",
-    "The padding cost is not included in the initial bill. It will be added once we visit the site and assess the requirements.",
-  ]);
-
-  if (data.notes && data.notes.trim()) {
-    drawSectionTitle(ctx, "Additional Notes");
-    drawText(ctx, data.notes.trim(), { x: MARGIN, size: 9, maxWidth: CONTENT_W });
+  // Specifications (only when items carry structured specs)
+  const specItems = data.lineItems.filter((i) => i.included && i.specs && i.specs.length);
+  if (specItems.length) {
+    drawSectionTitle(ctx, specSectionTitle(data.sport));
+    drawSpecCards(ctx, specItems);
   }
 
-  drawFooter(ctx);
-  newPage(ctx);
-
-  // ── PAGE 2: payment terms, bank, advantage ──
-  drawSectionTitle(ctx, "Payment Terms");
-  drawBullets(ctx, [
-    "50% advance during purchase order.",
-    "30% during flooring work.",
-    `15% after ${installationMilestone(data.sport)}.`,
-    "5% after completion of work.",
+  // Notes / Client Work Scope / Payment Terms + bank
+  drawSectionTitle(ctx, "Notes");
+  drawNumbered(ctx, [
+    "Installation charges are included in the above rates.",
+    "GST is charged extra as shown; ground preparation carries no GST.",
+    "Freight / transport charges extra for materials at actuals.",
+    "Client's scope: levelled ground to be provided; power, water and handling support at site.",
+    "Food and stay for the installation team on client scope.",
+    "Unloading, shifting and storage at the project site on client scope.",
+    "Warranty as applicable to the selected surface, excluding damage from misuse, vandalism or natural calamities.",
   ]);
+  drawSubheading(ctx, "Client Work Scope");
+  drawBullets(ctx, [
+    "Site to be ready, clean and levelled before commencement.",
+    "Power, water, unloading, shifting and storage support at site.",
+    "Food and stay for the installation team.",
+  ]);
+  drawSectionTitle(ctx, "Payment Terms");
+  drawPaymentTerms(ctx, data.sport);
   space(ctx, 4);
-  drawText(
-    ctx,
-    "Payment in form of Demand Draft or At-Par Cheques to be made in favour of FITOVERSE PRIVATE LIMITED. For payment through RTGS/NEFT, bank details are below.",
-    { x: MARGIN, size: 9, maxWidth: CONTENT_W }
-  );
+  drawText(ctx, "Payment by Demand Draft or At-Par Cheque in favour of FITOVERSE PRIVATE LIMITED. For RTGS/NEFT:", { x: MARGIN, size: 9, maxWidth: CONTENT_W });
   space(ctx, 6);
   drawBankBlock(ctx);
 
-  drawSectionTitle(ctx, "The Fitoverse Advantage");
-  drawText(
-    ctx,
-    "Fitoverse Sports Infra is synonymous with world-class sports construction. We bridge the gap between natural playability and modern engineering, offering surfaces that replicate the best qualities of natural fields while significantly reducing maintenance costs and eliminating game cancellations due to weather or uneven terrain.",
-    { x: MARGIN, size: 9, maxWidth: CONTENT_W }
-  );
-  space(ctx, 4);
-  drawText(
-    ctx,
-    "We pride ourselves on being a single-source provider. When you partner with Fitoverse, you engage a team capable of handling the entire project lifecycle — from planning, design, and subfloor construction to professional lighting and precision installation.",
-    { x: MARGIN, size: 9, maxWidth: CONTENT_W }
-  );
-  space(ctx, 4);
-  drawText(
-    ctx,
-    "Our commitment to quality is validated by our adherence to the rigorous standards set by global governing bodies, including FIFA, World Rugby, FIH, ITF, and FIBA.",
-    { x: MARGIN, size: 9, maxWidth: CONTENT_W }
-  );
-  space(ctx, 10);
+  if (data.notes && data.notes.trim()) {
+    drawSubheading(ctx, "Additional Notes");
+    drawText(ctx, data.notes.trim(), { x: MARGIN, size: 9, maxWidth: CONTENT_W });
+  }
 
-  // Stats badge row
-  ensureSpace(ctx, 50);
-  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, 50, { fill: COL.light });
-  const statW = CONTENT_W / 3;
-  const drawStat = (col: number, big: string, small: string) => {
-    const cx = MARGIN + col * statW + statW / 2;
-    const bigW = safeWidth(ctx.bold, big, 14);
-    const smallW = safeWidth(ctx.font, small, 8);
-    safeDraw(ctx.page, big, {
-      x: cx - bigW / 2,
-      y: yFromTop(ctx.y + 20),
-      size: 14,
-      font: ctx.bold,
-      color: COL.accent,
-    });
-    safeDraw(ctx.page, small, {
-      x: cx - smallW / 2,
-      y: yFromTop(ctx.y + 36),
-      size: 8,
-      font: ctx.font,
-      color: COL.muted,
-    });
-  };
-  drawStat(0, "4 Lakh+", "Sq.Ft. Covered");
-  drawStat(1, "65+", "Infra Projects");
-  drawStat(2, "FIFA · FIH · ITF · FIBA", "Global Standards");
-  ctx.y += 56;
-
-  // Connect with Fitoverse — clickable social/web links. Placed between
-  // the Advantage section and Terms & Conditions per user request.
-  drawConnectSection(ctx);
-
-  drawFooter(ctx);
-  newPage(ctx);
-
-  // ── PAGE 3: T&C + signatures + contacts ──
-  drawText(ctx, "TERMS AND CONDITIONS", {
-    x: MARGIN,
-    size: 13,
-    bold: true,
-    align: "center",
-    maxWidth: CONTENT_W,
-    color: COL.accent,
-  });
+  // ── Terms & Conditions (flows after the bank block; paginates as needed) ──
+  space(ctx, 8);
+  drawSectionTitle(ctx, "Terms & Conditions");
+  drawText(ctx, "FITOVERSE PRIVATE LIMITED     CIN: U92490TZ2022PTC038004     |     GSTIN: 33AAECF8905G1ZQ", { x: MARGIN, size: 8.5, maxWidth: CONTENT_W, color: COL.muted });
   space(ctx, 6);
 
   const TERMS = [
@@ -1217,22 +1632,27 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   for (const t of TERMS) drawTerm(ctx, t.title, t.body);
 
   drawSignatures(ctx, data.customerName);
-
   space(ctx, 12);
   drawLine(ctx, MARGIN, PAGE_W - MARGIN);
   space(ctx, 6);
   drawText(ctx, "Project Contact Points", { x: MARGIN, size: 9, bold: true });
-  drawText(ctx, "Mr. Vignesh: +91 63815 02055", { x: MARGIN, size: 9 });
-  drawText(ctx, "Mr. Praveen: +91 95977 66524", { x: MARGIN, size: 9 });
-  space(ctx, 6);
-  drawText(
-    ctx,
-    "Instagram: FITOVERSE/INSTA  ·  Facebook: FITOVERSE/FACEBOOK  ·  LinkedIn: FITOVERSE/LINKEDIN  ·  WhatsApp: FITOVERSE/WHATSAPP  ·  Website: fitoverse.com",
-    { x: MARGIN, size: 9, color: COL.muted, maxWidth: CONTENT_W }
-  );
+  drawText(ctx, "Mr. Vignesh: +91 63815 02055      Mr. Praveen: +91 95977 66524      www.fitoverse.com", {
+    x: MARGIN,
+    size: 9,
+    color: COL.muted,
+  });
+
+  // ── The Fitoverse Advantage (full page) ──
+  drawFooter(ctx);
+  newPage(ctx);
+  drawAdvantagePage(ctx);
+
+  // ── Connect With Us (final page) ──
+  drawFooter(ctx);
+  newPage(ctx);
+  drawConnectPage(ctx);
 
   drawFooter(ctx);
-
   const bytes = await doc.save();
   return Buffer.from(bytes);
 }

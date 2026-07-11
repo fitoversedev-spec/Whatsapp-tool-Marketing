@@ -21,27 +21,41 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return new NextResponse("forbidden", { status: 403 });
   }
 
-  const lineItems = JSON.parse(q.lineItems) as QuoteLineItem[];
-  const pdfBuffer = await renderQuotationPdf({
-    number: q.number,
-    customerName: q.customerName,
-    sport: q.sport,
-    lengthFt: q.lengthFt,
-    widthFt: q.widthFt,
-    lineItems,
-    subtotal: Number(q.subtotal),
-    gstAmount: Number(q.gstAmount),
-    grandTotal: Number(q.grandTotal),
-    notes: q.notes,
-    quoteDate: q.quoteDate,
-    validityDays: q.validityDays,
-  });
+  let pdfBuffer: Buffer;
+  try {
+    const lineItems = JSON.parse(q.lineItems) as QuoteLineItem[];
+    pdfBuffer = await renderQuotationPdf({
+      number: q.number,
+      customerName: q.customerName,
+      sport: q.sport,
+      lengthFt: q.lengthFt,
+      widthFt: q.widthFt,
+      lineItems,
+      subtotal: Number(q.subtotal),
+      gstAmount: Number(q.gstAmount),
+      grandTotal: Number(q.grandTotal),
+      notes: q.notes,
+      quoteDate: q.quoteDate,
+      validityDays: q.validityDays,
+    });
+  } catch (e) {
+    // Surface the real error to the preview iframe instead of letting an
+    // unhandled throw crash the Next.js worker ("Jest worker encountered child
+    // process exceptions, exceeding retry limit").
+    console.error("[quotation pdf] render failed for", q.number, e);
+    return new NextResponse(
+      "Failed to render quotation PDF: " +
+        (e instanceof Error ? e.message : String(e)),
+      { status: 500 },
+    );
+  }
 
   // Node Buffer isn't a valid BodyInit type — coerce to Uint8Array.
+  const safeName = (q.customerName ?? "quote").replace(/[^a-zA-Z0-9]+/g, "-");
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${q.number}-${q.customerName.replace(/[^a-zA-Z0-9]+/g, "-")}.pdf"`,
+      "Content-Disposition": `inline; filename="${q.number}-${safeName}.pdf"`,
       "Cache-Control": "private, no-cache",
     },
   });

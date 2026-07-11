@@ -487,7 +487,10 @@ function ColorPickerSection({
                 key={c.hex}
                 type="button"
                 title={c.name}
-                onClick={() => onChange(c.hex)}
+                onClick={() => {
+                  setDraft(null);
+                  onChange(c.hex);
+                }}
                 className={`h-9 rounded-md border-2 transition ${
                   active
                     ? "border-wa-green ring-2 ring-wa-green/40"
@@ -502,7 +505,10 @@ function ColorPickerSection({
           <input
             type="color"
             value={hexValue || fallback}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => {
+              setDraft(null);
+              onChange(e.target.value);
+            }}
             className="w-9 h-9 rounded border border-slate-300 cursor-pointer bg-white shrink-0"
             title="Custom colour"
           />
@@ -534,7 +540,10 @@ function ColorPickerSection({
           {allowNone && (
             <button
               type="button"
-              onClick={() => onChange("none")}
+              onClick={() => {
+                setDraft(null);
+                onChange("none");
+              }}
               className={`text-[10.5px] whitespace-nowrap ${
                 isNone
                   ? "text-wa-dark font-semibold underline"
@@ -548,7 +557,10 @@ function ColorPickerSection({
           {value !== undefined && (
             <button
               type="button"
-              onClick={() => onChange(undefined)}
+              onClick={() => {
+                setDraft(null);
+                onChange(undefined);
+              }}
               className="text-[10.5px] text-slate-500 hover:text-slate-700 underline whitespace-nowrap"
               title="Reset to the sport preset"
             >
@@ -980,7 +992,7 @@ export default function CourtImageWizard({
       config: {
         football: { aSide: footballASide ?? undefined },
         cricket: {
-          // Turf strip: 2 m wide × 10 or 20 m long.
+          // Fitoverse turf strip: 2 m wide × 10 or 20 m long.
           pitchLengthFt: cricketStripM * M_TO_FT,
           pitchWidthFt: 2 * M_TO_FT,
           orientation: cricketOrientation,
@@ -1038,7 +1050,8 @@ export default function CourtImageWizard({
 
   async function goStep3() {
     if (!layout) return;
-    const dataUrl = canvasRef.current?.toDataURL(2);
+    // Capture the 2D plan at 3x so it stays crisp when enlarged in the PDF.
+    const dataUrl = canvasRef.current?.toDataURL(3);
     if (!dataUrl) {
       toast.error("Could not render preview — try again");
       return;
@@ -1940,6 +1953,7 @@ export default function CourtImageWizard({
                   onSetColor={(id, color) =>
                     updateElement(id, { surfaceColor: color })
                   }
+                  onDelete={removeElement}
                 />
 
                 {/* Highlights section removed (V1) — the generic per-area
@@ -2541,18 +2555,32 @@ export default function CourtImageWizard({
                               return el.sport as Sport;
                             return null;
                           };
-                          // The canvas renders strictly by z-order, so a plain
-                          // array re-sort was ignored. Bump the primary sport's
-                          // court(s) just above the OTHER COURTS so they render
-                          // as the hero — but NOT above non-court elements
-                          // (nets, hoops), which must stay visible on top.
-                          const maxCourtZ = l.elements.reduce(
-                            (m, e) => (isCourt(e.type) ? Math.max(m, e.z ?? 0) : m),
-                            0,
+                          // Multisport courts NEST by physical size: the biggest
+                          // court is the base (lowest z), the smallest sits on
+                          // top, so every nested court's markings stay visible.
+                          // Enforce that z-order by court AREA — never "primary
+                          // on top", which would cover the smaller nested courts.
+                          // primarySport is still recorded for the PDF / labels.
+                          const areaOf = (el: Element): number => {
+                            const w =
+                              "width" in el
+                                ? (el as { width?: number }).width ?? 0
+                                : 0;
+                            const h =
+                              "height" in el
+                                ? (el as { height?: number }).height ?? 0
+                                : 0;
+                            return w * h;
+                          };
+                          const zBySize = new Map(
+                            l.elements
+                              .filter((e) => isCourt(e.type))
+                              .sort((a, b) => areaOf(b) - areaOf(a)) // biggest first
+                              .map((c, i) => [c.id, i + 1]),
                           );
                           const elements = l.elements.map((el) =>
-                            isCourt(el.type) && sportFor(el) === next
-                              ? { ...el, z: maxCourtZ + 1 }
+                            isCourt(el.type) && zBySize.has(el.id)
+                              ? { ...el, z: zBySize.get(el.id) as number }
                               : el,
                           );
                           return {
@@ -3397,8 +3425,8 @@ function Step1(props: {
             <div className="flex gap-2 mt-1">
               {(
                 [
-                  { m: 10 as const, dim: "6.6 × 32.8 ft" },
-                  { m: 20 as const, dim: "6.6 × 65.6 ft" },
+                  { m: 10 as const, dim: "33 × 7 ft" },
+                  { m: 20 as const, dim: "66 × 7 ft" },
                 ]
               ).map((opt) => (
                 <button
@@ -4630,13 +4658,17 @@ function CombinedPdfBlock({
       mode === "view" || mode === "download" ? window.open("", "_blank") : null;
     try {
       const image2d = pngDataUrl2D ?? undefined;
-      // All-angle 3D — capture a turntable set of stills so the PDF shows
-      // the court from every side (the customer's "see all angles" without
-      // a link or video). Falls back to a single snapshot if capture fails.
+      // The PDF shows ONE 3D still — a top-down "drone" view. Capturing the
+      // spin frames first also ensures the 3D scene is mounted; then grab the
+      // overhead shot and put it FIRST so the route's angleImages[0] (what the
+      // PDF draws) is the drone view.
       let image3dAngles = (await onCaptureAngles((f) => setProgress(f))) ?? [];
+      const topDown = canvas3dRef.current?.captureTopDown(3) ?? undefined;
       let image3d =
-        pngDataUrl3D ?? canvas3dRef.current?.toDataURL(2) ?? undefined;
-      if (image3dAngles.length === 0) {
+        topDown ?? pngDataUrl3D ?? canvas3dRef.current?.toDataURL(2) ?? undefined;
+      if (topDown) {
+        image3dAngles = [topDown, ...image3dAngles];
+      } else if (image3dAngles.length === 0) {
         if (!image3d) image3d = (await onEnsure3D()) ?? undefined;
         if (image3d) image3dAngles = [image3d];
       } else if (!image3d) {
@@ -4958,6 +4990,7 @@ function LayerList({
   onToggleVisible,
   onToggleLocked,
   onSetColor,
+  onDelete,
 }: {
   elements: Element[];
   selectedId: string | null;
@@ -4965,6 +4998,7 @@ function LayerList({
   onToggleVisible: (id: string) => void;
   onToggleLocked: (id: string) => void;
   onSetColor: (id: string, color: string) => void;
+  onDelete: (id: string) => void;
 }) {
   // Sort by z DESC so visually top elements appear at the top of the list.
   const sorted = [...elements].sort((a, b) => (b.z ?? 0) - (a.z ?? 0));
@@ -5026,6 +5060,19 @@ function LayerList({
                 title="Court colour"
               />
             )}
+            {/* Per-row delete — removes just this element (e.g. an extra hoop
+                you don't want). Stops propagation so it doesn't also select. */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(el.id);
+              }}
+              className="text-slate-400 hover:text-red-500 shrink-0 text-[13px] leading-none"
+              title="Delete this layer"
+            >
+              🗑
+            </button>
           </div>
         );
       })}

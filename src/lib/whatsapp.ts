@@ -5,6 +5,14 @@ const API_VERSION = process.env.META_GRAPH_API_VERSION || "v21.0";
 const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID || "";
 const WABA_ID = process.env.META_WABA_ID || "";
 
+// axios has NO default timeout — a hung/slow Meta Graph endpoint would block
+// forever. That stalls the interactive-reply route, and (worse) freezes the
+// whole paced broadcast loop indefinitely on a single dead send. Bound every
+// call: 30s for JSON message calls, 60s for the (potentially large) inbound
+// media byte download.
+const META_TIMEOUT_MS = 30_000;
+const META_MEDIA_TIMEOUT_MS = 60_000;
+
 const messagesUrl = () => `https://graph.facebook.com/${API_VERSION}/${PHONE_NUMBER_ID}/messages`;
 const wabaTemplatesUrl = () => `https://graph.facebook.com/${API_VERSION}/${WABA_ID}/message_templates`;
 
@@ -39,7 +47,7 @@ export async function sendTemplate(args: {
         components: args.components ?? [],
       },
     },
-    { headers: await authHeaders() }
+    { headers: await authHeaders(), timeout: META_TIMEOUT_MS }
   );
   return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
 }
@@ -53,7 +61,7 @@ export async function sendText(args: { to: string; body: string }): Promise<{ wa
       type: "text",
       text: { body: args.body, preview_url: false },
     },
-    { headers: await authHeaders() }
+    { headers: await authHeaders(), timeout: META_TIMEOUT_MS }
   );
   return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
 }
@@ -80,7 +88,7 @@ export async function sendMedia(args: {
       type: args.mediaType,
       [args.mediaType]: mediaPayload,
     },
-    { headers: await authHeaders() }
+    { headers: await authHeaders(), timeout: META_TIMEOUT_MS }
   );
   return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
 }
@@ -120,7 +128,7 @@ export async function sendButtons(args: {
       type: "interactive",
       interactive,
     },
-    { headers: await authHeaders() }
+    { headers: await authHeaders(), timeout: META_TIMEOUT_MS }
   );
   return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
 }
@@ -169,7 +177,7 @@ export async function sendList(args: {
       type: "interactive",
       interactive,
     },
-    { headers: await authHeaders() }
+    { headers: await authHeaders(), timeout: META_TIMEOUT_MS }
   );
   return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
 }
@@ -185,7 +193,7 @@ export async function fetchInboundMedia(mediaId: string): Promise<{
   const token = await getMetaAccessToken();
   const metaRes = await axios.get(
     `https://graph.facebook.com/${API_VERSION}/${mediaId}`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    { headers: { Authorization: `Bearer ${token}` }, timeout: META_TIMEOUT_MS }
   );
   const url: string = metaRes.data?.url;
   const mimeType: string = metaRes.data?.mime_type ?? "application/octet-stream";
@@ -194,6 +202,7 @@ export async function fetchInboundMedia(mediaId: string): Promise<{
   const fileRes = await axios.get<ArrayBuffer>(url, {
     headers: { Authorization: `Bearer ${token}` },
     responseType: "arraybuffer",
+    timeout: META_MEDIA_TIMEOUT_MS,
   });
 
   const fileName =
@@ -210,6 +219,7 @@ export async function listTemplates() {
   const res = await axios.get(wabaTemplatesUrl(), {
     headers: await authHeaders(),
     params: { limit: 200 },
+    timeout: META_TIMEOUT_MS,
   });
   return res.data?.data ?? [];
 }
@@ -228,7 +238,7 @@ export async function submitTemplate(args: {
       category: args.category,
       components: args.components,
     },
-    { headers: await authHeaders() }
+    { headers: await authHeaders(), timeout: META_TIMEOUT_MS }
   );
   return { id: res.data?.id ?? "", status: res.data?.status ?? "submitted" };
 }
@@ -272,7 +282,7 @@ export async function sendImageButtons(args: {
       type: "interactive",
       interactive,
     },
-    { headers: await authHeaders() },
+    { headers: await authHeaders(), timeout: META_TIMEOUT_MS },
   );
   return { waMessageId: res.data?.messages?.[0]?.id ?? "" };
 }

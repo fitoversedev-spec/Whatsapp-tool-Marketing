@@ -7,21 +7,23 @@ export default async function QuotationsPage() {
 
   const where = user.role === "admin" ? {} : { createdByUserId: user.id };
 
-  const quotations = await prisma.quotation.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    include: { createdBy: { select: { name: true } } },
-  });
-
-  const salesUsers =
+  // The quotation list and the sales-user list are independent, so fetch them
+  // concurrently rather than as two serial round-trips.
+  const [quotations, salesUsers] = await Promise.all([
+    prisma.quotation.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: { createdBy: { select: { name: true } } },
+    }),
     user.role === "admin"
-      ? await prisma.user.findMany({
+      ? prisma.user.findMany({
           where: { role: { in: ["admin", "sales"] }, isActive: true, deletedAt: null },
           select: { id: true, name: true },
           orderBy: { name: "asc" },
         })
-      : [];
+      : Promise.resolve([] as { id: string; name: string }[]),
+  ]);
 
   return (
     <QuotationsClient

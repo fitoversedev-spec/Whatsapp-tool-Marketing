@@ -58,6 +58,16 @@ export async function PATCH(
         /* ignore malformed sports */
       }
     }
+    if (form.has("specs")) {
+      try {
+        const parsed = JSON.parse(String(form.get("specs") ?? "{}"));
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          input.specs = parsed as Record<string, string>;
+        }
+      } catch {
+        /* ignore malformed specs */
+      }
+    }
     if (form.has("priceInr")) {
       const raw = String(form.get("priceInr") ?? "").trim();
       const n = raw === "" ? null : Number(raw);

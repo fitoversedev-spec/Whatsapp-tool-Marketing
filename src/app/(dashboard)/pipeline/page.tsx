@@ -10,7 +10,6 @@ export default async function PipelinePage({
   searchParams: { view?: string; owner?: string };
 }) {
   const user = await requireUser();
-  const stages = await getPipelineStages();
   const view = searchParams.view === "funnel" ? "funnel" : "kanban";
 
   // Owner filter — "me" / "all" / specific userId. Sales defaults to "me".
@@ -26,28 +25,32 @@ export default async function PipelinePage({
           ? { assignedToUserId: null }
           : { assignedToUserId: ownerFilter };
 
-  const conversations = await prisma.conversation.findMany({
-    where: ownerWhere,
-    include: {
-      assignedTo: { select: { name: true } },
-      messages: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { body: true, direction: true, createdAt: true },
+  // Stages, the conversation list, and the sales-user list are independent of
+  // one another (their inputs are already derived from `user`), so run them
+  // concurrently instead of as three serial round-trips.
+  const [stages, conversations, salesUsers] = await Promise.all([
+    getPipelineStages(),
+    prisma.conversation.findMany({
+      where: ownerWhere,
+      include: {
+        assignedTo: { select: { name: true } },
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { body: true, direction: true, createdAt: true },
+        },
       },
-    },
-    orderBy: [{ stageChangedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
-    take: 500,
-  });
-
-  const salesUsers =
+      orderBy: [{ stageChangedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      take: 500,
+    }),
     user.role === "admin"
-      ? await prisma.user.findMany({
+      ? prisma.user.findMany({
           where: { role: "sales", isActive: true, deletedAt: null },
           select: { id: true, name: true },
           orderBy: { name: "asc" },
         })
-      : [];
+      : Promise.resolve([] as { id: string; name: string }[]),
+  ]);
 
   // Group conversations by stage. Any conversation with a stage not in the
   // configured list lands in "new" (graceful degradation if stages were

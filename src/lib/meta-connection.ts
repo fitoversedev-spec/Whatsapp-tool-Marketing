@@ -17,7 +17,7 @@ async function auth() {
 
 async function safeGet<T>(url: string): Promise<{ data?: T; error?: string }> {
   try {
-    const r = await axios.get(url, await auth());
+    const r = await axios.get(url, { ...(await auth()), timeout: 30_000 });
     return { data: r.data as T };
   } catch (err: any) {
     const m = err.response?.data?.error?.message ?? err.message;

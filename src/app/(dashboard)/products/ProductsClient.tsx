@@ -12,6 +12,7 @@ import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import type { ProductDTO, ProductType } from "@/lib/products/store";
 import { toEmbeddableImage } from "@/lib/products/image-embed";
+import { extractHtmlTables } from "@/lib/products/format";
 
 const SPORTS = [
   "football",
@@ -36,6 +37,10 @@ const SPORT_LABEL: Record<string, string> = {
 };
 
 type Section = "products" | "equipment" | "tds";
+
+// Keep in sync with SPEC_CARD_MAX in QuoteWizard.tsx / combined-pdf route.ts —
+// the quote spec card renders at most this many rows per product.
+const SPEC_CARD_MAX = 12;
 
 export default function ProductsClient({
   initialProducts,
@@ -300,6 +305,8 @@ function ProductCard({
           <img
             src={product.heroImageUrl}
             alt={product.name}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
           />
         ) : (
@@ -411,6 +418,57 @@ function ProductForm({
   const [video, setVideo] = useState<File | null>(null);
   const [tdsFile, setTdsFile] = useState<File | null>(null);
   const [existingTds, setExistingTds] = useState(product?.tdsFiles ?? []);
+  // Structured specs (Label + Value rows) → rendered as the product's spec
+  // card on quotations. Seeded from the product's existing specs; can be
+  // pulled from the description's spec tables with one click.
+  const [specs, setSpecs] = useState<Array<{ key: string; value: string }>>(
+    product?.specs && Object.keys(product.specs).length
+      ? Object.entries(product.specs).map(([k, v]) => ({ key: k, value: String(v) }))
+      : [],
+  );
+
+  function addSpecRow() {
+    setSpecs((prev) => [...prev, { key: "", value: "" }]);
+  }
+  function updateSpecRow(i: number, field: "key" | "value", val: string) {
+    setSpecs((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: val } : r)));
+  }
+  function removeSpecRow(i: number) {
+    setSpecs((prev) => prev.filter((_, idx) => idx !== i));
+  }
+  // Parse the description's spec tables (Product Information / Yarn / Backing…)
+  // into Label+Value rows so existing products don't need retyping. Appends any
+  // labels not already present; keeps whatever the user already entered.
+  function pullSpecsFromDescription() {
+    const { tables } = extractHtmlTables(description);
+    const pulled: Array<{ key: string; value: string }> = [];
+    for (const t of tables) {
+      for (const [k, v] of t.rows) {
+        const key = (k ?? "").trim();
+        const value = (v ?? "").trim();
+        if (key && value) pulled.push({ key, value });
+      }
+    }
+    if (pulled.length === 0) {
+      toast.error("No spec tables found in the description");
+      return;
+    }
+    setSpecs((prev) => {
+      const seen = new Set(
+        prev.filter((r) => r.key.trim()).map((r) => r.key.trim().toLowerCase()),
+      );
+      const merged = prev.filter((r) => r.key.trim() || r.value.trim());
+      for (const r of pulled) {
+        const lk = r.key.toLowerCase();
+        if (!seen.has(lk)) {
+          merged.push(r);
+          seen.add(lk);
+        }
+      }
+      return merged;
+    });
+    toast.success(`Pulled ${pulled.length} spec rows from the description`);
+  }
 
   function toggleSport(s: string) {
     setSports((prev) =>
@@ -443,6 +501,13 @@ function ProductForm({
     form.set("category", category);
     form.set("priceInr", priceInr);
     form.set("unit", unit);
+    // Build the specs map from the Label+Value rows (drop rows with no label).
+    const specsObj: Record<string, string> = {};
+    for (const { key, value } of specs) {
+      const k = key.trim();
+      if (k) specsObj[k] = value.trim();
+    }
+    form.set("specs", JSON.stringify(specsObj));
     if (hero) form.set("hero", await toEmbeddableImage(hero));
     if (video) form.set("video", video);
     const r = editing
@@ -537,6 +602,71 @@ function ProductForm({
             className={`${FIELD} font-mono text-xs leading-relaxed resize-y min-h-[14rem]`}
           />
         </label>
+      </section>
+
+      {/* Specifications — the quote spec card */}
+      <section className={SECTION_BOX}>
+        <div className="flex items-center justify-between gap-3">
+          <div className={SECTION_TITLE}>Specifications — shown as the spec card on quotes</div>
+          <button
+            type="button"
+            onClick={pullSpecsFromDescription}
+            className="shrink-0 text-[11px] font-medium text-wa-dark border border-slate-300 rounded-md px-2.5 py-1 hover:border-wa-green hover:bg-wa-green/5"
+            title="Fill these rows from the description's spec tables"
+          >
+            ↧ Pull from description
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-500 mt-1 mb-2">
+          Label + value rows (e.g. Pile Height / 30 mm). These render as this
+          product&apos;s spec card after the quotation table. Leave empty and the
+          quote falls back to the description&apos;s spec tables automatically.
+        </p>
+        <div className="space-y-2">
+          {specs.length === 0 ? (
+            <div className="text-xs text-slate-400 italic">
+              No specs yet — add rows, or pull them from the description above.
+            </div>
+          ) : (
+            specs.map((row, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={row.key}
+                  onChange={(e) => updateSpecRow(i, "key", e.target.value)}
+                  placeholder="Label (e.g. Pile Height)"
+                  className={`${FIELD} flex-1 min-w-0`}
+                />
+                <input
+                  value={row.value}
+                  onChange={(e) => updateSpecRow(i, "value", e.target.value)}
+                  placeholder="Value (e.g. 30 mm)"
+                  className={`${FIELD} flex-1 min-w-0`}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeSpecRow(i)}
+                  className="shrink-0 text-slate-400 hover:text-red-500 text-sm px-1"
+                  title="Remove row"
+                >
+                  ✕
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={addSpecRow}
+          className="mt-2 text-[11px] text-wa-dark border border-dashed border-wa-green/40 rounded-md px-3 py-1 hover:bg-wa-green/5"
+        >
+          + Add spec row
+        </button>
+        {specs.length > SPEC_CARD_MAX && (
+          <p className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+            ⚠ Only the first {SPEC_CARD_MAX} specs will appear on the quote spec
+            card — trim the list for a cleaner PDF (the rest stay saved here).
+          </p>
+        )}
       </section>
 
       {/* Sports */}

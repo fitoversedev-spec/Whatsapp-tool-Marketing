@@ -1,15 +1,28 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, FormEvent } from "react";
+import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import NotesPanel from "./NotesPanel";
 import RemindersPanel from "./RemindersPanel";
 import LabelPicker from "@/components/LabelPicker";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import MediaPreview from "@/components/MediaPreview";
-import QuoteWizard from "@/app/(dashboard)/quotations/QuoteWizard";
-import CourtImageWizard from "@/app/(dashboard)/court-images/CourtImageWizard";
-import SendCatalogueWizard from "@/components/catalogue/SendCatalogueWizard";
+
+// These three wizards are heavy (the court designer alone pulls in the Konva
+// 2D + 3D canvas and a large court-image lib). They open only when the user
+// clicks Quote / Design / Catalogue, which is rare relative to how often the
+// inbox loads — so code-split them out of the inbox's client bundle and fetch
+// each chunk lazily on first open (see the show* gating in the JSX below).
+const QuoteWizard = dynamic(() => import("@/app/(dashboard)/quotations/QuoteWizard"), {
+  ssr: false,
+});
+const CourtImageWizard = dynamic(() => import("@/app/(dashboard)/court-images/CourtImageWizard"), {
+  ssr: false,
+});
+const SendCatalogueWizard = dynamic(() => import("@/components/catalogue/SendCatalogueWizard"), {
+  ssr: false,
+});
 
 type ConversationLabel = { id: string; name: string; color: string };
 type Conversation = {
@@ -100,8 +113,16 @@ export default function InboxClient({
     return () => clearInterval(t);
   }, [search]);
 
-  // When search changes, fetch with q (server can also search message content)
+  // When search changes, fetch with q (server can also search message content).
+  // Skip the FIRST run on mount: the initial unfiltered list is already
+  // supplied by the server via initialConversations, so re-fetching it on load
+  // is a wasted full-list round-trip. The 15s poller handles refresh from here.
+  const searchInitDone = useRef(false);
   useEffect(() => {
+    if (!searchInitDone.current) {
+      searchInitDone.current = true;
+      return;
+    }
     const id = setTimeout(async () => {
       const res = await fetch(`/api/conversations?q=${encodeURIComponent(search)}`);
       if (res.ok) {
@@ -670,36 +691,42 @@ export default function InboxClient({
             open={showReminders}
             onClose={() => setShowReminders(false)}
           />
-          <QuoteWizard
-            open={showQuote}
-            onClose={() => setShowQuote(false)}
-            onComplete={() => setShowQuote(false)}
-            prefill={{
-              customerName: current.contactName ?? "+" + current.contactPhone,
-              contactPhone: current.contactPhone,
-              conversationId: current.id,
-            }}
-          />
-          <CourtImageWizard
-            open={showCourtDesign}
-            onClose={() => setShowCourtDesign(false)}
-            onComplete={() => setShowCourtDesign(false)}
-            prefill={{
-              customerName: current.contactName ?? "+" + current.contactPhone,
-              contactPhone: current.contactPhone,
-              conversationId: current.id,
-            }}
-          />
-          <SendCatalogueWizard
-            open={showCatalogue}
-            onClose={() => setShowCatalogue(false)}
-            onComplete={() => setShowCatalogue(false)}
-            prefill={{
-              customerName: current.contactName ?? "+" + current.contactPhone,
-              contactPhone: current.contactPhone,
-              conversationId: current.id,
-            }}
-          />
+          {showQuote && (
+            <QuoteWizard
+              open={showQuote}
+              onClose={() => setShowQuote(false)}
+              onComplete={() => setShowQuote(false)}
+              prefill={{
+                customerName: current.contactName ?? "+" + current.contactPhone,
+                contactPhone: current.contactPhone,
+                conversationId: current.id,
+              }}
+            />
+          )}
+          {showCourtDesign && (
+            <CourtImageWizard
+              open={showCourtDesign}
+              onClose={() => setShowCourtDesign(false)}
+              onComplete={() => setShowCourtDesign(false)}
+              prefill={{
+                customerName: current.contactName ?? "+" + current.contactPhone,
+                contactPhone: current.contactPhone,
+                conversationId: current.id,
+              }}
+            />
+          )}
+          {showCatalogue && (
+            <SendCatalogueWizard
+              open={showCatalogue}
+              onClose={() => setShowCatalogue(false)}
+              onComplete={() => setShowCatalogue(false)}
+              prefill={{
+                customerName: current.contactName ?? "+" + current.contactPhone,
+                contactPhone: current.contactPhone,
+                conversationId: current.id,
+              }}
+            />
+          )}
         </>
       )}
     </div>

@@ -1,11 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
-import QuoteWizard from "./QuoteWizard";
+
+// The wizard is heavy and only opens behind "+ New quotation", so code-split
+// it out of the list page's initial bundle and load its chunk on first open.
+const QuoteWizard = dynamic(() => import("./QuoteWizard"), { ssr: false });
 
 type Quotation = {
   id: string;
@@ -310,14 +314,16 @@ export default function QuotationsClient({
         )}
       </div>
 
-      <QuoteWizard
-        open={showWizard}
-        onClose={() => setShowWizard(false)}
-        onComplete={() => {
-          setShowWizard(false);
-          router.refresh();
-        }}
-      />
+      {showWizard && (
+        <QuoteWizard
+          open={showWizard}
+          onClose={() => setShowWizard(false)}
+          onComplete={() => {
+            setShowWizard(false);
+            router.refresh();
+          }}
+        />
+      )}
     </>
   );
 }

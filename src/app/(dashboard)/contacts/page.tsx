@@ -18,22 +18,25 @@ export default async function ContactsPage({
     ? { tags: { some: { tagId: tagFilter } } }
     : {};
 
-  const contacts = await prisma.contact.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 50,
-    include: { tags: { include: { tag: true } } },
-  });
-  const total = await prisma.contact.count({ where });
+  // These four queries are mutually independent, so run them concurrently
+  // instead of in a sequential waterfall (was 4 serial round-trips → now 1).
+  const [contacts, total, allForMeta, allTags] = await Promise.all([
+    prisma.contact.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: { tags: { include: { tag: true } } },
+    }),
+    prisma.contact.count({ where }),
+    // Collect distinct field keys for the column headers + filter UI
+    prisma.contact.findMany({ select: { fields: true } }),
+    prisma.tag.findMany({ orderBy: { name: "asc" } }),
+  ]);
 
-  // Collect distinct field keys for the column headers + filter UI
-  const allForMeta = await prisma.contact.findMany({ select: { fields: true } });
   const fieldKeys = new Set<string>();
   for (const c of allForMeta) {
     for (const k of Object.keys(parseFields(c.fields))) fieldKeys.add(k);
   }
-
-  const allTags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
 
   return (
     <ContactsClient

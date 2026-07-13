@@ -34,6 +34,8 @@ export default function MediaPreview({ url, mimeType, fileName, size, inline = t
           <img
             src={url}
             alt={fileLabel}
+            loading="lazy"
+            decoding="async"
             className={inline ? "max-w-[260px] max-h-[260px] object-cover" : "max-w-full max-h-[80vh]"}
           />
         </button>

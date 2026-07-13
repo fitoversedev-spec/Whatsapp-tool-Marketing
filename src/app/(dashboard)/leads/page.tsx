@@ -5,23 +5,26 @@ import LeadsClient from "./LeadsClient";
 export default async function LeadsPage() {
   const user = await requireUser();
 
-  // Sales team + admin see all leads (they follow up daily).
-  const leads = await prisma.botLead.findMany({
-    orderBy: [{ createdAt: "desc" }],
-    take: 500,
-    include: {
-      conversation: {
-        select: { id: true, contactPhone: true, contactName: true },
+  // The lead list and the assignee dropdown source are independent, so fetch
+  // them concurrently instead of in a serial waterfall.
+  const [leads, users] = await Promise.all([
+    // Sales team + admin see all leads (they follow up daily).
+    prisma.botLead.findMany({
+      orderBy: [{ createdAt: "desc" }],
+      take: 500,
+      include: {
+        conversation: {
+          select: { id: true, contactPhone: true, contactName: true },
+        },
       },
-    },
-  });
-
-  // Assignee dropdown source
-  const users = await prisma.user.findMany({
-    where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
-    select: { id: true, name: true, role: true },
-    orderBy: [{ role: "asc" }, { name: "asc" }],
-  });
+    }),
+    // Assignee dropdown source
+    prisma.user.findMany({
+      where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+      select: { id: true, name: true, role: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    }),
+  ]);
 
   return (
     <LeadsClient

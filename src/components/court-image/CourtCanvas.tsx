@@ -10,7 +10,7 @@
 // Renderer dispatch is inline (switch on element.type) rather than a
 // per-shape file so the schema + canvas stay easy to read together.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import {
   Stage,
@@ -718,6 +718,21 @@ function applyScaleToDimensions(
 //  Shape renderers — one per element type
 // ─────────────────────────────────────────────────────────────────────
 
+// Perf: the court shapes are the heavy renderers — each emits dozens (fence:
+// ~40 hatch lines, basketball: ~50 markings) of Konva primitives. Their props
+// are a single element object + a few primitives; updateElement() keeps the
+// object identity of every UNCHANGED element and preserves layout.style
+// identity across element edits, so React.memo lets a select / drag-end /
+// single-element edit skip regenerating the primitives for every OTHER court.
+// Without this, any state change re-reconciled the whole canvas. The `...Base`
+// impls are declared below (hoisted) and wrapped here.
+const FootballFieldShape = memo(FootballFieldShapeBase);
+const CricketPitchShape = memo(CricketPitchShapeBase);
+const BasketballCourtShape = memo(BasketballCourtShapeBase);
+const PickleballCourtShape = memo(PickleballCourtShapeBase);
+const GenericCourtShape = memo(GenericCourtShapeBase);
+const FenceRectShape = memo(FenceRectShapeBase);
+
 // Sport-name label for a court — a small dark pill + white text above the
 // court's top-left corner, with the court's size on a second line. Every court
 // renders its own, so on a multi-sport (concentric) design each court is
@@ -790,7 +805,7 @@ function courtDims(el: { width: number; height: number }): string {
   return `${Math.round(el.width)} × ${Math.round(el.height)} ft`;
 }
 
-function FootballFieldShape({
+function FootballFieldShapeBase({
   el,
   pxPerFt,
   style,
@@ -1011,7 +1026,7 @@ function FootballFieldShape({
   );
 }
 
-function CricketPitchShape({
+function CricketPitchShapeBase({
   el,
   pxPerFt,
   style,
@@ -1163,7 +1178,7 @@ function SectionClickOverlays({
   );
 }
 
-function BasketballCourtShape({
+function BasketballCourtShapeBase({
   el,
   pxPerFt,
   style,
@@ -1413,7 +1428,7 @@ function BasketballCourtShape({
   );
 }
 
-function PickleballCourtShape({
+function PickleballCourtShapeBase({
   el,
   pxPerFt,
   style,
@@ -1476,7 +1491,7 @@ function PickleballCourtShape({
   );
 }
 
-function GenericCourtShape({
+function GenericCourtShapeBase({
   el,
   pxPerFt,
   style,
@@ -1835,7 +1850,7 @@ function HighlightZoneShape({
   );
 }
 
-function FenceRectShape({ el, pxPerFt }: { el: FenceRectElement; pxPerFt: number }) {
+function FenceRectShapeBase({ el, pxPerFt }: { el: FenceRectElement; pxPerFt: number }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
   const color = el.color ?? "#94a3b8";

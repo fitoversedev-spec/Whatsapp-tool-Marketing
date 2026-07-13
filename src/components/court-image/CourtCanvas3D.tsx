@@ -103,6 +103,16 @@ export default function CourtCanvas3D({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const animationIdRef = useRef<number>(0);
+  // On-demand rendering. The animation loop calls the (expensive) WebGL
+  // render ONLY when something actually changed: a control move (drag / zoom /
+  // damping), an auto-orbit frame, or a layout / view / resize invalidate.
+  // An idle static view (top / iso / side with no interaction) stops rendering
+  // entirely instead of redrawing an identical shadow-mapped frame at 60fps.
+  // `needsRenderRef` is the dirty flag; `animateRef` lets the imperative export
+  // handlers resume this same loop instead of spinning up a second always-on
+  // render loop.
+  const needsRenderRef = useRef(true);
+  const animateRef = useRef<(() => void) | null>(null);
   // Holds all dynamically built layout objects so we can dispose + rebuild
   // them when the layout JSON changes without recreating the scene.
   const courtGroupRef = useRef<THREE.Group | null>(null);
@@ -279,16 +289,36 @@ export default function CourtCanvas3D({
     controls.update();
     controlsRef.current = controls;
 
-    // Animation loop
+    // On-demand render loop. controls.update() is cheap (matrix math only) and
+    // must run every frame so damping + auto-orbit keep advancing; the
+    // expensive renderer.render() fires only while auto-orbit is on or the
+    // dirty flag is set. OrbitControls dispatches 'change' whenever the camera
+    // actually moves (drag, zoom, pan, damping settle), so marking dirty there
+    // captures every interactive + inertial frame without rendering when idle.
+    const invalidate = () => {
+      needsRenderRef.current = true;
+    };
+    controls.addEventListener("change", invalidate);
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate);
-      if (controlsRef.current) controlsRef.current.update();
-      renderer.render(scene, camera);
+      const c = controlsRef.current;
+      const r = rendererRef.current;
+      const s = sceneRef.current;
+      const cam = cameraRef.current;
+      if (!r || !s || !cam) return;
+      if (c) c.update();
+      if ((c && c.autoRotate) || needsRenderRef.current) {
+        r.render(s, cam);
+        needsRenderRef.current = false;
+      }
     };
+    animateRef.current = animate;
     animate();
 
     return () => {
       cancelAnimationFrame(animationIdRef.current);
+      animateRef.current = null;
+      controls.removeEventListener("change", invalidate);
       controls.dispose();
       // Walk the scene and free GPU resources so we don't leak when the
       // wizard tab switches back to 2D and remounts the editor.
@@ -298,9 +328,9 @@ export default function CourtCanvas3D({
         }
         const mat = (obj as THREE.Mesh).material;
         if (Array.isArray(mat)) {
-          mat.forEach((m) => m.dispose());
+          mat.forEach(disposeMaterial);
         } else if (mat) {
-          (mat as THREE.Material).dispose();
+          disposeMaterial(mat as THREE.Material);
         }
       });
       scene.environment?.dispose();
@@ -403,6 +433,9 @@ export default function CourtCanvas3D({
       widthSprite.position.set(-layout.plot.lengthFt / 2 - 6, 0.5, 0);
       group.add(widthSprite);
     }
+    // Newly rebuilt geometry must be painted at least once even in a static
+    // (non-auto-orbit) view, where the loop otherwise stays idle.
+    needsRenderRef.current = true;
   }, [layout]);
 
   // ───────────────────────────────────────────────
@@ -424,6 +457,8 @@ export default function CourtCanvas3D({
     controls.autoRotate = v.rot;
     controls.autoRotateSpeed = 0.55;
     controls.update();
+    // Repaint the new camera framing even when the target view is static.
+    needsRenderRef.current = true;
   }, [view]);
 
   // ───────────────────────────────────────────────
@@ -436,6 +471,8 @@ export default function CourtCanvas3D({
     renderer.setSize(canvasWidth, canvasHeight);
     camera.aspect = canvasWidth / canvasHeight;
     camera.updateProjectionMatrix();
+    // Repaint at the new size/aspect even in a static view.
+    needsRenderRef.current = true;
   }, [canvasWidth, canvasHeight]);
 
   // ───────────────────────────────────────────────
@@ -642,12 +679,10 @@ export default function CourtCanvas3D({
             controls.enabled = true;
             controls.autoRotate = prevAutoRotate;
           }
-          const tick = () => {
-            animationIdRef.current = requestAnimationFrame(tick);
-            if (controlsRef.current) controlsRef.current.update();
-            rendererRef.current?.render(sceneRef.current!, cameraRef.current!);
-          };
-          tick();
+          // Resume the shared on-demand loop rather than starting a second,
+          // always-render loop (which would peg the GPU again after export).
+          needsRenderRef.current = true;
+          animateRef.current?.();
         }
       },
       async captureSpinFrames(options) {
@@ -711,12 +746,9 @@ export default function CourtCanvas3D({
             controls.enabled = true;
             controls.autoRotate = prevAutoRotate;
           }
-          const tick = () => {
-            animationIdRef.current = requestAnimationFrame(tick);
-            if (controlsRef.current) controlsRef.current.update();
-            rendererRef.current?.render(sceneRef.current!, cameraRef.current!);
-          };
-          tick();
+          // Resume the shared on-demand loop rather than a second always-on one.
+          needsRenderRef.current = true;
+          animateRef.current?.();
         }
       },
     };
@@ -1758,12 +1790,27 @@ function makeDimensionSprite(text: string): THREE.Sprite {
 //  Helpers
 // ─────────────────────────────────────────────────────────────────────
 
+// Material.dispose() frees the shader program but NOT the textures bound to it.
+// Every court / ground / plot / sprite / fence surface here carries a
+// per-build CanvasTexture in `.map`, so disposing only the material leaked
+// those textures on every layout rebuild and on unmount. Free the maps first,
+// then the material.
+function disposeMaterial(mat: THREE.Material) {
+  const m = mat as THREE.Material & {
+    map?: THREE.Texture | null;
+    alphaMap?: THREE.Texture | null;
+  };
+  m.map?.dispose();
+  m.alphaMap?.dispose();
+  mat.dispose();
+}
+
 function disposeGroup(group: THREE.Object3D) {
   group.traverse((obj) => {
     if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
     const mat = (obj as THREE.Mesh).material;
-    if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
-    else if (mat) (mat as THREE.Material).dispose();
+    if (Array.isArray(mat)) mat.forEach(disposeMaterial);
+    else if (mat) disposeMaterial(mat as THREE.Material);
   });
 }
 

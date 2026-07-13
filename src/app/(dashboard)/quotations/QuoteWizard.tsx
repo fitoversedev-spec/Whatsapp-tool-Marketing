@@ -20,6 +20,7 @@ import {
   UNIT_DATALIST_ID,
   defaultUnitForAreaMode,
 } from "@/lib/quotation/units";
+import { extractHtmlTables } from "@/lib/products/format";
 
 type RateSheetItem = {
   id: string;
@@ -63,6 +64,9 @@ type ProductRow = {
   // Product spec sheet (key → value) — carried onto the chosen line item so
   // the quote PDF can render a spec card for it after the particulars table.
   specs?: Record<string, string>;
+  // Rich description (may hold spec tables) — used as the spec-card fallback
+  // when a product has no structured specs entered yet.
+  description?: string;
 };
 
 // A product picked in the Products step, plus which line item shows its photo.
@@ -77,23 +81,48 @@ type PickedProduct = {
   photoNone?: boolean;
   // The product's spec sheet, shown as a spec card in the PDF.
   specs?: Record<string, string>;
+  // Fallback source for the spec card when `specs` is empty.
+  description?: string;
 };
 
-// Convert a product's spec map into the ordered {label,value} list the PDF's
-// spec cards render — humanising camelCase keys and dropping empty values.
+// Max spec rows to put on a card — keeps it compact (the card is ~half the
+// page width and sits alongside up to two others).
+const SPEC_CARD_MAX = 12;
+
+// Build the ordered {label,value} list the PDF's spec cards render. Prefers the
+// product's curated structured specs; when those are empty, falls back to the
+// spec tables parsed out of the product description (same source the combined
+// PDF uses) so existing products still show a card without re-entry.
 function productSpecList(
   specs?: Record<string, string> | null,
+  description?: string | null,
 ): Array<{ label: string; value: string }> {
-  if (!specs) return [];
-  return Object.entries(specs)
-    .filter(([, v]) => v != null && String(v).trim() !== "")
-    .map(([k, v]) => ({
-      label: k
-        .replace(/([A-Z])/g, " $1")
-        .replace(/^./, (c) => c.toUpperCase())
-        .trim(),
-      value: String(v),
-    }));
+  const structured = specs
+    ? Object.entries(specs)
+        .filter(([, v]) => v != null && String(v).trim() !== "")
+        .map(([k, v]) => ({
+          label: k
+            .replace(/([A-Z])/g, " $1")
+            .replace(/^./, (c) => c.toUpperCase())
+            .trim(),
+          value: String(v),
+        }))
+    : [];
+  if (structured.length) return structured.slice(0, SPEC_CARD_MAX);
+
+  if (description) {
+    const { tables } = extractHtmlTables(description);
+    const rows: Array<{ label: string; value: string }> = [];
+    for (const t of tables) {
+      for (const [k, v] of t.rows) {
+        const label = (k ?? "").trim();
+        const value = (v ?? "").trim();
+        if (label && value) rows.push({ label, value });
+      }
+    }
+    return rows.slice(0, SPEC_CARD_MAX);
+  }
+  return [];
 }
 
 // Derive a line item's area from the plot dimensions per its rate-sheet mode.
@@ -375,6 +404,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
               imageUrl: p.heroImageUrl!,
               lineItemId: null,
               specs: p.specs ?? {},
+              description: p.description,
             },
           ],
     );
@@ -385,7 +415,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
   function lineItemsForSubmit(): LineItem[] {
     return lineItems.map((li) => {
       const product = picked.find((p) => p.lineItemId === li.id);
-      const specs = productSpecList(product?.specs);
+      const specs = productSpecList(product?.specs, product?.description);
       return {
         ...li,
         imageUrl: product?.imageUrl ?? null,
@@ -844,6 +874,8 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                             <img
                               src={p.heroImageUrl}
                               alt={p.name}
+                              loading="lazy"
+                              decoding="async"
                               className="w-full h-full object-cover"
                             />
                           ) : (

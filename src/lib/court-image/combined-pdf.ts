@@ -1010,7 +1010,12 @@ function drawTotalLine(ctx: Ctx, label: string, val: number, strong = false) {
 
 async function fetchBytes(url: string): Promise<Uint8Array | null> {
   try {
-    const r = await fetch(url);
+    // Bound each product-image fetch (mirrors the 8s cap on TDS + quote-PDF
+    // image fetches). These run sequentially inside the drawProduct loop, so a
+    // single hung image host would otherwise stall the whole render up to the
+    // route's 60s maxDuration and 504 with no PDF at all. A skipped image just
+    // falls back to the text-only product block.
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!r.ok) return null;
     return new Uint8Array(await r.arrayBuffer());
   } catch {

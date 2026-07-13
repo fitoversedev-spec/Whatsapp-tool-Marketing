@@ -36,6 +36,7 @@ import {
 } from "@/lib/quotation/calculator";
 import { renderQuotationPdf } from "@/lib/quotation/pdf";
 import { inferSection } from "@/lib/quotation/sections";
+import { extractHtmlTables } from "@/lib/products/format";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 
 export const runtime = "nodejs";
@@ -59,6 +60,9 @@ function specTokens(s: string): Set<string> {
   );
 }
 
+// Keep spec cards compact — cap the rows put on a card.
+const SPEC_CARD_MAX = 12;
+
 // Turn a product's spec map into the ordered {label,value} list the quote
 // PDF's spec cards render — humanising camelCase keys, dropping empty values.
 function specListFrom(specs: Record<string, string>): Array<{ label: string; value: string }> {
@@ -73,12 +77,30 @@ function specListFrom(specs: Record<string, string>): Array<{ label: string; val
     }));
 }
 
+// Fallback spec source: the spec tables parsed out of a product description
+// (same source the combined PDF's product section uses), for products that
+// have no curated structured specs yet.
+function specListFromDescription(description: string): Array<{ label: string; value: string }> {
+  const { tables } = extractHtmlTables(description);
+  const rows: Array<{ label: string; value: string }> = [];
+  for (const t of tables) {
+    for (const [k, v] of t.rows) {
+      const label = (k ?? "").trim();
+      const value = (v ?? "").trim();
+      if (label && value) rows.push({ label, value });
+    }
+  }
+  return rows;
+}
+
 // Attach each product's specs to the quote line whose name shares the most
 // words. Only attaches on a real match (shared word) and never overwrites a
 // line that already has specs, so unrelated products don't mis-tag a row.
 function attachProductSpecs(lineItems: QuoteLineItem[], products: ProductDTO[]) {
   for (const p of products) {
-    const list = specListFrom(p.specs ?? {});
+    let list = specListFrom(p.specs ?? {});
+    if (list.length === 0 && p.description) list = specListFromDescription(p.description);
+    list = list.slice(0, SPEC_CARD_MAX);
     if (list.length === 0) continue;
     const a = specTokens(p.name);
     let bestId: string | null = null;

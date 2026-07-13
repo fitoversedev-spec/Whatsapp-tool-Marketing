@@ -95,6 +95,9 @@ export async function exchangeForLongToken(
       client_secret: APP_SECRET,
       fb_exchange_token: inputToken,
     },
+    // This runs on the critical path of every Meta send (lazy refresh inside
+    // getMetaAccessToken) — bound it so a hung token exchange can't stall sends.
+    timeout: 30_000,
   });
 
   const newToken: string = res.data?.access_token || "";

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import { sectionForItem, orderedSectionsFor } from "@/lib/quotation/sections";
 
 type Item = {
   id: string;
@@ -14,6 +15,7 @@ type Item = {
   gstPercent: number;
   wrapHeightFt?: number;
   optional?: boolean;
+  section?: string;
 };
 
 type Sport =
@@ -51,6 +53,12 @@ export default function RatesEditorClient({
   const [items, setItems] = useState<Item[]>(initialItems);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Admin-added custom sections that have no items yet (so they still render).
+  const [extraSections, setExtraSections] = useState<string[]>([]);
+  const allSections = orderedSectionsFor([
+    ...items.map((it) => sectionForItem(it)),
+    ...extraSections,
+  ]);
 
   // Refetch when sport tab changes
   useEffect(() => {
@@ -76,11 +84,11 @@ export default function RatesEditorClient({
     router.replace(`/settings/quotation-rates?${search}`);
   }
 
-  function update<K extends keyof Item>(idx: number, key: K, value: Item[K]) {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [key]: value } : it)));
+  function update<K extends keyof Item>(id: string, key: K, value: Item[K]) {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [key]: value } : it)));
   }
 
-  function addCustomItem() {
+  function addItemToSection(section: string) {
     const newId = `custom_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
     setItems((prev) => [
       ...prev,
@@ -91,21 +99,23 @@ export default function RatesEditorClient({
         areaMode: "plot",
         defaultRate: 0,
         gstPercent: 18,
+        section,
       },
     ]);
   }
 
-  function removeItem(idx: number, name: string) {
+  function removeItem(id: string, name: string) {
     if (!confirm(`Remove "${name}" from the rate sheet? Existing quotations are unaffected.`)) {
       return;
     }
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setItems((prev) => prev.filter((it) => it.id !== id));
   }
 
-  function move(idx: number, direction: -1 | 1) {
+  function move(id: string, direction: -1 | 1) {
     setItems((prev) => {
+      const idx = prev.findIndex((it) => it.id === id);
       const target = idx + direction;
-      if (target < 0 || target >= prev.length) return prev;
+      if (idx < 0 || target < 0 || target >= prev.length) return prev;
       const next = [...prev];
       [next[idx], next[target]] = [next[target], next[idx]];
       return next;
@@ -177,144 +187,184 @@ export default function RatesEditorClient({
           <div className="py-12 text-center text-sm text-slate-500">Loading…</div>
         ) : (
           <>
-            {items.map((item, idx) => (
-              <div
-                key={item.id}
-                className="bg-white border border-slate-200 rounded-xl p-4"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-[10px] text-slate-500 uppercase tracking-wide">
-                    Item {idx + 1} of {items.length}
-                    {item.id.startsWith("custom_") && (
-                      <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-semibold">
-                        CUSTOM
-                      </span>
-                    )}
+            {allSections.map((section) => {
+              const secItems = items.filter((it) => sectionForItem(it) === section);
+              return (
+                <div key={section} className="space-y-3">
+                  <div className="flex items-center gap-3 pt-3">
+                    <h3 className="text-sm font-bold text-slate-800 whitespace-nowrap">{section}</h3>
+                    <span className="text-xs text-slate-400">
+                      {secItems.length} item{secItems.length === 1 ? "" : "s"}
+                    </span>
+                    <div className="flex-1 border-t border-slate-200" />
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => move(idx, -1)}
-                      disabled={idx === 0}
-                      className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-                      title="Move up"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => move(idx, 1)}
-                      disabled={idx === items.length - 1}
-                      className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-                      title="Move down"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeItem(idx, item.name)}
-                      className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded"
-                      title="Remove from rate sheet"
-                    >
-                      🗑 Remove
-                    </button>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                  <div className="sm:col-span-5">
-                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
-                      Item name
-                    </label>
-                    <input
-                      value={item.name}
-                      onChange={(e) => update(idx, "name", e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
-                    />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
-                      Default rate (₹)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={item.defaultRate}
-                      onChange={(e) => update(idx, "defaultRate", parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 text-right"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
-                      GST %
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={item.gstPercent}
-                      onChange={(e) => update(idx, "gstPercent", parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 text-right"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
-                      Area mode
-                    </label>
-                    <select
-                      value={item.areaMode}
-                      onChange={(e) =>
-                        update(idx, "areaMode", e.target.value as Item["areaMode"])
-                      }
-                      className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                  {secItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-white border border-slate-200 rounded-xl p-4"
                     >
-                      <option value="plot">Plot area (L × W)</option>
-                      <option value="perimeter">Perimeter (running ft)</option>
-                      <option value="wrap">Wrap (perim × h + top)</option>
-                      <option value="per_piece">Per piece</option>
-                    </select>
-                  </div>
-                  <div className="sm:col-span-12">
-                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
-                      Default description (sales can edit per-quote)
-                    </label>
-                    <textarea
-                      value={item.description}
-                      onChange={(e) => update(idx, "description", e.target.value)}
-                      rows={3}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 resize-none"
-                    />
-                  </div>
-                  {item.areaMode === "wrap" && (
-                    <div className="sm:col-span-3">
-                      <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
-                        Wrap height (ft)
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={item.wrapHeightFt ?? 35}
-                        onChange={(e) => update(idx, "wrapHeightFt", parseFloat(e.target.value) || 35)}
-                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 text-right"
-                      />
-                    </div>
-                  )}
-                  {item.optional && (
-                    <div className="sm:col-span-12 text-xs text-slate-500">
-                      ☐ Optional item — unchecked by default in the wizard
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wide">
+                          {item.id.startsWith("custom_") ? (
+                            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-semibold">
+                              CUSTOM
+                            </span>
+                          ) : (
+                            item.id
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => move(item.id, -1)}
+                            className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded"
+                            title="Move up"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => move(item.id, 1)}
+                            className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded"
+                            title="Move down"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(item.id, item.name)}
+                            className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded"
+                            title="Remove from rate sheet"
+                          >
+                            🗑 Remove
+                          </button>
+                        </div>
+                      </div>
 
-            {/* + Add new line item to rate sheet */}
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                        <div className="sm:col-span-5">
+                          <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
+                            Item name
+                          </label>
+                          <input
+                            value={item.name}
+                            onChange={(e) => update(item.id, "name", e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
+                            Default rate (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={item.defaultRate}
+                            onChange={(e) => update(item.id, "defaultRate", parseFloat(e.target.value) || 0)}
+                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 text-right"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
+                            GST %
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={item.gstPercent}
+                            onChange={(e) => update(item.id, "gstPercent", parseFloat(e.target.value) || 0)}
+                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 text-right"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
+                            Area mode
+                          </label>
+                          <select
+                            value={item.areaMode}
+                            onChange={(e) => update(item.id, "areaMode", e.target.value as Item["areaMode"])}
+                            className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                          >
+                            <option value="plot">Plot area (L × W)</option>
+                            <option value="perimeter">Perimeter (running ft)</option>
+                            <option value="wrap">Wrap (perim × h + top)</option>
+                            <option value="per_piece">Per piece</option>
+                          </select>
+                        </div>
+                        <div className="sm:col-span-4">
+                          <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
+                            Section
+                          </label>
+                          <select
+                            value={sectionForItem(item)}
+                            onChange={(e) => update(item.id, "section", e.target.value)}
+                            className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                          >
+                            {allSections.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="sm:col-span-12">
+                          <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
+                            Default description (sales can edit per-quote)
+                          </label>
+                          <textarea
+                            value={item.description}
+                            onChange={(e) => update(item.id, "description", e.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 resize-none"
+                          />
+                        </div>
+                        {item.areaMode === "wrap" && (
+                          <div className="sm:col-span-3">
+                            <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
+                              Wrap height (ft)
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={item.wrapHeightFt ?? 35}
+                              onChange={(e) => update(item.id, "wrapHeightFt", parseFloat(e.target.value) || 35)}
+                              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 text-right"
+                            />
+                          </div>
+                        )}
+                        {item.optional && (
+                          <div className="sm:col-span-12 text-xs text-slate-500">
+                            ☐ Optional item — unchecked by default in the wizard
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => addItemToSection(section)}
+                    className="w-full py-2 border-2 border-dashed border-slate-300 rounded-lg text-xs text-slate-500 hover:border-wa-green hover:text-wa-dark transition"
+                  >
+                    + Add item to {section}
+                  </button>
+                </div>
+              );
+            })}
+
             <button
               type="button"
-              onClick={addCustomItem}
-              className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-600 hover:border-wa-green hover:text-wa-dark transition"
+              onClick={() => {
+                const name = window.prompt("New section name:")?.trim();
+                if (name && !allSections.includes(name)) {
+                  setExtraSections((prev) => [...prev, name]);
+                }
+              }}
+              className="w-full py-3 border-2 border-dashed border-emerald-300 rounded-xl text-sm text-emerald-700 hover:border-wa-green hover:bg-emerald-50 transition"
             >
-              + Add line item to rate sheet
+              + Add a new section
             </button>
           </>
         )}

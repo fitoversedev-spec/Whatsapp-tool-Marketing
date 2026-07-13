@@ -56,6 +56,8 @@ export default function InboxClient({
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [withinWindow, setWithinWindow] = useState<boolean>(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"open" | "closed" | "all">("open");
   const [showReassign, setShowReassign] = useState(false);
@@ -84,9 +86,11 @@ export default function InboxClient({
     });
   }, [conversations, statusFilter, search]);
 
-  // Poll every 15s
+  // Poll every 15s — but only while the tab is visible (a backgrounded inbox
+  // shouldn't keep hitting the DB every 15s; that thrashes the connection).
   useEffect(() => {
     const t = setInterval(async () => {
+      if (document.hidden) return;
       const res = await fetch(`/api/conversations?q=${encodeURIComponent(search)}`);
       if (res.ok) {
         const data = await res.json();
@@ -108,42 +112,92 @@ export default function InboxClient({
     return () => clearTimeout(id);
   }, [search]);
 
-  // Load messages when selection changes + poll every 8s while open so
-  // inbound replies stream in without the user having to re-click the thread.
+  // Load the LATEST page of messages when the selection changes, then poll every
+  // 8s while open. The endpoint is paginated (last ~50) — loading the whole
+  // history every 8s was a scale/lag problem for long threads.
   useEffect(() => {
     if (!selected) return;
     let cancelled = false;
-    const load = async () => {
+    const fetchLatest = async (isInitial: boolean) => {
       const r = await fetch(`/api/conversations/${selected}/messages`);
       if (!r.ok || cancelled) return;
       const data = await r.json();
       if (cancelled) return;
-      setMessages((prev) => {
-        // Avoid pointless re-render (and scroll jump) when the message list
-        // is unchanged. Cheap shallow check on last id + length.
-        const next: Message[] = data.messages ?? [];
-        if (
-          prev.length === next.length &&
-          prev[prev.length - 1]?.id === next[next.length - 1]?.id
-        ) {
-          return prev;
-        }
-        return next;
-      });
+      const next: Message[] = data.messages ?? [];
+      if (isInitial) {
+        setMessages(next);
+        setHasMoreOlder(!!data.hasMore);
+      } else {
+        // Poll → merge: add new messages + reflect status changes, while keeping
+        // any older messages the user pulled in via "Load older".
+        setMessages((prev) => {
+          const byId = new Map(prev.map((m) => [m.id, m] as const));
+          let changed = false;
+          for (const m of next) {
+            const ex = byId.get(m.id);
+            if (!ex) {
+              byId.set(m.id, m);
+              changed = true;
+            } else if (ex.status !== m.status) {
+              byId.set(m.id, m);
+              changed = true;
+            }
+          }
+          if (!changed) return prev;
+          return [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        });
+      }
       setWithinWindow(data.withinWindow ?? false);
     };
-    load();
-    const t = setInterval(load, 8000);
+    fetchLatest(true);
+    // Poll every 8s — skip when the tab is hidden so a backgrounded thread
+    // doesn't keep hitting the DB.
+    const t = setInterval(() => {
+      if (!document.hidden) fetchLatest(false);
+    }, 8000);
     return () => {
       cancelled = true;
       clearInterval(t);
     };
   }, [selected]);
 
-  // Scroll to bottom on new messages
+  // "Load older" — page backwards from the oldest loaded message, preserving the
+  // scroll position (content is prepended above the viewport).
+  async function loadOlder() {
+    if (!selected || messages.length === 0 || loadingOlder) return;
+    setLoadingOlder(true);
+    const el = threadRef.current;
+    const prevHeight = el?.scrollHeight ?? 0;
+    const prevTop = el?.scrollTop ?? 0;
+    try {
+      const oldest = messages[0];
+      const r = await fetch(
+        `/api/conversations/${selected}/messages?before=${encodeURIComponent(oldest.createdAt)}`,
+      );
+      if (!r.ok) return;
+      const data = await r.json();
+      const older: Message[] = data.messages ?? [];
+      setHasMoreOlder(!!data.hasMore);
+      if (older.length > 0) {
+        setMessages((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          return [...older.filter((m) => !seen.has(m.id)), ...prev];
+        });
+        requestAnimationFrame(() => {
+          if (el) el.scrollTop = el.scrollHeight - prevHeight + prevTop;
+        });
+      }
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
+
+  // Scroll to bottom when the NEWEST message changes (initial load / new reply),
+  // but NOT when older messages are prepended via "Load older".
+  const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
   useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
-  }, [messages]);
+  }, [lastMessageId]);
 
   // Pre-fetch assignable users for admin
   useEffect(() => {
@@ -489,6 +543,18 @@ export default function InboxClient({
             </div>
 
             <div ref={threadRef} className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-2">
+              {hasMoreOlder && (
+                <div className="flex justify-center pb-1">
+                  <button
+                    type="button"
+                    onClick={loadOlder}
+                    disabled={loadingOlder}
+                    className="text-xs text-slate-500 hover:text-wa-dark px-3 py-1.5 rounded-full border border-slate-200 hover:border-wa-green bg-white disabled:opacity-50"
+                  >
+                    {loadingOlder ? "Loading…" : "Load older messages"}
+                  </button>
+                </div>
+              )}
               {messages.map((m) => (
                 <div
                   key={m.id}

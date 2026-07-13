@@ -7,14 +7,16 @@ import { categorize } from "@/lib/media";
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const convo = await prisma.conversation.findUnique({
-    where: { id: params.id },
-    include: { messages: { orderBy: { createdAt: "asc" }, include: { sentBy: { select: { name: true } } } } },
-  });
+  const url = new URL(req.url);
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 1), 100);
+  const beforeRaw = url.searchParams.get("before"); // ISO createdAt cursor for older pages
+  const before = beforeRaw ? new Date(beforeRaw) : null;
+
+  const convo = await prisma.conversation.findUnique({ where: { id: params.id } });
   if (!convo) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   // Sales role check: must be assigned to me or null
@@ -22,8 +24,23 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  // Reset unread count on open
-  if (convo.unreadCount > 0) {
+  // Page the most-recent messages (uses the [conversationId, createdAt] index).
+  // Loading the ENTIRE thread history on every 8s poll was a major scale/lag
+  // problem for long threads — fetch one extra row to know if older exist.
+  const rows = await prisma.message.findMany({
+    where: {
+      conversationId: convo.id,
+      ...(before && !Number.isNaN(before.getTime()) ? { createdAt: { lt: before } } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit + 1,
+    include: { sentBy: { select: { name: true } } },
+  });
+  const hasMore = rows.length > limit;
+  const page = (hasMore ? rows.slice(0, limit) : rows).reverse(); // oldest → newest
+
+  // Reset unread only on the initial (latest) load, not when paging older.
+  if (!before && convo.unreadCount > 0) {
     await prisma.conversation.update({ where: { id: convo.id }, data: { unreadCount: 0 } });
   }
 
@@ -32,7 +49,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   return NextResponse.json({
     withinWindow,
-    messages: convo.messages.map((m) => ({
+    hasMore,
+    messages: page.map((m) => ({
       id: m.id,
       direction: m.direction,
       type: m.type,

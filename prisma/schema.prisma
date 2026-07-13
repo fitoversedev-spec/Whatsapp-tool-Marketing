@@ -125,6 +125,10 @@ model Conversation {
   @@index([assignedToUserId])
   @@index([status])
   @@index([pipelineStage])
+  // Inbox list sorts by recency; index the sort key (+ the per-sales filter) so
+  // it stays fast at thousands of conversations instead of a full sort.
+  @@index([assignedToUserId, lastInboundAt])
+  @@index([lastInboundAt])
   @@map("conversations")
 }
 

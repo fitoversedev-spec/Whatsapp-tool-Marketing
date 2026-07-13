@@ -10,6 +10,7 @@
 // multiply by plot area, wrap area (perimeter-based), or piece count.
 
 import { prisma } from "@/lib/prisma";
+import { sectionForItem } from "./sections";
 
 export type Sport =
   | "football"
@@ -43,7 +44,17 @@ export type RateSheetItem = {
   // Optional metadata only used by some areaModes
   wrapHeightFt?: number; // for "wrap" mode (nylon net height)
   optional?: boolean; // shows unchecked by default
+  // Scope section this item groups under (Base Preparation, Sports Flooring…).
+  // Absent on legacy sheets → inferred from the name at load time. Kept as a
+  // plain string; sectionForItem() normalises it onto the fixed set.
+  section?: string;
 };
+
+// Ensure every item has a concrete `section` (explicit wins, else inferred from
+// the name) so the wizard / editor / PDF can group consistently.
+function withSections(items: RateSheetItem[]): RateSheetItem[] {
+  return items.map((it) => ({ ...it, section: sectionForItem(it) }));
+}
 
 export const FOOTBALL_DEFAULTS: RateSheetItem[] = [
   {
@@ -541,13 +552,13 @@ export async function getRatesForSport(sport: Sport): Promise<RateSheetItem[]> {
   const row = await prisma.setting.findUnique({
     where: { key: settingKeyForSport(sport) },
   });
-  if (!row) return fallback;
+  if (!row) return withSections(fallback);
   try {
     const parsed = JSON.parse(row.value) as RateSheetItem[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return fallback;
-    return parsed;
+    if (!Array.isArray(parsed) || parsed.length === 0) return withSections(fallback);
+    return withSections(parsed);
   } catch {
-    return fallback;
+    return withSections(fallback);
   }
 }
 

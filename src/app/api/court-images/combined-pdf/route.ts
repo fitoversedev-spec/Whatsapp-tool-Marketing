@@ -35,6 +35,7 @@ import {
   type QuoteLineItem,
 } from "@/lib/quotation/calculator";
 import { renderQuotationPdf } from "@/lib/quotation/pdf";
+import { inferSection } from "@/lib/quotation/sections";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 
 export const runtime = "nodejs";
@@ -220,6 +221,9 @@ export async function POST(req: NextRequest) {
               gstPercent: isFinite(g) ? g : 18,
               total: Number(it.total) || 0,
               included: true,
+              // Group the attached quote by scope section too (inferred from the
+              // item name, since the canvas payload doesn't carry a section).
+              section: inferSection(it.name),
             };
           },
         );

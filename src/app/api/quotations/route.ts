@@ -19,6 +19,8 @@ const lineItemSchema = z.object({
   total: z.number().min(0),
   included: z.boolean(),
   imageUrl: z.string().url().nullable().optional(),
+  section: z.string().max(60).optional(),
+  unit: z.string().max(20).nullable().optional(),
 });
 
 const createSchema = z.object({

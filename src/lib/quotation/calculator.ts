@@ -11,6 +11,7 @@
 // reflect their own bracket.
 
 import type { RateSheetItem } from "./rates";
+import { sectionForItem } from "./sections";
 
 export type QuoteLineItem = {
   id: string;
@@ -84,6 +85,7 @@ export function buildInitialLineItems(
       gstPercent: r.gstPercent,
       total: area * r.defaultRate,
       included: !r.optional, // optional items (padding) start unchecked
+      section: sectionForItem(r),
     };
   });
 }

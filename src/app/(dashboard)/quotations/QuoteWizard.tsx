@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 import { useUserUnit } from "@/lib/units/useUserUnit";
 import { toFeet, toUnit } from "@/lib/units";
+import { sectionForItem, orderedSectionsFor } from "@/lib/quotation/sections";
 
 type RateSheetItem = {
   id: string;
@@ -23,6 +24,7 @@ type RateSheetItem = {
   gstPercent: number;
   wrapHeightFt?: number;
   optional?: boolean;
+  section?: string;
 };
 
 type LineItem = {
@@ -37,6 +39,10 @@ type LineItem = {
   // Optional product photo shown at the top of this item's description in the
   // PDF. Set from the "Products" step (auto-matched, reassignable).
   imageUrl?: string | null;
+  // Scope section this line groups under (Base Preparation, Lights…).
+  section?: string;
+  // Unit shown in the quote's UNIT column (sq ft / nos / rft / LS …).
+  unit?: string | null;
 };
 
 // Catalogue product row (subset of ProductDTO) shown in the Products step.
@@ -255,6 +261,13 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             gstPercent: r.gstPercent,
             total: area * r.defaultRate,
             included: !r.optional,
+            section: sectionForItem(r),
+            unit:
+              r.areaMode === "per_piece"
+                ? "nos"
+                : r.areaMode === "perimeter"
+                  ? "rft"
+                  : "sq ft",
           };
         });
         setLineItems(initial);
@@ -858,131 +871,157 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                     </div>
                   )}
 
-                  {lineItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`border rounded-lg p-3 transition ${
-                        item.included
-                          ? "border-slate-300 bg-white"
-                          : "border-slate-200 bg-slate-50 opacity-60"
-                      }`}
-                    >
-                      <div className="flex items-start gap-2">
-                        <input
-                          type="checkbox"
-                          checked={item.included}
-                          onChange={(e) => updateLineItem(item.id, "included", e.target.checked)}
-                          className="mt-1.5"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <input
-                            value={item.name}
-                            onChange={(e) => updateLineItem(item.id, "name", e.target.value)}
-                            className="w-full text-base font-semibold text-slate-900 bg-transparent border-0 border-b border-transparent hover:border-slate-300 focus:border-wa-green focus:outline-none focus:ring-0 px-0 py-1"
-                          />
-                          {picked.some((p) => p.lineItemId === item.id) && (
-                            <div className="text-[10px] text-wa-dark mt-0.5">
-                              📷 Product photo attached — shows at the top of this
-                              description in the PDF
-                            </div>
-                          )}
-                          <textarea
-                            value={item.description}
-                            onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
-                            rows={5}
-                            className="w-full mt-1.5 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2.5 focus:outline-none focus:ring-1 focus:ring-wa-green/30 focus:border-wa-green resize-y leading-relaxed min-h-[6rem]"
-                          />
-                          <div className="grid grid-cols-4 gap-2 mt-2">
-                            <div>
-                              <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
-                                Area
-                              </label>
+                  {orderedSectionsFor(lineItems.map((i) => sectionForItem(i))).map((section) => {
+                    const secItems = lineItems.filter((i) => sectionForItem(i) === section);
+                    return (
+                      <div key={section} className="space-y-2">
+                        <div className="flex items-center gap-2 pt-1">
+                          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide whitespace-nowrap">
+                            {section}
+                          </h4>
+                          <span className="text-[10px] text-slate-400">
+                            {secItems.filter((i) => i.included).length}/{secItems.length}
+                          </span>
+                          <div className="flex-1 border-t border-slate-200" />
+                        </div>
+
+                        {secItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`border rounded-lg p-3 transition ${
+                              item.included
+                                ? "border-slate-300 bg-white"
+                                : "border-slate-200 bg-slate-50 opacity-60"
+                            }`}
+                          >
+                            <div className="flex items-start gap-2">
                               <input
-                                type="number"
-                                min={0}
-                                value={item.areaSqFt}
-                                onChange={(e) => updateLineItem(item.id, "areaSqFt", parseFloat(e.target.value) || 0)}
-                                disabled={!item.included}
-                                className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                type="checkbox"
+                                checked={item.included}
+                                onChange={(e) => updateLineItem(item.id, "included", e.target.checked)}
+                                className="mt-1.5"
                               />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
-                                Rate ₹
-                              </label>
-                              <input
-                                type="number"
-                                min={0}
-                                value={item.ratePerSqFt}
-                                onChange={(e) => updateLineItem(item.id, "ratePerSqFt", parseFloat(e.target.value) || 0)}
-                                disabled={!item.included}
-                                className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
-                                GST %
-                              </label>
-                              <input
-                                type="number"
-                                min={0}
-                                max={100}
-                                value={item.gstPercent}
-                                onChange={(e) => updateLineItem(item.id, "gstPercent", parseFloat(e.target.value) || 0)}
-                                disabled={!item.included}
-                                className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
-                                Total
-                              </label>
-                              <div className="px-2 py-1 text-sm font-semibold text-right bg-slate-50 border border-slate-200 rounded">
-                                ₹ {(item.areaSqFt * item.ratePerSqFt).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start gap-2">
+                                  <input
+                                    value={item.name}
+                                    onChange={(e) => updateLineItem(item.id, "name", e.target.value)}
+                                    className="flex-1 min-w-0 text-base font-semibold text-slate-900 bg-transparent border-0 border-b border-transparent hover:border-slate-300 focus:border-wa-green focus:outline-none focus:ring-0 px-0 py-1"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setLineItems((prev) => prev.filter((x) => x.id !== item.id))}
+                                    className="shrink-0 mt-1 text-xs text-red-500 hover:text-red-700 px-1"
+                                    title="Remove this line"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                                {picked.some((p) => p.lineItemId === item.id) && (
+                                  <div className="text-[10px] text-wa-dark mt-0.5">
+                                    📷 Product photo attached — shows at the top of this
+                                    description in the PDF
+                                  </div>
+                                )}
+                                <textarea
+                                  value={item.description}
+                                  onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
+                                  rows={5}
+                                  className="w-full mt-1.5 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2.5 focus:outline-none focus:ring-1 focus:ring-wa-green/30 focus:border-wa-green resize-y leading-relaxed min-h-[6rem]"
+                                />
+                                <div className="grid grid-cols-5 gap-2 mt-2">
+                                  <div>
+                                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
+                                      Qty
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={item.areaSqFt}
+                                      onChange={(e) => updateLineItem(item.id, "areaSqFt", parseFloat(e.target.value) || 0)}
+                                      disabled={!item.included}
+                                      className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
+                                      Unit
+                                    </label>
+                                    <input
+                                      value={item.unit ?? "sq ft"}
+                                      onChange={(e) => updateLineItem(item.id, "unit", e.target.value)}
+                                      disabled={!item.included}
+                                      className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-center focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
+                                      Rate ₹
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={item.ratePerSqFt}
+                                      onChange={(e) => updateLineItem(item.id, "ratePerSqFt", parseFloat(e.target.value) || 0)}
+                                      disabled={!item.included}
+                                      className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
+                                      GST %
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      value={item.gstPercent}
+                                      onChange={(e) => updateLineItem(item.id, "gstPercent", parseFloat(e.target.value) || 0)}
+                                      disabled={!item.included}
+                                      className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
+                                      Total
+                                    </label>
+                                    <div className="px-2 py-1 text-sm font-semibold text-right bg-slate-50 border border-slate-200 rounded">
+                                      ₹ {(item.areaSqFt * item.ratePerSqFt).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
-                          {item.id.startsWith("custom_") && (
-                            <div className="mt-2 flex justify-end">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setLineItems((prev) => prev.filter((x) => x.id !== item.id))
-                                }
-                                className="text-xs text-red-600 hover:underline"
-                              >
-                                Remove custom item
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                        ))}
 
-                  {/* Add custom line item */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newId = `custom_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-                      setLineItems((prev) => [
-                        ...prev,
-                        {
-                          id: newId,
-                          name: "New Item",
-                          description: "Describe the work or product…",
-                          areaSqFt: lengthFt * widthFt,
-                          ratePerSqFt: 0,
-                          gstPercent: 18,
-                          total: 0,
-                          included: true,
-                        },
-                      ]);
-                    }}
-                    className="w-full py-2.5 border-2 border-dashed border-slate-300 rounded-lg text-sm text-slate-600 hover:border-wa-green hover:text-wa-dark transition"
-                  >
-                    + Add custom line item
-                  </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newId = `custom_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+                            setLineItems((prev) => [
+                              ...prev,
+                              {
+                                id: newId,
+                                name: "New Item",
+                                description: "Describe the work or product…",
+                                areaSqFt: lengthFt * widthFt,
+                                ratePerSqFt: 0,
+                                gstPercent: 18,
+                                total: 0,
+                                included: true,
+                                section,
+                                unit: "sq ft",
+                              },
+                            ]);
+                          }}
+                          className="w-full py-1.5 border border-dashed border-slate-300 rounded-lg text-xs text-slate-500 hover:border-wa-green hover:text-wa-dark transition"
+                        >
+                          + Add item to {section}
+                        </button>
+                      </div>
+                    );
+                  })}
 
                   {/* Totals */}
                   <div className="mt-4 pt-4 border-t border-slate-200 space-y-1.5 text-sm">

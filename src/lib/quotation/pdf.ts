@@ -25,6 +25,7 @@ import {
   PDFName,
 } from "pdf-lib";
 import type { QuoteLineItem } from "./calculator";
+import { sectionOrder } from "./sections";
 import fs from "fs";
 import path from "path";
 
@@ -1189,7 +1190,7 @@ function drawOptionChip(ctx: Ctx, x: number, yTop: number, tag: string, color?: 
 
 // Six-column particulars table (PARTICULARS · UNIT · QTY · RATE · GST · AMOUNT)
 // with optional A/B section subheaders and option chips.
-function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[]) {
+function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<string, PDFImage>) {
   const cols = { part: 264, unit: 44, qty: 48, rate: 55, gst: 42, amt: 70 };
   const x = {
     part: MARGIN,
@@ -1223,7 +1224,9 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[]) {
   drawHead();
   let lastSection: string | null = null;
   let rowIdx = 0;
-  for (const item of items) {
+  // Group rows by scope section (stable sort preserves within-section order).
+  const ordered = [...items].sort((a, b) => sectionOrder(a.section) - sectionOrder(b.section));
+  for (const item of ordered) {
     if (!item.included) continue;
     const sec = item.section ?? null;
     if (sec && sec !== lastSection) {
@@ -1237,8 +1240,17 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[]) {
       lastSection = sec;
       rowIdx = 0;
     }
+    // Optional product photo (from the Products step) shown under the name.
+    const img = images.get(item.id);
+    let imgW = 0;
+    let imgH = 0;
+    if (img) {
+      const s = Math.min(130 / img.width, 90 / img.height, 1);
+      imgW = img.width * s;
+      imgH = img.height * s;
+    }
     const descLines = wordWrap(ctx.font, item.description, 8, cols.part - 16);
-    const rowH = 8 + 13 + descLines.length * 10 + 8;
+    const rowH = 8 + 13 + (img ? imgH + 6 : 0) + descLines.length * 10 + 8;
     const pb = ctx.pageNumber;
     ensureSpace(ctx, rowH);
     if (ctx.pageNumber !== pb) { drawHead(); lastSection = null; }
@@ -1251,6 +1263,18 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[]) {
       drawOptionChip(ctx, x.part + 8 + nameW + 8, sy, item.optionTag, item.optionColor);
     }
     let cy = sy + 15;
+    if (img) {
+      ctx.page.drawImage(img, { x: x.part + 8, y: yFromTop(cy + imgH), width: imgW, height: imgH });
+      ctx.page.drawRectangle({
+        x: x.part + 8,
+        y: yFromTop(cy + imgH),
+        width: imgW,
+        height: imgH,
+        borderColor: COL.borderStrong,
+        borderWidth: 0.75,
+      });
+      cy += imgH + 6;
+    }
     for (const ln of descLines) {
       safeDraw(ctx.page, ln, { x: x.part + 8, y: yFromTop(cy + 8), size: 8, font: ctx.font, color: COL.textSoft });
       cy += 10;
@@ -1557,7 +1581,8 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
     : `${introBase} Rates are inclusive of installation. GST is charged extra as applicable and shown separately.`;
   drawText(ctx, intro, { x: MARGIN, size: 9.5, maxWidth: CONTENT_W, color: COL.textSoft });
   space(ctx, 8);
-  drawParticularsTable(ctx, data.lineItems);
+  const itemImages = await embedLineItemImages(doc, data.lineItems);
+  drawParticularsTable(ctx, data.lineItems, itemImages);
   if (hasOptions) drawComparisonTable(ctx, data.lineItems);
   else drawTotals(ctx, data.subtotal, data.gstAmount, data.grandTotal);
 

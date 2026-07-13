@@ -22,6 +22,7 @@ const itemSchema = z.object({
   gstPercent: z.number().min(0).max(100),
   wrapHeightFt: z.number().min(0).max(1000).optional(),
   optional: z.boolean().optional(),
+  section: z.string().max(60).optional(),
 });
 
 const sportSchema = z.enum(SUPPORTED_SPORTS as [Sport, ...Sport[]]);

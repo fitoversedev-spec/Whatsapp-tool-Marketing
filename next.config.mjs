@@ -22,6 +22,13 @@ const nextConfig = {
     // special handling needed. (We previously had @react-pdf/renderer here
     // but switched to pdf-lib because react-pdf's internal dynamic
     // imports race with OneDrive's file lock on Windows.)
+    //
+    // sharp (used to convert WEBP product photos to PNG for pdf-lib embedding)
+    // ships a native binary — webpack trying to bundle it breaks at runtime
+    // ("Could not load the sharp module..."). Keep it as a plain Node
+    // `require` instead of bundling it. Next 14's stable location for this
+    // moved to the top-level `serverExternalPackages` in Next 15+.
+    serverComponentsExternalPackages: ["sharp"],
   },
 
   webpack: (config, { dev }) => {

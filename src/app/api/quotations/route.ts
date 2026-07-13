@@ -200,6 +200,28 @@ export async function POST(req: NextRequest) {
   });
 }
 
+const bulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(500),
+});
+
+// Bulk delete — mirrors the single-item DELETE's admin-only rule exactly
+// (src/app/api/quotations/[id]/route.ts).
+export async function DELETE(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => null);
+  const parsed = bulkDeleteSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
+
+  const result = await prisma.quotation.deleteMany({
+    where: { id: { in: parsed.data.ids } },
+  });
+  return NextResponse.json({ ok: true, count: result.count });
+}
+
 // Find the next sequential number for a given calendar year by parsing
 // the highest existing FIT-QT-YYYY-NNN row. Returns 1 if no quotations
 // exist yet that year.

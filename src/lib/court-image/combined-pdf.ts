@@ -23,6 +23,7 @@ import path from "path";
 import { htmlToPlainText, extractHtmlTables } from "@/lib/products/format";
 import type { ProductDTO } from "@/lib/products/store";
 import type { DesignAreas } from "./schema";
+import { convertToPng } from "@/lib/pdf-image";
 
 // Fitoverse logo — loaded once at module load (mirrors quotation/pdf.ts).
 // Guarded so a missing file degrades to text rather than 500-ing the render.
@@ -128,7 +129,16 @@ async function tryEmbed(
     try {
       return await doc.embedJpg(bytes);
     } catch {
-      return null;
+      // Neither PNG nor JPEG — likely WEBP (common for phone/browser uploads
+      // and the MVPv2 catalogue import). Convert to PNG so the photo still
+      // renders instead of silently dropping out of the product section.
+      const converted = await convertToPng(bytes);
+      if (!converted) return null;
+      try {
+        return await doc.embedPng(converted);
+      } catch {
+        return null;
+      }
     }
   }
 }

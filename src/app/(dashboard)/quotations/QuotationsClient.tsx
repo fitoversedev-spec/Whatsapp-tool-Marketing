@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 
 // The wizard is heavy and only opens behind "+ New quotation", so code-split
 // it out of the list page's initial bundle and load its chunk on first open.
@@ -55,6 +56,7 @@ export default function QuotationsClient({
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     return quotations.filter((q) => {
@@ -120,8 +122,44 @@ export default function QuotationsClient({
     const res = await fetch(`/api/quotations/${q.id}`, { method: "DELETE" });
     if (res.ok) {
       setQuotations((prev) => prev.filter((x) => x.id !== q.id));
+      setSelected((prev) => {
+        if (!prev.has(q.id)) return prev;
+        const next = new Set(prev);
+        next.delete(q.id);
+        return next;
+      });
       toast.success("Deleted");
     }
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkDelete() {
+    if (selected.size === 0) return;
+    const n = selected.size;
+    if (!confirm(`Delete ${n} quotation${n === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    const ids = Array.from(selected);
+    const res = await fetch("/api/quotations", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(data.error ?? "Delete failed");
+      return;
+    }
+    setQuotations((prev) => prev.filter((x) => !selected.has(x.id)));
+    setSelected(new Set());
+    const count = data.count ?? ids.length;
+    toast.success(`Deleted ${count} quotation${count === 1 ? "" : "s"}`);
   }
 
   return (
@@ -201,6 +239,23 @@ export default function QuotationsClient({
           />
         </div>
 
+        {isAdmin && selected.size > 0 && (
+          <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
+            <span className="text-red-800 font-medium">
+              {selected.size} selected
+            </span>
+            <button onClick={bulkDelete} className="text-red-700 hover:underline font-medium">
+              Delete selected
+            </button>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="text-slate-500 hover:underline ml-auto"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
             <div className="text-4xl mb-2">📄</div>
@@ -219,6 +274,15 @@ export default function QuotationsClient({
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                   <tr>
+                    {isAdmin && (
+                      <th className="px-4 py-3 text-left w-8">
+                        <SelectAllCheckbox
+                          ids={filtered.map((q) => q.id)}
+                          selected={selected}
+                          onChange={setSelected}
+                        />
+                      </th>
+                    )}
                     <th className="px-4 py-3 text-left">Number</th>
                     <th className="px-4 py-3 text-left">Customer</th>
                     <th className="px-4 py-3 text-left">Sport / Size</th>
@@ -231,7 +295,20 @@ export default function QuotationsClient({
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filtered.map((q) => (
-                    <tr key={q.id} className="hover:bg-slate-50">
+                    <tr
+                      key={q.id}
+                      className={`hover:bg-slate-50 ${selected.has(q.id) ? "bg-red-50/50" : ""}`}
+                    >
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(q.id)}
+                            onChange={() => toggleOne(q.id)}
+                            className="rounded"
+                          />
+                        </td>
+                      )}
                       <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-900">
                         {q.number}
                       </td>

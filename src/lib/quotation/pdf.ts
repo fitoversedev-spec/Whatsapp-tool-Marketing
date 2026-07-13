@@ -26,6 +26,7 @@ import {
 } from "pdf-lib";
 import type { QuoteLineItem } from "./calculator";
 import { sectionOrder } from "./sections";
+import { convertToPng, isPng, isJpg } from "../pdf-image";
 import fs from "fs";
 import path from "path";
 
@@ -73,6 +74,11 @@ const COL = {
   light: rgb(0.957, 0.965, 0.973), // #f4f6f8 info card
   border: rgb(0.851, 0.871, 0.894), // #d9dee4
   borderStrong: rgb(0.72, 0.75, 0.79),
+  // Darker, higher-contrast grid used specifically for the particulars table
+  // and the spec cards, so they visually stand out — kept separate from the
+  // lighter `border` used for subtle dividers elsewhere (footer, terms, bank
+  // block) so those aren't affected.
+  tableGrid: rgb(0.35, 0.38, 0.42), // #596170
   rowAlt: rgb(0.972, 0.98, 0.988), // #f8fafc alt row
   highlight: rgb(1, 0.953, 0.749), // #fff3bf highlighted value bg
   highlightText: rgb(0.478, 0.361, 0), // #7a5c00
@@ -617,9 +623,13 @@ function drawProjectLine(ctx: Ctx, sport: string, lengthFt: number, widthFt: num
   space(ctx, 10);
 }
 
-// Fetch + embed each line item's product photo (PNG/JPG only — pdf-lib can't
-// embed WEBP). Returns a map of item id -> embedded image. Any failure is
-// silently skipped so a broken URL never breaks the whole quote.
+// Fetch + embed each line item's product photo. pdf-lib only embeds PNG/JPG
+// natively; any other format (WEBP is common — phone/browser uploads and the
+// MVPv2 catalogue import both produce it) is converted to PNG first via sharp
+// so the photo still shows instead of silently vanishing. Any failure is
+// still skipped so a broken URL/truly corrupt file never breaks the whole
+// quote. Returns a map of item id -> embedded image (shared by the
+// particulars-table row AND the spec card, so this one fix covers both).
 async function embedLineItemImages(
   doc: PDFDocument,
   items: QuoteLineItem[],
@@ -634,8 +644,12 @@ async function embedLineItemImages(
       if (!res.ok) continue;
       const bytes = new Uint8Array(await res.arrayBuffer());
       let img: PDFImage | null = null;
-      if (bytes[0] === 0x89 && bytes[1] === 0x50) img = await doc.embedPng(bytes);
-      else if (bytes[0] === 0xff && bytes[1] === 0xd8) img = await doc.embedJpg(bytes);
+      if (isPng(bytes)) img = await doc.embedPng(bytes);
+      else if (isJpg(bytes)) img = await doc.embedJpg(bytes);
+      else {
+        const converted = await convertToPng(bytes);
+        if (converted) img = await doc.embedPng(converted);
+      }
       if (img) map.set(it.id, img);
     } catch {
       // ignore — the item just renders without a photo
@@ -1210,16 +1224,16 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<stri
     const yTop = yFromTop(top);
     const yBot = yFromTop(top + h);
     for (const vx of [MARGIN, rightEdge]) {
-      ctx.page.drawLine({ start: { x: vx, y: yTop }, end: { x: vx, y: yBot }, color: COL.border, thickness: 0.6 });
+      ctx.page.drawLine({ start: { x: vx, y: yTop }, end: { x: vx, y: yBot }, color: COL.tableGrid, thickness: 0.9 });
     }
     if (inner) {
       for (const vx of innerXs) {
-        ctx.page.drawLine({ start: { x: vx, y: yTop }, end: { x: vx, y: yBot }, color: COL.border, thickness: 0.5 });
+        ctx.page.drawLine({ start: { x: vx, y: yTop }, end: { x: vx, y: yBot }, color: COL.tableGrid, thickness: 0.7 });
       }
     }
   };
   const rowLine = (top: number) => {
-    ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(top) }, end: { x: rightEdge, y: yFromTop(top) }, color: COL.border, thickness: 0.5 });
+    ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(top) }, end: { x: rightEdge, y: yFromTop(top) }, color: COL.tableGrid, thickness: 0.7 });
   };
   const centerAt = (t: string, cx0: number, cw: number, size: number, font: PDFFont, color: ReturnType<typeof rgb>, y: number) => {
     const w = safeWidth(font, t, size);
@@ -1313,8 +1327,8 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<stri
         y: yFromTop(cy + imgH),
         width: imgW,
         height: imgH,
-        borderColor: COL.borderStrong,
-        borderWidth: 0.75,
+        borderColor: COL.tableGrid,
+        borderWidth: 0.9,
       });
       cy += imgH + 6;
     }
@@ -1400,6 +1414,42 @@ function specSectionTitle(sport: string): string {
   return sport === "football" || sport === "cricket" ? "Turf Specifications" : "Product Specifications";
 }
 
+// Height of the FIRST row of spec cards (mirrors drawSpecCards' own per-row
+// math). Used at the call site to reserve space for the section title
+// TOGETHER with its first row, so a title that just barely fits at a page's
+// bottom doesn't leave its card(s) stranded on the next page — most visible
+// with a single/solo product, where there's only one row to begin with.
+function firstSpecCardRowHeight(
+  ctx: Ctx,
+  items: QuoteLineItem[],
+  images: Map<string, PDFImage>,
+): number {
+  const gap = 12;
+  const topPad = 14;
+  const columns = Math.min(items.length, 3) || 1;
+  const cardW = (CONTENT_W - gap * (columns - 1)) / columns;
+  const bulletSize = 8;
+  const lh = 12;
+  const imgMaxW = cardW - 24;
+  const imgMaxH = 96;
+  let maxLines = 0;
+  let maxImgH = 0;
+  for (const it of items.slice(0, columns)) {
+    let lines = 0;
+    for (const s of it.specs ?? []) {
+      lines += wordWrap(ctx.font, `${s.label}: ${s.value}`, bulletSize, cardW - 26).length;
+    }
+    maxLines = Math.max(maxLines, lines);
+    const img = images.get(it.id);
+    if (img) {
+      const sc = Math.min(imgMaxW / img.width, imgMaxH / img.height, 1);
+      maxImgH = Math.max(maxImgH, img.height * sc);
+    }
+  }
+  const imgBlock = maxImgH > 0 ? maxImgH + 10 : 0;
+  return topPad + imgBlock + 18 + maxLines * lh + 12;
+}
+
 // Spec cards (product photo + title + bullet specs), one per product. Laid out
 // up to three side-by-side, wrapping to further rows when more than three
 // products carry specs — so a single product shows one card and N products
@@ -1443,13 +1493,13 @@ function drawSpecCards(ctx: Ctx, items: QuoteLineItem[], images: Map<string, PDF
     const top = ctx.y;
     rowCards.forEach((c, i) => {
       const cx = MARGIN + i * (cardW + gap);
-      drawRect(ctx, cx, top, cardW, cardH, { fill: rgb(1, 1, 1), border: COL.border });
+      drawRect(ctx, cx, top, cardW, cardH, { fill: rgb(1, 1, 1), border: COL.tableGrid, borderWidth: 0.9 });
       // Product photo, centred at the top of the card (with a thin frame).
       if (c.img) {
         const ix = cx + (cardW - c.imgW) / 2;
         const iy = top + topPad;
         ctx.page.drawImage(c.img, { x: ix, y: yFromTop(iy + c.imgH), width: c.imgW, height: c.imgH });
-        ctx.page.drawRectangle({ x: ix, y: yFromTop(iy + c.imgH), width: c.imgW, height: c.imgH, borderColor: COL.border, borderWidth: 0.5 });
+        ctx.page.drawRectangle({ x: ix, y: yFromTop(iy + c.imgH), width: c.imgW, height: c.imgH, borderColor: COL.tableGrid, borderWidth: 0.75 });
       }
       // Title + specs sit below the shared photo band so rows line up.
       const titleTop = top + topPad + imgBlock;
@@ -1663,6 +1713,12 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   // Specifications (only when items carry structured specs)
   const specItems = data.lineItems.filter((i) => i.included && i.specs && i.specs.length);
   if (specItems.length) {
+    // Reserve space for the section title TOGETHER with its first row of
+    // cards (34 = drawSectionTitle's own vertical consumption: space(10) +
+    // 18 + space(6)) — otherwise a title that just fits at a page's bottom
+    // leaves the card(s) stranded on the next page. Solo products are the
+    // most visible case since there's only one row to keep together.
+    ensureSpace(ctx, 34 + firstSpecCardRowHeight(ctx, specItems, itemImages));
     drawSectionTitle(ctx, specSectionTitle(data.sport));
     drawSpecCards(ctx, specItems, itemImages);
   }

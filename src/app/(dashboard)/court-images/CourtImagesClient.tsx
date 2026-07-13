@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 import CourtImageWizard from "./CourtImageWizard";
 
 type CourtImageRow = {
@@ -44,6 +45,7 @@ export default function CourtImagesClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -97,7 +99,43 @@ export default function CourtImagesClient({
       return;
     }
     setRows((prev) => prev.filter((r) => r.id !== id));
+    setSelected((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     toast.success("Design deleted");
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkDelete() {
+    if (selected.size === 0) return;
+    const n = selected.size;
+    if (!confirm(`Delete ${n} design${n === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    const ids = Array.from(selected);
+    const res = await fetch("/api/court-images", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(data.message ?? data.error ?? "Delete failed");
+      return;
+    }
+    setRows((prev) => prev.filter((r) => !selected.has(r.id)));
+    setSelected(new Set());
+    const count = data.count ?? ids.length;
+    toast.success(`Deleted ${count} design${count === 1 ? "" : "s"}`);
   }
 
   async function resend(id: string) {
@@ -150,7 +188,34 @@ export default function CourtImagesClient({
             <option value="draft">Drafts</option>
             <option value="sent">Sent</option>
           </select>
+          {isAdmin && filtered.length > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-slate-600 px-1 cursor-pointer">
+              <SelectAllCheckbox
+                ids={filtered.map((r) => r.id)}
+                selected={selected}
+                onChange={setSelected}
+              />
+              Select all
+            </label>
+          )}
         </div>
+
+        {selected.size > 0 && (
+          <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
+            <span className="text-red-800 font-medium">
+              {selected.size} selected
+            </span>
+            <button onClick={bulkDelete} className="text-red-700 hover:underline font-medium">
+              Delete selected
+            </button>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="text-slate-500 hover:underline ml-auto"
+            >
+              Clear
+            </button>
+          </div>
+        )}
 
         {filtered.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
@@ -177,8 +242,19 @@ export default function CourtImagesClient({
             {filtered.map((r) => (
               <div
                 key={r.id}
-                className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 transition group"
+                className={`relative bg-white border rounded-xl overflow-hidden hover:border-slate-300 transition group ${
+                  selected.has(r.id) ? "border-red-300 ring-2 ring-red-200" : "border-slate-200"
+                }`}
               >
+                {isAdmin && (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(r.id)}
+                    onChange={() => toggleOne(r.id)}
+                    className="absolute top-2 left-2 z-10 rounded shadow"
+                    aria-label={`Select design ${r.number}`}
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => openEdit(r.id)}

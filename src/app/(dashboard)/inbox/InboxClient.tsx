@@ -320,7 +320,7 @@ export default function InboxClient({
       {/* Conversation list */}
       <div
         className={`
-          w-full lg:w-80 border-r border-slate-200 bg-white flex-col
+          w-full lg:w-80 lg:min-w-0 lg:shrink border-r border-slate-200 bg-white flex-col
           ${selected ? "hidden lg:flex" : "flex"}
         `}
       >
@@ -417,13 +417,13 @@ export default function InboxClient({
       {/* Thread */}
       <div
         className={`
-          flex-1 flex-col bg-slate-50
+          flex-1 min-w-0 flex-col bg-slate-50
           ${selected ? "flex" : "hidden lg:flex"}
         `}
       >
         {current ? (
           <>
-            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-white flex items-center gap-3 shrink-0">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-white flex items-center flex-wrap gap-3 shrink-0">
               <button
                 onClick={() => setSelected(null)}
                 aria-label="Back to conversations"
@@ -464,7 +464,7 @@ export default function InboxClient({
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0 relative">
+              <div className="flex items-center flex-wrap gap-1 shrink-0 max-w-full relative">
                 <button
                   onClick={() => {
                     setShowNotes((v) => !v);

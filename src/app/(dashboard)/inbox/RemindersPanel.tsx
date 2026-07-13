@@ -131,7 +131,7 @@ export default function RemindersPanel({
       <aside
         className={`
           fixed lg:relative inset-y-0 right-0 z-50 lg:z-auto
-          w-full sm:w-96 lg:w-80 xl:w-96 h-full
+          w-full sm:w-96 lg:w-80 xl:w-96 lg:shrink-0 h-full
           bg-white border-l border-slate-200 flex flex-col
           shadow-2xl lg:shadow-none
         `}

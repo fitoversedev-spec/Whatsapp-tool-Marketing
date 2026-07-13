@@ -12,6 +12,7 @@
 
 import type { RateSheetItem } from "./rates";
 import { sectionForItem } from "./sections";
+import { defaultUnitForAreaMode } from "./units";
 
 export type QuoteLineItem = {
   id: string;
@@ -80,7 +81,7 @@ export function buildInitialLineItems(
       name: r.name,
       description: r.description,
       areaSqFt: area,
-      unit: r.areaMode === "per_piece" ? "nos" : "sq.ft",
+      unit: r.unit ?? defaultUnitForAreaMode(r.areaMode),
       ratePerSqFt: r.defaultRate,
       gstPercent: r.gstPercent,
       total: area * r.defaultRate,

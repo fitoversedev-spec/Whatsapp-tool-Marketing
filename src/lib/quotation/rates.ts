@@ -48,6 +48,9 @@ export type RateSheetItem = {
   // Absent on legacy sheets → inferred from the name at load time. Kept as a
   // plain string; sectionForItem() normalises it onto the fixed set.
   section?: string;
+  // Display unit shown in the quote's UNIT column (sq.ft / rft / qty / custom).
+  // Absent on legacy sheets → derived from areaMode via defaultUnitForAreaMode.
+  unit?: string;
 };
 
 // Ensure every item has a concrete `section` (explicit wins, else inferred from

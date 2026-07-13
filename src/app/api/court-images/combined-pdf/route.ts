@@ -47,6 +47,63 @@ function dataUrlToBytes(dataUrl: string): Uint8Array | null {
   return new Uint8Array(Buffer.from(m[1], "base64"));
 }
 
+// Tokenise a name for word-overlap matching (singular/plural-insensitive).
+function specTokens(s: string): Set<string> {
+  return new Set(
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2)
+      .map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w)),
+  );
+}
+
+// Turn a product's spec map into the ordered {label,value} list the quote
+// PDF's spec cards render — humanising camelCase keys, dropping empty values.
+function specListFrom(specs: Record<string, string>): Array<{ label: string; value: string }> {
+  return Object.entries(specs)
+    .filter(([, v]) => v != null && String(v).trim() !== "")
+    .map(([k, v]) => ({
+      label: k
+        .replace(/([A-Z])/g, " $1")
+        .replace(/^./, (c) => c.toUpperCase())
+        .trim(),
+      value: String(v),
+    }));
+}
+
+// Attach each product's specs to the quote line whose name shares the most
+// words. Only attaches on a real match (shared word) and never overwrites a
+// line that already has specs, so unrelated products don't mis-tag a row.
+function attachProductSpecs(lineItems: QuoteLineItem[], products: ProductDTO[]) {
+  for (const p of products) {
+    const list = specListFrom(p.specs ?? {});
+    if (list.length === 0) continue;
+    const a = specTokens(p.name);
+    let bestId: string | null = null;
+    let bestScore = 0;
+    for (const li of lineItems) {
+      if (li.specs && li.specs.length) continue;
+      const b = specTokens(li.name);
+      let n = 0;
+      for (const t of a) if (b.has(t)) n++;
+      if (n > bestScore) {
+        bestScore = n;
+        bestId = li.id;
+      }
+    }
+    if (!bestId) continue; // no shared word → leave it for the products section
+    const target = lineItems.find((li) => li.id === bestId);
+    if (target) {
+      target.specs = list;
+      // Carry the product photo onto the line too, so the spec card (and the
+      // particulars row) show the product image — same as a stand-alone quote.
+      if (!target.imageUrl && p.heroImageUrl) target.imageUrl = p.heroImageUrl;
+    }
+  }
+}
+
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -205,6 +262,7 @@ export async function POST(req: NextRequest) {
               rate?: number;
               gst?: number;
               total?: number;
+              section?: string | null;
             },
             idx: number,
           ) => {
@@ -221,12 +279,20 @@ export async function POST(req: NextRequest) {
               gstPercent: isFinite(g) ? g : 18,
               total: Number(it.total) || 0,
               included: true,
-              // Group the attached quote by scope section too (inferred from the
-              // item name, since the canvas payload doesn't carry a section).
-              section: inferSection(it.name),
+              // Group the attached quote by scope section — use the section the
+              // canvas quote now sends, falling back to inferring from the name.
+              section:
+                typeof it.section === "string" && it.section.trim()
+                  ? it.section
+                  : inferSection(it.name),
             };
           },
         );
+
+      // Attach the chosen flooring products' spec sheets onto the best-matching
+      // quote line (by shared words in the names) so the merged quote PDF shows
+      // a spec card after the table — the same behaviour as a stand-alone quote.
+      attachProductSpecs(qLineItems, products);
       const buf = await renderQuotationPdf({
         number: String(
           body.quote.number ?? buildQuotationNumber(new Date().getFullYear(), 0),

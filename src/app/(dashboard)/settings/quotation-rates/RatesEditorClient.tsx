@@ -5,6 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import { sectionForItem, orderedSectionsFor } from "@/lib/quotation/sections";
+import {
+  UNIT_OPTIONS,
+  UNIT_DATALIST_ID,
+  defaultUnitForAreaMode,
+} from "@/lib/quotation/units";
 
 type Item = {
   id: string;
@@ -16,6 +21,8 @@ type Item = {
   wrapHeightFt?: number;
   optional?: boolean;
   section?: string;
+  // Display unit for the quote's UNIT column (sq.ft / rft / qty / custom).
+  unit?: string;
 };
 
 type Sport =
@@ -161,6 +168,13 @@ export default function RatesEditorClient({
       />
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-4">
+        {/* Shared unit suggestions — powers every line item's Unit dropdown
+            while still allowing a freely-typed custom unit. */}
+        <datalist id={UNIT_DATALIST_ID}>
+          {UNIT_OPTIONS.map((u) => (
+            <option key={u} value={u} />
+          ))}
+        </datalist>
         {/* Sport tabs */}
         <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
           {SPORTS.map((s) => (
@@ -243,7 +257,7 @@ export default function RatesEditorClient({
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                        <div className="sm:col-span-5">
+                        <div className="sm:col-span-4">
                           <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
                             Item name
                           </label>
@@ -253,7 +267,7 @@ export default function RatesEditorClient({
                             className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
                           />
                         </div>
-                        <div className="sm:col-span-3">
+                        <div className="sm:col-span-2">
                           <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
                             Default rate (₹)
                           </label>
@@ -276,6 +290,18 @@ export default function RatesEditorClient({
                             value={item.gstPercent}
                             onChange={(e) => update(item.id, "gstPercent", parseFloat(e.target.value) || 0)}
                             className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 text-right"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1">
+                            Unit
+                          </label>
+                          <input
+                            list={UNIT_DATALIST_ID}
+                            value={item.unit ?? defaultUnitForAreaMode(item.areaMode)}
+                            onChange={(e) => update(item.id, "unit", e.target.value)}
+                            placeholder="sq.ft"
+                            className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30"
                           />
                         </div>
                         <div className="sm:col-span-2">

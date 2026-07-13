@@ -21,6 +21,14 @@ const lineItemSchema = z.object({
   imageUrl: z.string().url().nullable().optional(),
   section: z.string().max(60).optional(),
   unit: z.string().max(20).nullable().optional(),
+  // Structured product specs (from the Products step) → rendered as spec
+  // cards after the quote table. Zod strips unknown keys, so without this the
+  // specs would be silently dropped before the snapshot is stored.
+  specs: z
+    .array(z.object({ label: z.string().max(120), value: z.string().max(2000) }))
+    .max(40)
+    .nullable()
+    .optional(),
 });
 
 const createSchema = z.object({

@@ -62,6 +62,16 @@ import {
 import { predictCapacity } from "@/lib/court-image/packing";
 import { useUserUnit } from "@/lib/units/useUserUnit";
 import { toFeet, toUnit, FT_TO_M } from "@/lib/units";
+import {
+  sectionForItem,
+  orderedSectionsFor,
+  inferSection,
+} from "@/lib/quotation/sections";
+import {
+  UNIT_OPTIONS,
+  UNIT_DATALIST_ID,
+  defaultUnitForAreaMode,
+} from "@/lib/quotation/units";
 
 // Konva is client-only. SSR will throw "window is undefined" if we let
 // Next.js include react-konva in the server bundle.
@@ -114,6 +124,10 @@ type QuoteLineItem = {
   rate: number;
   gst: number;
   included: boolean;
+  // Scope section this line groups under (Base Preparation, Sports Flooring…).
+  // Mirrors the standalone Quotation wizard so the canvas quote has the same
+  // grouped structure in the UI and the attached PDF.
+  section?: string;
 };
 
 let quoteLineSeq = 0;
@@ -280,6 +294,9 @@ function buildQuotePayload(
         rate: i.rate,
         gst: i.gst,
         total: Math.round(i.qty * i.rate),
+        // Carry the scope section so the attached-quote PDF groups rows the
+        // same way the standalone quote does (route falls back to inferring it).
+        section: i.section ?? sectionForItem(i),
       })),
     subtotal: t.subtotal,
     gst: t.gst,
@@ -1099,6 +1116,8 @@ export default function CourtImageWizard({
           defaultRate: number;
           gstPercent: number;
           optional?: boolean;
+          section?: string;
+          unit?: string;
         }) => {
           const qty =
             it.areaMode === "perimeter"
@@ -1106,7 +1125,7 @@ export default function CourtImageWizard({
               : it.areaMode === "per_piece"
                 ? 1
                 : L * W;
-          const unit = it.areaMode === "per_piece" ? "nos" : "sq.ft";
+          const unit = it.unit ?? defaultUnitForAreaMode(it.areaMode);
           return {
             id: newQuoteLineId(),
             name: it.name,
@@ -1119,6 +1138,7 @@ export default function CourtImageWizard({
             rate: it.defaultRate,
             gst: it.gstPercent,
             included: !it.optional,
+            section: it.section ?? inferSection(it.name),
           };
         },
       );
@@ -3754,15 +3774,18 @@ function ExistingQuotePicker({
           ratePerSqFt?: number;
           gstPercent?: number;
           included?: boolean;
+          section?: string;
+          unit?: string | null;
         }) => ({
           id: newQuoteLineId(),
           name: li.name ?? "",
           desc: li.description ?? "",
           qty: Number(li.areaSqFt) || 0,
-          unit: "sq.ft",
+          unit: li.unit ?? "sq.ft",
           rate: Number(li.ratePerSqFt) || 0,
           gst: Number(li.gstPercent) || 18,
           included: li.included !== false,
+          section: li.section ?? inferSection(li.name ?? ""),
         }),
       );
       if (items.length === 0) {
@@ -3905,6 +3928,14 @@ function StepQuotation({
   const totals = computeQuoteTotals(quoteItems);
   const area = layout.plot.lengthFt * layout.plot.widthFt;
 
+  // Custom sections the user added on top of the fixed scope set + whatever the
+  // seeded items already use. Same grouped model as the standalone Quotation.
+  const [extraSections, setExtraSections] = useState<string[]>([]);
+  const sections = orderedSectionsFor([
+    ...quoteItems.map((i) => sectionForItem(i)),
+    ...extraSections,
+  ]);
+
   function patch(id: string, next: Partial<QuoteLineItem>) {
     setQuoteItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, ...next } : it)),
@@ -3913,7 +3944,7 @@ function StepQuotation({
   function remove(id: string) {
     setQuoteItems((prev) => prev.filter((it) => it.id !== id));
   }
-  function addRow() {
+  function addRow(section?: string) {
     setQuoteItems((prev) => [
       ...prev,
       {
@@ -3921,17 +3952,30 @@ function StepQuotation({
         name: "",
         desc: "",
         qty: 1,
-        unit: "nos",
+        unit: "qty",
         rate: 0,
         gst: 18,
         included: true,
+        section: section ?? "Accessories",
       },
     ]);
+  }
+  function addSection() {
+    const name = window.prompt("New section name")?.trim();
+    if (!name) return;
+    setExtraSections((prev) => (prev.includes(name) ? prev : [...prev, name]));
   }
 
   return (
     <div className="h-full overflow-y-auto bg-slate-50">
       <div className="max-w-5xl mx-auto p-5 sm:p-6 space-y-4">
+        {/* Unit suggestions for every line item's Unit field (custom units can
+            still be typed freely). */}
+        <datalist id={UNIT_DATALIST_ID}>
+          {UNIT_OPTIONS.map((u) => (
+            <option key={u} value={u} />
+          ))}
+        </datalist>
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-slate-900">
@@ -4034,90 +4078,112 @@ function StepQuotation({
                 <span></span>
               </div>
 
-              <div className="divide-y divide-slate-100">
-                {quoteItems.length === 0 ? (
-                  <div className="px-3 py-4 text-[12px] text-slate-500 italic">
-                    No line items. Add one below or reset from the rate sheet.
-                  </div>
-                ) : (
-                  quoteItems.map((it) => {
-                    const amount = Math.round(it.qty * it.rate);
-                    return (
-                      <div
-                        key={it.id}
-                        className="grid grid-cols-2 sm:grid-cols-[auto_1fr_6rem_5rem_7rem_7rem_auto] gap-2.5 px-4 py-3 items-center"
+              {sections.map((section) => {
+                const secItems = quoteItems.filter(
+                  (i) => sectionForItem(i) === section,
+                );
+                return (
+                  <div key={section} className="border-t border-slate-100">
+                    <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+                      <h5 className="text-[11px] font-bold text-slate-600 uppercase tracking-wide whitespace-nowrap">
+                        {section}
+                      </h5>
+                      <span className="text-[10px] text-slate-400">
+                        {secItems.filter((i) => i.included).length}/{secItems.length}
+                      </span>
+                      <div className="flex-1 border-t border-slate-200" />
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {secItems.map((it) => {
+                        const amount = Math.round(it.qty * it.rate);
+                        return (
+                          <div
+                            key={it.id}
+                            className="grid grid-cols-2 sm:grid-cols-[auto_1fr_6rem_5rem_7rem_7rem_auto] gap-2.5 px-4 py-3 items-center"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={it.included}
+                              onChange={(e) =>
+                                patch(it.id, { included: e.target.checked })
+                              }
+                              className="accent-wa-green w-4 h-4 row-start-1"
+                              title="Include in quote"
+                            />
+                            <div className="col-span-2 sm:col-span-1 order-last sm:order-none">
+                              <input
+                                value={it.name}
+                                onChange={(e) => patch(it.id, { name: e.target.value })}
+                                placeholder="Item name"
+                                className={`w-full px-3 py-2 text-base font-semibold border border-slate-300 rounded-md ${
+                                  it.included ? "text-slate-900" : "text-slate-400"
+                                }`}
+                              />
+                              <textarea
+                                value={it.desc}
+                                onChange={(e) => patch(it.id, { desc: e.target.value })}
+                                placeholder="Description (optional)"
+                                rows={6}
+                                className="mt-2 w-full px-3 py-2.5 text-sm text-slate-600 border border-slate-300 hover:border-slate-400 focus:border-slate-400 rounded-md resize-y leading-relaxed min-h-[7rem]"
+                              />
+                            </div>
+                            <input
+                              type="number"
+                              value={it.qty}
+                              onChange={(e) =>
+                                patch(it.id, { qty: Number(e.target.value) || 0 })
+                              }
+                              className="w-full px-2 py-1.5 text-sm text-right border border-slate-200 rounded"
+                            />
+                            <input
+                              list={UNIT_DATALIST_ID}
+                              value={it.unit}
+                              onChange={(e) => patch(it.id, { unit: e.target.value })}
+                              className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded"
+                            />
+                            <input
+                              type="number"
+                              value={it.rate}
+                              onChange={(e) =>
+                                patch(it.id, { rate: Number(e.target.value) || 0 })
+                              }
+                              className="w-full px-2 py-1.5 text-sm text-right border border-slate-200 rounded"
+                            />
+                            <span className="text-sm text-right text-slate-700 tabular-nums">
+                              ₹{amount.toLocaleString("en-IN")}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => remove(it.id)}
+                              className="text-slate-400 hover:text-red-500 text-sm justify-self-end"
+                              title="Remove"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="px-3 py-1.5">
+                      <button
+                        type="button"
+                        onClick={() => addRow(section)}
+                        className="text-[11px] text-wa-dark hover:bg-wa-green/5 border border-dashed border-wa-green/40 rounded-md px-3 py-1"
                       >
-                        <input
-                          type="checkbox"
-                          checked={it.included}
-                          onChange={(e) =>
-                            patch(it.id, { included: e.target.checked })
-                          }
-                          className="accent-wa-green w-4 h-4 row-start-1"
-                          title="Include in quote"
-                        />
-                        <div className="col-span-2 sm:col-span-1 order-last sm:order-none">
-                          <input
-                            value={it.name}
-                            onChange={(e) => patch(it.id, { name: e.target.value })}
-                            placeholder="Item name"
-                            className={`w-full px-3 py-2 text-base font-semibold border border-slate-300 rounded-md ${
-                              it.included ? "text-slate-900" : "text-slate-400"
-                            }`}
-                          />
-                          <textarea
-                            value={it.desc}
-                            onChange={(e) => patch(it.id, { desc: e.target.value })}
-                            placeholder="Description (optional)"
-                            rows={6}
-                            className="mt-2 w-full px-3 py-2.5 text-sm text-slate-600 border border-slate-300 hover:border-slate-400 focus:border-slate-400 rounded-md resize-y leading-relaxed min-h-[7rem]"
-                          />
-                        </div>
-                        <input
-                          type="number"
-                          value={it.qty}
-                          onChange={(e) =>
-                            patch(it.id, { qty: Number(e.target.value) || 0 })
-                          }
-                          className="w-full px-2 py-1.5 text-sm text-right border border-slate-200 rounded"
-                        />
-                        <input
-                          value={it.unit}
-                          onChange={(e) => patch(it.id, { unit: e.target.value })}
-                          className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded"
-                        />
-                        <input
-                          type="number"
-                          value={it.rate}
-                          onChange={(e) =>
-                            patch(it.id, { rate: Number(e.target.value) || 0 })
-                          }
-                          className="w-full px-2 py-1.5 text-sm text-right border border-slate-200 rounded"
-                        />
-                        <span className="text-sm text-right text-slate-700 tabular-nums">
-                          ₹{amount.toLocaleString("en-IN")}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => remove(it.id)}
-                          className="text-slate-400 hover:text-red-500 text-sm justify-self-end"
-                          title="Remove"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                        + Add item to {section}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
 
               <div className="px-3 py-2 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={addRow}
-                  className="text-[11px] text-wa-dark hover:bg-wa-green/5 border border-dashed border-wa-green/40 rounded-md px-3 py-1"
+                  onClick={addSection}
+                  className="text-[11px] text-slate-600 hover:bg-slate-100 border border-dashed border-slate-300 rounded-md px-3 py-1"
                 >
-                  + Add line item
+                  + Add a new section
                 </button>
               </div>
 

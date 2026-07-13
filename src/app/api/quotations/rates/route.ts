@@ -23,6 +23,7 @@ const itemSchema = z.object({
   wrapHeightFt: z.number().min(0).max(1000).optional(),
   optional: z.boolean().optional(),
   section: z.string().max(60).optional(),
+  unit: z.string().max(20).optional(),
 });
 
 const sportSchema = z.enum(SUPPORTED_SPORTS as [Sport, ...Sport[]]);

@@ -14,6 +14,12 @@ import { useToast } from "@/components/Toast";
 import { useUserUnit } from "@/lib/units/useUserUnit";
 import { toFeet, toUnit } from "@/lib/units";
 import { sectionForItem, orderedSectionsFor } from "@/lib/quotation/sections";
+import { SPORT_STANDARDS } from "@/lib/court-image/sport-standards";
+import {
+  UNIT_OPTIONS,
+  UNIT_DATALIST_ID,
+  defaultUnitForAreaMode,
+} from "@/lib/quotation/units";
 
 type RateSheetItem = {
   id: string;
@@ -25,6 +31,7 @@ type RateSheetItem = {
   wrapHeightFt?: number;
   optional?: boolean;
   section?: string;
+  unit?: string;
 };
 
 type LineItem = {
@@ -43,6 +50,8 @@ type LineItem = {
   section?: string;
   // Unit shown in the quote's UNIT column (sq ft / nos / rft / LS …).
   unit?: string | null;
+  // Structured specs (from the chosen product) → spec cards after the table.
+  specs?: Array<{ label: string; value: string }> | null;
 };
 
 // Catalogue product row (subset of ProductDTO) shown in the Products step.
@@ -51,6 +60,9 @@ type ProductRow = {
   name: string;
   sports: string[];
   heroImageUrl: string | null;
+  // Product spec sheet (key → value) — carried onto the chosen line item so
+  // the quote PDF can render a spec card for it after the particulars table.
+  specs?: Record<string, string>;
 };
 
 // A product picked in the Products step, plus which line item shows its photo.
@@ -63,7 +75,26 @@ type PickedProduct = {
   // auto-match on re-entering Step 3 tell a deliberate detach apart from a
   // never-assigned photo, so it doesn't silently re-attach.
   photoNone?: boolean;
+  // The product's spec sheet, shown as a spec card in the PDF.
+  specs?: Record<string, string>;
 };
+
+// Convert a product's spec map into the ordered {label,value} list the PDF's
+// spec cards render — humanising camelCase keys and dropping empty values.
+function productSpecList(
+  specs?: Record<string, string> | null,
+): Array<{ label: string; value: string }> {
+  if (!specs) return [];
+  return Object.entries(specs)
+    .filter(([, v]) => v != null && String(v).trim() !== "")
+    .map(([k, v]) => ({
+      label: k
+        .replace(/([A-Z])/g, " $1")
+        .replace(/^./, (c) => c.toUpperCase())
+        .trim(),
+      value: String(v),
+    }));
+}
 
 // Derive a line item's area from the plot dimensions per its rate-sheet mode.
 // Returns null for per-piece / manual modes, which must not be auto-recomputed.
@@ -262,12 +293,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             total: area * r.defaultRate,
             included: !r.optional,
             section: sectionForItem(r),
-            unit:
-              r.areaMode === "per_piece"
-                ? "nos"
-                : r.areaMode === "perimeter"
-                  ? "rft"
-                  : "sq ft",
+            unit: r.unit ?? defaultUnitForAreaMode(r.areaMode),
           };
         });
         setLineItems(initial);
@@ -348,17 +374,24 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
               name: p.name,
               imageUrl: p.heroImageUrl!,
               lineItemId: null,
+              specs: p.specs ?? {},
             },
           ],
     );
   }
 
-  // Attach each picked product's photo to its assigned line item for the API.
+  // Attach each picked product's photo AND spec sheet to its assigned line item
+  // for the API. The product on a line drives both its photo and its spec card.
   function lineItemsForSubmit(): LineItem[] {
-    return lineItems.map((li) => ({
-      ...li,
-      imageUrl: picked.find((p) => p.lineItemId === li.id)?.imageUrl ?? null,
-    }));
+    return lineItems.map((li) => {
+      const product = picked.find((p) => p.lineItemId === li.id);
+      const specs = productSpecList(product?.specs);
+      return {
+        ...li,
+        imageUrl: product?.imageUrl ?? null,
+        specs: specs.length ? specs : null,
+      };
+    });
   }
 
   function step1Valid(): boolean {
@@ -505,6 +538,13 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-stretch justify-center p-2 sm:p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1400px] max-h-full overflow-hidden flex flex-col">
+        {/* Unit suggestions for every line item's Unit field (free typing still
+            allowed for custom units). */}
+        <datalist id={UNIT_DATALIST_ID}>
+          {UNIT_OPTIONS.map((u) => (
+            <option key={u} value={u} />
+          ))}
+        </datalist>
         {/* Header */}
         <div className="px-5 sm:px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <div>
@@ -652,6 +692,54 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                       : `= ${Math.round(lengthFt * widthFt * 0.0929).toLocaleString("en-IN")} m² (${(lengthFt * widthFt).toLocaleString("en-IN")} sq.ft)`}
                   </span>
                 </div>
+
+                {/* Preset dimensions for the selected sport — the same
+                    international standards the court designer's Step 1 offers.
+                    Click a chip to fill the plot's L × W. */}
+                {(SPORT_STANDARDS[sport] ?? []).length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                      International standards — click to apply
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                      {(SPORT_STANDARDS[sport] ?? []).map((p) => {
+                        const active =
+                          lengthFt === Math.round(p.lengthFt) &&
+                          widthFt === Math.round(p.widthFt);
+                        return (
+                          <button
+                            key={`${p.label}|${p.lengthFt}x${p.widthFt}`}
+                            type="button"
+                            onClick={() => {
+                              setLengthFt(Math.round(p.lengthFt));
+                              setWidthFt(Math.round(p.widthFt));
+                            }}
+                            className={`text-left px-2.5 py-1.5 text-xs rounded border transition ${
+                              active
+                                ? "border-wa-green bg-wa-green/10 ring-1 ring-wa-green/40"
+                                : "bg-white border-slate-300 hover:border-wa-green hover:bg-wa-green/5"
+                            }`}
+                          >
+                            <div className="font-medium text-slate-900 leading-tight flex items-center gap-1">
+                              {active && <span className="text-wa-green">✓</span>}
+                              {p.label}
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              {unit === "ft"
+                                ? `${Math.round(p.lengthFt)} × ${Math.round(p.widthFt)} ft · ${p.areaSqFt.toLocaleString("en-IN")} sqft`
+                                : `${(p.lengthFt * 0.3048).toFixed(1)} × ${(p.widthFt * 0.3048).toFixed(1)} m · ${Math.round(p.areaSqFt * 0.0929).toLocaleString("en-IN")} m²`}
+                            </div>
+                            {p.hint && (
+                              <div className="text-[9px] text-slate-400 mt-0.5 italic">
+                                {p.hint}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -948,7 +1036,8 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                       Unit
                                     </label>
                                     <input
-                                      value={item.unit ?? "sq ft"}
+                                      list={UNIT_DATALIST_ID}
+                                      value={item.unit ?? "sq.ft"}
                                       onChange={(e) => updateLineItem(item.id, "unit", e.target.value)}
                                       disabled={!item.included}
                                       className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-center focus:outline-none focus:ring-1 focus:ring-wa-green/30"
@@ -1011,7 +1100,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                 total: 0,
                                 included: true,
                                 section,
-                                unit: "sq ft",
+                                unit: "sq.ft",
                               },
                             ]);
                           }}

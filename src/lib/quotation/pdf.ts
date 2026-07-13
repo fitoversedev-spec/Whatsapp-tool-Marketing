@@ -1201,6 +1201,26 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<stri
     amt: MARGIN + cols.part + cols.unit + cols.qty + cols.rate + cols.gst,
   };
   const headerH = 20;
+  // Table grid: outer left/right borders on every band + inner column
+  // separators on data rows. Drawn per-row (using each row's own top/height)
+  // so the grid survives page breaks. `inner` adds the column dividers.
+  const innerXs = [x.unit, x.qty, x.rate, x.gst, x.amt];
+  const rightEdge = MARGIN + CONTENT_W;
+  const drawGrid = (top: number, h: number, inner: boolean) => {
+    const yTop = yFromTop(top);
+    const yBot = yFromTop(top + h);
+    for (const vx of [MARGIN, rightEdge]) {
+      ctx.page.drawLine({ start: { x: vx, y: yTop }, end: { x: vx, y: yBot }, color: COL.border, thickness: 0.6 });
+    }
+    if (inner) {
+      for (const vx of innerXs) {
+        ctx.page.drawLine({ start: { x: vx, y: yTop }, end: { x: vx, y: yBot }, color: COL.border, thickness: 0.5 });
+      }
+    }
+  };
+  const rowLine = (top: number) => {
+    ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(top) }, end: { x: rightEdge, y: yFromTop(top) }, color: COL.border, thickness: 0.5 });
+  };
   const centerAt = (t: string, cx0: number, cw: number, size: number, font: PDFFont, color: ReturnType<typeof rgb>, y: number) => {
     const w = safeWidth(font, t, size);
     safeDraw(ctx.page, t, { x: cx0 + (cw - w) / 2, y, size, font, color });
@@ -1219,9 +1239,20 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<stri
     rightAt("RATE", x.rate, cols.rate, 8.5, ctx.bold, COL.accentText, hy);
     centerAt("GST", x.gst, cols.gst, 8.5, ctx.bold, COL.accentText, hy);
     rightAt("AMOUNT", x.amt, cols.amt, 8.5, ctx.bold, COL.accentText, hy);
+    drawGrid(ctx.y, headerH, false);
     ctx.y += headerH;
   };
   drawHead();
+  const subH = 17;
+  // Draw a section subheader band (green band + label + grid) at the current
+  // cursor. Extracted so it can be re-emitted at the top of a continued page.
+  const drawSubheader = (sec: string) => {
+    drawRect(ctx, MARGIN, ctx.y, CONTENT_W, subH, { fill: COL.greenSoft });
+    safeDraw(ctx.page, sec, { x: x.part + 8, y: yFromTop(ctx.y + 12), size: 8.5, font: ctx.bold, color: COL.greenDeep });
+    drawGrid(ctx.y, subH, false);
+    rowLine(ctx.y + subH);
+    ctx.y += subH;
+  };
   let lastSection: string | null = null;
   let rowIdx = 0;
   // Group rows by scope section (stable sort preserves within-section order).
@@ -1229,31 +1260,43 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<stri
   for (const item of ordered) {
     if (!item.included) continue;
     const sec = item.section ?? null;
-    if (sec && sec !== lastSection) {
-      const subH = 17;
-      const pb = ctx.pageNumber;
-      ensureSpace(ctx, subH + 30);
-      if (ctx.pageNumber !== pb) drawHead();
-      drawRect(ctx, MARGIN, ctx.y, CONTENT_W, subH, { fill: COL.greenSoft });
-      safeDraw(ctx.page, sec, { x: x.part + 8, y: yFromTop(ctx.y + 12), size: 8.5, font: ctx.bold, color: COL.greenDeep });
-      ctx.y += subH;
-      lastSection = sec;
-      rowIdx = 0;
-    }
+    // Compute this row's height FIRST — the enlarged product photo can make a
+    // row ~200pt tall, so the subheader must reserve room for its first row too
+    // (else the band orphans at a page bottom), and a mid-section page break
+    // must re-emit the band rather than reset the section tracking.
     // Optional product photo (from the Products step) shown under the name.
+    // Sized large for a strong visual (fits inside the PARTICULARS column,
+    // which is 264pt wide → keep width within ~240pt incl. the 8pt inset).
     const img = images.get(item.id);
     let imgW = 0;
     let imgH = 0;
     if (img) {
-      const s = Math.min(130 / img.width, 90 / img.height, 1);
+      const s = Math.min(230 / img.width, 165 / img.height, 1);
       imgW = img.width * s;
       imgH = img.height * s;
     }
     const descLines = wordWrap(ctx.font, item.description, 8, cols.part - 16);
     const rowH = 8 + 13 + (img ? imgH + 6 : 0) + descLines.length * 10 + 8;
-    const pb = ctx.pageNumber;
-    ensureSpace(ctx, rowH);
-    if (ctx.pageNumber !== pb) { drawHead(); lastSection = null; }
+
+    if (sec && sec !== lastSection) {
+      // New section: keep the band together with its first row on one page.
+      const pb = ctx.pageNumber;
+      ensureSpace(ctx, subH + rowH);
+      if (ctx.pageNumber !== pb) drawHead();
+      drawSubheader(sec);
+      lastSection = sec;
+      rowIdx = 0;
+    } else {
+      // Continuing a section: if the row doesn't fit, break and re-emit the
+      // section band at the top of the new page — WITHOUT resetting lastSection
+      // (that would make the following row redraw the band mid-section).
+      const pb = ctx.pageNumber;
+      ensureSpace(ctx, rowH);
+      if (ctx.pageNumber !== pb) {
+        drawHead();
+        if (sec) drawSubheader(sec);
+      }
+    }
     if (rowIdx % 2 === 1) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
     const sy = ctx.y + 8;
     const nameY = yFromTop(sy + 9);
@@ -1280,12 +1323,13 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<stri
       cy += 10;
     }
     const amt = item.areaSqFt * item.ratePerSqFt;
-    centerAt(item.unit ?? "sq ft", x.unit, cols.unit, 8.5, ctx.font, COL.text, nameY);
+    centerAt(item.unit ?? "sq.ft", x.unit, cols.unit, 8.5, ctx.font, COL.text, nameY);
     rightAt(inr(item.areaSqFt), x.qty, cols.qty, 9, ctx.font, COL.text, nameY);
     rightAt(inrRate(item.ratePerSqFt), x.rate, cols.rate, 9, ctx.font, COL.text, nameY);
     centerAt(gstLabel(item.gstPercent), x.gst, cols.gst, 8.5, ctx.font, COL.text, nameY);
     rightAt(inr(amt), x.amt, cols.amt, 9, ctx.font, COL.text, nameY);
-    ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y + rowH) }, end: { x: PAGE_W - MARGIN, y: yFromTop(ctx.y + rowH) }, color: COL.border, thickness: 0.5 });
+    rowLine(ctx.y + rowH);
+    drawGrid(ctx.y, rowH, true);
     ctx.y += rowH;
     rowIdx++;
   }
@@ -1356,41 +1400,71 @@ function specSectionTitle(sport: string): string {
   return sport === "football" || sport === "cricket" ? "Turf Specifications" : "Product Specifications";
 }
 
-// Up to three side-by-side spec cards (title + bullet specs).
-function drawSpecCards(ctx: Ctx, items: QuoteLineItem[]) {
-  const cards = items.slice(0, 3);
-  const n = cards.length;
+// Spec cards (product photo + title + bullet specs), one per product. Laid out
+// up to three side-by-side, wrapping to further rows when more than three
+// products carry specs — so a single product shows one card and N products
+// show N cards. The card photo reuses the same embedded image map the
+// particulars table uses (keyed by line-item id).
+function drawSpecCards(ctx: Ctx, items: QuoteLineItem[], images: Map<string, PDFImage>) {
   const gap = 12;
-  const cardW = (CONTENT_W - gap * (n - 1)) / n;
+  const topPad = 14;
+  const columns = Math.min(items.length, 3) || 1;
+  const cardW = (CONTENT_W - gap * (columns - 1)) / columns;
   const titleSize = 9.5;
   const bulletSize = 8;
   const lh = 12;
-  const prepared = cards.map((it) => {
+  const imgMaxW = cardW - 24;
+  const imgMaxH = 96;
+  const prepared = items.map((it) => {
     const lines: string[] = [];
     for (const s of it.specs ?? []) {
       const wrapped = wordWrap(ctx.font, `${s.label}: ${s.value}`, bulletSize, cardW - 26);
       wrapped.forEach((w, idx) => lines.push((idx === 0 ? "- " : "  ") + w));
     }
-    return { it, lines };
-  });
-  const maxLines = prepared.reduce((m, c) => Math.max(m, c.lines.length), 0);
-  const cardH = 16 + 20 + maxLines * lh + 10;
-  ensureSpace(ctx, cardH + 6);
-  const top = ctx.y;
-  prepared.forEach((c, i) => {
-    const cx = MARGIN + i * (cardW + gap);
-    drawRect(ctx, cx, top, cardW, cardH, { fill: rgb(1, 1, 1), border: COL.border });
-    let title = c.it.optionShort ?? c.it.name ?? "";
-    while (title.length > 4 && safeWidth(ctx.bold, title, titleSize) > cardW - 20) title = title.slice(0, -1);
-    safeDraw(ctx.page, title, { x: cx + 12, y: yFromTop(top + 20), size: titleSize, font: ctx.bold, color: COL.green });
-    let yy = top + 34;
-    for (const ln of c.lines) {
-      safeDraw(ctx.page, ln, { x: cx + 12, y: yFromTop(yy + 8), size: bulletSize, font: ctx.font, color: COL.textSoft });
-      yy += lh;
+    const img = images.get(it.id) ?? null;
+    let imgW = 0;
+    let imgH = 0;
+    if (img) {
+      const sc = Math.min(imgMaxW / img.width, imgMaxH / img.height, 1);
+      imgW = img.width * sc;
+      imgH = img.height * sc;
     }
+    return { it, lines, img, imgW, imgH };
   });
-  ctx.y = top + cardH;
-  space(ctx, 6);
+  // Render in rows of `columns`; each row's height fits its tallest card, and
+  // the photo band height is shared so titles align across the row.
+  for (let r = 0; r < prepared.length; r += columns) {
+    const rowCards = prepared.slice(r, r + columns);
+    const maxLines = rowCards.reduce((m, c) => Math.max(m, c.lines.length), 0);
+    const maxImgH = rowCards.reduce((m, c) => Math.max(m, c.imgH), 0);
+    const imgBlock = maxImgH > 0 ? maxImgH + 10 : 0;
+    const cardH = topPad + imgBlock + 18 + maxLines * lh + 12;
+    ensureSpace(ctx, cardH + 6);
+    const top = ctx.y;
+    rowCards.forEach((c, i) => {
+      const cx = MARGIN + i * (cardW + gap);
+      drawRect(ctx, cx, top, cardW, cardH, { fill: rgb(1, 1, 1), border: COL.border });
+      // Product photo, centred at the top of the card (with a thin frame).
+      if (c.img) {
+        const ix = cx + (cardW - c.imgW) / 2;
+        const iy = top + topPad;
+        ctx.page.drawImage(c.img, { x: ix, y: yFromTop(iy + c.imgH), width: c.imgW, height: c.imgH });
+        ctx.page.drawRectangle({ x: ix, y: yFromTop(iy + c.imgH), width: c.imgW, height: c.imgH, borderColor: COL.border, borderWidth: 0.5 });
+      }
+      // Title + specs sit below the shared photo band so rows line up.
+      const titleTop = top + topPad + imgBlock;
+      let title = c.it.optionShort ?? c.it.name ?? "";
+      while (title.length > 4 && safeWidth(ctx.bold, title, titleSize) > cardW - 20) title = title.slice(0, -1);
+      safeDraw(ctx.page, title, { x: cx + 12, y: yFromTop(titleTop + titleSize), size: titleSize, font: ctx.bold, color: COL.green });
+      let yy = titleTop + 18;
+      for (const ln of c.lines) {
+        safeDraw(ctx.page, ln, { x: cx + 12, y: yFromTop(yy + 8), size: bulletSize, font: ctx.font, color: COL.textSoft });
+        yy += lh;
+      }
+    });
+    ctx.y = top + cardH;
+    space(ctx, 6);
+  }
 }
 
 function drawNumbered(ctx: Ctx, lines: string[]) {
@@ -1590,7 +1664,7 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   const specItems = data.lineItems.filter((i) => i.included && i.specs && i.specs.length);
   if (specItems.length) {
     drawSectionTitle(ctx, specSectionTitle(data.sport));
-    drawSpecCards(ctx, specItems);
+    drawSpecCards(ctx, specItems, itemImages);
   }
 
   // Notes / Client Work Scope / Payment Terms + bank

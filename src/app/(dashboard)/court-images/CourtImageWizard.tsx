@@ -4696,9 +4696,12 @@ function CombinedPdfBlock({
   // has been generated). The PDF carries the court from all angles as
   // still images; the video shows it spinning.
   const [alsoSendVideo, setAlsoSendVideo] = useState(true);
-  // Off by default — the catalogue adds several extra pages, so sales opts
-  // in only when the customer hasn't already seen it.
-  const [includeCatalogue, setIncludeCatalogue] = useState(false);
+  // On by default — matches the standalone quotation PDF, which always
+  // attaches the sport catalogue with no opt-out toggle. A separate
+  // default-off checkbox here was confusing: sales expected "attach the
+  // quote" to behave the same way it does everywhere else. Still a
+  // checkbox so it can be turned off for a specific send if needed.
+  const [includeCatalogue, setIncludeCatalogue] = useState(true);
   const [busy, setBusy] = useState<
     "" | "view" | "download" | "send" | "email"
   >("");

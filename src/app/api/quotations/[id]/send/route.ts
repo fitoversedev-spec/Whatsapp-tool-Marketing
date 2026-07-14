@@ -64,6 +64,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // the quote renders to start that download would add it to the
       // critical path.
       const cataloguePromise = getSportCatalogueBytes(q.sport);
+      const driveLinkPromise = prisma.setting
+        .findUnique({ where: { key: `project_drive_link_${q.sport}` } })
+        .then((s) => s?.value ?? null);
       const lineItems = JSON.parse(q.lineItems) as QuoteLineItem[];
       const pdfBuffer = await renderQuotationPdf({
         number: q.number,
@@ -78,6 +81,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         notes: q.notes,
         quoteDate: q.quoteDate,
         validityDays: q.validityDays,
+        driveLink: await driveLinkPromise,
       });
       const withCatalogue = await mergeCatalogueIntoQuote(pdfBuffer, await cataloguePromise);
       const uploaded = await uploadToBlob({

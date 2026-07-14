@@ -316,12 +316,16 @@ export async function POST(req: NextRequest) {
       // quote line (by shared words in the names) so the merged quote PDF shows
       // a spec card after the table — the same behaviour as a stand-alone quote.
       attachProductSpecs(qLineItems, products);
+      const quoteSport = sports[0] ?? "multisport";
+      const driveLinkSetting = await prisma.setting.findUnique({
+        where: { key: `project_drive_link_${quoteSport}` },
+      });
       const buf = await renderQuotationPdf({
         number: String(
           body.quote.number ?? buildQuotationNumber(new Date().getFullYear(), 0),
         ),
         customerName: String(body.customerName ?? ""),
-        sport: sports[0] ?? "multisport",
+        sport: quoteSport,
         lengthFt: Math.round(lengthFt),
         widthFt: Math.round(widthFt),
         lineItems: qLineItems,
@@ -331,6 +335,7 @@ export async function POST(req: NextRequest) {
         notes: typeof body.quote.notes === "string" ? body.quote.notes : null,
         quoteDate: new Date(),
         validityDays: 30,
+        driveLink: driveLinkSetting?.value ?? null,
       });
       quotePdf = new Uint8Array(buf);
     } catch (e) {

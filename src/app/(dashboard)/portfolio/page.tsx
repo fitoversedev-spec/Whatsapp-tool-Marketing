@@ -7,7 +7,7 @@ export default async function PortfolioPage() {
   const user = await requireUser();
 
   const sports = Object.keys(SPORT_META) as SportKey[];
-  const [rows, catalogueSettings] = await Promise.all([
+  const [rows, catalogueSettings, driveLinkSettings] = await Promise.all([
     prisma.portfolioProject.findMany({
       where: { archived: false },
       orderBy: [{ featured: "desc" }, { completionDate: "desc" }, { createdAt: "desc" }],
@@ -17,9 +17,15 @@ export default async function PortfolioPage() {
     prisma.setting.findMany({
       where: { key: { in: sports.map((s) => `catalogue_${s}_url`) } },
     }),
+    prisma.setting.findMany({
+      where: { key: { in: sports.map((s) => `project_drive_link_${s}`) } },
+    }),
   ]);
   const catalogueUrlBySport = new Map(
     catalogueSettings.map((s) => [s.key.replace(/^catalogue_/, "").replace(/_url$/, ""), s.value]),
+  );
+  const driveLinkBySport = new Map(
+    driveLinkSettings.map((s) => [s.key.replace(/^project_drive_link_/, ""), s.value]),
   );
 
   return (
@@ -29,6 +35,7 @@ export default async function PortfolioPage() {
         sport,
         label: SPORT_META[sport].label,
         url: catalogueUrlBySport.get(sport) ?? null,
+        driveLink: driveLinkBySport.get(sport) ?? null,
       }))}
       initialProjects={rows.map((p) => ({
         id: p.id,

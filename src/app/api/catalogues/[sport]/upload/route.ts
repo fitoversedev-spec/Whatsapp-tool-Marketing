@@ -1,18 +1,30 @@
 // Admin upload/replace/remove for a sport's catalogue PDF override
 // (Setting key catalogue_<sport>_url) — the polished, Fitoverse-authored
 // marketing PDF that attach-catalogue.ts prefers over the auto-rendered
-// fallback. The file is used exactly as uploaded (never resized or
-// recompressed); the only hard cap is MAX_OVERRIDE_BYTES, which mirrors
-// WhatsApp's own document-message size limit — a file past that can never
-// be sent regardless of load time, so it's rejected here rather than
-// failing later at send time.
+// fallback. The uploaded deck's CONTENT is never resized/recompressed —
+// but for sports with a curated page list (see CURATED_PAGES in
+// attach-catalogue.ts), only those specific pages are kept, extracted
+// here once at upload time. This is deliberate: the raw deck can be
+// 50MB+, and fetching that in full on every single quote (even just to
+// discard most of it afterward) is what made the catalogue slow/
+// unreliable to begin with. Curating once here means every quote request
+// afterward just fetches an already-small (~1-3MB) file.
+//
+// The only hard cap is MAX_OVERRIDE_BYTES, which mirrors WhatsApp's own
+// document-message size limit — a file past that can never be sent
+// regardless of load time, so it's rejected here rather than failing
+// later at send time.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadToBlob } from "@/lib/media";
 import { getSportMeta } from "@/lib/catalogue/sport-meta";
-import { MAX_OVERRIDE_BYTES } from "@/lib/quotation/attach-catalogue";
+import {
+  MAX_OVERRIDE_BYTES,
+  curateOverridePages,
+  hasCuratedPages,
+} from "@/lib/quotation/attach-catalogue";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -53,9 +65,15 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
   }
 
   let url: string;
+  let sizeBytes: number;
   try {
+    let bytes: Uint8Array = new Uint8Array(await file.arrayBuffer());
+    if (hasCuratedPages(params.sport)) {
+      bytes = await curateOverridePages(bytes, params.sport);
+    }
+    sizeBytes = bytes.length;
     const uploaded = await uploadToBlob({
-      bytes: file,
+      bytes: Buffer.from(bytes),
       fileName: `${params.sport}-catalogue.pdf`,
       mimeType: "application/pdf",
       folder: "catalogues",
@@ -75,7 +93,7 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
     update: { value: url },
   });
 
-  return NextResponse.json({ ok: true, url, sizeBytes: file.size });
+  return NextResponse.json({ ok: true, url, sizeBytes, originalSizeBytes: file.size });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { sport: string } }) {

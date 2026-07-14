@@ -49,6 +49,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   // admin-uploaded override can be several MB, so waiting until AFTER the
   // quote renders to start that download would add it to the critical path.
   const cataloguePromise = getSportCatalogueBytes(q.sport);
+  const driveLinkPromise = prisma.setting
+    .findUnique({ where: { key: `project_drive_link_${q.sport}` } })
+    .then((s) => s?.value ?? null);
 
   let pdfBuffer: Buffer;
   try {
@@ -66,6 +69,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       notes: q.notes,
       quoteDate: q.quoteDate,
       validityDays: q.validityDays,
+      driveLink: await driveLinkPromise,
     });
   } catch (e) {
     // Surface the real error to the preview iframe instead of letting an

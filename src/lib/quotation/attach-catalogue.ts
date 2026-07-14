@@ -29,18 +29,78 @@ import { getSportMeta, type SportKey } from "@/lib/catalogue/sport-meta";
 // at send time.
 export const MAX_OVERRIDE_BYTES = 90 * 1024 * 1024;
 
+// Curated page selection for the admin-uploaded override deck — the full
+// marketing PDF runs 24 pages (team bios, per-product spec sheets, etc.);
+// every quote keeps only these sections, in this order:
+// Custom Designed [Sport] cover, Origin Story, Proud Members Of, What Our
+// Customers Speak About Us, Custom Designed To Fit Your Property, the
+// injury/risk page, We Solve This With Flooring, Why Choose Fitoverse, One
+// Place For Every Passion, Everything You Need In One Place, Fitoverse QR.
+// Verified page-by-page against the actual 24-page football catalogue.
+// The same numbers are applied to the other overrides below since all 5
+// share one company template — only the cover and a couple of
+// sport-specific pages differ in CONTENT, not position. If a particular
+// sport's catalogue turns out laid out differently, give that sport its
+// own entry here instead of FOOTBALL_TEMPLATE_PAGES.
+//
+// Applied ONCE, at upload time (api/catalogues/[sport]/upload) — NOT on
+// every quote request. The raw upload can be 50MB+; fetching that in full
+// on every single quote (even just to throw most of it away afterward) is
+// what made the catalogue unreliable in the first place. The Setting this
+// module reads always points at the already-curated ~1-3MB file, so the
+// request-time path here is just "fetch and use it" — fast by construction.
+const FOOTBALL_TEMPLATE_PAGES = [1, 2, 5, 6, 8, 9, 10, 21, 23, 19, 24];
+const CURATED_PAGES: Partial<Record<string, number[]>> = {
+  football: FOOTBALL_TEMPLATE_PAGES,
+  basketball: FOOTBALL_TEMPLATE_PAGES,
+  pickleball: FOOTBALL_TEMPLATE_PAGES,
+  badminton: FOOTBALL_TEMPLATE_PAGES,
+  multisport: FOOTBALL_TEMPLATE_PAGES,
+};
+
+export function hasCuratedPages(sport: string): boolean {
+  return !!CURATED_PAGES[sport];
+}
+
+export async function curateOverridePages(bytes: Uint8Array, sport: string): Promise<Uint8Array> {
+  const wanted = CURATED_PAGES[sport];
+  if (!wanted) return bytes;
+  const src = await PDFDocument.load(bytes);
+  const maxPage = src.getPageCount();
+  const indices = wanted.filter((n) => n <= maxPage).map((n) => n - 1);
+  if (indices.length === 0) return bytes;
+  const out = await PDFDocument.create();
+  const copied = await out.copyPages(src, indices);
+  for (const pg of copied) out.addPage(pg);
+  return await out.save();
+}
+
+// In-memory, per-process cache of the fetched override bytes — even curated
+// to ~11 pages, the deck is 20-25MB (unmodified source images), which measured
+// 10-16s to fetch from Blob. That's uncomfortably close to the 40s timeout
+// below, and every quote render was paying that cost freshly. Keyed by the
+// Setting's URL itself, so a re-upload (which always gets a new blob path)
+// invalidates automatically — no separate TTL/bust logic needed.
+const catalogueCache = new Map<string, Uint8Array>();
+
 export async function getSportCatalogueBytes(sport: string): Promise<Uint8Array | null> {
   try {
     const override = await prisma.setting.findUnique({
       where: { key: `catalogue_${sport}_url` },
     });
     if (override?.value) {
+      const cached = catalogueCache.get(override.value);
+      if (cached) return cached;
       try {
-        // Generous but bounded — callers run under a 60s function timeout and
-        // still need headroom afterward (merge, upload, and for /send the
-        // actual WhatsApp API calls).
+        // The stored file is already curated down to ~11 pages at upload
+        // time — much smaller than the 50MB+ raw deck, but still large
+        // enough (20-25MB) to need real headroom against a hung/slow fetch.
         const r = await fetch(override.value, { signal: AbortSignal.timeout(40000) });
-        if (r.ok) return new Uint8Array(await r.arrayBuffer());
+        if (r.ok) {
+          const bytes = new Uint8Array(await r.arrayBuffer());
+          catalogueCache.set(override.value, bytes);
+          return bytes;
+        }
       } catch (err) {
         console.warn(
           `[quotation] catalogue override fetch failed for ${sport}, using the` +

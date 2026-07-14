@@ -589,7 +589,7 @@ function drawQuoteTitle(ctx: Ctx, sport: string) {
     y: yFromTop(ctx.y + 13),
     size: 13,
     font: ctx.bold,
-    color: COL.green,
+    color: COL.blue,
   });
   ctx.y += 22;
   const subject = titleForSport(sport).replace(/^Quotation for\s+/i, "");
@@ -611,33 +611,33 @@ function drawFromTo(ctx: Ctx, customerName: string, quoteDate: string) {
   const s = ctx.y;
   ensureSpace(ctx, 110);
   // From (left)
-  safeDraw(ctx.page, "From", { x: MARGIN, y: yFromTop(s + 12), size: 13, font: ctx.bold, color: COL.green });
+  safeDraw(ctx.page, "From", { x: MARGIN, y: yFromTop(s + 12), size: 13, font: ctx.bold, color: COL.blue });
   safeDraw(ctx.page, "Fitoverse Private Limited", { x: MARGIN, y: yFromTop(s + 33), size: 15, font: ctx.bold, color: COL.text });
   safeDraw(ctx.page, "Phone: 6381502055", { x: MARGIN, y: yFromTop(s + 51), size: 10.5, font: ctx.font, color: COL.textSoft });
   safeDraw(ctx.page, "GSTIN: 33AAECF8905G1ZQ", { x: MARGIN, y: yFromTop(s + 66), size: 10.5, font: ctx.font, color: COL.textSoft });
   // To (right)
   const rx = MARGIN + colW;
-  safeDraw(ctx.page, "To", { x: rx, y: yFromTop(s + 12), size: 13, font: ctx.bold, color: COL.green });
+  safeDraw(ctx.page, "To", { x: rx, y: yFromTop(s + 12), size: 13, font: ctx.bold, color: COL.blue });
   safeDraw(ctx.page, toName, { x: rx, y: yFromTop(s + 33), size: 15, font: ctx.bold, color: COL.text });
   if (city) safeDraw(ctx.page, city, { x: rx, y: yFromTop(s + 50), size: 10.5, font: ctx.font, color: COL.textSoft });
-  safeDraw(ctx.page, "Quoted on", { x: rx, y: yFromTop(s + 74), size: 13, font: ctx.bold, color: COL.green });
+  safeDraw(ctx.page, "Quoted on", { x: rx, y: yFromTop(s + 74), size: 13, font: ctx.bold, color: COL.blue });
   safeDraw(ctx.page, quoteDate, { x: rx, y: yFromTop(s + 94), size: 15, font: ctx.bold, color: COL.text });
   ctx.y = s + 110;
   space(ctx, 8);
 }
 
 function drawProjectLine(ctx: Ctx, sport: string, lengthFt: number, widthFt: number, city: string) {
-  const h = 28;
+  const h = 38;
   ensureSpace(ctx, h);
   drawRect(ctx, MARGIN, ctx.y, CONTENT_W, h, { fill: COL.greenSoft });
-  drawRect(ctx, MARGIN, ctx.y, 3, h, { fill: COL.accent });
+  drawRect(ctx, MARGIN, ctx.y, 4, h, { fill: COL.accent });
   const area = lengthFt * widthFt;
   const prefix = "Project:  ";
   const detail = `${projectLabelForSport(sport)} - ${lengthFt} ft x ${widthFt} ft (${inr(area)} sq ft)${city ? ", " + city : ""}`;
-  const baseY = yFromTop(ctx.y + 18);
-  safeDraw(ctx.page, prefix, { x: MARGIN + 12, y: baseY, size: 10, font: ctx.font, color: COL.muted });
-  const px = MARGIN + 12 + safeWidth(ctx.font, prefix, 10);
-  safeDraw(ctx.page, detail, { x: px, y: baseY, size: 10, font: ctx.bold, color: COL.text });
+  const baseY = yFromTop(ctx.y + 24);
+  safeDraw(ctx.page, prefix, { x: MARGIN + 14, y: baseY, size: 13, font: ctx.bold, color: COL.blue });
+  const px = MARGIN + 14 + safeWidth(ctx.bold, prefix, 13);
+  safeDraw(ctx.page, detail, { x: px, y: baseY, size: 13, font: ctx.bold, color: COL.text });
   ctx.y += h;
   space(ctx, 10);
 }
@@ -848,24 +848,29 @@ function drawItemsTable(
 }
 
 function drawTotals(ctx: Ctx, subtotal: number, gst: number, grandTotal: number) {
-  const totalsW = 250;
-  const x = PAGE_W - MARGIN - totalsW;
-  const lineH = 19;
-  ensureSpace(ctx, lineH * 4 + 24);
+  // Spans the full content width (matching the particulars table above it)
+  // instead of a narrow box on the right — a right-aligned-only box left a
+  // large empty gap on the left where the row visually had nothing in it.
+  const totalsW = CONTENT_W;
+  const x = MARGIN;
+  const lineH = 22;
+  const grandH = 32;
+  const totalH = lineH * 2 + grandH;
+  ensureSpace(ctx, totalH + 10);
+  const top = ctx.y;
 
-  const drawTotalRow = (label: string, value: string, bold = false) => {
-    const font = bold ? ctx.bold : ctx.font;
+  const drawTotalRow = (label: string, value: string) => {
     safeDraw(ctx.page, label, {
-      x,
-      y: yFromTop(ctx.y + 13),
+      x: x + 10,
+      y: yFromTop(ctx.y + 14.5),
       size: 11.5,
-      font,
+      font: ctx.font,
       color: COL.text,
     });
-    const valW = safeWidth(font, value, 11.5);
+    const valW = safeWidth(ctx.bold, value, 11.5);
     safeDraw(ctx.page, value, {
-      x: PAGE_W - MARGIN - valW,
-      y: yFromTop(ctx.y + 13),
+      x: PAGE_W - MARGIN - valW - 10,
+      y: yFromTop(ctx.y + 14.5),
       size: 11.5,
       font: ctx.bold,
       color: COL.text,
@@ -874,14 +879,14 @@ function drawTotals(ctx: Ctx, subtotal: number, gst: number, grandTotal: number)
   };
 
   drawTotalRow("Subtotal (without GST)", `₹ ${inr(subtotal)}`);
+  drawLine(ctx, x, PAGE_W - MARGIN, COL.tableGrid, 0.7);
   drawTotalRow("GST Amount", `₹ ${inr(gst)}`);
-  space(ctx, 4);
 
-  // Grand total band — brand green.
-  drawRect(ctx, x, ctx.y, totalsW, 30, { fill: COL.grandTotalBg });
+  // Grand total band — brand green — still inside the same bordered block.
+  drawRect(ctx, x, ctx.y, totalsW, grandH, { fill: COL.grandTotalBg });
   safeDraw(ctx.page, "Grand Total", {
     x: x + 10,
-    y: yFromTop(ctx.y + 20),
+    y: yFromTop(ctx.y + 21),
     size: 13,
     font: ctx.bold,
     color: COL.accentText,
@@ -890,12 +895,23 @@ function drawTotals(ctx: Ctx, subtotal: number, gst: number, grandTotal: number)
   const grandW = safeWidth(ctx.bold, grandText, 13);
   safeDraw(ctx.page, grandText, {
     x: PAGE_W - MARGIN - grandW - 10,
-    y: yFromTop(ctx.y + 20),
+    y: yFromTop(ctx.y + 21),
     size: 13,
     font: ctx.bold,
     color: COL.accentText,
   });
-  ctx.y += 34;
+  ctx.y += grandH;
+
+  // Outer border wraps the whole block so it reads as one complete table
+  // instead of loose floating text.
+  ctx.page.drawRectangle({
+    x,
+    y: yFromTop(top + totalH),
+    width: totalsW,
+    height: totalH,
+    borderColor: COL.tableGrid,
+    borderWidth: 0.9,
+  });
 }
 
 function drawSectionTitle(ctx: Ctx, title: string) {
@@ -908,7 +924,7 @@ function drawSectionTitle(ctx: Ctx, title: string) {
     y: yFromTop(ctx.y + 14),
     size: 14.5,
     font: ctx.bold,
-    color: COL.accent,
+    color: COL.blue,
   });
   ctx.y += 22;
   drawLine(ctx, MARGIN, PAGE_W - MARGIN, COL.border, 0.5);
@@ -1510,7 +1526,7 @@ function firstSpecCardRowHeight(
   for (const it of items.slice(0, columns)) {
     let lines = 0;
     for (const s of it.specs ?? []) {
-      lines += wordWrap(ctx.font, `${s.label}: ${s.value}`, bulletSize, cardW - 26).length;
+      lines += wordWrap(ctx.bold, `${s.label}: ${s.value}`, bulletSize, cardW - 26).length;
     }
     maxLines = Math.max(maxLines, lines);
     const img = images.get(it.id);
@@ -1541,7 +1557,7 @@ function drawSpecCards(ctx: Ctx, items: QuoteLineItem[], images: Map<string, PDF
   const prepared = items.map((it) => {
     const lines: string[] = [];
     for (const s of it.specs ?? []) {
-      const wrapped = wordWrap(ctx.font, `${s.label}: ${s.value}`, bulletSize, cardW - 26);
+      const wrapped = wordWrap(ctx.bold, `${s.label}: ${s.value}`, bulletSize, cardW - 26);
       wrapped.forEach((w, idx) => lines.push((idx === 0 ? "- " : "  ") + w));
     }
     const img = images.get(it.id) ?? null;
@@ -1578,10 +1594,10 @@ function drawSpecCards(ctx: Ctx, items: QuoteLineItem[], images: Map<string, PDF
       const titleTop = top + topPad + imgBlock;
       let title = c.it.optionShort ?? c.it.name ?? "";
       while (title.length > 4 && safeWidth(ctx.bold, title, titleSize) > cardW - 20) title = title.slice(0, -1);
-      safeDraw(ctx.page, title, { x: cx + 12, y: yFromTop(titleTop + titleSize), size: titleSize, font: ctx.bold, color: COL.green });
+      safeDraw(ctx.page, title, { x: cx + 12, y: yFromTop(titleTop + titleSize), size: titleSize, font: ctx.bold, color: COL.blue });
       let yy = titleTop + 20;
       for (const ln of c.lines) {
-        safeDraw(ctx.page, ln, { x: cx + 12, y: yFromTop(yy + 8), size: bulletSize, font: ctx.font, color: COL.textSoft });
+        safeDraw(ctx.page, ln, { x: cx + 12, y: yFromTop(yy + 8), size: bulletSize, font: ctx.bold, color: COL.text });
         yy += lh;
       }
     });
@@ -1590,14 +1606,28 @@ function drawSpecCards(ctx: Ctx, items: QuoteLineItem[], images: Map<string, PDF
   }
 }
 
+// Total height a numbered list will take (mirrors drawNumbered's own
+// per-item math). Exposed so a caller can reserve it TOGETHER with a
+// preceding section title (see the Notes call site) — otherwise the title
+// alone can fit at a page's bottom while the whole list it introduces gets
+// pushed to the next page on its own.
+function numberedListHeight(ctx: Ctx, lines: string[]): number {
+  return lines.reduce((h, line) => h + wordWrap(ctx.font, line, 10.5, CONTENT_W - 28).length * 14 + 2, 0);
+}
+
 function drawNumbered(ctx: Ctx, lines: string[]) {
+  // Wrap everything up front and reserve the WHOLE list's height in one
+  // ensureSpace call — otherwise each item is paginated independently, so a
+  // page boundary falling mid-list orphans the first item(s) alone at the
+  // bottom of one page while the rest spill to the next. Reserving the full
+  // block keeps the list together, pushing all of it to a new page instead.
+  const wrapped = lines.map((line) => wordWrap(ctx.font, line, 10.5, CONTENT_W - 28));
+  ensureSpace(ctx, numberedListHeight(ctx, lines));
   lines.forEach((line, i) => {
     const num = `${i + 1}.`;
-    const wrapped = wordWrap(ctx.font, line, 10.5, CONTENT_W - 28);
-    ensureSpace(ctx, wrapped.length * 14 + 2);
     safeDraw(ctx.page, num, { x: MARGIN + 4, y: yFromTop(ctx.y + 9), size: 10.5, font: ctx.font, color: COL.text });
     let ly = ctx.y;
-    for (const w of wrapped) {
+    for (const w of wrapped[i]) {
       safeDraw(ctx.page, w, { x: MARGIN + 22, y: yFromTop(ly + 9), size: 10.5, font: ctx.font, color: COL.text });
       ly += 14;
     }
@@ -1608,7 +1638,7 @@ function drawNumbered(ctx: Ctx, lines: string[]) {
 function drawSubheading(ctx: Ctx, title: string) {
   space(ctx, 6);
   ensureSpace(ctx, 19);
-  safeDraw(ctx.page, title, { x: MARGIN, y: yFromTop(ctx.y + 12), size: 12, font: ctx.bold, color: COL.green });
+  safeDraw(ctx.page, title, { x: MARGIN, y: yFromTop(ctx.y + 12), size: 12, font: ctx.bold, color: COL.blue });
   ctx.y += 19;
 }
 
@@ -1675,11 +1705,10 @@ function drawAdvantagePage(ctx: Ctx) {
 function drawShowcasePage(
   ctx: Ctx,
   photo: PDFImage,
-  sportLabel: string,
   driveLink: string | null,
 ) {
   space(ctx, 24);
-  drawCentered(ctx, "See It Built", MARGIN, CONTENT_W, ctx.y, 22, ctx.bold, COL.text);
+  drawCentered(ctx, "Our Portfolio", MARGIN, CONTENT_W, ctx.y, 22, ctx.bold, COL.text);
   ctx.y += 30;
   ctx.page.drawLine({
     start: { x: (PAGE_W - 64) / 2, y: yFromTop(ctx.y) },
@@ -1687,18 +1716,7 @@ function drawShowcasePage(
     color: COL.accent,
     thickness: 2.5,
   });
-  space(ctx, 20);
-  drawCentered(
-    ctx,
-    `A recent Fitoverse ${sportLabel} project.`,
-    MARGIN,
-    CONTENT_W,
-    ctx.y,
-    11,
-    ctx.font,
-    COL.muted,
-  );
-  ctx.y += 30;
+  space(ctx, 30);
 
   const maxW = 440;
   const maxH = 300;
@@ -1755,7 +1773,7 @@ function drawConnectPage(ctx: Ctx) {
   drawRect(ctx, px, ctx.y, panelW, panelH, { fill: COL.greenSoft, border: COL.border });
   let ry = ctx.y + 14;
   for (const [label, value, url] of rows) {
-    safeDraw(ctx.page, label, { x: px + 24, y: yFromTop(ry + 10), size: 10, font: ctx.bold, color: COL.green });
+    safeDraw(ctx.page, label, { x: px + 24, y: yFromTop(ry + 10), size: 10, font: ctx.bold, color: COL.blue });
     if (url) {
       drawLink(ctx, value, url, { x: px + 130, y: ry, size: 10 });
     } else {
@@ -1835,13 +1853,6 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   space(ctx, 6);
   const hasOptions = anyOptions(data.lineItems);
   drawSectionTitle(ctx, "Commercial Quotation");
-  const surface = data.sport === "football" || data.sport === "cricket" ? "turf" : "flooring";
-  const introBase = `Turnkey ${projectLabelForSport(data.sport).toLowerCase()} for a ${data.lengthFt} x ${data.widthFt} ft (${inr(data.lengthFt * data.widthFt)} sq ft) ground${cityFromName ? " at " + cityFromName : ""}.`;
-  const intro = hasOptions
-    ? `${introBase} Ground preparation is common to all options; the ${surface} is a choose-one selection across the grades below. GST is charged extra on ${surface} only (no GST on ground preparation).`
-    : `${introBase} Rates are inclusive of installation. GST is charged extra as applicable and shown separately.`;
-  drawText(ctx, intro, { x: MARGIN, size: 10.5, maxWidth: CONTENT_W, color: COL.textSoft });
-  space(ctx, 8);
   const itemImages = await embedLineItemImages(doc, data.lineItems);
   // Matches drawComparisonTable's / drawTotals' own ensureSpace() cost (with a
   // little headroom) — see drawParticularsTable's finalReserve doc comment.
@@ -1864,8 +1875,7 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   }
 
   // Notes / Client Work Scope / Payment Terms + bank
-  drawSectionTitle(ctx, "Notes");
-  drawNumbered(ctx, [
+  const notesLines = [
     "Installation charges are included in the above rates.",
     "GST is charged extra as shown; ground preparation carries no GST.",
     "Freight / transport charges extra for materials at actuals.",
@@ -1873,7 +1883,14 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
     "Food and stay for the installation team on client scope.",
     "Unloading, shifting and storage at the project site on client scope.",
     "Warranty as applicable to the selected surface, excluding damage from misuse, vandalism or natural calamities.",
-  ]);
+  ];
+  // Reserve the title TOGETHER with the whole list (34 = drawSectionTitle's
+  // own vertical consumption) — otherwise the title alone can fit at a
+  // page's bottom while the list it introduces gets pushed to the next page
+  // by itself.
+  ensureSpace(ctx, 34 + numberedListHeight(ctx, notesLines));
+  drawSectionTitle(ctx, "Notes");
+  drawNumbered(ctx, notesLines);
   drawSubheading(ctx, "Client Work Scope");
   drawBullets(ctx, [
     "Site to be ready, clean and levelled before commencement.",
@@ -1950,7 +1967,7 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
       const showcaseImage = await doc.embedJpg(showcaseBytes);
       drawFooter(ctx);
       newPage(ctx);
-      drawShowcasePage(ctx, showcaseImage, projectLabelForSport(data.sport), data.driveLink ?? null);
+      drawShowcasePage(ctx, showcaseImage, data.driveLink ?? null);
     } catch (e) {
       console.error("[quotation pdf] showcase photo embed failed", e);
     }

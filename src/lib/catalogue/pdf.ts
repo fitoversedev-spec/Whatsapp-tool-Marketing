@@ -680,29 +680,41 @@ async function preloadProjectPhotos(
   doc: PDFDocument,
   projects: FeaturedProject[]
 ): Promise<Array<FeaturedProject & { embeddedImage: PDFImage | null }>> {
-  const out: Array<FeaturedProject & { embeddedImage: PDFImage | null }> = [];
-  for (const p of projects) {
-    let embeddedImage: PDFImage | null = null;
-    if (p.heroPhotoUrl) {
+  // Fetch all hero photos CONCURRENTLY (network I/O, up to 6 — was
+  // sequential with no timeout, so a single slow host serialized the whole
+  // wait and a hung one could stall the render indefinitely). Embedding into
+  // the shared PDFDocument stays sequential afterward, since pdf-lib's embed
+  // calls mutate shared document state and aren't safe to run concurrently
+  // against the same PDFDocument instance.
+  const fetched = await Promise.all(
+    projects.map(async (p) => {
+      if (!p.heroPhotoUrl) return { p, buf: null as Buffer | null, contentType: "" };
       try {
-        const res = await fetch(p.heroPhotoUrl);
-        if (res.ok) {
-          const buf = Buffer.from(await res.arrayBuffer());
-          const contentType = res.headers.get("content-type") ?? "";
-          if (contentType.includes("png") || p.heroPhotoUrl.endsWith(".png")) {
-            embeddedImage = await doc.embedPng(buf);
-          } else {
-            // Try JPEG by default; pdf-lib handles JPEGs but is picky on
-            // PNG signature so we don't try PNG fallback.
-            embeddedImage = await doc.embedJpg(buf);
-          }
-        }
+        const res = await fetch(p.heroPhotoUrl, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return { p, buf: null as Buffer | null, contentType: "" };
+        const buf = Buffer.from(await res.arrayBuffer());
+        return { p, buf, contentType: res.headers.get("content-type") ?? "" };
+      } catch (err) {
+        console.warn(`[catalogue/pdf] could not fetch hero photo for ${p.customerName}:`, err);
+        return { p, buf: null as Buffer | null, contentType: "" };
+      }
+    }),
+  );
+
+  const out: Array<FeaturedProject & { embeddedImage: PDFImage | null }> = [];
+  for (const { p, buf, contentType } of fetched) {
+    let embeddedImage: PDFImage | null = null;
+    if (buf) {
+      try {
+        // Try JPEG by default; pdf-lib handles JPEGs but is picky on PNG
+        // signature so we don't try PNG fallback.
+        embeddedImage =
+          contentType.includes("png") || p.heroPhotoUrl?.endsWith(".png")
+            ? await doc.embedPng(buf)
+            : await doc.embedJpg(buf);
       } catch (err) {
         // Don't break the whole render for one bad photo.
-        console.warn(
-          `[catalogue/pdf] could not embed hero photo for ${p.customerName}:`,
-          err
-        );
+        console.warn(`[catalogue/pdf] could not embed hero photo for ${p.customerName}:`, err);
       }
     }
     out.push({ ...p, embeddedImage });

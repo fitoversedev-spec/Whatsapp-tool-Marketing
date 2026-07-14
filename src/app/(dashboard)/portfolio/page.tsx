@@ -1,20 +1,35 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { SPORT_META, type SportKey } from "@/lib/catalogue/sport-meta";
 import PortfolioClient from "./PortfolioClient";
 
 export default async function PortfolioPage() {
   const user = await requireUser();
 
-  const rows = await prisma.portfolioProject.findMany({
-    where: { archived: false },
-    orderBy: [{ featured: "desc" }, { completionDate: "desc" }, { createdAt: "desc" }],
-    take: 200,
-    include: { createdBy: { select: { name: true } } },
-  });
+  const sports = Object.keys(SPORT_META) as SportKey[];
+  const [rows, catalogueSettings] = await Promise.all([
+    prisma.portfolioProject.findMany({
+      where: { archived: false },
+      orderBy: [{ featured: "desc" }, { completionDate: "desc" }, { createdAt: "desc" }],
+      take: 200,
+      include: { createdBy: { select: { name: true } } },
+    }),
+    prisma.setting.findMany({
+      where: { key: { in: sports.map((s) => `catalogue_${s}_url`) } },
+    }),
+  ]);
+  const catalogueUrlBySport = new Map(
+    catalogueSettings.map((s) => [s.key.replace(/^catalogue_/, "").replace(/_url$/, ""), s.value]),
+  );
 
   return (
     <PortfolioClient
       isAdmin={user.role === "admin"}
+      initialCatalogues={sports.map((sport) => ({
+        sport,
+        label: SPORT_META[sport].label,
+        url: catalogueUrlBySport.get(sport) ?? null,
+      }))}
       initialProjects={rows.map((p) => ({
         id: p.id,
         customerName: p.customerName,

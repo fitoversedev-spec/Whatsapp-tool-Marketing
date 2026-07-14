@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import PortfolioProjectModal from "./PortfolioProjectModal";
+import CatalogueUploadsPanel, { type CatalogueRow } from "./CatalogueUploadsPanel";
 
 export type PortfolioRow = {
   id: string;
@@ -45,9 +46,11 @@ const SPORT_OPTIONS = [
 export default function PortfolioClient({
   isAdmin,
   initialProjects,
+  initialCatalogues,
 }: {
   isAdmin: boolean;
   initialProjects: PortfolioRow[];
+  initialCatalogues: CatalogueRow[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -140,6 +143,8 @@ export default function PortfolioClient({
       />
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-4">
+        <CatalogueUploadsPanel isAdmin={isAdmin} initialCatalogues={initialCatalogues} />
+
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={search}

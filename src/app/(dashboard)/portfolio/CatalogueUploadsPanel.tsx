@@ -2,9 +2,11 @@
 
 // Admin-only panel for uploading/replacing the per-sport catalogue PDF
 // override (src/lib/quotation/attach-catalogue.ts prefers this over the
-// auto-generated fallback). Enforces the same size cap server-side
+// auto-generated fallback, and uses it exactly as uploaded — never
+// resized/recompressed). Enforces the same size cap server-side
 // (api/catalogues/[sport]/upload) — checked here too so the error shows up
-// immediately instead of after a full upload round-trip.
+// immediately instead of after a full upload round-trip. The cap mirrors
+// WhatsApp's own document-message limit, not a speed preference.
 
 import { useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
@@ -15,7 +17,7 @@ export type CatalogueRow = {
   url: string | null;
 };
 
-const MAX_MB = 15;
+const MAX_MB = 90;
 
 export default function CatalogueUploadsPanel({
   isAdmin,
@@ -36,7 +38,7 @@ export default function CatalogueUploadsPanel({
     }
     if (file.size > MAX_MB * 1024 * 1024) {
       toast.error(
-        `File is ${(file.size / 1024 / 1024).toFixed(1)}MB — must be ${MAX_MB}MB or under. Re-export/compress it and try again.`,
+        `File is ${(file.size / 1024 / 1024).toFixed(1)}MB — WhatsApp can't send documents over ${MAX_MB}MB. Re-export/compress it and try again.`,
       );
       return;
     }
@@ -90,9 +92,9 @@ export default function CatalogueUploadsPanel({
       <div>
         <div className="text-sm font-semibold text-slate-900">Sport catalogues</div>
         <div className="text-xs text-slate-500">
-          Upload a polished PDF per sport (max {MAX_MB}MB) to replace the auto-generated
-          catalogue attached to quotes and combined designs. A blank sport uses the
-          auto-generated version.
+          Upload a polished PDF per sport (max {MAX_MB}MB — WhatsApp's document limit) to
+          replace the auto-generated catalogue attached to quotes and combined designs. Used
+          exactly as uploaded. A blank sport uses the auto-generated version.
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">

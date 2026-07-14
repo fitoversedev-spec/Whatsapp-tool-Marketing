@@ -1,11 +1,11 @@
 // Admin upload/replace/remove for a sport's catalogue PDF override
 // (Setting key catalogue_<sport>_url) — the polished, Fitoverse-authored
 // marketing PDF that attach-catalogue.ts prefers over the auto-rendered
-// fallback. Enforces the same MAX_OVERRIDE_BYTES cap that
-// attach-catalogue.ts silently falls back on at fetch time, so an
-// oversized file (a raw Canva/print export can run 50MB+) is rejected
-// here instead of quietly degrading every quote/design generated
-// afterwards.
+// fallback. The file is used exactly as uploaded (never resized or
+// recompressed); the only hard cap is MAX_OVERRIDE_BYTES, which mirrors
+// WhatsApp's own document-message size limit — a file past that can never
+// be sent regardless of load time, so it's rejected here rather than
+// failing later at send time.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
     const capMb = MAX_OVERRIDE_BYTES / 1024 / 1024;
     return NextResponse.json(
       {
-        error: `File is ${gotMb}MB — must be ${capMb}MB or under. Re-export/compress it (most design tools have a "web" or "compressed" export option) and try again.`,
+        error: `File is ${gotMb}MB — WhatsApp can't send documents over ${capMb}MB, so this can never be delivered to a customer as-is. Re-export/compress it and try again.`,
       },
       { status: 413 },
     );
@@ -74,12 +74,6 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
     create: { key, value: url },
     update: { value: url },
   });
-  // The old cached copy (if any) is now for a different sourceUrl, so
-  // attach-catalogue.ts's cache check will naturally miss and repopulate —
-  // no explicit invalidation needed, but drop the stale row for tidiness.
-  await prisma.setting
-    .delete({ where: { key: `catalogue_${params.sport}_cache` } })
-    .catch(() => null);
 
   return NextResponse.json({ ok: true, url, sizeBytes: file.size });
 }
@@ -95,7 +89,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { sport: s
   if (!meta) return NextResponse.json({ error: "unknown_sport" }, { status: 404 });
 
   await prisma.setting.delete({ where: { key: `catalogue_${params.sport}_url` } }).catch(() => null);
-  await prisma.setting.delete({ where: { key: `catalogue_${params.sport}_cache` } }).catch(() => null);
 
   return NextResponse.json({ ok: true });
 }

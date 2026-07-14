@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { renderQuotationPdf } from "@/lib/quotation/pdf";
-import { attachSportCatalogue } from "@/lib/quotation/attach-catalogue";
+import { getSportCatalogueBytes, mergeCatalogueIntoQuote } from "@/lib/quotation/attach-catalogue";
 import { uploadToBlob } from "@/lib/media";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { z } from "zod";
@@ -59,6 +59,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   let fileName = `${q.number}-${q.customerName.replace(/[^a-zA-Z0-9]+/g, "-")}.pdf`;
   if (!pdfUrl) {
     try {
+      // Fetch/render the catalogue CONCURRENTLY with the quote — the
+      // admin-uploaded override can be several MB, so waiting until AFTER
+      // the quote renders to start that download would add it to the
+      // critical path.
+      const cataloguePromise = getSportCatalogueBytes(q.sport);
       const lineItems = JSON.parse(q.lineItems) as QuoteLineItem[];
       const pdfBuffer = await renderQuotationPdf({
         number: q.number,
@@ -74,7 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         quoteDate: q.quoteDate,
         validityDays: q.validityDays,
       });
-      const withCatalogue = await attachSportCatalogue(pdfBuffer, q.sport);
+      const withCatalogue = await mergeCatalogueIntoQuote(pdfBuffer, await cataloguePromise);
       const uploaded = await uploadToBlob({
         bytes: Buffer.from(withCatalogue),
         fileName,

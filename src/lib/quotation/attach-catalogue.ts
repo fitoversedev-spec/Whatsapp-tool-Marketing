@@ -6,68 +6,97 @@
 // same override the catalogue send route uses) and falls back to
 // auto-rendering one from featured portfolio projects. Never throws — a
 // missing/broken catalogue must not break the quotation itself.
+//
+// getSportCatalogueBytes and mergeCatalogueIntoQuote are exported separately
+// so a caller can fetch the catalogue CONCURRENTLY with rendering the quote
+// PDF (the admin-uploaded override can be several MB — fetching it after the
+// quote has already rendered adds that whole download to the critical path).
 
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PageSizes, type PDFPage } from "pdf-lib";
 import { prisma } from "@/lib/prisma";
 import { renderCatalogue, type FeaturedProject } from "@/lib/catalogue/pdf";
 import { getSportMeta, type SportKey } from "@/lib/catalogue/sport-meta";
 
-async function getCatalogueBytes(sport: string): Promise<Uint8Array | null> {
-  const override = await prisma.setting.findUnique({
-    where: { key: `catalogue_${sport}_url` },
-  });
-  if (override?.value) {
-    try {
-      const r = await fetch(override.value, { signal: AbortSignal.timeout(8000) });
-      if (r.ok) return new Uint8Array(await r.arrayBuffer());
-    } catch {
-      // fall through to auto-render
+export async function getSportCatalogueBytes(sport: string): Promise<Uint8Array | null> {
+  try {
+    const override = await prisma.setting.findUnique({
+      where: { key: `catalogue_${sport}_url` },
+    });
+    if (override?.value) {
+      try {
+        const r = await fetch(override.value, { signal: AbortSignal.timeout(15000) });
+        if (r.ok) return new Uint8Array(await r.arrayBuffer());
+      } catch {
+        // fall through to auto-render
+      }
     }
-  }
 
-  const meta = getSportMeta(sport);
-  if (!meta) return null;
-  const featured = await prisma.portfolioProject.findMany({
-    where: { sport, featured: true, archived: false },
-    orderBy: [{ completionDate: "desc" }, { createdAt: "desc" }],
-    take: 6,
-  });
-  const projects: FeaturedProject[] = featured.map((p) => ({
-    customerName: p.customerName,
-    location: p.location,
-    completionDate: p.completionDate,
-    plotLengthFt: p.plotLengthFt,
-    plotWidthFt: p.plotWidthFt,
-    surfaceType: p.surfaceType,
-    surfaceGrade: p.surfaceGrade,
-    shortDescription: p.shortDescription,
-    heroPhotoUrl: p.heroPhotoUrl,
-  }));
-  const buf = await renderCatalogue(sport as SportKey, projects);
-  return new Uint8Array(buf);
+    const meta = getSportMeta(sport);
+    if (!meta) return null;
+    const featured = await prisma.portfolioProject.findMany({
+      where: { sport, featured: true, archived: false },
+      orderBy: [{ completionDate: "desc" }, { createdAt: "desc" }],
+      take: 6,
+    });
+    const projects: FeaturedProject[] = featured.map((p) => ({
+      customerName: p.customerName,
+      location: p.location,
+      completionDate: p.completionDate,
+      plotLengthFt: p.plotLengthFt,
+      plotWidthFt: p.plotWidthFt,
+      surfaceType: p.surfaceType,
+      surfaceGrade: p.surfaceGrade,
+      shortDescription: p.shortDescription,
+      heroPhotoUrl: p.heroPhotoUrl,
+    }));
+    const buf = await renderCatalogue(sport as SportKey, projects);
+    return new Uint8Array(buf);
+  } catch (err) {
+    console.error("[quotation] catalogue fetch/render failed for", sport, err);
+    return null;
+  }
+}
+
+// Admin-uploaded catalogues (Canva/print exports, etc.) are rarely A4 — a
+// square social post or a landscape poster merged in as-is leaves the
+// combined PDF with a visibly different-sized page, which readers show as a
+// mismatched thumbnail. Scale (preserving aspect ratio, no distortion) to
+// fit within the quote's page size, then pad + center so every page in the
+// merged document reports the exact same box.
+function normalizeToPageSize(pg: PDFPage, [targetW, targetH]: readonly [number, number]) {
+  const { width, height } = pg.getSize();
+  if (Math.abs(width - targetW) < 0.5 && Math.abs(height - targetH) < 0.5) return;
+  const scale = Math.min(targetW / width, targetH / height);
+  pg.scale(scale, scale);
+  const scaled = pg.getSize();
+  pg.setSize(targetW, targetH);
+  pg.translateContent((targetW - scaled.width) / 2, (targetH - scaled.height) / 2);
+}
+
+export async function mergeCatalogueIntoQuote(
+  quotePdfBytes: Uint8Array,
+  catalogueBytes: Uint8Array | null,
+): Promise<Uint8Array> {
+  if (!catalogueBytes) return quotePdfBytes;
+  try {
+    const doc = await PDFDocument.load(quotePdfBytes);
+    const src = await PDFDocument.load(catalogueBytes);
+    const copied = await doc.copyPages(src, src.getPageIndices());
+    for (const pg of copied) {
+      normalizeToPageSize(pg, PageSizes.A4);
+      doc.addPage(pg);
+    }
+    return await doc.save();
+  } catch (err) {
+    console.error("[quotation] catalogue merge failed", err);
+    return quotePdfBytes;
+  }
 }
 
 export async function attachSportCatalogue(
   quotePdfBytes: Uint8Array,
   sport: string,
 ): Promise<Uint8Array> {
-  let catalogueBytes: Uint8Array | null;
-  try {
-    catalogueBytes = await getCatalogueBytes(sport);
-  } catch (err) {
-    console.error("[quotation] catalogue fetch/render failed for", sport, err);
-    return quotePdfBytes;
-  }
-  if (!catalogueBytes) return quotePdfBytes;
-
-  try {
-    const doc = await PDFDocument.load(quotePdfBytes);
-    const src = await PDFDocument.load(catalogueBytes);
-    const copied = await doc.copyPages(src, src.getPageIndices());
-    for (const pg of copied) doc.addPage(pg);
-    return await doc.save();
-  } catch (err) {
-    console.error("[quotation] catalogue merge failed for", sport, err);
-    return quotePdfBytes;
-  }
+  const catalogueBytes = await getSportCatalogueBytes(sport);
+  return mergeCatalogueIntoQuote(quotePdfBytes, catalogueBytes);
 }

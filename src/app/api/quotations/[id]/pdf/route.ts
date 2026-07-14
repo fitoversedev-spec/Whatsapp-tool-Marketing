@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { renderQuotationPdf } from "@/lib/quotation/pdf";
-import { attachSportCatalogue } from "@/lib/quotation/attach-catalogue";
+import { getSportCatalogueBytes, mergeCatalogueIntoQuote } from "@/lib/quotation/attach-catalogue";
 import type { QuoteLineItem } from "@/lib/quotation/calculator";
 import { uploadToBlob } from "@/lib/media";
 
@@ -45,6 +45,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
   }
 
+  // Fetch/render the catalogue CONCURRENTLY with the quote — the
+  // admin-uploaded override can be several MB, so waiting until AFTER the
+  // quote renders to start that download would add it to the critical path.
+  const cataloguePromise = getSportCatalogueBytes(q.sport);
+
   let pdfBuffer: Buffer;
   try {
     const lineItems = JSON.parse(q.lineItems) as QuoteLineItem[];
@@ -73,7 +78,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       { status: 500 },
     );
   }
-  pdfBuffer = Buffer.from(await attachSportCatalogue(pdfBuffer, q.sport));
+  pdfBuffer = Buffer.from(await mergeCatalogueIntoQuote(pdfBuffer, await cataloguePromise));
 
   // Cache for next time — best-effort; a cache-write failure must never fail
   // the response. Persists pdfUrl so future loads (and /send) skip the render.

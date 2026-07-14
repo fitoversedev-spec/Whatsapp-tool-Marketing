@@ -4696,6 +4696,9 @@ function CombinedPdfBlock({
   // has been generated). The PDF carries the court from all angles as
   // still images; the video shows it spinning.
   const [alsoSendVideo, setAlsoSendVideo] = useState(true);
+  // Off by default — the catalogue adds several extra pages, so sales opts
+  // in only when the customer hasn't already seen it.
+  const [includeCatalogue, setIncludeCatalogue] = useState(false);
   const [busy, setBusy] = useState<
     "" | "view" | "download" | "send" | "email"
   >("");
@@ -4713,6 +4716,10 @@ function CombinedPdfBlock({
   const includedCount = quoteItems.filter((i) => i.included).length;
   const quoteActive = quoteEnabled && includedCount > 0;
   const quoteTotals = computeQuoteTotals(quoteItems);
+  const primarySport = layout.sports[0];
+  const primarySportLabel = primarySport
+    ? (SPORT_LABEL[primarySport] ?? cap(primarySport))
+    : null;
 
   async function build(mode: "view" | "download" | "send" | "email") {
     setBusy(mode);
@@ -4764,6 +4771,7 @@ function CombinedPdfBlock({
         quote: quoteActive
           ? buildQuotePayload(quoteNumber, quoteTitle, quoteNotes, quoteItems)
           : undefined,
+        includeCatalogue,
         videoUrl,
         send: mode === "send",
         contactPhone: mode === "send" ? contactPhone : undefined,
@@ -4914,6 +4922,19 @@ function CombinedPdfBlock({
         <div className="text-[11px] text-slate-500 italic border border-dashed border-slate-200 rounded-md px-2 py-1.5">
           No quote attached. Go back to the Quotation step to add one.
         </div>
+      )}
+      {/* Optional — appends the sport catalogue as extra pages after the
+          quote, same as the standalone quotation PDF now does. */}
+      {primarySport && (
+        <label className="flex items-center gap-2 text-xs cursor-pointer text-slate-700">
+          <input
+            type="checkbox"
+            checked={includeCatalogue}
+            onChange={(e) => setIncludeCatalogue(e.target.checked)}
+            className="accent-wa-green"
+          />
+          Also attach the {primarySportLabel} catalogue
+        </label>
       )}
       {/* View / download the combined PDF first, then send. */}
       <div className="flex gap-2">

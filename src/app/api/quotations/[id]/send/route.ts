@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { renderQuotationPdf } from "@/lib/quotation/pdf";
+import { attachSportCatalogue } from "@/lib/quotation/attach-catalogue";
 import { uploadToBlob } from "@/lib/media";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { z } from "zod";
@@ -73,8 +74,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         quoteDate: q.quoteDate,
         validityDays: q.validityDays,
       });
+      const withCatalogue = await attachSportCatalogue(pdfBuffer, q.sport);
       const uploaded = await uploadToBlob({
-        bytes: pdfBuffer,
+        bytes: Buffer.from(withCatalogue),
         fileName,
         mimeType: "application/pdf",
         folder: "quotations",

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { renderQuotationPdf } from "@/lib/quotation/pdf";
+import { attachSportCatalogue } from "@/lib/quotation/attach-catalogue";
 import type { QuoteLineItem } from "@/lib/quotation/calculator";
 import { uploadToBlob } from "@/lib/media";
 
@@ -72,6 +73,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       { status: 500 },
     );
   }
+  pdfBuffer = Buffer.from(await attachSportCatalogue(pdfBuffer, q.sport));
 
   // Cache for next time — best-effort; a cache-write failure must never fail
   // the response. Persists pdfUrl so future loads (and /send) skip the render.

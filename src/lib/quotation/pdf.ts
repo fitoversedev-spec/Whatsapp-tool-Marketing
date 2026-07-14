@@ -1246,23 +1246,23 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<stri
   const drawHead = () => {
     ensureSpace(ctx, headerH);
     drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.accent });
-    const hy = yFromTop(ctx.y + 13.5);
-    safeDraw(ctx.page, "PARTICULARS", { x: x.part + 8, y: hy, size: 8.5, font: ctx.bold, color: COL.accentText });
-    centerAt("UNIT", x.unit, cols.unit, 8.5, ctx.bold, COL.accentText, hy);
-    rightAt("QTY", x.qty, cols.qty, 8.5, ctx.bold, COL.accentText, hy);
-    rightAt("RATE", x.rate, cols.rate, 8.5, ctx.bold, COL.accentText, hy);
-    centerAt("GST", x.gst, cols.gst, 8.5, ctx.bold, COL.accentText, hy);
-    rightAt("AMOUNT", x.amt, cols.amt, 8.5, ctx.bold, COL.accentText, hy);
+    const hy = yFromTop(ctx.y + 14);
+    safeDraw(ctx.page, "PARTICULARS", { x: x.part + 8, y: hy, size: 9.5, font: ctx.bold, color: COL.accentText });
+    centerAt("UNIT", x.unit, cols.unit, 9.5, ctx.bold, COL.accentText, hy);
+    rightAt("QTY", x.qty, cols.qty, 9.5, ctx.bold, COL.accentText, hy);
+    rightAt("RATE", x.rate, cols.rate, 9.5, ctx.bold, COL.accentText, hy);
+    centerAt("GST", x.gst, cols.gst, 9.5, ctx.bold, COL.accentText, hy);
+    rightAt("AMOUNT", x.amt, cols.amt, 9.5, ctx.bold, COL.accentText, hy);
     drawGrid(ctx.y, headerH, false);
     ctx.y += headerH;
   };
   drawHead();
-  const subH = 17;
+  const subH = 19;
   // Draw a section subheader band (green band + label + grid) at the current
   // cursor. Extracted so it can be re-emitted at the top of a continued page.
   const drawSubheader = (sec: string) => {
     drawRect(ctx, MARGIN, ctx.y, CONTENT_W, subH, { fill: COL.greenSoft });
-    safeDraw(ctx.page, sec, { x: x.part + 8, y: yFromTop(ctx.y + 12), size: 8.5, font: ctx.bold, color: COL.greenDeep });
+    safeDraw(ctx.page, sec, { x: x.part + 8, y: yFromTop(ctx.y + 13.5), size: 9.5, font: ctx.bold, color: COL.greenDeep });
     drawGrid(ctx.y, subH, false);
     rowLine(ctx.y + subH);
     ctx.y += subH;
@@ -1289,8 +1289,33 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<stri
       imgW = img.width * s;
       imgH = img.height * s;
     }
-    const descLines = wordWrap(ctx.font, item.description, 8, cols.part - 16);
-    const rowH = 8 + 13 + (img ? imgH + 6 : 0) + descLines.length * 10 + 8;
+    const descLines = wordWrap(ctx.bold, item.description, 10.5, cols.part - 16);
+    // Long product names must wrap too — at 11.5pt bold a one-line name can
+    // easily exceed the 264pt column and bleed into the UNIT/QTY cells.
+    const nameLines = wordWrap(ctx.bold, item.name, 11.5, cols.part - 16);
+    const NAME_LH = 14;
+    // A long/wrapped name can't always share its last line with the option
+    // chip (11.5pt bold name + "OPTION Bn" badge may not both fit in the
+    // 264pt column) — stack the chip below the name instead, which needs
+    // extra row height reserved up front so the band/grid don't undershoot it.
+    let chipStacks = false;
+    if (item.optionTag) {
+      if (nameLines.length > 1) {
+        chipStacks = true;
+      } else {
+        const nameW = safeWidth(ctx.bold, item.name, 11.5);
+        const chipW = safeWidth(ctx.bold, `OPTION ${item.optionTag}`, 6.5) + 8;
+        chipStacks = cols.part - 16 - nameW - 8 < chipW;
+      }
+    }
+    const rowH =
+      8 +
+      nameLines.length * NAME_LH +
+      5 +
+      (chipStacks ? 16 : 0) +
+      (img ? imgH + 6 : 0) +
+      descLines.length * 13 +
+      8;
 
     if (sec && sec !== lastSection) {
       // New section: keep the band together with its first row on one page.
@@ -1313,13 +1338,26 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<stri
     }
     if (rowIdx % 2 === 1) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
     const sy = ctx.y + 8;
-    const nameY = yFromTop(sy + 9);
-    safeDraw(ctx.page, item.name, { x: x.part + 8, y: nameY, size: 9.5, font: ctx.bold, color: COL.text });
+    const nameY = yFromTop(sy + 11);
+    nameLines.forEach((ln, i) => {
+      safeDraw(ctx.page, ln, {
+        x: x.part + 8,
+        y: yFromTop(sy + 11 + i * NAME_LH),
+        size: 11.5,
+        font: ctx.bold,
+        color: COL.text,
+      });
+    });
+    let cy = sy + nameLines.length * NAME_LH + 5;
     if (item.optionTag) {
-      const nameW = safeWidth(ctx.bold, item.name, 9.5);
-      drawOptionChip(ctx, x.part + 8 + nameW + 8, sy, item.optionTag, item.optionColor);
+      if (chipStacks) {
+        drawOptionChip(ctx, x.part + 8, cy, item.optionTag, item.optionColor);
+        cy += 16;
+      } else {
+        const nameW = safeWidth(ctx.bold, nameLines[0], 11.5);
+        drawOptionChip(ctx, x.part + 8 + nameW + 8, sy, item.optionTag, item.optionColor);
+      }
     }
-    let cy = sy + 15;
     if (img) {
       ctx.page.drawImage(img, { x: x.part + 8, y: yFromTop(cy + imgH), width: imgW, height: imgH });
       ctx.page.drawRectangle({
@@ -1333,15 +1371,15 @@ function drawParticularsTable(ctx: Ctx, items: QuoteLineItem[], images: Map<stri
       cy += imgH + 6;
     }
     for (const ln of descLines) {
-      safeDraw(ctx.page, ln, { x: x.part + 8, y: yFromTop(cy + 8), size: 8, font: ctx.font, color: COL.textSoft });
-      cy += 10;
+      safeDraw(ctx.page, ln, { x: x.part + 8, y: yFromTop(cy + 10), size: 10.5, font: ctx.bold, color: COL.text });
+      cy += 13;
     }
     const amt = item.areaSqFt * item.ratePerSqFt;
-    centerAt(item.unit ?? "sq.ft", x.unit, cols.unit, 8.5, ctx.font, COL.text, nameY);
-    rightAt(inr(item.areaSqFt), x.qty, cols.qty, 9, ctx.font, COL.text, nameY);
-    rightAt(inrRate(item.ratePerSqFt), x.rate, cols.rate, 9, ctx.font, COL.text, nameY);
-    centerAt(gstLabel(item.gstPercent), x.gst, cols.gst, 8.5, ctx.font, COL.text, nameY);
-    rightAt(inr(amt), x.amt, cols.amt, 9, ctx.font, COL.text, nameY);
+    centerAt(item.unit ?? "sq.ft", x.unit, cols.unit, 9.5, ctx.font, COL.text, nameY);
+    rightAt(inr(item.areaSqFt), x.qty, cols.qty, 10, ctx.font, COL.text, nameY);
+    rightAt(inrRate(item.ratePerSqFt), x.rate, cols.rate, 10, ctx.font, COL.text, nameY);
+    centerAt(gstLabel(item.gstPercent), x.gst, cols.gst, 9.5, ctx.font, COL.text, nameY);
+    rightAt(inr(amt), x.amt, cols.amt, 10, ctx.font, COL.text, nameY);
     rowLine(ctx.y + rowH);
     drawGrid(ctx.y, rowH, true);
     ctx.y += rowH;

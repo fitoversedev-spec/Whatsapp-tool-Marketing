@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import type { Role } from "@/lib/rbac";
 
 export default function ProfileClient({
   user,
@@ -11,14 +12,18 @@ export default function ProfileClient({
   user: {
     name: string;
     email: string;
-    role: "admin" | "sales";
+    role: Role;
     preferredUnit: "ft" | "m";
+    phone: string | null;
   };
 }) {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState(user.name);
   const [savingName, setSavingName] = useState(false);
+
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [savingPhone, setSavingPhone] = useState(false);
 
   const [preferredUnit, setPreferredUnit] = useState<"ft" | "m">(user.preferredUnit);
   const [savingUnit, setSavingUnit] = useState(false);
@@ -68,6 +73,29 @@ export default function ProfileClient({
     } else {
       const err = await res.json().catch(() => ({}));
       toast.error(err.error ?? "Failed to update name");
+    }
+  }
+
+  async function savePhone(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = phone.trim();
+    if (trimmed === (user.phone ?? "")) {
+      toast.info("No changes to save");
+      return;
+    }
+    setSavingPhone(true);
+    const res = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: trimmed }),
+    });
+    setSavingPhone(false);
+    if (res.ok) {
+      toast.success(trimmed ? "WhatsApp number saved" : "WhatsApp number removed");
+      router.refresh();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Failed to update number");
     }
   }
 
@@ -132,6 +160,34 @@ export default function ProfileClient({
               className="bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-5 py-2 rounded-lg"
             >
               {savingName ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </form>
+
+        {/* WhatsApp number for bot commands */}
+        <form
+          onSubmit={savePhone}
+          className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4"
+        >
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">WhatsApp bot commands</h2>
+            <p className="text-xs text-slate-500">
+              Link the number you'll text the business number from to use commands like "my day", "remind", and "deal &lt;code&gt;". Leave blank to disable.
+            </p>
+          </div>
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="e.g. 919876543210"
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-300 focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none text-base sm:text-sm"
+          />
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={savingPhone}
+              className="bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-5 py-2 rounded-lg"
+            >
+              {savingPhone ? "Saving…" : "Save"}
             </button>
           </div>
         </form>

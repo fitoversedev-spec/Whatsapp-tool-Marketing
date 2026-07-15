@@ -1,11 +1,12 @@
 import { getIronSession, SessionOptions } from "iron-session";
 import { cookies } from "next/headers";
+import type { Role } from "./rbac";
 
 export type SessionData = {
   userId?: string;
   email?: string;
   name?: string;
-  role?: "admin" | "sales";
+  role?: Role;
 };
 
 export const sessionOptions: SessionOptions = {

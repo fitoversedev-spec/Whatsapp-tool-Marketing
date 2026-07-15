@@ -7,8 +7,9 @@ import { prisma } from "@/lib/prisma";
 const schema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  role: z.enum(["admin", "sales"]),
+  role: z.enum(["admin", "sales", "manager", "management"]),
   password: z.string().min(8),
+  officeId: z.string().uuid().nullable().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
       name: parsed.data.name,
       role: parsed.data.role,
       passwordHash,
+      officeId: parsed.data.officeId ?? null,
       approvalStatus: "approved", // admin-invited users are auto-approved
     },
   });

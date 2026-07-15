@@ -12,7 +12,9 @@ datasource db {
 
 // NOTE: SQLite did not support native enums, so we use String fields.
 // Allowed values (validated at the API layer via Zod):
-//   role: "admin" | "sales"
+//   role: "admin" | "sales" | "manager" | "management"
+//     (manager/management are granted only via the admin-controlled /users
+//     page — public self-signup keeps offering just admin/sales.)
 //   user.approvalStatus: "pending" | "approved" | "rejected"
 //   template.status: "draft" | "pending_admin" | "submitted" | "approved" | "rejected" | "paused"
 //   broadcast.status: "draft" | "running" | "completed" | "failed"
@@ -35,8 +37,15 @@ model User {
   // Values: "ft" (default, Indian market) | "m" (meters).
   // PDF/exported outputs always show both units regardless (Option C).
   preferredUnit   String    @default("ft") @map("preferred_unit")
+  officeId        String?   @map("office_id")
+  // Staff sender identification for WhatsApp bot commands (spec §10) — the
+  // inbound webhook matches msg.from against this to tell "a rep texting
+  // the business number" apart from a customer. Nullable/unique: existing
+  // users get it filled in by an admin once they opt into bot commands.
+  phone           String?   @unique @map("phone")
   createdAt       DateTime  @default(now()) @map("created_at")
 
+  office               Office?                @relation(fields: [officeId], references: [id])
   draftedTemplates     Template[]             @relation("DraftedTemplates")
   approvedTemplates    Template[]             @relation("ApprovedTemplates")
   assignedConvos       Conversation[]         @relation("AssignedConversations")
@@ -50,8 +59,32 @@ model User {
   courtImages          CourtImage[]
   portfolioProjects    PortfolioProject[]
   products             Product[]
+  ownedAccounts        Account[]              @relation("AccountOwner")
+  ownedLeads           Lead[]                 @relation("LeadOwner")
+  ownedDeals           Deal[]                 @relation("DealOwner")
+  dealStageChanges     DealStageHistory[]
+  activities           Activity[]             @relation("ActivityOwner")
+  pendingStaffAction   PendingStaffAction?
+  auditLogs            AuditLog[]
 
   @@map("users")
+}
+
+// Fitoverse's real offices (Salem/Chennai/Bangalore) — seeded, not user-created.
+// Nullable everywhere it's referenced (User.officeId, Deal.officeId): existing
+// rows get null and an admin assigns an office manually, no data to infer it from.
+model Office {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  city      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  users User[]
+  deals Deal[]
+
+  @@map("offices")
 }
 
 model Template {
@@ -121,6 +154,7 @@ model Conversation {
   autoReplyLogs   AutoReplyLog[]
   botFlow         ConversationFlow?
   botLeads        BotLead[]
+  deals           Deal[]
 
   @@index([assignedToUserId])
   @@index([status])
@@ -293,12 +327,72 @@ model Reminder {
   notifiedAt     DateTime? @map("notified_at")
   createdAt      DateTime  @default(now()) @map("created_at")
 
-  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  owner        User          @relation(fields: [ownerUserId], references: [id])
+  // Phase 3 additions — additive/nullable, existing completedAt/notifiedAt-
+  // based logic in api/reminders/** keeps working unchanged; new dispatch
+  // code (cron-runner.ts) is what actually reads/writes these.
+  dealId         String?   @map("deal_id")
+  activityTypeId String?   @map("activity_type_id")
+  // e.g. ["whatsapp","in_app"]. Empty/absent = in-app only (today's behavior).
+  channels       String[]  @default([])
+  // "PENDING"|"SENT"|"DONE"|"SNOOZED"|"CANCELLED" — informational alongside
+  // the timestamp fields, not (yet) a replacement for them.
+  status         String    @default("PENDING")
+  snoozedUntil   DateTime? @map("snoozed_until")
+  // RRULE string for periodic follow-ups; null = one-off (today's only mode).
+  recurrenceRule String?   @map("recurrence_rule")
+  meetingUrl     String?   @map("meeting_url")
+  location       String?
+
+  conversation Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  owner        User               @relation(fields: [ownerUserId], references: [id])
+  deal         Deal?              @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  activityType ActivityType?      @relation(fields: [activityTypeId], references: [id])
+  dispatches   ReminderDispatch[]
 
   @@index([ownerUserId, dueAt])
   @@index([dueAt, completedAt])
+  @@index([dealId])
   @@map("reminders")
+}
+
+// Audit of what was actually dispatched, on which channel — the row is
+// written BEFORE the send attempt (inside a transaction with a uniqueness
+// guard) so a retried/concurrent cron sweep can never double-send the same
+// reminder on the same channel (spec §9.2).
+model ReminderDispatch {
+  id                String   @id @default(uuid())
+  reminderId        String   @map("reminder_id")
+  channel           String
+  sentAt            DateTime @default(now()) @map("sent_at")
+  providerMessageId String?  @map("provider_message_id")
+  error             String?
+
+  reminder Reminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+
+  @@unique([reminderId, channel])
+  @@map("reminder_dispatches")
+}
+
+// One pending yes/no confirmation per staff phone number for the WhatsApp
+// bot commands that need a confirm step before writing anything (spec §10:
+// `remind` echoes the parsed date-time back, `stage` confirms the
+// fuzzy-matched transition) — never execute on the strength of a single
+// message. Cleared on confirm/cancel or once expired; a stale row is
+// treated as if none exists rather than silently executed late.
+model PendingStaffAction {
+  id         String   @id @default(uuid())
+  userId     String   @unique @map("user_id")
+  // "remind" | "stage"
+  kind       String
+  // JSON payload specific to `kind` — e.g. {dueAt, title} for remind,
+  // {dealId, dealCode, toStageId, stageName} for stage.
+  payload    String
+  createdAt  DateTime @default(now()) @map("created_at")
+  expiresAt  DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("pending_staff_actions")
 }
 
 // Append-only audit log of pipeline stage changes. Powers the "days in stage"
@@ -316,6 +410,28 @@ model PipelineStageHistory {
 
   @@index([conversationId, changedAt])
   @@map("pipeline_stage_history")
+}
+
+// Spec §3.2/§14 ("every mutation audit-logged") + §13 (MANAGEMENT/ADMIN can
+// view it). actorId nullable for system-driven writes (e.g. the reminder
+// cron). diff is a free-form JSON snapshot of what changed — intentionally
+// loose (no per-entity schema) since this spans every entity type in the
+// app, not just the new CRM models.
+model AuditLog {
+  id       String   @id @default(uuid())
+  actorId  String?  @map("actor_id")
+  entity   String
+  entityId String   @map("entity_id")
+  // "CREATE" | "UPDATE" | "DELETE" | "STAGE_CHANGE" | "SEND"
+  action   String
+  diff     String?
+  at       DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entity, entityId, at])
+  @@index([actorId, at])
+  @@map("audit_log")
 }
 
 // Colored, named tags applied to contacts. Tag names are globally unique;
@@ -398,6 +514,9 @@ model Quotation {
   // a clear intro instead of hiding it under the document thumbnail.
   caption         String?
   pdfUrl          String?   @map("pdf_url")
+  // "draft"|"sent"|"viewed"|"accepted"|"expired" (pre-existing) plus
+  // "rejected"|"superseded" (Phase 2, additive — viewed/expired are real
+  // live statuses already, not replaced).
   status          String    @default("draft")
   quoteDate       DateTime  @map("quote_date")
   validityDays    Int       @default(30) @map("validity_days")
@@ -405,16 +524,34 @@ model Quotation {
   conversationId  String?   @map("conversation_id")
   contactPhone    String?   @map("contact_phone")
   createdByUserId String    @map("created_by_user_id")
+
+  // Phase 2 — CRM linkage + versioning. dealId is nullable: quote creation
+  // still works standalone (today's UX, unchanged); the API auto-creates a
+  // one-off Deal behind the scenes when none is given, so dealId always
+  // ends up populated without forcing a deal-first flow in the wizard.
+  dealId       String?   @map("deal_id")
+  version      Int       @default(1)
+  isPrimary    Boolean   @default(true) @map("is_primary")
+  sentVia      String?   @default("whatsapp") @map("sent_via")
+  acceptedAt   DateTime? @map("accepted_at")
+  rejectedAt   DateTime? @map("rejected_at")
+  // "SPLIT" (today's itemized-per-line-GST behavior, zero change) | "FLAT_18"
+  // (compute path intentionally unimplemented — see docs/DATA_GAPS.md #16).
+  gstMode      String    @default("SPLIT") @map("gst_mode")
+
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  createdBy    User          @relation(fields: [createdByUserId], references: [id])
+  conversation Conversation?  @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  createdBy    User           @relation(fields: [createdByUserId], references: [id])
+  deal         Deal?          @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  dealLineItems DealLineItem[]
 
   @@index([status])
   @@index([conversationId])
   @@index([contactPhone])
   @@index([createdAt])
+  @@index([dealId, version])
   @@map("quotations")
 }
 
@@ -518,10 +655,15 @@ model BotLead {
   status            String    @default("new")
   assignedToUserId  String?   @map("assigned_to_user_id")
   notes             String?
+  // Set going forward whenever the chatbot creates a BotLead — mirrors it
+  // into the general CRM Lead pipeline without touching this model's own
+  // chatbot-specific fields. Nullable/optional — historical rows won't have it.
+  leadId            String?   @map("lead_id")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([path])
@@ -560,12 +702,17 @@ model CourtImage {
   conversationId  String?   @map("conversation_id")
   contactPhone    String?   @map("contact_phone")
   createdByUserId String    @map("created_by_user_id")
+  // Phase 2 — fulfills the spec's CourtDesign role in place, rather than
+  // introducing a redundant model (CourtImage already IS the parametric
+  // designer's output). Nullable, same pattern as Quotation.dealId.
+  dealId          String?   @map("deal_id")
   sentAt          DateTime? @map("sent_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   createdBy    User          @relation(fields: [createdByUserId], references: [id])
+  deal         Deal?         @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([conversationId])
@@ -661,17 +808,52 @@ model Product {
   featured     Boolean  @default(false)
   archived     Boolean  @default(false)
   createdByUserId String @map("created_by_user_id")
+
+  // Phase 2 additions. code is a short human ref (nullable — historical
+  // products won't have one, admin can backfill via the products UI).
+  // gstPercent is reporting/autofill metadata — the wizard's own per-line
+  // gstPercent (RateSheetItem-driven) stays the actual compute source, see
+  // docs/DECISIONS.md. currentRate/rateIsConfirmed separate "no rate set
+  // yet" from "rate is genuinely zero" — never silently render as ₹0.
+  code             String?          @unique
+  productCategoryId String?         @map("product_category_id")
+  defaultUnit      String?          @map("default_unit")
+  gstPercent       Decimal?         @db.Decimal(5, 2) @map("gst_percent")
+  currentRate      Decimal?         @db.Decimal(12, 2) @map("current_rate")
+  rateIsConfirmed  Boolean          @default(false) @map("rate_is_confirmed")
+
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  createdBy User           @relation(fields: [createdByUserId], references: [id])
-  media     ProductMedia[]
-  tdsFiles  TdsFile[]
+  createdBy       User             @relation(fields: [createdByUserId], references: [id])
+  productCategory ProductCategory? @relation(fields: [productCategoryId], references: [id])
+  media           ProductMedia[]
+  tdsFiles        TdsFile[]
+  dealLineItems   DealLineItem[]
+  rateHistory     ProductRateHistory[]
 
   @@index([type])
   @@index([featured])
   @@index([archived])
   @@map("products")
+}
+
+// Phase 2 — audit trail for Product.currentRate changes, so quotations can
+// be re-costed and margin drift is visible over time. Quotations snapshot
+// the rate at send time into DealLineItem.rate — never join live to
+// Product.currentRate for a historical quote's numbers.
+model ProductRateHistory {
+  id            String   @id @default(uuid())
+  productId     String   @map("product_id")
+  rate          Decimal  @db.Decimal(12, 2)
+  effectiveFrom DateTime @default(now()) @map("effective_from")
+  setByUserId   String?  @map("set_by_user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, effectiveFrom])
+  @@map("product_rate_history")
 }
 
 model ProductMedia {
@@ -706,4 +888,443 @@ model TdsFile {
   @@index([sport])
   @@index([productId])
   @@map("tds_files")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CRM (Phase 1) — see docs/DECISIONS.md for the reconciliation calls behind
+// every naming/shape choice below (AccountContact vs the pre-existing
+// Contact model, ...UserId suffix convention, Decimal-rupee money fields,
+// nullable-everywhere migration safety, etc).
+// ─────────────────────────────────────────────────────────────────────────
+
+// Shared shape for every admin-editable taxonomy list (funnel stages, lead
+// sources, customer profiles, ...). "Delete" always means isActive=false +
+// deletedAt — never a hard delete — so history/analytics referencing an old
+// row stay intact. colorHex renders via inline style, never a Tailwind class
+// (see DECISIONS.md — Tailwind's JIT purger can't see dynamic class names).
+
+model FunnelStage {
+  id                 String    @id @default(uuid())
+  name               String
+  slug               String    @unique
+  sortOrder          Int       @default(0) @map("sort_order")
+  isActive           Boolean   @default(true) @map("is_active")
+  colorHex           String?   @map("color_hex")
+  // "active" | "won" | "lost"
+  stageType          String    @map("stage_type")
+  probabilityPercent Int?      @map("probability_percent")
+  slaHours           Int?      @map("sla_hours")
+  requiresLossReason Boolean   @default(false) @map("requires_loss_reason")
+  deletedAt          DateTime? @map("deleted_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  deals        Deal[]
+  stageHistoryFrom DealStageHistory[] @relation("StageHistoryFrom")
+  stageHistoryTo   DealStageHistory[] @relation("StageHistoryTo")
+
+  @@index([isActive, sortOrder])
+  @@map("funnel_stages")
+}
+
+model LeadSource {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  sortOrder Int       @default(0) @map("sort_order")
+  isActive  Boolean   @default(true) @map("is_active")
+  colorHex  String?   @map("color_hex")
+  // Optional grouping, e.g. "Paid Ads" as parent of google_ads/meta_ads/youtube_ads.
+  parentId  String?   @map("parent_id")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  parent   LeadSource?  @relation("LeadSourceHierarchy", fields: [parentId], references: [id])
+  children LeadSource[] @relation("LeadSourceHierarchy")
+  leads    Lead[]
+  deals    Deal[]
+  adSpend  AdSpend[]
+
+  @@index([isActive, sortOrder])
+  @@map("lead_sources")
+}
+
+// Manual monthly ad spend per source, admin-entered (spec §11.3.G) — makes
+// cost-per-lead/CAC/ROAS computable once Fitoverse starts supplying figures.
+// No rows exist until then; sources.ts renders those columns empty rather
+// than hiding them, per the spec's explicit instruction not to hide the gap.
+model AdSpend {
+  id           String   @id @default(uuid())
+  leadSourceId String   @map("lead_source_id")
+  // First day of the month this spend covers, e.g. 2026-07-01.
+  month        DateTime
+  amount       Decimal  @db.Decimal(12, 2)
+  setByUserId  String   @map("set_by_user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  leadSource LeadSource @relation(fields: [leadSourceId], references: [id])
+
+  @@unique([leadSourceId, month])
+  @@map("ad_spend")
+}
+
+model CustomerProfile {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  sortOrder Int       @default(0) @map("sort_order")
+  isActive  Boolean   @default(true) @map("is_active")
+  colorHex  String?   @map("color_hex")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  accounts Account[]
+
+  @@index([isActive, sortOrder])
+  @@map("customer_profiles")
+}
+
+model CityTier {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  sortOrder Int       @default(0) @map("sort_order")
+  isActive  Boolean   @default(true) @map("is_active")
+  colorHex  String?   @map("color_hex")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  accounts Account[]
+  deals    Deal[]
+
+  @@index([isActive, sortOrder])
+  @@map("city_tiers")
+}
+
+model LossReason {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  sortOrder Int       @default(0) @map("sort_order")
+  isActive  Boolean   @default(true) @map("is_active")
+  colorHex  String?   @map("color_hex")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  deals Deal[]
+
+  @@index([isActive, sortOrder])
+  @@map("loss_reasons")
+}
+
+model ActivityType {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  sortOrder Int       @default(0) @map("sort_order")
+  isActive  Boolean   @default(true) @map("is_active")
+  colorHex  String?   @map("color_hex")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  activities Activity[]
+  reminders  Reminder[]
+
+  @@index([isActive, sortOrder])
+  @@map("activity_types")
+}
+
+// Phase 2 — top-level product grouping (spec §7.1). Distinct from the
+// pre-existing free-text Product.category (sub-category within a type,
+// e.g. "turf"/"acrylic") — this is the new admin-editable taxonomy layer.
+model ProductCategory {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  sortOrder Int       @default(0) @map("sort_order")
+  isActive  Boolean   @default(true) @map("is_active")
+  colorHex  String?   @map("color_hex")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  products Product[]
+
+  @@index([isActive, sortOrder])
+  @@map("product_categories")
+}
+
+// Phase 4 — project-cost bands for analytics filtering (spec §11.2).
+// Ships with a single "All" band; the real boundaries are data gap #2 in
+// docs/DATA_GAPS.md — not guessed.
+model ValueBand {
+  id        String    @id @default(uuid())
+  label     String
+  minValue  Decimal?  @map("min_value") @db.Decimal(12, 2)
+  maxValue  Decimal?  @map("max_value") @db.Decimal(12, 2)
+  sortOrder Int       @default(0) @map("sort_order")
+  isActive  Boolean   @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([isActive, sortOrder])
+  @@map("value_bands")
+}
+
+// The buying organisation — distinct from AccountContact (the human) and
+// Lead (the raw enquiry). Anchor for repeat-customer analysis: when the same
+// school buys a second court, it attaches to this same Account.
+model Account {
+  id                String    @id @default(uuid())
+  name              String
+  customerProfileId String?   @map("customer_profile_id")
+  // "B2B" | "B2C" | "B2G"
+  businessType      String?   @map("business_type")
+  city              String?
+  cityTierId        String?   @map("city_tier_id")
+  ownerUserId       String?   @map("owner_user_id")
+  parentAccountId   String?   @map("parent_account_id")
+  gstin             String?
+  notes             String?
+  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  customerProfile CustomerProfile? @relation(fields: [customerProfileId], references: [id])
+  cityTier        CityTier?        @relation(fields: [cityTierId], references: [id])
+  owner           User?            @relation("AccountOwner", fields: [ownerUserId], references: [id])
+  parentAccount   Account?         @relation("AccountHierarchy", fields: [parentAccountId], references: [id])
+  childAccounts   Account[]        @relation("AccountHierarchy")
+  contacts        AccountContact[]
+  deals           Deal[]
+
+  @@index([city, customerProfileId])
+  @@map("accounts")
+}
+
+// A person at an Account. Named AccountContact (not "Contact" per the spec)
+// because "Contact" already exists as the unrelated broadcast/marketing
+// contact list model — see DECISIONS.md.
+model AccountContact {
+  id        String   @id @default(uuid())
+  accountId String   @map("account_id")
+  name      String
+  phone     String?
+  email     String?
+  designation String?
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  dealsAsPrimary Deal[] @relation("DealPrimaryContact")
+
+  @@index([accountId])
+  @@map("account_contacts")
+}
+
+// A raw enquiry before it's qualified into a Deal. Kept thin — fast capture
+// is the point. BotLead (chatbot-originated leads) stays separate and gets
+// a nullable link here (leadId) so chatbot-specific fields aren't lost while
+// every lead still shows up in this general CRM pipeline.
+model Lead {
+  id             String    @id @default(uuid())
+  name           String
+  phone          String
+  email          String?
+  city           String?
+  rawEnquiryText String?   @map("raw_enquiry_text")
+  leadSourceId   String?   @map("lead_source_id")
+  sourceDetail   String?   @map("source_detail")
+  ownerUserId    String?   @map("owner_user_id")
+  // "NEW" | "CONTACTED" | "QUALIFIED" | "DISQUALIFIED"
+  status         String    @default("NEW")
+  convertedDealId String?  @unique @map("converted_deal_id")
+  convertedAt    DateTime? @map("converted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  leadSource   LeadSource? @relation(fields: [leadSourceId], references: [id])
+  owner        User?       @relation("LeadOwner", fields: [ownerUserId], references: [id])
+  convertedDeal Deal?      @relation("LeadConvertedDeal", fields: [convertedDealId], references: [id])
+  botLeads     BotLead[]
+
+  @@index([ownerUserId, createdAt])
+  @@index([leadSourceId, createdAt])
+  @@map("leads")
+}
+
+// The central sales object — one project opportunity at one site.
+// Conversation -> Deal is 1-to-many (mirrors the existing Conversation ->
+// Quotation / Conversation -> CourtImage pattern) since one WhatsApp thread
+// can cover more than one site enquiry. transitionDeal() (src/lib/funnel/)
+// is the only code path allowed to change currentStageId.
+model Deal {
+  id               String    @id @default(uuid())
+  code             String    @unique
+  title            String
+  accountId        String    @map("account_id")
+  primaryContactId String?   @map("primary_contact_id")
+  ownerUserId      String?   @map("owner_user_id")
+  officeId         String?   @map("office_id")
+  currentStageId   String    @map("current_stage_id")
+  leadSourceId     String?   @map("lead_source_id")
+  sourceDetail     String?   @map("source_detail")
+  conversationId   String?   @map("conversation_id")
+
+  siteCity       String? @map("site_city")
+  siteCityTierId String? @map("site_city_tier_id")
+  siteState      String? @map("site_state")
+  siteAddress    String? @map("site_address")
+
+  estimatedValue Decimal? @map("estimated_value") @db.Decimal(12, 2)
+  quotedValue    Decimal? @map("quoted_value") @db.Decimal(12, 2)
+  wonValue       Decimal? @map("won_value") @db.Decimal(12, 2)
+
+  enquiryAt       DateTime  @default(now()) @map("enquiry_at")
+  firstContactAt  DateTime? @map("first_contact_at")
+  siteVisitAt     DateTime? @map("site_visit_at")
+  sampleSentAt    DateTime? @map("sample_sent_at")
+  firstQuotedAt   DateTime? @map("first_quoted_at")
+  negotiationAt   DateTime? @map("negotiation_at")
+  closedAt        DateTime? @map("closed_at")
+  expectedCloseAt DateTime? @map("expected_close_at")
+
+  // "WON" | "LOST" | "DROPPED" | null (still open)
+  outcome        String?
+  lossReasonId   String?   @map("loss_reason_id")
+  // Free-text fallback — the pre-existing Conversation.lostReason is noisy
+  // sales-rep free text; preserved verbatim here rather than force-mapped
+  // into the LossReason taxonomy (see DECISIONS.md).
+  lossReasonNote String?   @map("loss_reason_note")
+
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  account        Account          @relation(fields: [accountId], references: [id])
+  primaryContact AccountContact?  @relation("DealPrimaryContact", fields: [primaryContactId], references: [id])
+  owner          User?            @relation("DealOwner", fields: [ownerUserId], references: [id])
+  office         Office?          @relation(fields: [officeId], references: [id])
+  currentStage   FunnelStage      @relation(fields: [currentStageId], references: [id])
+  leadSource     LeadSource?      @relation(fields: [leadSourceId], references: [id])
+  siteCityTier   CityTier?        @relation(fields: [siteCityTierId], references: [id])
+  lossReason     LossReason?      @relation(fields: [lossReasonId], references: [id])
+  conversation   Conversation?    @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  convertedFromLead Lead?         @relation("LeadConvertedDeal")
+  stageHistory   DealStageHistory[]
+  lineItems      DealLineItem[]
+  quotations     Quotation[]
+  courtImages    CourtImage[]
+  activities     Activity[]
+  reminders      Reminder[]
+
+  @@index([ownerUserId, currentStageId])
+  @@index([siteCity, createdAt])
+  @@index([currentStageId, expectedCloseAt])
+  // Phase 6 — every Phase 4 analytics function filters deletedAt + a date
+  // range (createdAt for "deals in this period", closedAt for cycle-time /
+  // won-value stats), almost always alongside ownerUserId. Added once the
+  // combined 8-screen smoke test measured ~9.5s against a tiny (18-deal)
+  // dataset — see docs/DECISIONS.md.
+  @@index([deletedAt, createdAt])
+  @@index([deletedAt, outcome, closedAt])
+  @@map("deals")
+}
+
+// Append-only. Source of truth for funnel + timing analytics — never
+// update or delete rows here. changedByUserId is nullable (unlike the
+// pre-existing PipelineStageHistory.changedByUserId) so a future
+// system-driven transition doesn't need a synthetic user.
+model DealStageHistory {
+  id                         String    @id @default(uuid())
+  dealId                     String    @map("deal_id")
+  fromStageId                String?   @map("from_stage_id")
+  toStageId                  String    @map("to_stage_id")
+  changedByUserId            String?   @map("changed_by_user_id")
+  changedAt                  DateTime  @default(now()) @map("changed_at")
+  durationInFromStageSeconds Int?      @map("duration_in_from_stage_seconds")
+  note                       String?
+
+  deal      Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  fromStage FunnelStage? @relation("StageHistoryFrom", fields: [fromStageId], references: [id])
+  toStage   FunnelStage  @relation("StageHistoryTo", fields: [toStageId], references: [id])
+  changedBy User?        @relation(fields: [changedByUserId], references: [id])
+
+  @@index([dealId, changedAt])
+  @@index([toStageId, changedAt])
+  @@map("deal_stage_history")
+}
+
+// Product-level detail — drives product-movement analytics. Populated from
+// a quotation (quotationId set) OR captured as pre-quote interest
+// (isEnquiryOnly=true, quotationId null) via a Deal's "Interested in"
+// picker — this split is what makes enquiry-vs-sold-by-product answerable.
+// Coexists with Quotation.lineItems (JSON) — that stays the PDF-rendering
+// source of truth; this is a parallel, denormalized analytics projection.
+model DealLineItem {
+  id            String   @id @default(uuid())
+  dealId        String   @map("deal_id")
+  quotationId   String?  @map("quotation_id")
+  productId     String?  @map("product_id")
+  sportId       String?  @map("sport_id")
+  // Free-text label for enquiry-only rows with no product chosen yet.
+  label         String?
+  quantity      Decimal  @db.Decimal(12, 2)
+  unit          String?
+  rate          Decimal? @db.Decimal(12, 2)
+  amount        Decimal? @db.Decimal(12, 2)
+  isEnquiryOnly Boolean  @default(false) @map("is_enquiry_only")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  deal      Deal       @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  quotation Quotation? @relation(fields: [quotationId], references: [id], onDelete: SetNull)
+  product   Product?   @relation(fields: [productId], references: [id])
+  sport     Sport?     @relation(fields: [sportId], references: [id])
+
+  @@index([productId, dealId])
+  @@index([dealId])
+  @@map("deal_line_items")
+}
+
+// Real Sport table — replaces the two independently-duplicated hardcoded
+// TS unions in rates.ts (SUPPORTED_SPORTS) and products/store.ts
+// (SPORT_KEYS). Those stay as the form-validation source of truth for now
+// (touching the PDF/rate-sheet pipeline that keys off them is out of
+// scope here) and are seeded to match this table exactly.
+model Sport {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  name      String
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  dealLineItems DealLineItem[]
+
+  @@map("sports")
+}
+
+// Unified touchpoint log — consolidates what today is built ad hoc by
+// merging separate queries against ConversationNote/PipelineStageHistory/
+// Reminder/Message in src/app/api/team/analytics/route.ts.
+model Activity {
+  id             String    @id @default(uuid())
+  dealId         String?   @map("deal_id")
+  leadId         String?   @map("lead_id")
+  accountId      String?   @map("account_id")
+  activityTypeId String    @map("activity_type_id")
+  ownerUserId    String    @map("owner_user_id")
+  subject        String
+  notes          String?
+  occurredAt     DateTime  @map("occurred_at")
+  durationMins   Int?      @map("duration_mins")
+  outcome        String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  deal         Deal?        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  activityType ActivityType @relation(fields: [activityTypeId], references: [id])
+  owner        User         @relation("ActivityOwner", fields: [ownerUserId], references: [id])
+
+  @@index([ownerUserId, occurredAt])
+  @@index([dealId, occurredAt])
+  @@map("activities")
 }

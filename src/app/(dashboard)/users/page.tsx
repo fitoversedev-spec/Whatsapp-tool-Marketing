@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import UsersClient from "./UsersClient";
+import type { Role } from "@/lib/rbac";
 
 export default async function UsersPage() {
   const me = await requireAdmin();
@@ -25,7 +26,7 @@ export default async function UsersPage() {
         id: u.id,
         email: u.email,
         name: u.name,
-        role: u.role as "admin" | "sales",
+        role: u.role as Role,
         isActive: u.isActive,
         approvalStatus: u.approvalStatus as "pending" | "approved" | "rejected",
         rejectionReason: u.rejectionReason,

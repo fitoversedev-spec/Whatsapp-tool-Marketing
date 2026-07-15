@@ -13,6 +13,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { salesActivity } from "@/lib/analytics/salesActivity";
+import { funnelSnapshot } from "@/lib/analytics/funnel";
+import { geography } from "@/lib/analytics/geography";
+import { customerSegments } from "@/lib/analytics/customers";
+import { productAnalytics } from "@/lib/analytics/products";
+import { sourceAnalytics } from "@/lib/analytics/sources";
+import { timelineMetrics } from "@/lib/analytics/timelines";
+import { forecast } from "@/lib/analytics/forecast";
+import { overview } from "@/lib/analytics/overview";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -395,11 +404,43 @@ export async function GET(req: NextRequest) {
   }
   activity.sort((a, b) => b.when.localeCompare(a.when));
 
+  // Phase 4 — the 9-screen analytics build, nested here rather than a new
+  // top-level route (see docs/DECISIONS.md — avoids colliding with the
+  // pre-existing, unrelated /analytics WhatsApp-broadcast-analytics page).
+  // sales-activity + funnel + geography + customers ship first; 5 more follow.
+  const analyticsFrom = since ?? new Date(0);
+  const analyticsTo = new Date();
+  const [salesActivityRows, funnel, geo, customers, products, sources, timelines, forecastResult, overviewResult] = await Promise.all([
+    salesActivity({ from: analyticsFrom, to: analyticsTo }),
+    funnelSnapshot({ from: analyticsFrom, to: analyticsTo }),
+    geography({ from: analyticsFrom, to: analyticsTo }),
+    customerSegments({ from: analyticsFrom, to: analyticsTo }),
+    productAnalytics({ from: analyticsFrom, to: analyticsTo }),
+    sourceAnalytics({ from: analyticsFrom, to: analyticsTo }),
+    timelineMetrics({ from: analyticsFrom, to: analyticsTo }),
+    // Forecast looks forward from "now" (expectedCloseAt), not the range's
+    // own start — the range picker still scopes it via ownerIds, but a
+    // 7d/30d "since" window would wrongly exclude deals expected to close
+    // further out than the activity range being reviewed.
+    forecast({ from: new Date(), to: new Date(Date.now() + 365 * 86_400_000) }),
+    // Overview is always this-month-vs-last, independent of the range picker.
+    overview(),
+  ]);
+
   return NextResponse.json({
     range: rangeParam,
     since: since?.toISOString() ?? null,
     teamTotals,
     perUser,
     activity: activity.slice(0, 25),
+    salesActivity: salesActivityRows,
+    funnel,
+    geography: geo,
+    customers,
+    products,
+    sources,
+    timelines,
+    forecast: forecastResult,
+    overview: { ...overviewResult, stuckDealCount: timelines.stuckDeals.length },
   });
 }

@@ -4,15 +4,23 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
-// Both fields are optional so the same endpoint handles "just change
-// my name" and "just change my preferred unit". If neither is provided
-// the payload is invalid.
+// All fields optional so the same endpoint handles "just change my name",
+// "just change my preferred unit", or "just set my WhatsApp number" — at
+// least one must be present. phone is nullable-on-purpose (empty string
+// clears it, disabling bot commands for this user rather than leaving a
+// stale number matched).
 const schema = z
   .object({
     name: z.string().min(1).max(120).optional(),
     preferredUnit: z.enum(["ft", "m"]).optional(),
+    phone: z
+      .string()
+      .max(20)
+      .regex(/^\+?\d{7,15}$/, "Enter digits only, e.g. 919876543210")
+      .or(z.literal(""))
+      .optional(),
   })
-  .refine((v) => v.name !== undefined || v.preferredUnit !== undefined, {
+  .refine((v) => v.name !== undefined || v.preferredUnit !== undefined || v.phone !== undefined, {
     message: "at least one field required",
   });
 
@@ -23,6 +31,14 @@ export async function PATCH(req: NextRequest) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
+  if (parsed.data.phone) {
+    const taken = await prisma.user.findFirst({
+      where: { phone: parsed.data.phone, id: { not: me.id } },
+      select: { id: true },
+    });
+    if (taken) return NextResponse.json({ error: "That number is already linked to another account." }, { status: 409 });
+  }
+
   await prisma.user.update({
     where: { id: me.id },
     data: {
@@ -30,6 +46,7 @@ export async function PATCH(req: NextRequest) {
       ...(parsed.data.preferredUnit !== undefined && {
         preferredUnit: parsed.data.preferredUnit,
       }),
+      ...(parsed.data.phone !== undefined && { phone: parsed.data.phone || null }),
     },
   });
 

@@ -2,27 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { recompute, type QuoteLineItem } from "@/lib/quotation/calculator";
-
-const lineItemSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1).max(120),
-  description: z.string().max(4000),
-  areaSqFt: z.number().min(0).max(1_000_000),
-  ratePerSqFt: z.number().min(0).max(1_000_000),
-  gstPercent: z.number().min(0).max(100),
-  total: z.number().min(0),
-  included: z.boolean(),
-});
+import { recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
 
 const patchSchema = z.object({
   customerName: z.string().min(1).max(200).optional(),
   lengthFt: z.number().int().min(1).max(10_000).optional(),
   widthFt: z.number().int().min(1).max(10_000).optional(),
+  // Uses the SAME lineItemSchema as POST /api/quotations (imageUrl/section/
+  // unit/specs/productId) — these two used to diverge, with PATCH silently
+  // dropping those four fields (see docs/DECISIONS.md).
   lineItems: z.array(lineItemSchema).optional(),
   notes: z.string().max(4000).optional(),
   validityDays: z.number().int().min(1).max(365).optional(),
-  status: z.enum(["draft", "sent", "viewed", "accepted", "expired"]).optional(),
+  status: z.enum(["draft", "sent", "viewed", "accepted", "expired", "rejected", "superseded"]).optional(),
+  dealId: z.string().uuid().nullable().optional(),
 });
 
 async function loadAuthorized(id: string, userId: string, role: string) {

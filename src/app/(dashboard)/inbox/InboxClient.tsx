@@ -8,6 +8,7 @@ import RemindersPanel from "./RemindersPanel";
 import LabelPicker from "@/components/LabelPicker";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import MediaPreview from "@/components/MediaPreview";
+import type { Role } from "@/lib/rbac";
 
 // These three wizards are heavy (the court designer alone pulls in the Konva
 // 2D + 3D canvas and a large court-image lib). They open only when the user
@@ -53,13 +54,13 @@ type Message = {
   sentByName?: string | null;
 };
 
-type AssignableUser = { id: string; name: string; role: "admin" | "sales"; email: string };
+type AssignableUser = { id: string; name: string; role: Role; email: string };
 
 export default function InboxClient({
   currentUser,
   initialConversations,
 }: {
-  currentUser: { id: string; name: string; role: "admin" | "sales" };
+  currentUser: { id: string; name: string; role: Role };
   initialConversations: Conversation[];
 }) {
   const toast = useToast();

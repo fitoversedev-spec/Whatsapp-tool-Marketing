@@ -40,6 +40,15 @@ async function main() {
 
   if (process.env.DEMO_SEED !== "true") return;
 
+  // Spec §14: demo data must never land in production, even by accident
+  // (e.g. DEMO_SEED=true left set in the wrong environment's env vars).
+  // The admin-bootstrap step above is real setup and stays unguarded —
+  // only the fake sales/pending/rejected users below are demo data.
+  if (process.env.NODE_ENV === "production") {
+    console.error("Refusing to seed demo data: NODE_ENV=production. Unset DEMO_SEED or run against a non-production database.");
+    process.exit(1);
+  }
+
   // Demo sales user
   let sales = await prisma.user.findUnique({ where: { email: "sales@demo.local" } });
   if (!sales) {

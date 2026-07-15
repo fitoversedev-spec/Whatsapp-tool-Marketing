@@ -6,6 +6,7 @@ import { categorize, uploadToBlob } from "@/lib/media";
 import { dispatchAutoReply } from "@/lib/auto-replies/dispatch";
 import { dispatchAfterHoursGate } from "@/lib/auto-replies/after-hours-gate";
 import { dispatchChatbot } from "@/lib/chatbot/dispatch";
+import { handleStaffMessage } from "@/lib/chatbot/staffCommands";
 
 // Meta requires GET for verification handshake
 export async function GET(req: NextRequest) {
@@ -248,6 +249,42 @@ async function handleInboundMessage(msg: any, profileName?: string) {
     // Don't auto-reply on the same message that opts them out — that
     // would be perverse. Return early.
     return;
+  }
+
+  // Rate limit — spec §14. The real gate against forged traffic is the HMAC
+  // signature check at the top of POST; this is defense-in-depth against a
+  // single contact flooding us (broken client, or a bug causing a reply
+  // loop). Reuses the Message rows we already store — no new table/service.
+  // Meta's own webhook-delivery traffic isn't itself the threat here (it's
+  // just carrying whatever a real WhatsApp user's client sent), so limiting
+  // per contactPhone is what actually matters, not per-request-source.
+  const recentInboundCount = await prisma.message.count({
+    where: { conversationId: convo.id, direction: "inbound", createdAt: { gte: new Date(Date.now() - 60_000) } },
+  });
+  if (recentInboundCount > 20) {
+    console.warn(`[webhook] rate limit: ${from} sent ${recentInboundCount} messages in the last 60s — dropping further processing`);
+    return;
+  }
+
+  // Staff command check — spec §10: identify the sender by User.phone
+  // *before* anything customer-facing runs. Known staff numbers get routed
+  // to the bot-command handler exclusively (no after-hours gate, no
+  // customer flow, no auto-replies); unknown numbers fall through to the
+  // existing behavior completely unchanged. Never executes a command for a
+  // number that isn't a known, active staff user.
+  if (type === "text" && body) {
+    const staffUser = await prisma.user
+      .findFirst({ where: { phone: from, isActive: true, deletedAt: null }, select: { id: true, name: true } })
+      .catch(() => null);
+    if (staffUser) {
+      await handleStaffMessage({
+        user: staffUser,
+        conversationId: convo.id,
+        contactPhone: from,
+        inboundBody: body,
+      }).catch((err) => console.error("[webhook] staff command handling threw", err));
+      return;
+    }
   }
 
   // After-hours gate — outside 9am-8pm IST, on a fresh conversation,

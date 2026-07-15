@@ -462,7 +462,7 @@ async function sendProductListing(
 // sendProductListing, sendProductDetails, and captureProductInterest
 // — each of those sends more than one WA message per invocation, so
 // the generic mirrorOutbound (one-call-one-row) can't handle them.
-async function writeOutboundMessage(
+export async function writeOutboundMessage(
   conversationId: string,
   m: {
     type: "text" | "image" | "document";
@@ -613,6 +613,30 @@ async function finaliseFlow(
 
   const preferredDateTime = parseMaybeDate(data.preferredDateTime);
 
+  // Mirror into the general CRM Lead pipeline (Phase 1) — BotLead's own
+  // chatbot-specific fields stay as the detailed record; leadId links them
+  // so every chatbot lead also shows up alongside manually/referral-entered
+  // ones. Failure here must never block the BotLead write itself.
+  const whatsappSource = await prisma.leadSource
+    .findUnique({ where: { slug: "whatsapp_inbound" } })
+    .catch(() => null);
+  const lead = await prisma.lead
+    .create({
+      data: {
+        name: data.name || contactPhone,
+        phone: contactPhone,
+        city: data.location ?? null,
+        rawEnquiryText: endReason === "off_script" ? "Ended off-script mid-flow" : null,
+        leadSourceId: whatsappSource?.id ?? null,
+        sourceDetail: path ?? null,
+        status: "NEW",
+      },
+    })
+    .catch((err) => {
+      console.error("[chatbot] Lead write failed", err);
+      return null;
+    });
+
   await prisma.botLead
     .create({
       data: {
@@ -628,6 +652,7 @@ async function finaliseFlow(
         productCategory: data.productCategory ?? null,
         preferredDateTime,
         notes: endReason === "off_script" ? "Ended off-script mid-flow" : null,
+        leadId: lead?.id ?? null,
       },
     })
     .catch((err) => console.error("[chatbot] lead write failed", err));
@@ -759,6 +784,25 @@ async function captureProductInterest(
     });
   }
 
+  const whatsappSource = await prisma.leadSource
+    .findUnique({ where: { slug: "whatsapp_inbound" } })
+    .catch(() => null);
+  const lead = await prisma.lead
+    .create({
+      data: {
+        name: contactPhone,
+        phone: contactPhone,
+        rawEnquiryText: `Interested in ${productName}`,
+        leadSourceId: whatsappSource?.id ?? null,
+        sourceDetail: "product",
+        status: "NEW",
+      },
+    })
+    .catch((err) => {
+      console.error("[chatbot] Lead write failed", err);
+      return null;
+    });
+
   await prisma.botLead
     .create({
       data: {
@@ -767,6 +811,7 @@ async function captureProductInterest(
         path: "product",
         productCategory: productId,
         notes: `Interested in ${productName}`,
+        leadId: lead?.id ?? null,
       },
     })
     .catch((err) => console.error("[chatbot] interest lead write failed", err));

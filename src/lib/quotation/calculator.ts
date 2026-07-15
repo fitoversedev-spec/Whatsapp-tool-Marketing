@@ -10,6 +10,7 @@
 // the totals block can show the combined GST while individual items still
 // reflect their own bracket.
 
+import { z } from "zod";
 import type { RateSheetItem } from "./rates";
 import { sectionForItem } from "./sections";
 import { defaultUnitForAreaMode } from "./units";
@@ -45,7 +46,39 @@ export type QuoteLineItem = {
   optionShort?: string | null; // short label for comparison header / spec card
   // Structured specs for the "Specifications" cards (pile height, gauge, …).
   specs?: Array<{ label: string; value: string }> | null;
+  // Which catalogue Product this line came from, if any (Phase 2 — was
+  // previously computed in the wizard's product picker but dropped before
+  // save; see docs/DECISIONS.md). Drives DealLineItem/product-movement
+  // analytics. Historical line items predating this field are null.
+  productId?: string | null;
 };
+
+// Single shared source of truth for both the POST (create) and PATCH
+// (update) quotation routes — they used to each declare their own copy,
+// which had silently drifted apart (PATCH was missing imageUrl/section/
+// unit/specs, see docs/DECISIONS.md). Import this instead of redeclaring.
+export const lineItemSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1).max(120),
+  description: z.string().max(4000),
+  areaSqFt: z.number().min(0).max(1_000_000),
+  ratePerSqFt: z.number().min(0).max(1_000_000),
+  gstPercent: z.number().min(0).max(100),
+  total: z.number().min(0),
+  included: z.boolean(),
+  imageUrl: z.string().url().nullable().optional(),
+  section: z.string().max(60).optional(),
+  unit: z.string().max(20).nullable().optional(),
+  // Structured product specs (from the Products step) → rendered as spec
+  // cards after the quote table. Zod strips unknown keys, so without this the
+  // specs would be silently dropped before the snapshot is stored.
+  specs: z
+    .array(z.object({ label: z.string().max(120), value: z.string().max(2000) }))
+    .max(40)
+    .nullable()
+    .optional(),
+  productId: z.string().uuid().nullable().optional(),
+});
 
 export function computeAreaForItem(
   item: RateSheetItem,

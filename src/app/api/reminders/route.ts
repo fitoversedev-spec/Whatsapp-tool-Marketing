@@ -5,8 +5,12 @@ import { prisma } from "@/lib/prisma";
 
 const createSchema = z.object({
   conversationId: z.string().uuid().nullable().optional(),
+  dealId: z.string().uuid().nullable().optional(),
   message: z.string().min(1).max(500),
   dueAt: z.string().datetime(),
+  // ["whatsapp"] opts into real outbound dispatch via the cron sweep;
+  // omitted/empty = in-app only (today's only behavior).
+  channels: z.array(z.enum(["whatsapp", "in_app"])).optional(),
 });
 
 const listFilterSchema = z.enum(["overdue", "today", "week", "later", "completed", "all"]);
@@ -97,9 +101,11 @@ export async function POST(req: NextRequest) {
   const reminder = await prisma.reminder.create({
     data: {
       conversationId: parsed.data.conversationId ?? null,
+      dealId: parsed.data.dealId ?? null,
       ownerUserId: user.id,
       message: parsed.data.message,
       dueAt: new Date(parsed.data.dueAt),
+      channels: parsed.data.channels ?? [],
     },
     include: {
       conversation: { select: { contactPhone: true, contactName: true } },

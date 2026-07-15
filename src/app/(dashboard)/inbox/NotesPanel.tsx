@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Role } from "@/lib/rbac";
 
 type Note = {
   id: string;
@@ -19,7 +20,7 @@ export default function NotesPanel({
   onClose,
 }: {
   conversationId: string;
-  currentUser: { id: string; role: "admin" | "sales" };
+  currentUser: { id: string; role: Role };
   open: boolean;
   onClose: () => void;
 }) {

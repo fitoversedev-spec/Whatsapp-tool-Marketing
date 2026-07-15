@@ -53,6 +53,8 @@ type LineItem = {
   unit?: string | null;
   // Structured specs (from the chosen product) → spec cards after the table.
   specs?: Array<{ label: string; value: string }> | null;
+  // Which catalogue Product this line came from — see lineItemsForSubmit().
+  productId?: string | null;
 };
 
 // Catalogue product row (subset of ProductDTO) shown in the Products step.
@@ -420,6 +422,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         ...li,
         imageUrl: product?.imageUrl ?? null,
         specs: specs.length ? specs : null,
+        productId: product?.productId ?? null,
       };
     });
   }

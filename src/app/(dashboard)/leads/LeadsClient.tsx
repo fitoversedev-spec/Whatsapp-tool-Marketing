@@ -31,6 +31,25 @@ type Lead = {
 
 type UserOption = { id: string; name: string; role: string };
 
+type GeneralLead = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  city: string | null;
+  status: string;
+  sourceName: string | null;
+  ownerName: string | null;
+  createdAt: string;
+};
+
+const GENERAL_STATUS_COLORS: Record<string, string> = {
+  NEW: "bg-blue-100 text-blue-800",
+  CONTACTED: "bg-purple-100 text-purple-800",
+  QUALIFIED: "bg-green-100 text-green-800",
+  DISQUALIFIED: "bg-slate-100 text-slate-600",
+};
+
 const PATH_LABEL: Record<string, string> = {
   turnkey_new: "Turnkey — New",
   turnkey_maintenance: "Maintenance",
@@ -49,11 +68,13 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function LeadsClient({
   leads,
+  generalLeads,
   users,
   currentUserId,
   isAdmin,
 }: {
   leads: Lead[];
+  generalLeads: GeneralLead[];
   users: UserOption[];
   currentUserId: string;
   isAdmin: boolean;
@@ -61,6 +82,7 @@ export default function LeadsClient({
   const router = useRouter();
   const toast = useToast();
 
+  const [tab, setTab] = useState<"bot" | "general">("bot");
   const [pathFilter, setPathFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("open");
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
@@ -164,6 +186,28 @@ export default function LeadsClient({
         }
       />
 
+      <div className="px-4 sm:px-6 lg:px-8 pt-4 flex gap-1.5">
+        <button
+          onClick={() => setTab("bot")}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+            tab === "bot" ? "bg-wa-green text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+          }`}
+        >
+          Bot Leads ({leads.length})
+        </button>
+        <button
+          onClick={() => setTab("general")}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+            tab === "general" ? "bg-wa-green text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+          }`}
+        >
+          General Leads ({generalLeads.length})
+        </button>
+      </div>
+
+      {tab === "general" ? (
+        <GeneralLeadsTable leads={generalLeads} />
+      ) : (
       <div className="p-4 sm:p-6 lg:p-8 space-y-4">
         {/* Filters */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
@@ -347,6 +391,57 @@ export default function LeadsClient({
           </div>
         )}
       </div>
+      )}
     </>
+  );
+}
+
+function GeneralLeadsTable({ leads }: { leads: GeneralLead[] }) {
+  return (
+    <div className="p-4 sm:p-6 lg:p-8">
+      {leads.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-center text-slate-500 text-sm">
+          No general leads yet. These come from manual entry or referrals — see /deals to create one, or via POST /api/leads.
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200 text-[11px] uppercase text-slate-500 font-medium tracking-wide">
+                <tr>
+                  <th className="px-4 py-3 text-left">Created</th>
+                  <th className="px-4 py-3 text-left">Contact</th>
+                  <th className="px-4 py-3 text-left">City</th>
+                  <th className="px-4 py-3 text-left">Source</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-left">Owner</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {leads.map((l) => (
+                  <tr key={l.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                      {new Date(l.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-slate-900">{l.name}</div>
+                      <div className="text-xs text-slate-500">{l.phone}{l.email ? ` · ${l.email}` : ""}</div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{l.city ?? "—"}</td>
+                    <td className="px-4 py-3 text-slate-700">{l.sourceName ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-medium px-2 py-1 rounded-md ${GENERAL_STATUS_COLORS[l.status] ?? "bg-slate-100"}`}>
+                        {l.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{l.ownerName ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

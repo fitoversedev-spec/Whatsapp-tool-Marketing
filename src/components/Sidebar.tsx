@@ -6,9 +6,10 @@ import { useState, useEffect } from "react";
 import { setFaviconBadge } from "@/lib/favicon";
 import ThemeToggle from "./ThemeToggle";
 import AllToolsPanel from "./AllToolsPanel";
+import type { Role } from "@/lib/rbac";
 
 type Props = {
-  user: { name: string; email: string; role: "admin" | "sales" };
+  user: { name: string; email: string; role: Role };
   pendingCount?: number;
   unreadCount?: number;
   reminderCount?: number;
@@ -25,6 +26,7 @@ const PRIMARY_NAV = [
   { href: "/broadcasts", label: "Broadcasts", icon: "📣" },
   { href: "/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
   { href: "/pipeline", label: "Pipeline", icon: "🎯" },
+  { href: "/deals", label: "Deals", icon: "📁" },
   { href: "/leads", label: "Bot leads", icon: "🤖" },
 ];
 
@@ -135,6 +137,8 @@ export default function Sidebar({
     { href: "/settings/quotation-rates", label: "Quotation rates" },
     { href: "/connection", label: "Connection" },
     { href: "/users", label: "Users" },
+    { href: "/admin/taxonomies", label: "Taxonomies" },
+    { href: "/admin/audit-log", label: "Audit log" },
   ];
   const currentLabel =
     ALL_PAGES.find((n) => pathname.startsWith(n.href))?.label ?? "WhatsApp Tool";

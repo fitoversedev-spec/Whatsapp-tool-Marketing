@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import type { Role } from "@/lib/rbac";
 
 type Template = {
   id: string;
@@ -49,7 +50,7 @@ export default function TemplatesClient({
   showDeleted,
   templates,
 }: {
-  currentUser: { role: "admin" | "sales" };
+  currentUser: { role: Role };
   showDeleted: boolean;
   templates: Template[];
 }) {

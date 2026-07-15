@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { type PipelineStage } from "@/lib/pipeline";
 import { getPipelineStages } from "@/lib/pipeline-server";
 import PipelineClient from "./PipelineClient";
+import type { Role } from "@/lib/rbac";
 
 export default async function PipelinePage({
   searchParams,
@@ -84,7 +85,7 @@ export default async function PipelinePage({
 
   return (
     <PipelineClient
-      currentUser={{ id: user.id, name: user.name, role: user.role as "admin" | "sales" }}
+      currentUser={{ id: user.id, name: user.name, role: user.role as Role }}
       initialStages={stages as PipelineStage[]}
       initialCards={cards}
       salesUsers={salesUsers}

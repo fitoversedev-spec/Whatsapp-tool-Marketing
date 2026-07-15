@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { writeAudit } from "@/lib/audit";
 
 const patchSchema = z.object({
   isActive: z.boolean().optional(),
-  role: z.enum(["admin", "sales"]).optional(),
+  role: z.enum(["admin", "sales", "manager", "management"]).optional(),
   approvalStatus: z.enum(["pending", "approved", "rejected"]).optional(),
   rejectionReason: z.string().max(500).nullable().optional(),
+  officeId: z.string().uuid().nullable().optional(),
   deleted: z.boolean().optional(), // true = soft delete, false = restore
 });
 
@@ -35,5 +37,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   await prisma.user.update({ where: { id: params.id }, data: patch });
+  await writeAudit({ actorId: me.id, entity: "User", entityId: params.id, action: "UPDATE", diff: patch });
   return NextResponse.json({ ok: true });
 }

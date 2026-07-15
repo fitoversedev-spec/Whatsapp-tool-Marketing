@@ -18,6 +18,7 @@ import {
 import PageHeader from "@/components/PageHeader";
 import ContactDetailDrawer from "@/components/ContactDetailDrawer";
 import { colorFor, daysSince, type PipelineStage } from "@/lib/pipeline";
+import type { Role } from "@/lib/rbac";
 
 type Card = {
   id: string;
@@ -48,7 +49,7 @@ export default function PipelineClient({
   view,
   owner,
 }: {
-  currentUser: { id: string; name: string; role: "admin" | "sales" };
+  currentUser: { id: string; name: string; role: Role };
   initialStages: PipelineStage[];
   initialCards: Card[];
   salesUsers: { id: string; name: string }[];
@@ -302,7 +303,7 @@ function OwnerSelect({
   value: string;
   onChange: (v: string) => void;
   salesUsers: { id: string; name: string }[];
-  currentUser: { id: string; name: string; role: "admin" | "sales" };
+  currentUser: { id: string; name: string; role: Role };
 }) {
   return (
     <select

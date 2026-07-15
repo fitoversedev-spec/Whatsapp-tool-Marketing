@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import type { Role } from "@/lib/rbac";
 
 const schema = z.object({
   email: z.string().email(),
@@ -54,8 +55,8 @@ export async function POST(req: NextRequest) {
   session.userId = user.id;
   session.email = user.email;
   session.name = user.name;
-  session.role = user.role as "admin" | "sales";
+  session.role = user.role as Role;
   await session.save();
 
-  return NextResponse.json({ ok: true, user: { email: user.email, name: user.name, role: user.role as "admin" | "sales" } });
+  return NextResponse.json({ ok: true, user: { email: user.email, name: user.name, role: user.role as Role } });
 }

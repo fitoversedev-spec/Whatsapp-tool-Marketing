@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import TemplatesClient from "./TemplatesClient";
+import type { Role } from "@/lib/rbac";
 
 // When ?showDeleted=1 is set in the URL, include soft-deleted templates
 // (with a "deleted" badge + restore button). Default view excludes them.
@@ -23,7 +24,7 @@ export default async function TemplatesPage({
 
   return (
     <TemplatesClient
-      currentUser={{ role: user.role as "admin" | "sales" }}
+      currentUser={{ role: user.role as Role }}
       showDeleted={showDeleted}
       templates={templates.map((t) => ({
         id: t.id,

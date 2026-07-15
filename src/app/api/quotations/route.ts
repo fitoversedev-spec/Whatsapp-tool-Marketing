@@ -7,29 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildQuotationNumber, recompute, type QuoteLineItem } from "@/lib/quotation/calculator";
-
-const lineItemSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1).max(120),
-  description: z.string().max(4000),
-  areaSqFt: z.number().min(0).max(1_000_000),
-  ratePerSqFt: z.number().min(0).max(1_000_000),
-  gstPercent: z.number().min(0).max(100),
-  total: z.number().min(0),
-  included: z.boolean(),
-  imageUrl: z.string().url().nullable().optional(),
-  section: z.string().max(60).optional(),
-  unit: z.string().max(20).nullable().optional(),
-  // Structured product specs (from the Products step) → rendered as spec
-  // cards after the quote table. Zod strips unknown keys, so without this the
-  // specs would be silently dropped before the snapshot is stored.
-  specs: z
-    .array(z.object({ label: z.string().max(120), value: z.string().max(2000) }))
-    .max(40)
-    .nullable()
-    .optional(),
-});
+import { buildQuotationNumber, recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
+import { defaultFunnelStageId, buildDealCode, nextDealSequenceForYear } from "@/lib/crm/deals";
 
 const createSchema = z.object({
   customerName: z.string().min(1).max(200),
@@ -45,6 +24,10 @@ const createSchema = z.object({
   validityDays: z.number().int().min(1).max(365).default(30),
   conversationId: z.string().uuid().nullable().optional(),
   contactPhone: z.string().min(5).max(30).nullable().optional(),
+  // Phase 2 — attach to an existing Deal. Omitted = the route auto-creates
+  // a one-off Deal so dealId always ends up populated without forcing a
+  // deal-first flow in the wizard (see docs/DECISIONS.md).
+  dealId: z.string().uuid().nullable().optional(),
 });
 
 const listFilterSchema = z.object({
@@ -136,6 +119,33 @@ export async function POST(req: NextRequest) {
 
   const year = new Date(parsed.data.quoteDate).getFullYear();
 
+  // Phase 2 — resolve the Deal this quote attaches to. If none was given,
+  // auto-create a standalone Account + Deal (same shape the backfill script
+  // uses for orphan quotes) so dealId always ends up populated without
+  // requiring a deal-first flow in the wizard. No duplicate-account check
+  // here (unlike POST /api/deals) — this is a background convenience, not a
+  // user-facing "create account" action; an admin can reconcile duplicates
+  // later if a customer ends up with more than one from repeated standalone quotes.
+  let dealId = parsed.data.dealId ?? null;
+  if (!dealId) {
+    const [stageId, dealSeq] = await Promise.all([defaultFunnelStageId(), nextDealSequenceForYear(year)]);
+    const account = await prisma.account.create({
+      data: { name: parsed.data.customerName, ownerUserId: user.id },
+    });
+    const deal = await prisma.deal.create({
+      data: {
+        code: buildDealCode(year, dealSeq - 1),
+        title: `Quote for ${parsed.data.customerName}`,
+        accountId: account.id,
+        ownerUserId: user.id,
+        currentStageId: stageId,
+        conversationId: parsed.data.conversationId ?? null,
+        quotedValue: totals.grandTotal,
+      },
+    });
+    dealId = deal.id;
+  }
+
   // Sequential quotation number per calendar year. Originally we just
   // used count() + 1, but that collides as soon as ANY row gets deleted
   // (count drops below the highest existing seq) or two users create at
@@ -166,6 +176,7 @@ export async function POST(req: NextRequest) {
           contactPhone: parsed.data.contactPhone ?? null,
           createdByUserId: user.id,
           status: "draft",
+          dealId,
         },
       });
       break;
@@ -188,6 +199,33 @@ export async function POST(req: NextRequest) {
       },
       { status: 503 }
     );
+  }
+
+  // Phase 2 — DealLineItem rows: a real (not enquiry-only) row per included
+  // line item, so product-movement analytics can answer "what's sold" once
+  // Phase 4 ships. Best-effort — a failure here must never fail quote
+  // creation itself, since the quote's own JSON snapshot already saved fine.
+  try {
+    const sport = await prisma.sport.findUnique({ where: { slug: parsed.data.sport } });
+    const included = parsed.data.lineItems.filter((li) => li.included);
+    if (included.length) {
+      await prisma.dealLineItem.createMany({
+        data: included.map((li) => ({
+          dealId: dealId!,
+          quotationId: quotation!.id,
+          productId: li.productId ?? null,
+          sportId: sport?.id ?? null,
+          label: li.name,
+          quantity: li.areaSqFt,
+          unit: li.unit ?? null,
+          rate: li.ratePerSqFt,
+          amount: li.total,
+          isEnquiryOnly: false,
+        })),
+      });
+    }
+  } catch (err) {
+    console.error("[quotations] DealLineItem write failed", err);
   }
 
   return NextResponse.json({

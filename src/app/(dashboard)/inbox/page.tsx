@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import InboxClient from "./InboxClient";
+import type { Role } from "@/lib/rbac";
 
 export default async function InboxPage() {
   const user = await requireUser();
@@ -26,7 +27,7 @@ export default async function InboxPage() {
 
   return (
     <InboxClient
-      currentUser={{ id: user.id, name: user.name, role: user.role as "admin" | "sales" }}
+      currentUser={{ id: user.id, name: user.name, role: user.role as Role }}
       initialConversations={conversations.map((c) => ({
         id: c.id,
         contactPhone: c.contactPhone,

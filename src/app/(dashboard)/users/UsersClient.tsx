@@ -4,12 +4,13 @@ import { useState, useMemo, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import type { Role } from "@/lib/rbac";
 
 type User = {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "sales";
+  role: Role;
   isActive: boolean;
   approvalStatus: "pending" | "approved" | "rejected";
   rejectionReason: string | null;
@@ -299,12 +300,17 @@ export default function UsersClient({
   );
 }
 
-function RoleBadge({ role }: { role: "admin" | "sales" }) {
+const ROLE_BADGE_CLASSES: Record<Role, string> = {
+  admin: "bg-purple-100 text-purple-700",
+  management: "bg-emerald-100 text-emerald-700",
+  manager: "bg-amber-100 text-amber-700",
+  sales: "bg-blue-100 text-blue-700",
+};
+
+function RoleBadge({ role }: { role: Role }) {
   return (
     <span
-      className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-        role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
-      }`}
+      className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${ROLE_BADGE_CLASSES[role]}`}
     >
       {role}
     </span>
@@ -486,9 +492,9 @@ function ApproveModal({
 }: {
   user: User;
   onClose: () => void;
-  onConfirm: (role: "admin" | "sales") => void;
+  onConfirm: (role: Role) => void;
 }) {
-  const [role, setRole] = useState<"admin" | "sales">(user.role);
+  const [role, setRole] = useState<Role>(user.role);
   return (
     <ModalShell title={`Approve ${user.name}`} onClose={onClose}>
       <p className="text-sm text-slate-600">
@@ -498,10 +504,12 @@ function ApproveModal({
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Grant role</label>
         <select
           value={role}
-          onChange={(e) => setRole(e.target.value as "admin" | "sales")}
+          onChange={(e) => setRole(e.target.value as Role)}
           className="modal-input"
         >
           <option value="sales">Sales Representative</option>
+          <option value="manager">Manager</option>
+          <option value="management">Management</option>
           <option value="admin">Administrator</option>
         </select>
       </div>
@@ -679,7 +687,7 @@ function InviteModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   const toast = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"admin" | "sales">("sales");
+  const [role, setRole] = useState<Role>("sales");
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -730,10 +738,12 @@ function InviteModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Role</label>
           <select
             value={role}
-            onChange={(e) => setRole(e.target.value as "admin" | "sales")}
+            onChange={(e) => setRole(e.target.value as Role)}
             className="modal-input"
           >
             <option value="sales">Sales</option>
+            <option value="manager">Manager</option>
+            <option value="management">Management</option>
             <option value="admin">Admin</option>
           </select>
         </div>

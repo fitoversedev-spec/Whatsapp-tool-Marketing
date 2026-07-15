@@ -15,6 +15,8 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { Role } from "@/lib/rbac";
+import { isManagementOrAbove } from "@/lib/rbac";
 
 export type AllToolsItem = {
   href: string;
@@ -22,6 +24,10 @@ export type AllToolsItem = {
   icon: string;
   description: string;
   adminOnly?: boolean;
+  // Visible to management as well as admin (narrower than the default
+  // "everyone" but broader than adminOnly) — e.g. the audit log, which
+  // spec §13 grants to MANAGEMENT + ADMIN, not just ADMIN.
+  managementOrAbove?: boolean;
 };
 
 export type AllToolsGroup = {
@@ -118,6 +124,20 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         description: "Team members and approval queue",
         adminOnly: true,
       },
+      {
+        href: "/admin/taxonomies",
+        label: "Taxonomies",
+        icon: "🏷️",
+        description: "Funnel stages, lead sources, customer profiles, and other editable lists",
+        adminOnly: true,
+      },
+      {
+        href: "/admin/audit-log",
+        label: "Audit log",
+        icon: "🧾",
+        description: "Every stage change, role change, and taxonomy edit — who did what, when",
+        managementOrAbove: true,
+      },
     ],
   },
 ];
@@ -125,7 +145,7 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
 type Props = {
   open: boolean;
   onClose: () => void;
-  userRole: "admin" | "sales";
+  userRole: Role;
   pendingCount: number;
   // Pixel offset from the left edge of the viewport for desktop anchoring.
   // Tracks the current sidebar width (252 expanded, 76 collapsed) so the
@@ -220,7 +240,9 @@ export default function AllToolsPanel({
         <div className="p-5 space-y-6">
           {ALL_TOOLS_GROUPS.map((group) => {
             const visible = group.items.filter(
-              (i) => !i.adminOnly || userRole === "admin"
+              (i) =>
+                (!i.adminOnly || userRole === "admin") &&
+                (!i.managementOrAbove || isManagementOrAbove(userRole))
             );
             if (visible.length === 0) return null;
             return (

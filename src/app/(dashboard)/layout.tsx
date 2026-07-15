@@ -5,6 +5,7 @@ import CronTick from "@/components/CronTick";
 import axios from "axios";
 import { getMetaAccessToken } from "@/lib/token-manager";
 import { endOfDayIST } from "@/lib/time";
+import type { Role } from "@/lib/rbac";
 
 async function checkTokenValid(): Promise<boolean> {
   const token = await getMetaAccessToken();
@@ -72,7 +73,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         user={{
           name: user.name,
           email: user.email,
-          role: user.role as "admin" | "sales",
+          role: user.role as Role,
         }}
         pendingCount={pendingCount}
         unreadCount={unreadCount}

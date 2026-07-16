@@ -8,7 +8,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildQuotationNumber, recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
-import { findOrCreateDealForConversation } from "@/lib/crm/deals";
+import { findOrCreateDealForConversation, reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
 
 const createSchema = z.object({
   customerName: z.string().min(1).max(200),
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
   // not Deal — those are handled inside findOrCreateDealForConversation
   // above for the resolved-deal path; an explicitly-passed dealId skips that
   // helper, so mirror the same Account write here for that path too.)
-  await prisma.deal
+  const dealAfterQuote = await prisma.deal
     .update({
       where: { id: dealId },
       data: {
@@ -165,6 +165,22 @@ export async function POST(req: NextRequest) {
       },
     })
     .catch(() => null);
+  // Sync straight to Conversation.dealValue too, unconditionally — the
+  // previous only path for this (transitionDeal.ts's write-through) is
+  // forward-only-on-stage-advance, so revising a quote on a deal already
+  // past "Quotation Sent" (routine — e.g. a Negotiation-stage deal gets a
+  // revised price) never re-fired it, leaving /pipeline and
+  // ContactDetailDrawer showing a stale total indefinitely. This is a
+  // direct, always-fires sync instead of piggybacking on stage logic that
+  // was never meant to gate it. See docs/DECISIONS.md.
+  if (dealAfterQuote?.conversationId) {
+    await prisma.conversation
+      .update({
+        where: { id: dealAfterQuote.conversationId },
+        data: { dealValue: dealAfterQuote.wonValue ?? dealAfterQuote.quotedValue },
+      })
+      .catch(() => null);
+  }
   if (parsed.data.dealId && (parsed.data.customerProfileId || parsed.data.businessType)) {
     const dealAccount = await prisma.deal.findUnique({ where: { id: dealId }, select: { accountId: true } });
     if (dealAccount) {
@@ -298,9 +314,18 @@ export async function DELETE(req: NextRequest) {
   const parsed = bulkDeleteSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
+  // Collect affected deals BEFORE deleteMany (which doesn't return row data)
+  // so each can be reconciled afterward — see docs/DECISIONS.md.
+  const affected = await prisma.quotation.findMany({
+    where: { id: { in: parsed.data.ids } },
+    select: { dealId: true },
+  });
+  const dealIds = [...new Set(affected.map((q) => q.dealId).filter((id): id is string => !!id))];
+
   const result = await prisma.quotation.deleteMany({
     where: { id: { in: parsed.data.ids } },
   });
+  await Promise.all(dealIds.map((id) => reconcileDealAfterQuotationDelete(id)));
   return NextResponse.json({ ok: true, count: result.count });
 }
 

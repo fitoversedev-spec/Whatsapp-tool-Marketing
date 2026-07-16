@@ -35,6 +35,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   if (parsed.data.completed !== undefined) {
     data.completedAt = parsed.data.completed ? new Date() : null;
+    // Keep the informational `status` column consistent with the
+    // authoritative completedAt/notifiedAt timestamps it's meant to
+    // summarize (see schema comment) — this action used to only ever touch
+    // completedAt, leaving status stuck at whatever cron-runner.ts last set
+    // ("SENT") even after marking a reminder done, and never reverting it
+    // on uncomplete either.
+    data.status = parsed.data.completed ? "DONE" : res.reminder.notifiedAt ? "SENT" : "PENDING";
   }
 
   const updated = await prisma.reminder.update({

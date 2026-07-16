@@ -48,5 +48,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     data: parsed.data,
   });
 
+  // Bridge to Deal.ownerUserId — best-effort, never blocks this response.
+  // Before this, reassigning a conversation (the most common admin action
+  // that changes who's working a customer) never propagated to the linked
+  // Deal at all: the deal kept its original owner forever, silently
+  // misattributing it in Team Performance's per-rep views even after a
+  // different rep took over. Also applies to unassigning (assignedToUserId
+  // set to null) — an ownerless deal self-heals by claiming whoever next
+  // actually moves it (see transitionDeal.ts), so this is consistent, not
+  // a dead end. See docs/DECISIONS.md.
+  if (parsed.data.assignedToUserId !== undefined) {
+    await prisma.deal
+      .updateMany({
+        where: { conversationId: convo.id, deletedAt: null },
+        data: { ownerUserId: parsed.data.assignedToUserId },
+      })
+      .catch(() => null);
+  }
+
   return NextResponse.json({ ok: true });
 }

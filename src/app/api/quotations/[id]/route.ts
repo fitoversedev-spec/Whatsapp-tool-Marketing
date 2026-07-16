@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
+import { reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
 
 const patchSchema = z.object({
   customerName: z.string().min(1).max(200).optional(),
@@ -93,6 +94,61 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const updated = await prisma.quotation.update({ where: { id: params.id }, data });
+
+  // Resync DealLineItem — POST /api/quotations creates these but until now
+  // nothing ever refreshed them on a line-item edit, so they'd carry the
+  // ORIGINAL rate/label/amount forever even after a draft was corrected —
+  // silently wrong "won"/product-movement analytics the moment this deal
+  // closes. No live caller sends lineItems via PATCH today (confirmed
+  // during the 2026-07-16 sweep), but the Zod schema accepted it and the
+  // gap was real, so fixed rather than left for whichever future feature
+  // exercises this path. Delete-then-recreate (not a diff) mirrors the
+  // POST route's own creation logic exactly — same fields, same
+  // included-only filter, same best-effort/never-fails-the-request rule.
+  if (parsed.data.lineItems && res.quotation.dealId) {
+    try {
+      const sport = await prisma.sport.findUnique({ where: { slug: res.quotation.sport } });
+      await prisma.dealLineItem.deleteMany({ where: { quotationId: params.id } });
+      const included = (parsed.data.lineItems as QuoteLineItem[]).filter((li) => li.included);
+      if (included.length) {
+        await prisma.dealLineItem.createMany({
+          data: included.map((li) => ({
+            dealId: res.quotation.dealId!,
+            quotationId: params.id,
+            productId: li.productId ?? null,
+            sportId: sport?.id ?? null,
+            label: li.name,
+            quantity: li.areaSqFt,
+            unit: li.unit ?? null,
+            rate: li.ratePerSqFt,
+            amount: li.total,
+            isEnquiryOnly: false,
+          })),
+        });
+      }
+    } catch (err) {
+      console.error("[quotations] DealLineItem resync failed", err);
+    }
+
+    // Keep Deal.quotedValue current too — same reasoning as POST's own
+    // unconditional sync (docs/DECISIONS.md), only when this IS the deal's
+    // primary revision (editing an old, already-superseded draft shouldn't
+    // override what a newer quote already set).
+    if (res.quotation.isPrimary) {
+      const dealAfterEdit = await prisma.deal
+        .update({ where: { id: res.quotation.dealId }, data: { quotedValue: updated.grandTotal } })
+        .catch(() => null);
+      if (dealAfterEdit?.conversationId) {
+        await prisma.conversation
+          .update({
+            where: { id: dealAfterEdit.conversationId },
+            data: { dealValue: dealAfterEdit.wonValue ?? dealAfterEdit.quotedValue },
+          })
+          .catch(() => null);
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true, status: updated.status });
 }
 
@@ -102,7 +158,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   try {
-    await prisma.quotation.delete({ where: { id: params.id } });
+    const deleted = await prisma.quotation.delete({ where: { id: params.id } });
+    // If this was the deal's primary revision, promote the next-most-recent
+    // remaining one and keep Deal.quotedValue in sync — see docs/DECISIONS.md.
+    await reconcileDealAfterQuotationDelete(deleted.dealId);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "not_found" }, { status: 404 });

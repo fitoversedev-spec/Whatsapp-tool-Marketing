@@ -11,11 +11,18 @@ type Deal = {
   title: string;
   accountName: string;
   accountCity: string | null;
+  accountOwnerUserId: string | null;
+  accountOwnerName: string | null;
   contacts: { id: string; name: string; phone: string | null; isPrimary: boolean }[];
+  ownerUserId: string | null;
   ownerName: string | null;
   stageName: string;
   stageColorHex: string | null;
+  leadSourceId: string | null;
   leadSourceName: string | null;
+  customerProfileId: string | null;
+  customerProfileName: string | null;
+  businessType: string | null;
   estimatedValue: number | null;
   wonValue: number | null;
   outcome: string | null;
@@ -80,6 +87,10 @@ export default function DealDetailClient({
   activityTypes,
   offices,
   cityTiers,
+  leadSources,
+  customerProfiles,
+  isAdmin,
+  users,
 }: {
   deal: Deal;
   stageHistory: StageHistoryRow[];
@@ -87,22 +98,56 @@ export default function DealDetailClient({
   activityTypes: { id: string; name: string }[];
   offices: { id: string; name: string }[];
   cityTiers: { id: string; name: string }[];
+  leadSources: { id: string; name: string }[];
+  customerProfiles: { id: string; name: string }[];
+  isAdmin: boolean;
+  users: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const toast = useToast();
   const [showLogActivity, setShowLogActivity] = useState(false);
   const [showEditDetails, setShowEditDetails] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!confirm(`Delete deal ${deal.code}? This removes it from every list and analytics view — its quotations and designs stay on record, just no longer attached to a visible deal.`)) return;
+    setDeleting(true);
+    const res = await fetch(`/api/deals/${deal.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deleted: true }),
+    });
+    setDeleting(false);
+    if (res.ok) {
+      toast.success("Deal deleted");
+      router.push("/deals");
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Delete failed");
+    }
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex items-start justify-between gap-3">
         <PageHeader title={deal.title} description={deal.code} backHref="/deals" />
-        <button
-          onClick={() => setShowEditDetails(true)}
-          className="mt-1 shrink-0 text-xs font-medium text-wa-green hover:underline"
-        >
-          Edit details
-        </button>
+        <div className="mt-1 shrink-0 flex items-center gap-3">
+          <button
+            onClick={() => setShowEditDetails(true)}
+            className="text-xs font-medium text-wa-green hover:underline"
+          >
+            Edit details
+          </button>
+          {isAdmin && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-xs font-medium text-red-600 hover:underline disabled:opacity-40"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4 mt-4">
@@ -111,6 +156,7 @@ export default function DealDetailClient({
             <h3 className="text-sm font-semibold text-slate-900 mb-3">Account</h3>
             <div className="text-sm text-slate-700">{deal.accountName}</div>
             {deal.accountCity && <div className="text-xs text-slate-400">{deal.accountCity}</div>}
+            {deal.accountOwnerName && <div className="text-xs text-slate-400">Owner: {deal.accountOwnerName}</div>}
             {deal.contacts.map((c) => (
               <div key={c.id} className="text-xs text-slate-500 mt-1">
                 {c.name} {c.phone && `· ${c.phone}`} {c.isPrimary && <span className="text-wa-green">(primary)</span>}
@@ -184,6 +230,14 @@ export default function DealDetailClient({
             <div className="flex justify-between">
               <span className="text-slate-500">Source</span>
               <span className="text-slate-800">{deal.leadSourceName ?? "—"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Customer type</span>
+              <span className="text-slate-800">{deal.customerProfileName ?? "—"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Business type</span>
+              <span className="text-slate-800">{deal.businessType ?? "—"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Site city</span>
@@ -261,6 +315,10 @@ export default function DealDetailClient({
           deal={deal}
           offices={offices}
           cityTiers={cityTiers}
+          leadSources={leadSources}
+          customerProfiles={customerProfiles}
+          isAdmin={isAdmin}
+          users={users}
           onClose={() => setShowEditDetails(false)}
           onSaved={() => {
             setShowEditDetails(false);
@@ -274,28 +332,46 @@ export default function DealDetailClient({
 
 // Editable fields not already reachable elsewhere (stage/value/loss-reason
 // come from the pipeline board and won/lost close-out, not here — see
-// api/deals/[id]/stage/route.ts). These had columns on Deal since Phase 1
-// but no form ever wrote them (see docs/DECISIONS.md).
+// api/deals/[id]/stage/route.ts). These had columns on Deal/Account since
+// Phase 1 but no form ever wrote them (see docs/DECISIONS.md) — this is
+// also the only way to CORRECT lead source/customer type/business type
+// after the fact without re-submitting a whole new quote, since those are
+// otherwise only ever set once, at Deal/Account creation.
 function EditDealDetailsModal({
   deal,
   offices,
   cityTiers,
+  leadSources,
+  customerProfiles,
+  isAdmin,
+  users,
   onClose,
   onSaved,
 }: {
   deal: Deal;
   offices: { id: string; name: string }[];
   cityTiers: { id: string; name: string }[];
+  leadSources: { id: string; name: string }[];
+  customerProfiles: { id: string; name: string }[];
+  isAdmin: boolean;
+  users: { id: string; name: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const toast = useToast();
+  const [accountName, setAccountName] = useState(deal.accountName);
+  const [accountCity, setAccountCity] = useState(deal.accountCity ?? "");
+  const [accountOwnerUserId, setAccountOwnerUserId] = useState(deal.accountOwnerUserId ?? "");
   const [siteCity, setSiteCity] = useState(deal.siteCity ?? "");
   const [siteCityTierId, setSiteCityTierId] = useState(deal.siteCityTierId ?? "");
   const [siteState, setSiteState] = useState(deal.siteState ?? "");
   const [siteAddress, setSiteAddress] = useState(deal.siteAddress ?? "");
   const [officeId, setOfficeId] = useState(deal.officeId ?? "");
   const [primaryContactId, setPrimaryContactId] = useState(deal.primaryContactId ?? "");
+  const [leadSourceId, setLeadSourceId] = useState(deal.leadSourceId ?? "");
+  const [customerProfileId, setCustomerProfileId] = useState(deal.customerProfileId ?? "");
+  const [businessType, setBusinessType] = useState(deal.businessType ?? "");
+  const [ownerUserId, setOwnerUserId] = useState(deal.ownerUserId ?? "");
   const [expectedCloseAt, setExpectedCloseAt] = useState(deal.expectedCloseAt ? deal.expectedCloseAt.slice(0, 10) : "");
   const [saving, setSaving] = useState(false);
 
@@ -306,13 +382,23 @@ function EditDealDetailsModal({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        accountName: accountName.trim() || deal.accountName,
+        accountCity: accountCity.trim() || null,
         siteCity: siteCity.trim() || null,
         siteCityTierId: siteCityTierId || null,
         siteState: siteState.trim() || null,
         siteAddress: siteAddress.trim() || null,
         officeId: officeId || null,
         primaryContactId: primaryContactId || null,
+        leadSourceId: leadSourceId || null,
+        customerProfileId: customerProfileId || null,
+        businessType: businessType || null,
         expectedCloseAt: expectedCloseAt ? new Date(`${expectedCloseAt}T12:00:00`).toISOString() : null,
+        // Owner reassignment is admin-only (same rule as reassigning a
+        // Conversation) — only include it when this modal actually shows
+        // the control, so a sales rep's own PATCH request never carries a
+        // field they weren't shown.
+        ...(isAdmin ? { ownerUserId: ownerUserId || null, accountOwnerUserId: accountOwnerUserId || null } : {}),
       }),
     });
     setSaving(false);
@@ -332,6 +418,38 @@ function EditDealDetailsModal({
           <h2 className="text-lg sm:text-xl font-bold text-slate-900">Edit deal details</h2>
         </div>
         <form onSubmit={submit} className="p-5 sm:p-6 space-y-4">
+          {isAdmin && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Owner</label>
+              <select value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)} className="modal-input">
+                <option value="">— Unassigned —</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Account name</label>
+              <input value={accountName} onChange={(e) => setAccountName(e.target.value)} className="modal-input" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Account city</label>
+              <input value={accountCity} onChange={(e) => setAccountCity(e.target.value)} className="modal-input" />
+            </div>
+          </div>
+          {isAdmin && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Account owner</label>
+              <select value={accountOwnerUserId} onChange={(e) => setAccountOwnerUserId(e.target.value)} className="modal-input">
+                <option value="">— Unassigned —</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Site city</label>
@@ -372,6 +490,35 @@ function EditDealDetailsModal({
                 <option key={c.id} value={c.id}>{c.name}{c.phone ? ` (${c.phone})` : ""}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Lead source</label>
+            <select value={leadSourceId} onChange={(e) => setLeadSourceId(e.target.value)} className="modal-input">
+              <option value="">—</option>
+              {leadSources.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer type</label>
+              <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="modal-input">
+                <option value="">—</option>
+                {customerProfiles.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Business type</label>
+              <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="modal-input">
+                <option value="">—</option>
+                <option value="B2B">B2B</option>
+                <option value="B2C">B2C</option>
+                <option value="B2G">B2G</option>
+              </select>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Expected close date</label>

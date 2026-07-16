@@ -281,6 +281,29 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Prefill location + classification from this customer's existing Deal,
+  // if this conversation already has one (a previous quote/design already
+  // captured it) — so a repeat quote doesn't ask the same questions again.
+  // Runs after the reset effect above (declared later = commits later),
+  // and only overwrites the fields the existing Deal actually has a value
+  // for, so a fresh conversation with no Deal yet is unaffected. Still
+  // fully editable afterward — this only sets the initial value.
+  useEffect(() => {
+    if (!open || !prefill?.conversationId) return;
+    const conversationId = prefill.conversationId;
+    fetch(`/api/conversations/${conversationId}/deal-defaults`)
+      .then((r) => (r.ok ? r.json() : { deal: null }))
+      .then((d: { deal: { siteCity: string | null; leadSourceId: string | null; customerProfileId: string | null; businessType: string | null } | null }) => {
+        if (!d.deal) return;
+        if (d.deal.siteCity) setSiteCity(d.deal.siteCity);
+        if (d.deal.leadSourceId) setLeadSourceId(d.deal.leadSourceId);
+        if (d.deal.customerProfileId) setCustomerProfileId(d.deal.customerProfileId);
+        if (d.deal.businessType) setBusinessType(d.deal.businessType);
+      })
+      .catch(() => null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefill?.conversationId]);
+
   // Load lead-source / customer-profile taxonomy options once when the
   // modal first opens — small, admin-managed lists, no need to refetch per
   // step like the (much larger) product catalogue below.

@@ -9,6 +9,32 @@ export function buildDealCode(year: number, existingThisYear: number): string {
   return `FIT-DL-${year}-${seq}`;
 }
 
+// After deleting a quotation, re-establish the same invariant
+// POST /api/quotations already maintains going forward (exactly one
+// isPrimary:true quotation per deal, with Deal.quotedValue matching it) —
+// deleting a quotation had the identical silent-drift bug the "isPrimary
+// was never demoted" fix closed for creation, just from the other
+// direction: deleting the primary revision left zero primary quotations on
+// the deal (products.ts's won-tracking filters on isPrimary and would
+// permanently undercount) and left Deal.quotedValue pointing at a quote
+// that no longer exists. Idempotent/self-correcting — checks the REMAINING
+// rows' state rather than needing to know what was just deleted, so it's
+// safe to call after single or bulk delete.
+export async function reconcileDealAfterQuotationDelete(dealId: string | null): Promise<void> {
+  if (!dealId) return;
+  const remaining = await prisma.quotation.findMany({
+    where: { dealId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, isPrimary: true, grandTotal: true },
+  });
+  if (remaining.some((q) => q.isPrimary)) return; // a primary already exists — untouched by this delete
+  const newPrimary = remaining[0] ?? null;
+  if (newPrimary) {
+    await prisma.quotation.update({ where: { id: newPrimary.id }, data: { isPrimary: true } }).catch(() => null);
+  }
+  await prisma.deal.update({ where: { id: dealId }, data: { quotedValue: newPrimary?.grandTotal ?? null } }).catch(() => null);
+}
+
 export async function nextDealSequenceForYear(year: number): Promise<number> {
   const prefix = `FIT-DL-${year}-`;
   const latest = await prisma.deal.findFirst({

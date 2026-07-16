@@ -32,11 +32,31 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
 // General field edits — NOT stage (that's transitionDeal via
 // [id]/stage/route.ts, the only path allowed to touch currentStageId).
+//
+// customerProfileId/businessType are Account fields, not Deal fields — a
+// deal has no columns for them directly (see prisma/schema.prisma's
+// Account model) — but they're accepted here too so the Deal Detail page
+// has one edit action for "everything about this deal and its customer,"
+// rather than sending sales to a separate Account-editing screen that
+// doesn't exist. Same permission rule as everything else in this schema:
+// admin, or the deal's own owner.
 const patchSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   ownerUserId: z.string().uuid().nullable().optional(),
   officeId: z.string().uuid().nullable().optional(),
   primaryContactId: z.string().uuid().nullable().optional(),
+  leadSourceId: z.string().uuid().nullable().optional(),
+  customerProfileId: z.string().uuid().nullable().optional(),
+  businessType: z.enum(["B2B", "B2C", "B2G"]).nullable().optional(),
+  // Account.name/city/ownerUserId — prefixed "account" to disambiguate
+  // from this same schema's Deal-level `title`/`ownerUserId`. Closes the
+  // only remaining gap in "this page edits everything about a deal and
+  // its customer": name/city could be set once at Account creation and
+  // never corrected — no /api/accounts route exists at all. See
+  // docs/DECISIONS.md.
+  accountName: z.string().min(1).max(200).optional(),
+  accountCity: z.string().max(100).nullable().optional(),
+  accountOwnerUserId: z.string().uuid().nullable().optional(),
   siteCity: z.string().max(100).nullable().optional(),
   siteCityTierId: z.string().uuid().nullable().optional(),
   siteState: z.string().max(100).nullable().optional(),
@@ -60,11 +80,74 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
-  const { deleted, expectedCloseAt, ...rest } = parsed.data;
+  // Reassigning the owner is admin-only — same rule as reassigning a
+  // Conversation (PATCH /api/conversations/[id]/route.ts). A sales rep can
+  // edit everything else about their own deal, but handing it to someone
+  // else isn't theirs to decide unilaterally. Same rule for the Account's
+  // owner and for deleting the deal outright — both are more consequential
+  // than the fields a deal's own owner is trusted to self-edit.
+  if (parsed.data.ownerUserId !== undefined && !isAdmin(user.role)) {
+    return NextResponse.json({ error: "Only admin can reassign a deal's owner" }, { status: 403 });
+  }
+  if (parsed.data.accountOwnerUserId !== undefined && !isAdmin(user.role)) {
+    return NextResponse.json({ error: "Only admin can reassign an account's owner" }, { status: 403 });
+  }
+  if (parsed.data.deleted && !isAdmin(user.role)) {
+    return NextResponse.json({ error: "Only admin can delete a deal" }, { status: 403 });
+  }
+  if (parsed.data.ownerUserId) {
+    const target = await prisma.user.findUnique({ where: { id: parsed.data.ownerUserId } });
+    if (!target || target.deletedAt || !target.isActive || target.approvalStatus !== "approved") {
+      return NextResponse.json({ error: "Target user is not available" }, { status: 422 });
+    }
+  }
+  if (parsed.data.accountOwnerUserId) {
+    const target = await prisma.user.findUnique({ where: { id: parsed.data.accountOwnerUserId } });
+    if (!target || target.deletedAt || !target.isActive || target.approvalStatus !== "approved") {
+      return NextResponse.json({ error: "Target user is not available" }, { status: 422 });
+    }
+  }
+
+  const { deleted, expectedCloseAt, customerProfileId, businessType, accountName, accountCity, accountOwnerUserId, ...rest } = parsed.data;
   const patch: Record<string, unknown> = { ...rest };
   if (expectedCloseAt !== undefined) patch.expectedCloseAt = expectedCloseAt ? new Date(expectedCloseAt) : null;
   if (deleted) patch.deletedAt = new Date();
 
   const updated = await prisma.deal.update({ where: { id: params.id }, data: patch });
+
+  if (customerProfileId !== undefined || businessType !== undefined || accountName !== undefined || accountCity !== undefined || accountOwnerUserId !== undefined) {
+    await prisma.account.update({
+      where: { id: deal.accountId },
+      data: {
+        ...(customerProfileId !== undefined ? { customerProfileId } : {}),
+        ...(businessType !== undefined ? { businessType } : {}),
+        ...(accountName !== undefined ? { name: accountName } : {}),
+        ...(accountCity !== undefined ? { city: accountCity } : {}),
+        ...(accountOwnerUserId !== undefined ? { ownerUserId: accountOwnerUserId } : {}),
+      },
+    });
+  }
+
+  // Bridge to the linked Conversation — best-effort, never blocks this
+  // response. Before this, editing a deal's owner/close-date/value here
+  // never reached the Conversation side at all, leaving /pipeline and
+  // ContactDetailDrawer showing stale data after a real edit. Mirrors
+  // PATCH /api/conversations/[id]/route.ts's reverse-direction sync (Deal
+  // reassignment -> Conversation.assignedToUserId) and transitionDeal.ts's
+  // write-through (expectedCloseAt/dealValue), fixed to prefer the most
+  // concrete figure available (won > quoted > estimated) rather than the
+  // stale-estimate-first bug in that file — see docs/DECISIONS.md.
+  if (deal.conversationId) {
+    const convoPatch: Record<string, unknown> = {};
+    if (parsed.data.ownerUserId !== undefined) convoPatch.assignedToUserId = parsed.data.ownerUserId;
+    if (expectedCloseAt !== undefined) convoPatch.expectedCloseAt = patch.expectedCloseAt;
+    if (parsed.data.estimatedValue !== undefined || parsed.data.quotedValue !== undefined) {
+      convoPatch.dealValue = updated.wonValue ?? updated.quotedValue ?? updated.estimatedValue ?? null;
+    }
+    if (Object.keys(convoPatch).length > 0) {
+      await prisma.conversation.update({ where: { id: deal.conversationId }, data: convoPatch }).catch(() => null);
+    }
+  }
+
   return NextResponse.json({ deal: updated });
 }

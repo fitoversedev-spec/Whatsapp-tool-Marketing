@@ -970,6 +970,27 @@ export default function CourtImageWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingId]);
 
+  // Prefill location + classification from this customer's existing Deal —
+  // same as QuoteWizard, and for the same reason: a repeat design for a
+  // customer who's already been quoted/designed for shouldn't ask again.
+  // Only for a genuinely new design (editingId reloads its own saved
+  // values instead, above); only overwrites fields the Deal actually has.
+  useEffect(() => {
+    if (!open || editingId || !prefill?.conversationId) return;
+    const conversationId = prefill.conversationId;
+    fetch(`/api/conversations/${conversationId}/deal-defaults`)
+      .then((r) => (r.ok ? r.json() : { deal: null }))
+      .then((d: { deal: { siteCity: string | null; leadSourceId: string | null; customerProfileId: string | null; businessType: string | null } | null }) => {
+        if (!d.deal) return;
+        if (d.deal.siteCity) setSiteCity(d.deal.siteCity);
+        if (d.deal.leadSourceId) setLeadSourceId(d.deal.leadSourceId);
+        if (d.deal.customerProfileId) setCustomerProfileId(d.deal.customerProfileId);
+        if (d.deal.businessType) setBusinessType(d.deal.businessType);
+      })
+      .catch(() => null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editingId, prefill?.conversationId]);
+
   // Load lead-source / customer-profile taxonomy options once when the
   // modal first opens — same lists QuoteWizard fetches, small and
   // admin-managed, so a plain once-per-open fetch is enough.

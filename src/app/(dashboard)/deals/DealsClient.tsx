@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
@@ -76,7 +76,7 @@ export default function DealsClient({
 
   const visible = ownerFilter === "all" ? deals : deals.filter((d) => d.ownerName === users.find((u) => u.id === ownerFilter)?.name);
 
-  async function changeStage(deal: Deal, stage: Stage, extra?: { wonValue?: number; lossReasonId?: string; lossReasonNote?: string }) {
+  async function changeStage(deal: Deal, stage: Stage, extra?: { wonValue?: number; lossReasonId?: string; lossReasonNote?: string; note?: string }) {
     const res = await fetch(`/api/deals/${deal.id}/stage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -283,6 +283,13 @@ function NewDealModal({
 }) {
   const toast = useToast();
   const [title, setTitle] = useState("");
+  // New vs. attach-to-existing — previously every deal created here spawned
+  // a brand-new Account even for a customer who already had one, despite
+  // POST /api/deals already accepting accountId directly. See docs/DECISIONS.md.
+  const [accountMode, setAccountMode] = useState<"new" | "existing">("new");
+  const [accountSearch, setAccountSearch] = useState("");
+  const [accountResults, setAccountResults] = useState<DuplicateCandidate[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<DuplicateCandidate | null>(null);
   const [accountName, setAccountName] = useState("");
   const [city, setCity] = useState("");
   const [customerProfileId, setCustomerProfileId] = useState("");
@@ -299,6 +306,20 @@ function NewDealModal({
     setInterestedProductIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
   }
 
+  useEffect(() => {
+    if (accountMode !== "existing" || selectedAccount || accountSearch.trim().length < 2) {
+      setAccountResults([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/accounts/search?q=${encodeURIComponent(accountSearch.trim())}`)
+        .then((r) => (r.ok ? r.json() : { accounts: [] }))
+        .then((d: { accounts: DuplicateCandidate[] }) => setAccountResults(d.accounts ?? []))
+        .catch(() => null);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [accountMode, accountSearch, selectedAccount]);
+
   async function submit(confirmDuplicate = false) {
     setSaving(true);
     const res = await fetch("/api/deals", {
@@ -306,12 +327,16 @@ function NewDealModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
-        account: {
-          name: accountName,
-          city: city || undefined,
-          customerProfileId: customerProfileId || undefined,
-          businessType: businessType || undefined,
-        },
+        ...(accountMode === "existing" && selectedAccount
+          ? { accountId: selectedAccount.id }
+          : {
+              account: {
+                name: accountName,
+                city: city || undefined,
+                customerProfileId: customerProfileId || undefined,
+                businessType: businessType || undefined,
+              },
+            }),
         contactName: contactName || undefined,
         contactPhone: contactPhone || undefined,
         leadSourceId: leadSourceId || undefined,
@@ -378,38 +403,95 @@ function NewDealModal({
             required
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Account name <span className="text-red-500">*</span>
-            </label>
-            <input value={accountName} onChange={(e) => setAccountName(e.target.value)} className="modal-input" required />
+        <div>
+          <div className="flex gap-1.5 mb-2">
+            <button
+              type="button"
+              onClick={() => { setAccountMode("new"); setSelectedAccount(null); }}
+              className={`px-3 py-1 text-xs font-medium rounded-full ${accountMode === "new" ? "bg-wa-green text-white" : "bg-slate-100 text-slate-600"}`}
+            >
+              New account
+            </button>
+            <button
+              type="button"
+              onClick={() => setAccountMode("existing")}
+              className={`px-3 py-1 text-xs font-medium rounded-full ${accountMode === "existing" ? "bg-wa-green text-white" : "bg-slate-100 text-slate-600"}`}
+            >
+              Existing account
+            </button>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">City</label>
-            <input value={city} onChange={(e) => setCity(e.target.value)} className="modal-input" />
-          </div>
+
+          {accountMode === "existing" ? (
+            selectedAccount ? (
+              <div className="flex items-center justify-between px-3 py-2 border border-slate-300 rounded-md bg-slate-50">
+                <span className="text-sm text-slate-800">
+                  {selectedAccount.name}{selectedAccount.city ? ` — ${selectedAccount.city}` : ""}
+                </span>
+                <button type="button" onClick={() => { setSelectedAccount(null); setAccountSearch(""); }} className="text-xs text-slate-500 hover:underline">
+                  Change
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  value={accountSearch}
+                  onChange={(e) => setAccountSearch(e.target.value)}
+                  placeholder="Search accounts by name…"
+                  className="modal-input"
+                />
+                {accountResults.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    {accountResults.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => { setSelectedAccount(a); setAccountResults([]); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50"
+                      >
+                        {a.name}{a.city ? <span className="text-slate-400"> — {a.city}</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Account name <span className="text-red-500">*</span>
+                </label>
+                <input value={accountName} onChange={(e) => setAccountName(e.target.value)} className="modal-input" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">City</label>
+                <input value={city} onChange={(e) => setCity(e.target.value)} className="modal-input" />
+              </div>
+            </div>
+          )}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer type</label>
-            <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="modal-input">
-              <option value="">—</option>
-              {customerProfiles.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+        {accountMode === "new" && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer type</label>
+              <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="modal-input">
+                <option value="">—</option>
+                {customerProfiles.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Business type</label>
+              <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="modal-input">
+                <option value="">—</option>
+                <option value="B2B">B2B</option>
+                <option value="B2C">B2C</option>
+                <option value="B2G">B2G</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Business type</label>
-            <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="modal-input">
-              <option value="">—</option>
-              <option value="B2B">B2B</option>
-              <option value="B2C">B2C</option>
-              <option value="B2G">B2G</option>
-            </select>
-          </div>
-        </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Contact name</label>
@@ -460,7 +542,12 @@ function NewDealModal({
             </div>
           </div>
         )}
-        <ModalActions confirmLabel="Create deal" confirmDisabled={saving || !title || !accountName} onClose={onClose} onConfirm={() => submit(false)} />
+        <ModalActions
+          confirmLabel="Create deal"
+          confirmDisabled={saving || !title || (accountMode === "existing" ? !selectedAccount : !accountName)}
+          onClose={onClose}
+          onConfirm={() => submit(false)}
+        />
       </form>
     </ModalShell>
   );
@@ -477,11 +564,15 @@ function CloseoutModal({
   stage: Stage;
   lossReasons: Option[];
   onClose: () => void;
-  onConfirm: (extra: { wonValue?: number; lossReasonId?: string; lossReasonNote?: string }) => void;
+  onConfirm: (extra: { wonValue?: number; lossReasonId?: string; lossReasonNote?: string; note?: string }) => void;
 }) {
   const [wonValue, setWonValue] = useState(deal.estimatedValue?.toString() ?? "");
   const [lossReasonId, setLossReasonId] = useState("");
   const [lossReasonNote, setLossReasonNote] = useState("");
+  // WON has no other free-text field, so it gets its own — Lost reuses
+  // lossReasonNote as the DealStageHistory.note too (see onConfirm below)
+  // rather than asking for the same context twice in one modal.
+  const [wonNote, setWonNote] = useState("");
 
   const needsValue = stage.stageType === "won";
   const needsReason = stage.requiresLossReason;
@@ -493,19 +584,31 @@ function CloseoutModal({
   return (
     <ModalShell title={`Move ${deal.code} to "${stage.name}"`} onClose={onClose}>
       {needsValue && (
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            Won value (₹) <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="number"
-            min={0}
-            value={wonValue}
-            onChange={(e) => setWonValue(e.target.value)}
-            className="modal-input"
-            autoFocus
-          />
-        </div>
+        <>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Won value (₹) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={wonValue}
+              onChange={(e) => setWonValue(e.target.value)}
+              className="modal-input"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Note (optional)</label>
+            <textarea
+              value={wonNote}
+              onChange={(e) => setWonNote(e.target.value)}
+              className="modal-input"
+              rows={2}
+              placeholder="e.g. PO number, final negotiated terms"
+            />
+          </div>
+        </>
       )}
       {needsReason && (
         <>
@@ -543,6 +646,7 @@ function CloseoutModal({
             wonValue: needsValue ? Number(wonValue) : undefined,
             lossReasonId: needsReason && lossReasonId ? lossReasonId : undefined,
             lossReasonNote: needsReason && lossReasonNote.trim() ? lossReasonNote.trim() : undefined,
+            note: needsValue && wonNote.trim() ? wonNote.trim() : needsReason && lossReasonNote.trim() ? lossReasonNote.trim() : undefined,
           })
         }
       />

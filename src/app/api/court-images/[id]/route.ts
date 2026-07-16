@@ -22,8 +22,17 @@ const layoutSchema = z
 
 const updateSchema = z.object({
   customerName: z.string().min(1).max(200).optional(),
-  // Not stored on CourtImage itself — written through to Deal.siteCity.
+  // Not stored on CourtImage itself — written through to Deal.siteCity /
+  // Deal.leadSourceId / Account.customerProfileId / Account.businessType.
+  // These 4 fields used to be silently dropped here — POST declared and
+  // wrote through all of them, but this PATCH schema never did, so
+  // re-saving an existing draft (e.g. after "← Back" to Step 1) looked
+  // like it worked but quietly lost any classification change. See
+  // docs/DECISIONS.md.
   siteCity: z.string().max(100).optional(),
+  leadSourceId: z.string().uuid().nullable().optional(),
+  customerProfileId: z.string().uuid().nullable().optional(),
+  businessType: z.enum(["B2B", "B2C", "B2G"]).nullable().optional(),
   layout: layoutSchema.optional(),
   imageUrl: z.string().url().nullable().optional(),
   image2dUrl: z.string().url().nullable().optional(),
@@ -113,11 +122,34 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     },
   });
 
-  // Not stored on CourtImage — written through to the linked Deal, same as
-  // the create path. A later edit correcting the city should still reach
-  // Geography even though the deal already existed by then.
-  if (parsed.data.siteCity && row.dealId) {
-    await prisma.deal.update({ where: { id: row.dealId }, data: { siteCity: parsed.data.siteCity } }).catch(() => null);
+  // Not stored on CourtImage — written through to the linked Deal/Account,
+  // same as the create path. A later edit correcting these should still
+  // reach Geography/Sources/Customers even though the deal already existed
+  // by then.
+  if (row.dealId && (parsed.data.siteCity || parsed.data.leadSourceId)) {
+    await prisma.deal
+      .update({
+        where: { id: row.dealId },
+        data: {
+          ...(parsed.data.siteCity ? { siteCity: parsed.data.siteCity } : {}),
+          ...(parsed.data.leadSourceId ? { leadSourceId: parsed.data.leadSourceId } : {}),
+        },
+      })
+      .catch(() => null);
+  }
+  if (row.dealId && (parsed.data.customerProfileId || parsed.data.businessType)) {
+    const dealAccount = await prisma.deal.findUnique({ where: { id: row.dealId }, select: { accountId: true } });
+    if (dealAccount) {
+      await prisma.account
+        .update({
+          where: { id: dealAccount.accountId },
+          data: {
+            ...(parsed.data.customerProfileId ? { customerProfileId: parsed.data.customerProfileId } : {}),
+            ...(parsed.data.businessType ? { businessType: parsed.data.businessType } : {}),
+          },
+        })
+        .catch(() => null);
+    }
   }
 
   return NextResponse.json({

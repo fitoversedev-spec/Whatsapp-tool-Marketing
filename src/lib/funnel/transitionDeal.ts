@@ -101,14 +101,35 @@ export async function transitionDeal(input: TransitionDealInput) {
   const enteringNegotiation = isChanging && targetStage.slug === "negotiation" && !deal.negotiationAt;
   const enteringClosed = isChanging && (targetStage.stageType === "won" || targetStage.stageType === "lost");
 
+  // Self-healing owner claim: every Deal-creation path already sets a
+  // non-null ownerUserId, so a null owner here is always a historical
+  // anomaly, not an intentional "unassigned" state — but until now nothing
+  // ever corrected it, which made the deal permanently invisible to Team
+  // Performance's per-rep filter even while its DealStageHistory correctly
+  // showed a real rep actively moving it (confirmed against production: a
+  // sales rep moved a null-owner deal through 4 real stage changes, all
+  // correctly attributed in DealStageHistory, yet the deal never appeared
+  // under their name in Team Performance — see docs/DECISIONS.md). Claiming
+  // ownership for whoever is actually performing a real transition closes
+  // that gap; a system-driven transition (input.userId === null) claims
+  // nothing, since there's no real person to attribute it to.
+  const claimsOwnership = isChanging && !deal.ownerUserId && !!input.userId;
+
   const updated = await prisma.$transaction(async (tx) => {
     const d = await tx.deal.update({
       where: { id: input.dealId },
       data: {
         currentStageId: targetStage.id,
+        ...(claimsOwnership ? { ownerUserId: input.userId } : {}),
         wonValue: input.wonValue ?? deal.wonValue,
-        lossReasonId: input.lossReasonId ?? deal.lossReasonId,
-        lossReasonNote: input.lossReasonNote ?? deal.lossReasonNote,
+        // !== undefined, not ?? — an explicit null (clearing a loss reason)
+        // must actually clear it. `??` would silently keep the old value
+        // whenever a caller intentionally passed null, the same swallowed-
+        // null bug expectedCloseAt below was already guarding against and
+        // the Conversation write-through further down had too. See
+        // docs/DECISIONS.md.
+        lossReasonId: input.lossReasonId !== undefined ? input.lossReasonId : deal.lossReasonId,
+        lossReasonNote: input.lossReasonNote !== undefined ? input.lossReasonNote : deal.lossReasonNote,
         expectedCloseAt: input.expectedCloseAt !== undefined ? input.expectedCloseAt : deal.expectedCloseAt,
         ...(enteringContactedQualified ? { firstContactAt: now } : {}),
         ...(enteringSiteVisitDone ? { siteVisitAt: now } : {}),
@@ -163,9 +184,24 @@ export async function transitionDeal(input: TransitionDealInput) {
           data: {
             pipelineStage: targetStage.slug,
             stageChangedAt: convo.pipelineStage === targetStage.slug ? convo.stageChangedAt : now,
-            dealValue: input.wonValue ?? d.estimatedValue ?? d.quotedValue ?? convo.dealValue,
-            lostReason: input.lossReasonNote ?? convo.lostReason,
-            expectedCloseAt: d.expectedCloseAt ?? convo.expectedCloseAt,
+            // Most-concrete-figure-wins: an actual quoted amount is more
+            // real than a pre-quote estimate, so quotedValue must win over
+            // estimatedValue when both are set — this used to prefer the
+            // stale estimate, which could regress /pipeline's displayed
+            // value back to a rough guess even after a real quote existed.
+            // See docs/DECISIONS.md.
+            dealValue: input.wonValue ?? d.quotedValue ?? d.estimatedValue ?? convo.dealValue,
+            // Direct mirror of the deal's own value, not `??` — d already
+            // correctly resolved lossReasonNote/expectedCloseAt above
+            // (explicit null clears them), so falling back to the
+            // Conversation's OLD value here on a genuine null would
+            // silently undo that clear. Safe on every transition, not just
+            // ones that touch these fields: when a call doesn't pass them,
+            // d.lossReasonNote/d.expectedCloseAt already just carry
+            // forward the deal's existing persisted value unchanged, so
+            // mirroring them never wipes something this call didn't touch.
+            lostReason: d.lossReasonNote,
+            expectedCloseAt: d.expectedCloseAt,
           },
         });
       }

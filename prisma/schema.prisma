@@ -196,6 +196,14 @@ model Message {
   sentBy       User?        @relation(fields: [sentByUserId], references: [id])
 
   @@index([conversationId, createdAt])
+  // Serves src/app/api/team/analytics/route.ts's per-rep "messages sent"
+  // groupBy exactly: equality-filters direction, groups/filters
+  // sentByUserId (not-null), range-filters createdAt — column order matches
+  // that access pattern. Message is the largest table in this schema, so an
+  // unindexed groupBy here is the one candidate the performance audit
+  // couldn't rule out without live EXPLAIN ANALYZE access. Additive/free to
+  // add regardless. See docs/DECISIONS.md.
+  @@index([direction, sentByUserId, createdAt])
   @@map("messages")
 }
 
@@ -1227,6 +1235,13 @@ model Deal {
   // dataset — see docs/DECISIONS.md.
   @@index([deletedAt, createdAt])
   @@index([deletedAt, outcome, closedAt])
+  // Every sibling model with the same nullable conversationId FK
+  // (Quotation, CourtImage) already indexes it — Deal never did, despite
+  // 3 call sites filtering/updating by it (findOrCreateDealForConversation,
+  // the deal-defaults lookup, and the conversation-reassignment sync added
+  // 2026-07-16 — see docs/DECISIONS.md). Flagged by a performance audit,
+  // not yet measured as an active slowdown, but additive/free to fix.
+  @@index([conversationId])
   @@map("deals")
 }
 

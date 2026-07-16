@@ -7,11 +7,11 @@ import DealDetailClient from "./DealDetailClient";
 export default async function DealDetailPage({ params }: { params: { id: string } }) {
   const user = await requireUser();
 
-  const [deal, activityTypes, offices, cityTiers] = await Promise.all([
+  const [deal, activityTypes, offices, cityTiers, leadSources, customerProfiles, users] = await Promise.all([
     prisma.deal.findUnique({
       where: { id: params.id },
       include: {
-        account: { include: { contacts: true, customerProfile: true } },
+        account: { include: { contacts: true, customerProfile: true, owner: { select: { id: true, name: true } } } },
         owner: { select: { id: true, name: true } },
         office: true,
         currentStage: true,
@@ -27,6 +27,13 @@ export default async function DealDetailPage({ params }: { params: { id: string 
     prisma.activityType.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     prisma.office.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.cityTier.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { sortOrder: "asc" } }),
+    prisma.leadSource.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.customerProfile.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.user.findMany({
+      where: { role: { in: ["admin", "sales"] }, isActive: true, deletedAt: null, approvalStatus: "approved" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   if (!deal || deal.deletedAt) notFound();
@@ -40,17 +47,26 @@ export default async function DealDetailPage({ params }: { params: { id: string 
 
   return (
     <DealDetailClient
+      isAdmin={isAdmin(user.role)}
+      users={users}
       deal={{
         id: deal.id,
         code: deal.code,
         title: deal.title,
         accountName: deal.account.name,
         accountCity: deal.account.city,
+        accountOwnerUserId: deal.account.ownerUserId,
+        accountOwnerName: deal.account.owner?.name ?? null,
         contacts: deal.account.contacts.map((c) => ({ id: c.id, name: c.name, phone: c.phone, isPrimary: c.isPrimary })),
+        ownerUserId: deal.ownerUserId,
         ownerName: deal.owner?.name ?? null,
         stageName: deal.currentStage.name,
         stageColorHex: deal.currentStage.colorHex,
+        leadSourceId: deal.leadSourceId,
         leadSourceName: deal.leadSource?.name ?? null,
+        customerProfileId: deal.account.customerProfileId,
+        customerProfileName: deal.account.customerProfile?.name ?? null,
+        businessType: deal.account.businessType,
         estimatedValue: deal.estimatedValue ? Number(deal.estimatedValue) : null,
         wonValue: deal.wonValue ? Number(deal.wonValue) : null,
         outcome: deal.outcome,
@@ -72,6 +88,8 @@ export default async function DealDetailPage({ params }: { params: { id: string 
       }}
       offices={offices.map((o) => ({ id: o.id, name: o.name }))}
       cityTiers={cityTiers.map((c) => ({ id: c.id, name: c.name }))}
+      leadSources={leadSources.map((s) => ({ id: s.id, name: s.name }))}
+      customerProfiles={customerProfiles.map((c) => ({ id: c.id, name: c.name }))}
       stageHistory={deal.stageHistory.map((h) => ({
         id: h.id,
         fromStageName: h.fromStage?.name ?? null,

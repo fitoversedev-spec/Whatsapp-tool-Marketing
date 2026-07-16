@@ -5,33 +5,19 @@
 // write) — extracted here so it isn't duplicated once /deals and the
 // WhatsApp bot's `stage` command (Phase 5) both need to trigger transitions.
 //
-// Write-through: when a Deal has a conversationId, this also best-effort
-// syncs Conversation.pipelineStage/dealValue/expectedCloseAt/lostReason so
-// /pipeline and the current /team analytics keep working unchanged through
-// Phase 1-2 (see docs/DECISIONS.md). The 13 new FunnelStage rows don't map
-// 1:1 to the old 7-stage Conversation.pipelineStage system, so LEGACY_STAGE_MAP
-// below is a deliberate many-to-one approximation, not a source of truth.
+// Write-through: when a Deal has a conversationId, this also syncs
+// Conversation.pipelineStage/dealValue/expectedCloseAt/lostReason so
+// /pipeline keeps showing the right stage. /pipeline itself now reads its
+// stage list directly from FunnelStage (src/lib/pipeline-server.ts) — the
+// same 13 rows this file operates on — so this write-through is a direct
+// same-slug sync, not a translation between two different vocabularies.
+// (It used to be exactly that: a many-to-one approximation between this
+// model's 13 stages and /pipeline's old, separate, hardcoded 7-stage
+// system. See docs/DECISIONS.md for why that approximation is gone.)
 
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
-
-// Maps each seeded FunnelStage slug -> the closest old 7-stage pipeline.ts
-// slug, for the Conversation write-through only. See file header.
-const LEGACY_STAGE_MAP: Record<string, string> = {
-  enquiry_received: "new",
-  contacted_qualified: "qualified",
-  site_visit_scheduled: "qualified",
-  site_visit_done: "qualified",
-  sample_sent: "qualified",
-  design_shared: "demo_scheduled",
-  quotation_sent: "proposal_sent",
-  proposal_sent: "proposal_sent",
-  negotiation: "negotiation",
-  verbal_confirmation: "negotiation",
-  won_po_advance_received: "won",
-  lost_rejected: "lost",
-  dropped_cold: "lost",
-};
+import { findOrCreateDealForConversation } from "@/lib/crm/deals";
 
 export class TransitionDealError extends Error {
   code: string;
@@ -108,6 +94,7 @@ export async function transitionDeal(input: TransitionDealInput) {
   // plain conditional spreads into ONE literal below (not a separately-typed
   // partial) so Prisma's relation-vs-scalar update-input union resolves
   // correctly — spreading a Prisma.DealUpdateInput built elsewhere confuses it.
+  const enteringContactedQualified = isChanging && targetStage.slug === "contacted_qualified" && !deal.firstContactAt;
   const enteringSiteVisitDone = isChanging && targetStage.slug === "site_visit_done" && !deal.siteVisitAt;
   const enteringSampleSent = isChanging && targetStage.slug === "sample_sent" && !deal.sampleSentAt;
   const enteringQuotationSent = isChanging && targetStage.slug === "quotation_sent" && !deal.firstQuotedAt;
@@ -123,6 +110,7 @@ export async function transitionDeal(input: TransitionDealInput) {
         lossReasonId: input.lossReasonId ?? deal.lossReasonId,
         lossReasonNote: input.lossReasonNote ?? deal.lossReasonNote,
         expectedCloseAt: input.expectedCloseAt !== undefined ? input.expectedCloseAt : deal.expectedCloseAt,
+        ...(enteringContactedQualified ? { firstContactAt: now } : {}),
         ...(enteringSiteVisitDone ? { siteVisitAt: now } : {}),
         ...(enteringSampleSent ? { sampleSentAt: now } : {}),
         ...(enteringQuotationSent ? { firstQuotedAt: now } : {}),
@@ -164,23 +152,22 @@ export async function transitionDeal(input: TransitionDealInput) {
       });
     }
 
-    // Best-effort legacy write-through — never fails the transition itself.
+    // Write-through to Conversation.pipelineStage — best-effort, never
+    // fails the transition itself. Same slug on both sides now, so this is
+    // a direct sync, not a lookup through an approximated mapping.
     if (deal.conversationId) {
-      const legacySlug = LEGACY_STAGE_MAP[targetStage.slug] ?? null;
-      if (legacySlug) {
-        const convo = await tx.conversation.findUnique({ where: { id: deal.conversationId } });
-        if (convo) {
-          await tx.conversation.update({
-            where: { id: deal.conversationId },
-            data: {
-              pipelineStage: legacySlug,
-              stageChangedAt: convo.pipelineStage === legacySlug ? convo.stageChangedAt : now,
-              dealValue: input.wonValue ?? d.estimatedValue ?? d.quotedValue ?? convo.dealValue,
-              lostReason: input.lossReasonNote ?? convo.lostReason,
-              expectedCloseAt: d.expectedCloseAt ?? convo.expectedCloseAt,
-            },
-          });
-        }
+      const convo = await tx.conversation.findUnique({ where: { id: deal.conversationId } });
+      if (convo) {
+        await tx.conversation.update({
+          where: { id: deal.conversationId },
+          data: {
+            pipelineStage: targetStage.slug,
+            stageChangedAt: convo.pipelineStage === targetStage.slug ? convo.stageChangedAt : now,
+            dealValue: input.wonValue ?? d.estimatedValue ?? d.quotedValue ?? convo.dealValue,
+            lostReason: input.lossReasonNote ?? convo.lostReason,
+            expectedCloseAt: d.expectedCloseAt ?? convo.expectedCloseAt,
+          },
+        });
       }
     }
 
@@ -198,4 +185,82 @@ export async function transitionDeal(input: TransitionDealInput) {
   }
 
   return updated;
+}
+
+// Bridge from a /pipeline board move to a Deal transition. Called from
+// api/conversations/[id]/stage/route.ts after its own Conversation-side
+// transaction already succeeded. /pipeline's stage slug and FunnelStage's
+// slug are the same value now (both read the same 13 rows), so this is a
+// direct lookup — no translation, no ambiguity. Still best-effort/never
+// throws: a sync failure here must never break the pipeline board's own
+// response.
+export async function syncDealFromPipelineStageChange(args: {
+  conversationId: string;
+  stageSlug: string;
+  userId: string;
+  accountNameFallback: string;
+  wonValue?: number | null;
+  lossReasonId?: string | null;
+  lossReasonNote?: string | null;
+  expectedCloseAt?: Date | null;
+}): Promise<void> {
+  try {
+    const targetStage = await prisma.funnelStage.findUnique({ where: { slug: args.stageSlug } });
+    if (!targetStage || !targetStage.isActive) return;
+
+    const { id: dealId } = await findOrCreateDealForConversation({
+      conversationId: args.conversationId,
+      accountName: args.accountNameFallback,
+      dealTitle: args.accountNameFallback,
+      ownerUserId: args.userId,
+    });
+
+    await transitionDeal({
+      dealId,
+      toStageId: targetStage.id,
+      userId: args.userId,
+      wonValue: args.wonValue,
+      lossReasonId: args.lossReasonId,
+      lossReasonNote: args.lossReasonNote,
+      expectedCloseAt: args.expectedCloseAt,
+      note: "Synced from /pipeline stage change",
+    });
+  } catch (err) {
+    console.error("[pipeline-sync] failed to sync Deal from Conversation stage change", err);
+  }
+}
+
+// Best-effort, forward-only stage advance for real send actions — a quote
+// or court design actually going out to the customer is a genuine progress
+// signal and should move the deal (spec's own "Quotation Sent" guard
+// already requires a real sent quotation to exist before a deal can enter
+// that stage — this is what actually satisfies it going forward). Never
+// regresses: a revised quote resent after the deal has already reached
+// Negotiation must not drag it back down to Quotation Sent. Never throws —
+// the send itself already succeeded by the time this runs and that must
+// not be undone by a stage-advance failure.
+export async function advanceDealStageIfEarlier(args: {
+  dealId: string;
+  targetStageSlug: string;
+  userId: string;
+  note?: string;
+}): Promise<void> {
+  try {
+    const deal = await prisma.deal.findUnique({
+      where: { id: args.dealId },
+      select: { currentStage: { select: { sortOrder: true } } },
+    });
+    const targetStage = await prisma.funnelStage.findUnique({ where: { slug: args.targetStageSlug } });
+    if (!deal || !targetStage || !targetStage.isActive) return;
+    if (deal.currentStage.sortOrder >= targetStage.sortOrder) return; // already at or past this stage
+
+    await transitionDeal({
+      dealId: args.dealId,
+      toStageId: targetStage.id,
+      userId: args.userId,
+      note: args.note,
+    });
+  } catch (err) {
+    console.error("[advance-deal-stage] failed to advance deal on send", err);
+  }
 }

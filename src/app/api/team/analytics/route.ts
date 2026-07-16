@@ -51,6 +51,16 @@ export async function GET(req: NextRequest) {
   const since = rangeStart(rangeParam);
   const sinceFilter = since ? { gte: since } : undefined;
 
+  // Owner filter — "all" (default) or a specific userId, applied to every
+  // Phase 4 AnalyticsFilter-based screen below. Every one of those
+  // functions already honors filter.ownerIds internally (see each file's
+  // own `ownerWhere` guard), but until now nothing ever parsed a query
+  // param for it or passed it through — the whole 9-screen build only ever
+  // rendered team-wide numbers, with no way to drill into one rep. See
+  // docs/DECISIONS.md.
+  const ownerParam = req.nextUrl.searchParams.get("owner");
+  const ownerIds = ownerParam && ownerParam !== "all" ? [ownerParam] : undefined;
+
   // 1. All sales-team users (admin + sales). We rank by activity so the
   //    table can default-sort by usefulness.
   const users = await prisma.user.findMany({
@@ -411,19 +421,21 @@ export async function GET(req: NextRequest) {
   const analyticsFrom = since ?? new Date(0);
   const analyticsTo = new Date();
   const [salesActivityRows, funnel, geo, customers, products, sources, timelines, forecastResult, overviewResult] = await Promise.all([
-    salesActivity({ from: analyticsFrom, to: analyticsTo }),
-    funnelSnapshot({ from: analyticsFrom, to: analyticsTo }),
-    geography({ from: analyticsFrom, to: analyticsTo }),
-    customerSegments({ from: analyticsFrom, to: analyticsTo }),
-    productAnalytics({ from: analyticsFrom, to: analyticsTo }),
-    sourceAnalytics({ from: analyticsFrom, to: analyticsTo }),
-    timelineMetrics({ from: analyticsFrom, to: analyticsTo }),
+    salesActivity({ from: analyticsFrom, to: analyticsTo, ownerIds }),
+    funnelSnapshot({ from: analyticsFrom, to: analyticsTo, ownerIds }),
+    geography({ from: analyticsFrom, to: analyticsTo, ownerIds }),
+    customerSegments({ from: analyticsFrom, to: analyticsTo, ownerIds }),
+    productAnalytics({ from: analyticsFrom, to: analyticsTo, ownerIds }),
+    sourceAnalytics({ from: analyticsFrom, to: analyticsTo, ownerIds }),
+    timelineMetrics({ from: analyticsFrom, to: analyticsTo, ownerIds }),
     // Forecast looks forward from "now" (expectedCloseAt), not the range's
-    // own start — the range picker still scopes it via ownerIds, but a
-    // 7d/30d "since" window would wrongly exclude deals expected to close
-    // further out than the activity range being reviewed.
-    forecast({ from: new Date(), to: new Date(Date.now() + 365 * 86_400_000) }),
-    // Overview is always this-month-vs-last, independent of the range picker.
+    // own start — a 7d/30d "since" window would wrongly exclude deals
+    // expected to close further out than the activity range being
+    // reviewed. Still scoped by the same owner filter as everything else.
+    forecast({ from: new Date(), to: new Date(Date.now() + 365 * 86_400_000), ownerIds }),
+    // Overview is always this-month-vs-last, independent of both the range
+    // picker AND the owner filter — a fixed team-wide KPI snapshot, not an
+    // AnalyticsFilter screen (overview() takes no arguments at all).
     overview(),
   ]);
 

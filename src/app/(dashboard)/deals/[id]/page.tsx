@@ -7,15 +7,17 @@ import DealDetailClient from "./DealDetailClient";
 export default async function DealDetailPage({ params }: { params: { id: string } }) {
   const user = await requireUser();
 
-  const [deal, activityTypes] = await Promise.all([
+  const [deal, activityTypes, offices, cityTiers] = await Promise.all([
     prisma.deal.findUnique({
       where: { id: params.id },
       include: {
         account: { include: { contacts: true, customerProfile: true } },
         owner: { select: { id: true, name: true } },
+        office: true,
         currentStage: true,
         leadSource: true,
         lossReason: true,
+        siteCityTier: true,
         stageHistory: {
           orderBy: { changedAt: "desc" },
           include: { fromStage: { select: { name: true } }, toStage: { select: { name: true } }, changedBy: { select: { name: true } } },
@@ -23,6 +25,8 @@ export default async function DealDetailPage({ params }: { params: { id: string 
       },
     }),
     prisma.activityType.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.office.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.cityTier.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { sortOrder: "asc" } }),
   ]);
 
   if (!deal || deal.deletedAt) notFound();
@@ -53,11 +57,21 @@ export default async function DealDetailPage({ params }: { params: { id: string 
         lossReasonName: deal.lossReason?.name ?? null,
         lossReasonNote: deal.lossReasonNote,
         siteCity: deal.siteCity,
+        siteCityTierId: deal.siteCityTierId,
+        siteCityTierName: deal.siteCityTier?.name ?? null,
+        siteState: deal.siteState,
+        siteAddress: deal.siteAddress,
+        officeId: deal.officeId,
+        officeName: deal.office?.name ?? null,
+        primaryContactId: deal.primaryContactId,
+        expectedCloseAt: deal.expectedCloseAt?.toISOString() ?? null,
         enquiryAt: deal.enquiryAt.toISOString(),
         siteVisitAt: deal.siteVisitAt?.toISOString() ?? null,
         firstQuotedAt: deal.firstQuotedAt?.toISOString() ?? null,
         closedAt: deal.closedAt?.toISOString() ?? null,
       }}
+      offices={offices.map((o) => ({ id: o.id, name: o.name }))}
+      cityTiers={cityTiers.map((c) => ({ id: c.id, name: c.name }))}
       stageHistory={deal.stageHistory.map((h) => ({
         id: h.id,
         fromStageName: h.fromStage?.name ?? null,

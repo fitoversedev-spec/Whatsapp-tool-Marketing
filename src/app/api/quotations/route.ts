@@ -8,10 +8,13 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildQuotationNumber, recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
-import { defaultFunnelStageId, buildDealCode, nextDealSequenceForYear } from "@/lib/crm/deals";
+import { findOrCreateDealForConversation } from "@/lib/crm/deals";
 
 const createSchema = z.object({
   customerName: z.string().min(1).max(200),
+  // The project's location, not stored on Quotation itself — written
+  // through to Deal.siteCity, which Team Performance's Geography view reads.
+  siteCity: z.string().max(100).optional(),
   sport: z.string().default("football"),
   lengthFt: z.number().int().min(1).max(10_000),
   widthFt: z.number().int().min(1).max(10_000),
@@ -28,6 +31,12 @@ const createSchema = z.object({
   // a one-off Deal so dealId always ends up populated without forcing a
   // deal-first flow in the wizard (see docs/DECISIONS.md).
   dealId: z.string().uuid().nullable().optional(),
+  // Tier-1 classification — written to Deal.leadSourceId / Account.customerProfileId
+  // / Account.businessType, which Team Performance's Sources and Customers
+  // views read (previously always empty — see docs/DECISIONS.md).
+  leadSourceId: z.string().uuid().nullable().optional(),
+  customerProfileId: z.string().uuid().nullable().optional(),
+  businessType: z.enum(["B2B", "B2C", "B2G"]).nullable().optional(),
 });
 
 const listFilterSchema = z.object({
@@ -116,35 +125,69 @@ export async function POST(req: NextRequest) {
 
   // Compute totals server-side from the line items (don't trust client math).
   const totals = recompute(parsed.data.lineItems as QuoteLineItem[]);
-
   const year = new Date(parsed.data.quoteDate).getFullYear();
 
-  // Phase 2 — resolve the Deal this quote attaches to. If none was given,
-  // auto-create a standalone Account + Deal (same shape the backfill script
-  // uses for orphan quotes) so dealId always ends up populated without
-  // requiring a deal-first flow in the wizard. No duplicate-account check
-  // here (unlike POST /api/deals) — this is a background convenience, not a
-  // user-facing "create account" action; an admin can reconcile duplicates
-  // later if a customer ends up with more than one from repeated standalone quotes.
+  // Resolve the Deal this quote attaches to: an explicit dealId if the
+  // caller already knows it, otherwise find-or-create by conversationId
+  // (reusing an existing Deal so a second/revised quote for the same
+  // customer lands on the SAME deal instead of spawning a duplicate — see
+  // docs/DECISIONS.md, this used to unconditionally create a new Deal every
+  // time). conversationId itself may be null (a genuinely standalone quote),
+  // which the helper handles by always creating fresh.
   let dealId = parsed.data.dealId ?? null;
   if (!dealId) {
-    const [stageId, dealSeq] = await Promise.all([defaultFunnelStageId(), nextDealSequenceForYear(year)]);
-    const account = await prisma.account.create({
-      data: { name: parsed.data.customerName, ownerUserId: user.id },
+    const resolved = await findOrCreateDealForConversation({
+      conversationId: parsed.data.conversationId ?? null,
+      accountName: parsed.data.customerName,
+      dealTitle: `Quote for ${parsed.data.customerName}`,
+      ownerUserId: user.id,
+      leadSourceId: parsed.data.leadSourceId,
+      customerProfileId: parsed.data.customerProfileId,
+      businessType: parsed.data.businessType,
     });
-    const deal = await prisma.deal.create({
-      data: {
-        code: buildDealCode(year, dealSeq - 1),
-        title: `Quote for ${parsed.data.customerName}`,
-        accountId: account.id,
-        ownerUserId: user.id,
-        currentStageId: stageId,
-        conversationId: parsed.data.conversationId ?? null,
-        quotedValue: totals.grandTotal,
-      },
-    });
-    dealId = deal.id;
+    dealId = resolved.id;
   }
+  // Keep the deal's headline value current — a later revision should be
+  // what Sources/Forecast see, not whatever the first quote happened to
+  // total. Also writes through siteCity/leadSourceId when given, whether
+  // the deal is brand new or an explicit/reused one being corrected — powers
+  // Geography and Sources. (customerProfileId/businessType live on Account,
+  // not Deal — those are handled inside findOrCreateDealForConversation
+  // above for the resolved-deal path; an explicitly-passed dealId skips that
+  // helper, so mirror the same Account write here for that path too.)
+  await prisma.deal
+    .update({
+      where: { id: dealId },
+      data: {
+        quotedValue: totals.grandTotal,
+        ...(parsed.data.siteCity ? { siteCity: parsed.data.siteCity } : {}),
+        ...(parsed.data.leadSourceId ? { leadSourceId: parsed.data.leadSourceId } : {}),
+      },
+    })
+    .catch(() => null);
+  if (parsed.data.dealId && (parsed.data.customerProfileId || parsed.data.businessType)) {
+    const dealAccount = await prisma.deal.findUnique({ where: { id: dealId }, select: { accountId: true } });
+    if (dealAccount) {
+      await prisma.account
+        .update({
+          where: { id: dealAccount.accountId },
+          data: {
+            ...(parsed.data.customerProfileId ? { customerProfileId: parsed.data.customerProfileId } : {}),
+            ...(parsed.data.businessType ? { businessType: parsed.data.businessType } : {}),
+          },
+        })
+        .catch(() => null);
+    }
+  }
+
+  // A new revision becomes the primary one — demote any existing
+  // quotations on this deal first. Previously nothing ever did this, so
+  // isPrimary stayed true on every quotation ever created (confirmed: 0 of
+  // 31 rows were ever false) — harmless for a deal with one quote, but
+  // src/lib/analytics/products.ts's "won" tracking filters on isPrimary
+  // specifically to avoid counting every historical revision's line items
+  // as won product volume once a deal closes. See docs/DECISIONS.md.
+  await prisma.quotation.updateMany({ where: { dealId, isPrimary: true }, data: { isPrimary: false } });
 
   // Sequential quotation number per calendar year. Originally we just
   // used count() + 1, but that collides as soon as ANY row gets deleted
@@ -177,6 +220,7 @@ export async function POST(req: NextRequest) {
           createdByUserId: user.id,
           status: "draft",
           dealId,
+          isPrimary: true,
         },
       });
       break;

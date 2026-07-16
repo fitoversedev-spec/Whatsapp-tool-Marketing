@@ -3,12 +3,18 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPipelineStages } from "@/lib/pipeline-server";
+import { syncDealFromPipelineStageChange } from "@/lib/funnel/transitionDeal";
 
 const schema = z.object({
   toStage: z.string().min(1).max(40),
   // Optional close-out details — required when moving INTO a won/lost stage.
   dealValue: z.number().min(0).max(99999999).nullable().optional(),
   lostReason: z.string().max(500).nullable().optional(),
+  // Structured loss reason — written through to Deal.lossReasonId (the
+  // taxonomy Team Performance's Sales-Activity/Funnel loss breakdowns read).
+  // lostReason above stays the free-text note; this is additive, not a
+  // replacement — see docs/DECISIONS.md.
+  lossReasonId: z.string().uuid().nullable().optional(),
   expectedCloseAt: z.string().datetime().nullable().optional(),
 });
 
@@ -90,6 +96,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     return c;
   });
+
+  // Bridge to the Deal model (see docs/DECISIONS.md) — the Pipeline board
+  // previously only ever wrote Conversation.pipelineStage, completely
+  // invisible to every Deal-based Team Performance screen. Never blocks or
+  // fails this response; /pipeline must keep working exactly as it always
+  // has even if this sync has a problem.
+  if (fromStage !== targetStage.id) {
+    // Same fallback-to-existing-value logic as the Conversation update
+    // above — a "won"/"lost" move re-confirmed without fresh closeout
+    // details in THIS request should still see whatever was already on
+    // file, not look unfilled to transitionDeal()'s own validation.
+    await syncDealFromPipelineStageChange({
+      conversationId: params.id,
+      stageSlug: targetStage.id,
+      userId: user.id,
+      accountNameFallback: convo.contactName?.trim() || `Customer ${convo.contactPhone}`,
+      wonValue: parsed.data.dealValue ?? (convo.dealValue != null ? Number(convo.dealValue) : undefined),
+      lossReasonId: parsed.data.lossReasonId ?? undefined,
+      lossReasonNote: parsed.data.lostReason ?? convo.lostReason ?? undefined,
+      expectedCloseAt:
+        parsed.data.expectedCloseAt !== undefined
+          ? parsed.data.expectedCloseAt === null
+            ? null
+            : new Date(parsed.data.expectedCloseAt)
+          : undefined,
+    });
+  }
 
   return NextResponse.json({
     ok: true,

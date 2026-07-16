@@ -97,6 +97,7 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         label: "Quotation rates",
         icon: "⚙️",
         description: "Default rate sheets per sport",
+        adminOnly: true,
       },
     ],
   },

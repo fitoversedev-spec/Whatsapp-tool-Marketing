@@ -41,6 +41,7 @@ type GeneralLead = {
   sourceName: string | null;
   ownerName: string | null;
   createdAt: string;
+  convertedDealId: string | null;
 };
 
 const GENERAL_STATUS_COLORS: Record<string, string> = {
@@ -397,11 +398,31 @@ export default function LeadsClient({
 }
 
 function GeneralLeadsTable({ leads }: { leads: GeneralLead[] }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+
+  async function convertToDeal(lead: GeneralLead) {
+    setConvertingId(lead.id);
+    const res = await fetch(`/api/leads/${lead.id}/convert`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setConvertingId(null);
+    if (res.ok) {
+      toast.success(`Converted — deal ${data.deal.code} created`);
+      router.push(`/deals/${data.deal.id}`);
+    } else if (res.status === 409) {
+      toast.info("Already converted");
+      router.push(`/deals/${data.dealId}`);
+    } else {
+      toast.error(data.error ?? "Could not convert this lead");
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       {leads.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-center text-slate-500 text-sm">
-          No general leads yet. These come from manual entry or referrals — see /deals to create one, or via POST /api/leads.
+          No general leads yet. These come from manual entry, referrals, or the WhatsApp chatbot — see /deals to create one, or via POST /api/leads.
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
@@ -415,6 +436,7 @@ function GeneralLeadsTable({ leads }: { leads: GeneralLead[] }) {
                   <th className="px-4 py-3 text-left">Source</th>
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-left">Owner</th>
+                  <th className="px-4 py-3 text-right">Deal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -435,6 +457,21 @@ function GeneralLeadsTable({ leads }: { leads: GeneralLead[] }) {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{l.ownerName ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">
+                      {l.convertedDealId ? (
+                        <a href={`/deals/${l.convertedDealId}`} className="text-xs font-medium text-wa-green hover:underline">
+                          View deal →
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => convertToDeal(l)}
+                          disabled={convertingId === l.id}
+                          className="text-xs font-medium bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg"
+                        >
+                          {convertingId === l.id ? "Converting…" : "Convert to deal"}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

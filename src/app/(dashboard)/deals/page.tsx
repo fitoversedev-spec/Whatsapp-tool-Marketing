@@ -8,7 +8,7 @@ export default async function DealsPage() {
 
   const dealsWhere = isAdmin(user.role) ? {} : { ownerUserId: user.id };
 
-  const [deals, stages, leadSources, customerProfiles, users, products] = await Promise.all([
+  const [deals, stages, leadSources, customerProfiles, lossReasons, users, products] = await Promise.all([
     prisma.deal.findMany({
       where: { deletedAt: null, ...dealsWhere },
       orderBy: { updatedAt: "desc" },
@@ -22,6 +22,7 @@ export default async function DealsPage() {
     prisma.funnelStage.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     prisma.leadSource.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     prisma.customerProfile.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.lossReason.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     prisma.user.findMany({
       where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
       select: { id: true, name: true },
@@ -60,6 +61,7 @@ export default async function DealsPage() {
       stages={stages.map((s) => ({ id: s.id, name: s.name, slug: s.slug, stageType: s.stageType, colorHex: s.colorHex, requiresLossReason: s.requiresLossReason }))}
       leadSources={leadSources.map((s) => ({ id: s.id, name: s.name }))}
       customerProfiles={customerProfiles.map((c) => ({ id: c.id, name: c.name }))}
+      lossReasons={lossReasons.map((l) => ({ id: l.id, name: l.name }))}
       users={users}
       products={products}
     />

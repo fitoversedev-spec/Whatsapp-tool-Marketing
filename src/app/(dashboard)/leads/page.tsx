@@ -48,6 +48,7 @@ export default async function LeadsPage() {
         sourceName: l.leadSource?.name ?? null,
         ownerName: l.owner?.name ?? null,
         createdAt: l.createdAt.toISOString(),
+        convertedDealId: l.convertedDealId,
       }))}
       leads={leads.map((l) => ({
         id: l.id,

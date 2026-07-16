@@ -54,6 +54,7 @@ export default function DealsClient({
   stages,
   leadSources,
   customerProfiles,
+  lossReasons,
   users,
   products,
 }: {
@@ -63,6 +64,7 @@ export default function DealsClient({
   stages: Stage[];
   leadSources: Option[];
   customerProfiles: Option[];
+  lossReasons: Option[];
   users: Option[];
   products: ProductOption[];
 }) {
@@ -74,7 +76,7 @@ export default function DealsClient({
 
   const visible = ownerFilter === "all" ? deals : deals.filter((d) => d.ownerName === users.find((u) => u.id === ownerFilter)?.name);
 
-  async function changeStage(deal: Deal, stage: Stage, extra?: { wonValue?: number; lossReasonNote?: string }) {
+  async function changeStage(deal: Deal, stage: Stage, extra?: { wonValue?: number; lossReasonId?: string; lossReasonNote?: string }) {
     const res = await fetch(`/api/deals/${deal.id}/stage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -198,6 +200,7 @@ export default function DealsClient({
         <CloseoutModal
           deal={closeoutFor.deal}
           stage={closeoutFor.stage}
+          lossReasons={lossReasons}
           onClose={() => setCloseoutFor(null)}
           onConfirm={(extra) => {
             changeStage(closeoutFor.deal, closeoutFor.stage, extra);
@@ -283,6 +286,7 @@ function NewDealModal({
   const [accountName, setAccountName] = useState("");
   const [city, setCity] = useState("");
   const [customerProfileId, setCustomerProfileId] = useState("");
+  const [businessType, setBusinessType] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [leadSourceId, setLeadSourceId] = useState("");
@@ -302,7 +306,12 @@ function NewDealModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
-        account: { name: accountName, city: city || undefined, customerProfileId: customerProfileId || undefined },
+        account: {
+          name: accountName,
+          city: city || undefined,
+          customerProfileId: customerProfileId || undefined,
+          businessType: businessType || undefined,
+        },
         contactName: contactName || undefined,
         contactPhone: contactPhone || undefined,
         leadSourceId: leadSourceId || undefined,
@@ -381,14 +390,25 @@ function NewDealModal({
             <input value={city} onChange={(e) => setCity(e.target.value)} className="modal-input" />
           </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer type</label>
-          <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="modal-input">
-            <option value="">—</option>
-            {customerProfiles.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer type</label>
+            <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="modal-input">
+              <option value="">—</option>
+              {customerProfiles.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Business type</label>
+            <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="modal-input">
+              <option value="">—</option>
+              <option value="B2B">B2B</option>
+              <option value="B2C">B2C</option>
+              <option value="B2G">B2G</option>
+            </select>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -449,20 +469,26 @@ function NewDealModal({
 function CloseoutModal({
   deal,
   stage,
+  lossReasons,
   onClose,
   onConfirm,
 }: {
   deal: Deal;
   stage: Stage;
+  lossReasons: Option[];
   onClose: () => void;
-  onConfirm: (extra: { wonValue?: number; lossReasonNote?: string }) => void;
+  onConfirm: (extra: { wonValue?: number; lossReasonId?: string; lossReasonNote?: string }) => void;
 }) {
   const [wonValue, setWonValue] = useState(deal.estimatedValue?.toString() ?? "");
+  const [lossReasonId, setLossReasonId] = useState("");
   const [lossReasonNote, setLossReasonNote] = useState("");
 
   const needsValue = stage.stageType === "won";
   const needsReason = stage.requiresLossReason;
-  const canConfirm = (!needsValue || !!wonValue) && (!needsReason || !!lossReasonNote.trim());
+  // A picked taxonomy reason is enough on its own — the free-text note is a
+  // clarifying detail, not the only way to satisfy "needs a reason" (mirrors
+  // transitionDeal()'s own guard, which accepts either).
+  const canConfirm = (!needsValue || !!wonValue) && (!needsReason || !!lossReasonId || !!lossReasonNote.trim());
 
   return (
     <ModalShell title={`Move ${deal.code} to "${stage.name}"`} onClose={onClose}>
@@ -482,18 +508,31 @@ function CloseoutModal({
         </div>
       )}
       {needsReason && (
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            Reason <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            value={lossReasonNote}
-            onChange={(e) => setLossReasonNote(e.target.value)}
-            className="modal-input"
-            rows={3}
-            autoFocus
-          />
-        </div>
+        <>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Reason {!lossReasonNote.trim() && <span className="text-red-500">*</span>}
+            </label>
+            <select value={lossReasonId} onChange={(e) => setLossReasonId(e.target.value)} className="modal-input" autoFocus>
+              <option value="">—</option>
+              {lossReasons.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Notes {!lossReasonId && <span className="text-red-500">*</span>}
+            </label>
+            <textarea
+              value={lossReasonNote}
+              onChange={(e) => setLossReasonNote(e.target.value)}
+              className="modal-input"
+              rows={3}
+              placeholder="Optional detail beyond the reason picked above"
+            />
+          </div>
+        </>
       )}
       <ModalActions
         confirmLabel="Confirm"
@@ -502,7 +541,8 @@ function CloseoutModal({
         onConfirm={() =>
           onConfirm({
             wonValue: needsValue ? Number(wonValue) : undefined,
-            lossReasonNote: needsReason ? lossReasonNote.trim() : undefined,
+            lossReasonId: needsReason && lossReasonId ? lossReasonId : undefined,
+            lossReasonNote: needsReason && lossReasonNote.trim() ? lossReasonNote.trim() : undefined,
           })
         }
       />

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { findOrCreateDealForConversation } from "@/lib/crm/deals";
 
 const createSchema = z.object({
   conversationId: z.string().uuid().nullable().optional(),
@@ -98,10 +99,30 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // The Inbox reminder panel only ever sends conversationId, never dealId —
+  // resolve one server-side (find-or-create by conversation, same as
+  // quotations/court-images) so a reminder set the normal way still shows up
+  // in Deal-based analytics, with zero change needed on the client. Purely
+  // standalone reminders (no conversationId at all) stay unlinked — there's
+  // nothing to resolve a deal from.
+  let dealId = parsed.data.dealId ?? null;
+  if (!dealId && parsed.data.conversationId) {
+    const resolved = await findOrCreateDealForConversation({
+      conversationId: parsed.data.conversationId,
+      // Falls back to the conversation's own contactName when it has one
+      // (the common case) — this literal only surfaces for a contact with
+      // no name on file at all.
+      accountName: "Unknown customer",
+      dealTitle: parsed.data.message.slice(0, 120),
+      ownerUserId: user.id,
+    });
+    dealId = resolved.id;
+  }
+
   const reminder = await prisma.reminder.create({
     data: {
       conversationId: parsed.data.conversationId ?? null,
-      dealId: parsed.data.dealId ?? null,
+      dealId,
       ownerUserId: user.id,
       message: parsed.data.message,
       dueAt: new Date(parsed.data.dueAt),

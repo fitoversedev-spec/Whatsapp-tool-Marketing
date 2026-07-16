@@ -9,6 +9,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildCourtImageNumber } from "@/lib/court-image/schema";
+import { findOrCreateDealForConversation } from "@/lib/crm/deals";
 
 // Permissive layout validator — we accept anything that looks like
 // the right shape and let the canvas reject unknown elements at render
@@ -27,6 +28,8 @@ const layoutSchema = z
 
 const createSchema = z.object({
   customerName: z.string().min(1).max(200),
+  // Not stored on CourtImage itself — written through to Deal.siteCity.
+  siteCity: z.string().max(100).optional(),
   layout: layoutSchema,
   imageUrl: z.string().url().nullable().optional(),
   image2dUrl: z.string().url().nullable().optional(),
@@ -35,6 +38,12 @@ const createSchema = z.object({
   caption: z.string().max(1024).nullable().optional(),
   conversationId: z.string().uuid().nullable().optional(),
   contactPhone: z.string().min(5).max(30).nullable().optional(),
+  // Tier-1 classification — see docs/DECISIONS.md; same fields the quote
+  // wizard now captures, mirrored here so a design-first flow classifies
+  // the deal/account too.
+  leadSourceId: z.string().uuid().nullable().optional(),
+  customerProfileId: z.string().uuid().nullable().optional(),
+  businessType: z.enum(["B2B", "B2C", "B2G"]).nullable().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -98,6 +107,24 @@ export async function POST(req: NextRequest) {
   }
 
   const year = new Date().getFullYear();
+
+  // Same find-or-create-by-conversation resolution quotations uses (see
+  // docs/DECISIONS.md) — court designs previously never got a dealId at
+  // all, under any code path, so every design was permanently invisible to
+  // Deal-based analytics regardless of whether a deal already existed.
+  const resolvedDeal = await findOrCreateDealForConversation({
+    conversationId: parsed.data.conversationId ?? null,
+    accountName: parsed.data.customerName,
+    dealTitle: `Court design for ${parsed.data.customerName}`,
+    ownerUserId: user.id,
+    leadSourceId: parsed.data.leadSourceId,
+    customerProfileId: parsed.data.customerProfileId,
+    businessType: parsed.data.businessType,
+  });
+  if (parsed.data.siteCity) {
+    await prisma.deal.update({ where: { id: resolvedDeal.id }, data: { siteCity: parsed.data.siteCity } }).catch(() => null);
+  }
+
   // Same fix as the quotations route — derive next sequential number
   // from the highest existing FIT-CIM-YYYY-NNN row and retry on the
   // unique-constraint race. count()+1 collides as soon as any row gets
@@ -121,6 +148,7 @@ export async function POST(req: NextRequest) {
           contactPhone: parsed.data.contactPhone ?? null,
           createdByUserId: user.id,
           status: "draft",
+          dealId: resolvedDeal.id,
         },
       });
       break;

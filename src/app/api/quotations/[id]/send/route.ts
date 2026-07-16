@@ -12,6 +12,7 @@ import { renderQuotationPdf } from "@/lib/quotation/pdf";
 import { getSportCatalogueBytes, mergeCatalogueIntoQuote } from "@/lib/quotation/attach-catalogue";
 import { uploadToBlob } from "@/lib/media";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
+import { advanceDealStageIfEarlier } from "@/lib/funnel/transitionDeal";
 import { z } from "zod";
 
 // Optional caption in the request body — overrides row.caption if
@@ -139,6 +140,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       sentAt: new Date(),
     },
   });
+
+  // A quote actually going out is real progress — advance the deal to
+  // "Quotation Sent" if it hasn't reached that point yet (never regresses
+  // a deal already further along). This also write-throughs to the legacy
+  // /pipeline board via transitionDeal()'s own sync (see docs/DECISIONS.md).
+  if (q.dealId) {
+    await advanceDealStageIfEarlier({
+      dealId: q.dealId,
+      targetStageSlug: "quotation_sent",
+      userId: user.id,
+      note: `Quotation ${q.number} sent`,
+    });
+  }
 
   if (q.conversationId) {
     // Mirror the caption text (if sent) + the PDF into the inbox thread

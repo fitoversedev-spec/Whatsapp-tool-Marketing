@@ -181,6 +181,8 @@ function bestLineItemId(
   return bestId ?? items.find((i) => i.included)?.id ?? null;
 }
 
+type TaxonomyOption = { id: string; name: string };
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -211,6 +213,17 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
 
   // Step 1 state
   const [customerName, setCustomerName] = useState(prefill?.customerName ?? "");
+  // Site city — the project's location, not the customer's mailing address.
+  // Feeds Deal.siteCity for Team Performance's Geography analytics.
+  const [siteCity, setSiteCity] = useState("");
+  // Classification — feeds Deal.leadSourceId / Account.customerProfileId /
+  // Account.businessType, which Team Performance's Sources and Customers
+  // views read (previously always empty — see docs/DECISIONS.md).
+  const [leadSourceId, setLeadSourceId] = useState("");
+  const [customerProfileId, setCustomerProfileId] = useState("");
+  const [businessType, setBusinessType] = useState("");
+  const [leadSources, setLeadSources] = useState<TaxonomyOption[]>([]);
+  const [customerProfiles, setCustomerProfiles] = useState<TaxonomyOption[]>([]);
   const [sport, setSport] = useState("football");
   const [lengthFt, setLengthFt] = useState(60);
   const [widthFt, setWidthFt] = useState(100);
@@ -250,6 +263,10 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
     if (open) {
       setStep(1);
       setCustomerName(prefill?.customerName ?? "");
+      setSiteCity("");
+      setLeadSourceId("");
+      setCustomerProfileId("");
+      setBusinessType("");
       setLengthFt(60);
       setWidthFt(100);
       setQuoteDate(new Date().toISOString().slice(0, 10));
@@ -261,6 +278,22 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
       setProductFilter("");
       ratesLoadedForSport.current = null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Load lead-source / customer-profile taxonomy options once when the
+  // modal first opens — small, admin-managed lists, no need to refetch per
+  // step like the (much larger) product catalogue below.
+  useEffect(() => {
+    if (!open || leadSources.length > 0) return;
+    fetch("/api/admin/taxonomy/lead-sources")
+      .then((r) => (r.ok ? r.json() : { rows: [] }))
+      .then((d: { rows: TaxonomyOption[] }) => setLeadSources(d.rows ?? []))
+      .catch(() => null);
+    fetch("/api/admin/taxonomy/customer-profiles")
+      .then((r) => (r.ok ? r.json() : { rows: [] }))
+      .then((d: { rows: TaxonomyOption[] }) => setCustomerProfiles(d.rows ?? []))
+      .catch(() => null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -469,6 +502,10 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             customerName: customerName.trim(),
+            siteCity: siteCity.trim() || undefined,
+            leadSourceId: leadSourceId || undefined,
+            customerProfileId: customerProfileId || undefined,
+            businessType: businessType || undefined,
             sport,
             lengthFt,
             widthFt,
@@ -620,6 +657,61 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   placeholder="e.g. Dr. P. Prabhusankar"
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Site city
+                </label>
+                <input
+                  value={siteCity}
+                  onChange={(e) => setSiteCity(e.target.value)}
+                  placeholder="e.g. Coimbatore"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                />
+                <p className="mt-1 text-xs text-slate-400">Where the court is being built — powers the Geography view in Team Performance.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Lead source</label>
+                  <select
+                    value={leadSourceId}
+                    onChange={(e) => setLeadSourceId(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                  >
+                    <option value="">—</option>
+                    {leadSources.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Customer type</label>
+                  <select
+                    value={customerProfileId}
+                    onChange={(e) => setCustomerProfileId(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                  >
+                    <option value="">—</option>
+                    {customerProfiles.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Business type</label>
+                  <select
+                    value={businessType}
+                    onChange={(e) => setBusinessType(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                  >
+                    <option value="">—</option>
+                    <option value="B2B">B2B</option>
+                    <option value="B2C">B2C</option>
+                    <option value="B2G">B2G</option>
+                  </select>
+                </div>
               </div>
 
               <div>

@@ -22,6 +22,8 @@ const layoutSchema = z
 
 const updateSchema = z.object({
   customerName: z.string().min(1).max(200).optional(),
+  // Not stored on CourtImage itself — written through to Deal.siteCity.
+  siteCity: z.string().max(100).optional(),
   layout: layoutSchema.optional(),
   imageUrl: z.string().url().nullable().optional(),
   image2dUrl: z.string().url().nullable().optional(),
@@ -110,6 +112,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       ...(parsed.data.contactPhone !== undefined && { contactPhone: parsed.data.contactPhone }),
     },
   });
+
+  // Not stored on CourtImage — written through to the linked Deal, same as
+  // the create path. A later edit correcting the city should still reach
+  // Geography even though the deal already existed by then.
+  if (parsed.data.siteCity && row.dealId) {
+    await prisma.deal.update({ where: { id: row.dealId }, data: { siteCity: parsed.data.siteCity } }).catch(() => null);
+  }
 
   return NextResponse.json({
     courtImage: { id: updated.id, number: updated.number, status: updated.status },

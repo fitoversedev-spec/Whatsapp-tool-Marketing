@@ -181,8 +181,19 @@ type SortKey =
   | "messages"
   | "overdue";
 
+// Tabs backed by the shared AnalyticsFilter (see src/lib/analytics/types.ts)
+// — these are the ones the owner filter actually affects. "overview" is a
+// fixed team-wide KPI snapshot (overview() takes no filter at all) and
+// "activity" has its own always-team-wide KPI cards alongside a per-user
+// table that already breaks everyone out individually — an owner filter on
+// either would be redundant with what's already shown.
+const OWNER_FILTERABLE_TABS: Tab[] = [
+  "sales-activity", "funnel", "geography", "customers", "products", "sources", "timelines", "forecast",
+];
+
 export default function TeamAnalyticsClient() {
   const [range, setRange] = useState<Range>("30d");
+  const [owner, setOwner] = useState<string>("all");
   const [data, setData] = useState<AnalyticsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -195,7 +206,7 @@ export default function TeamAnalyticsClient() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/team/analytics?range=${range}`)
+    fetch(`/api/team/analytics?range=${range}&owner=${owner}`)
       .then(async (r) => {
         const text = await r.text();
         let json: AnalyticsPayload | { error?: string; message?: string } | null = null;
@@ -224,7 +235,7 @@ export default function TeamAnalyticsClient() {
     return () => {
       cancelled = true;
     };
-  }, [range]);
+  }, [range, owner]);
 
   const sortedUsers = useMemo(() => {
     if (!data) return [];
@@ -332,6 +343,24 @@ export default function TeamAnalyticsClient() {
           </button>
         ))}
       </div>
+
+      {data && OWNER_FILTERABLE_TABS.includes(tab) && (
+        <div className="px-4 sm:px-6 lg:px-8 pt-3 flex items-center gap-2">
+          <label className="text-xs font-medium text-slate-500">Rep</label>
+          <select
+            value={owner}
+            onChange={(e) => setOwner(e.target.value)}
+            className="text-sm border border-slate-300 rounded-md px-2 py-1 bg-white"
+          >
+            <option value="all">All reps</option>
+            {[...data.perUser]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+          </select>
+        </div>
+      )}
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {loading && (

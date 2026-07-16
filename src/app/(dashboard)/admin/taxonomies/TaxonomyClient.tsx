@@ -23,9 +23,61 @@ type Row = {
   stageType?: "active" | "won" | "lost";
   requiresLossReason?: boolean;
   parentId?: string | null;
+  // Funnel-stage only. slaHours drives Team Performance's "stuck deal"
+  // detection (falls back to a hardcoded default when null — see
+  // src/lib/analytics/timelines.ts); probabilityPercent weights the
+  // Forecast view's pipeline value (stays unweighted/"—" per stage when
+  // null — see src/lib/analytics/forecast.ts). Both were DB-only fields
+  // with no admin UI until now, so every stage left them null forever.
+  slaHours?: number | null;
+  probabilityPercent?: number | null;
 };
 
 const SWATCHES = ["#64748b", "#3b82f6", "#a855f7", "#f59e0b", "#f97316", "#10b981", "#ef4444"];
+
+// Mirrors src/lib/analytics/timelines.ts's DEFAULT_SLA_HOURS — shown as the
+// input placeholder so admins see what an unset stage currently falls back
+// to, without importing server code into this client component.
+const DEFAULT_SLA_HOURS = 72;
+
+// A number input that only commits on blur/Enter, not per keystroke —
+// patchRow triggers a full table reload (loading:true swaps the whole
+// <table> for a placeholder), which would drop focus mid-type if this
+// fired on every onChange like the color/checkbox cells do.
+function NumberCell({
+  value,
+  onCommit,
+  placeholder,
+}: {
+  value: number | null | undefined;
+  onCommit: (v: number | null) => void;
+  placeholder?: string;
+}) {
+  const [text, setText] = useState(value != null ? String(value) : "");
+  useEffect(() => {
+    setText(value != null ? String(value) : "");
+  }, [value]);
+
+  function commit() {
+    const trimmed = text.trim();
+    const parsed = trimmed === "" ? null : Number(trimmed);
+    const next = parsed != null && Number.isFinite(parsed) ? parsed : null;
+    if (next !== (value ?? null)) onCommit(next);
+    else setText(value != null ? String(value) : "");
+  }
+
+  return (
+    <input
+      type="number"
+      value={text}
+      placeholder={placeholder}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+      className="w-20 text-xs border border-slate-200 rounded px-1.5 py-1"
+    />
+  );
+}
 
 export default function TaxonomyClient() {
   const toast = useToast();
@@ -116,6 +168,8 @@ export default function TaxonomyClient() {
                 <th className="px-4 py-2.5 font-medium">Name</th>
                 {tab === "funnel-stages" && <th className="px-4 py-2.5 font-medium">Type</th>}
                 {tab === "funnel-stages" && <th className="px-4 py-2.5 font-medium">Needs reason</th>}
+                {tab === "funnel-stages" && <th className="px-4 py-2.5 font-medium">SLA (hrs)</th>}
+                {tab === "funnel-stages" && <th className="px-4 py-2.5 font-medium">Win prob %</th>}
                 <th className="px-4 py-2.5 font-medium">Active</th>
                 <th className="px-4 py-2.5 font-medium">Order</th>
               </tr>
@@ -155,6 +209,24 @@ export default function TaxonomyClient() {
                         type="checkbox"
                         checked={!!r.requiresLossReason}
                         onChange={(e) => patchRow(r.id, { requiresLossReason: e.target.checked })}
+                      />
+                    </td>
+                  )}
+                  {tab === "funnel-stages" && (
+                    <td className="px-4 py-2.5">
+                      <NumberCell
+                        value={r.slaHours}
+                        placeholder={String(DEFAULT_SLA_HOURS)}
+                        onCommit={(v) => patchRow(r.id, { slaHours: v })}
+                      />
+                    </td>
+                  )}
+                  {tab === "funnel-stages" && (
+                    <td className="px-4 py-2.5">
+                      <NumberCell
+                        value={r.probabilityPercent}
+                        placeholder="—"
+                        onCommit={(v) => patchRow(r.id, { probabilityPercent: v })}
                       />
                     </td>
                   )}

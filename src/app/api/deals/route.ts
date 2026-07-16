@@ -116,7 +116,13 @@ export async function POST(req: NextRequest) {
           currentStageId,
           leadSourceId: data.leadSourceId ?? null,
           sourceDetail: data.sourceDetail ?? null,
-          siteCity: data.siteCity ?? null,
+          // No dedicated site-city field on this form — for most deals
+          // created here the account's own city IS where the project is
+          // (a school building a court at its own address). Falls back to
+          // it so Geography analytics has something rather than nothing;
+          // a quote or court design generated later can correct it if the
+          // real site turns out to differ (see docs/DECISIONS.md).
+          siteCity: data.siteCity ?? data.account?.city ?? null,
           estimatedValue: data.estimatedValue ?? null,
           conversationId: data.conversationId ?? null,
         },

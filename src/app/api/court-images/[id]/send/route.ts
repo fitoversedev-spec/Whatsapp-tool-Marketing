@@ -12,6 +12,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
+import { advanceDealStageIfEarlier } from "@/lib/funnel/transitionDeal";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -156,6 +157,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     where: { id: params.id },
     data: { status: "sent", sentAt: new Date() },
   });
+
+  // Same forward-only advance as the quotation send route — a design
+  // actually going out is real progress, moves the deal to "Design Shared"
+  // if it hasn't gotten there yet (see docs/DECISIONS.md).
+  if (row.dealId) {
+    await advanceDealStageIfEarlier({
+      dealId: row.dealId,
+      targetStageSlug: "design_shared",
+      userId: user.id,
+      note: `Court design ${row.number} sent`,
+    });
+  }
 
   if (row.conversationId) {
     // Mirror each sent item as its own inbox message so the thread shows

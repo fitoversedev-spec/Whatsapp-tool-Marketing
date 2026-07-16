@@ -15,25 +15,31 @@ function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
-// §5.1 — 13 seed stages, exact order/type from the spec.
+// §5.1 — 13 seed stages, exact order/type from the spec. Colors progress
+// neutral -> engaged -> in-process -> closing-heat, with the two terminal
+// outcomes using the real Fitoverse brand colors (green for won, red for
+// lost) so they read unambiguously against the rest of the ramp. "Dropped /
+// Cold" gets a cooler gray rather than red — it's a passive non-outcome,
+// not an active rejection, and shouldn't look the same as "Lost — Rejected".
 const FUNNEL_STAGES: Array<{
   name: string;
   stageType: "active" | "won" | "lost";
   requiresLossReason?: boolean;
+  colorHex: string;
 }> = [
-  { name: "Enquiry Received", stageType: "active" },
-  { name: "Contacted / Qualified", stageType: "active" },
-  { name: "Site Visit Scheduled", stageType: "active" },
-  { name: "Site Visit Done", stageType: "active" },
-  { name: "Sample Sent", stageType: "active" },
-  { name: "Design Shared", stageType: "active" },
-  { name: "Quotation Sent", stageType: "active" },
-  { name: "Proposal Sent", stageType: "active" },
-  { name: "Negotiation", stageType: "active" },
-  { name: "Verbal Confirmation", stageType: "active" },
-  { name: "Won — PO / Advance Received", stageType: "won" },
-  { name: "Lost — Rejected", stageType: "lost", requiresLossReason: true },
-  { name: "Dropped / Cold", stageType: "lost", requiresLossReason: true },
+  { name: "Enquiry Received", stageType: "active", colorHex: "#64748b" },
+  { name: "Contacted / Qualified", stageType: "active", colorHex: "#3b82f6" },
+  { name: "Site Visit Scheduled", stageType: "active", colorHex: "#0ea5e9" },
+  { name: "Site Visit Done", stageType: "active", colorHex: "#06b6d4" },
+  { name: "Sample Sent", stageType: "active", colorHex: "#14b8a6" },
+  { name: "Design Shared", stageType: "active", colorHex: "#8b5cf6" },
+  { name: "Quotation Sent", stageType: "active", colorHex: "#6366f1" },
+  { name: "Proposal Sent", stageType: "active", colorHex: "#a855f7" },
+  { name: "Negotiation", stageType: "active", colorHex: "#f59e0b" },
+  { name: "Verbal Confirmation", stageType: "active", colorHex: "#f97316" },
+  { name: "Won — PO / Advance Received", stageType: "won", colorHex: "#159341" },
+  { name: "Lost — Rejected", stageType: "lost", requiresLossReason: true, colorHex: "#c81124" },
+  { name: "Dropped / Cold", stageType: "lost", requiresLossReason: true, colorHex: "#94a3b8" },
 ];
 
 // §6.1 — lead sources, flat list (no parent grouping seeded yet — the
@@ -147,6 +153,7 @@ async function main() {
       sortOrder: i,
       stageType: s.stageType,
       requiresLossReason: s.requiresLossReason ?? false,
+      colorHex: s.colorHex,
     };
     await prisma.funnelStage.upsert({ where: { slug }, create: data, update: data });
     i++;

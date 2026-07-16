@@ -799,6 +799,15 @@ export default function CourtImageWizard({
 
   // Step 1 state
   const [customerName, setCustomerName] = useState(prefill?.customerName ?? "");
+  // Site city — feeds Deal.siteCity for Team Performance's Geography view.
+  const [siteCity, setSiteCity] = useState("");
+  // Classification — feeds Deal.leadSourceId / Account.customerProfileId /
+  // Account.businessType, mirroring QuoteWizard (see docs/DECISIONS.md).
+  const [leadSourceId, setLeadSourceId] = useState("");
+  const [customerProfileId, setCustomerProfileId] = useState("");
+  const [businessType, setBusinessType] = useState("");
+  const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([]);
+  const [customerProfiles, setCustomerProfiles] = useState<{ id: string; name: string }[]>([]);
   const [lengthFt, setLengthFt] = useState(80);
   const [widthFt, setWidthFt] = useState(60);
   const [selectedSports, setSelectedSports] = useState<Sport[]>(["football"]);
@@ -931,6 +940,10 @@ export default function CourtImageWizard({
     } else {
       setStep(1);
       setCustomerName(prefill?.customerName ?? "");
+      setSiteCity("");
+      setLeadSourceId("");
+      setCustomerProfileId("");
+      setBusinessType("");
       setContactPhone(prefill?.contactPhone ?? "");
       setLengthFt(80);
       setWidthFt(60);
@@ -956,6 +969,22 @@ export default function CourtImageWizard({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingId]);
+
+  // Load lead-source / customer-profile taxonomy options once when the
+  // modal first opens — same lists QuoteWizard fetches, small and
+  // admin-managed, so a plain once-per-open fetch is enough.
+  useEffect(() => {
+    if (!open || leadSources.length > 0) return;
+    fetch("/api/admin/taxonomy/lead-sources")
+      .then((r) => (r.ok ? r.json() : { rows: [] }))
+      .then((d: { rows: { id: string; name: string }[] }) => setLeadSources(d.rows ?? []))
+      .catch(() => null);
+    fetch("/api/admin/taxonomy/customer-profiles")
+      .then((r) => (r.ok ? r.json() : { rows: [] }))
+      .then((d: { rows: { id: string; name: string }[] }) => setCustomerProfiles(d.rows ?? []))
+      .catch(() => null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Track canvas container size for responsive Konva stage.
   useEffect(() => {
@@ -1683,6 +1712,10 @@ export default function CourtImageWizard({
 
       const payload = {
         customerName,
+        siteCity: siteCity.trim() || undefined,
+        leadSourceId: leadSourceId || undefined,
+        customerProfileId: customerProfileId || undefined,
+        businessType: businessType || undefined,
         layout,
         imageUrl,
         image2dUrl: urls["2d"] ?? null,
@@ -1827,6 +1860,16 @@ export default function CourtImageWizard({
             <Step1
               customerName={customerName}
               setCustomerName={setCustomerName}
+              siteCity={siteCity}
+              setSiteCity={setSiteCity}
+              leadSourceId={leadSourceId}
+              setLeadSourceId={setLeadSourceId}
+              customerProfileId={customerProfileId}
+              setCustomerProfileId={setCustomerProfileId}
+              businessType={businessType}
+              setBusinessType={setBusinessType}
+              leadSources={leadSources}
+              customerProfiles={customerProfiles}
               lengthFt={lengthFt}
               setLengthFt={setLengthFt}
               widthFt={widthFt}
@@ -2947,6 +2990,16 @@ function surfaceOptionsForSports(
 function Step1(props: {
   customerName: string;
   setCustomerName: (v: string) => void;
+  siteCity: string;
+  setSiteCity: (v: string) => void;
+  leadSourceId: string;
+  setLeadSourceId: (v: string) => void;
+  customerProfileId: string;
+  setCustomerProfileId: (v: string) => void;
+  businessType: string;
+  setBusinessType: (v: string) => void;
+  leadSources: { id: string; name: string }[];
+  customerProfiles: { id: string; name: string }[];
   lengthFt: number;
   setLengthFt: (v: number) => void;
   widthFt: number;
@@ -2974,6 +3027,16 @@ function Step1(props: {
   const {
     customerName,
     setCustomerName,
+    siteCity,
+    setSiteCity,
+    leadSourceId,
+    setLeadSourceId,
+    customerProfileId,
+    setCustomerProfileId,
+    businessType,
+    setBusinessType,
+    leadSources,
+    customerProfiles,
     lengthFt,
     setLengthFt,
     widthFt,
@@ -3198,6 +3261,59 @@ function Step1(props: {
           placeholder="Customer or project name"
           className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
         />
+      </section>
+
+      <section>
+        <h3 className="text-sm font-semibold text-slate-900 mb-1">Site city</h3>
+        <input
+          value={siteCity}
+          onChange={(e) => setSiteCity(e.target.value)}
+          placeholder="e.g. Coimbatore"
+          className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+        />
+        <p className="mt-1 text-xs text-slate-400">Where the court is being built — powers the Geography view in Team Performance.</p>
+      </section>
+
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 mb-1">Lead source</h3>
+          <select
+            value={leadSourceId}
+            onChange={(e) => setLeadSourceId(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+          >
+            <option value="">—</option>
+            {leadSources.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 mb-1">Customer type</h3>
+          <select
+            value={customerProfileId}
+            onChange={(e) => setCustomerProfileId(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+          >
+            <option value="">—</option>
+            {customerProfiles.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 mb-1">Business type</h3>
+          <select
+            value={businessType}
+            onChange={(e) => setBusinessType(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+          >
+            <option value="">—</option>
+            <option value="B2B">B2B</option>
+            <option value="B2C">B2C</option>
+            <option value="B2G">B2G</option>
+          </select>
+        </div>
       </section>
 
       <section>

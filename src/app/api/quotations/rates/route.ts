@@ -1,11 +1,17 @@
-// Read + update default rate sheet for a given sport. Both admin and sales
-// can edit per the product spec ("editable by admin and sales also").
-// Sport selector is the ?sport= query param on GET, and `sport` field in
-// the PUT body. Defaults to "football" for back-compat with old callers.
+// Read + update default rate sheet for a given sport. Was previously
+// editable by both admin and sales per an earlier product decision; the
+// CRM spec's permission matrix (§13: rates are admin-only) has since
+// superseded that, and the conflict was explicitly resolved in favor of
+// admin-only (see docs/DECISIONS.md). Sport selector is the ?sport= query
+// param on GET, and `sport` field in the PUT body. Defaults to "football"
+// for back-compat with old callers. GET stays open to any signed-in
+// user — sales still needs to read rates to build a quote, only editing
+// is restricted.
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import {
   getRatesForSport,
   setRatesForSport,
@@ -50,6 +56,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!isAdmin(user.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => null);
   const parsed = putSchema.safeParse(body);

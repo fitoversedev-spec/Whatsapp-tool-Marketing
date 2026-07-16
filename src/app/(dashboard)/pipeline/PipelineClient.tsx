@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/core";
 import PageHeader from "@/components/PageHeader";
 import ContactDetailDrawer from "@/components/ContactDetailDrawer";
-import { colorFor, daysSince, type PipelineStage } from "@/lib/pipeline";
+import { stageVisual, daysSince, type PipelineStage } from "@/lib/pipeline";
 import type { Role } from "@/lib/rbac";
 
 type Card = {
@@ -46,6 +46,7 @@ export default function PipelineClient({
   initialStages,
   initialCards,
   salesUsers,
+  lossReasons,
   view,
   owner,
 }: {
@@ -53,6 +54,7 @@ export default function PipelineClient({
   initialStages: PipelineStage[];
   initialCards: Card[];
   salesUsers: { id: string; name: string }[];
+  lossReasons: { id: string; name: string }[];
   view: "kanban" | "funnel";
   owner: string;
 }) {
@@ -88,14 +90,13 @@ export default function PipelineClient({
     );
   }, [cards, search]);
 
-  // Fallback stage for cards whose pipelineStage was deleted from the
-  // configured stages list. Prefer "new" if present, else the first stage,
-  // else the literal id "new" (guaranteed to keep the card visible even if
-  // stages is empty — defensive but should never happen in practice).
-  const fallbackStageId = useMemo(
-    () => stages.find((s) => s.id === "new")?.id ?? stages[0]?.id ?? "new",
-    [stages]
-  );
+  // Fallback stage for cards whose pipelineStage isn't a currently-active
+  // FunnelStage slug (deactivated stage, or a not-yet-migrated legacy
+  // value) — the earliest stage by sortOrder, so the card stays visible
+  // rather than disappearing. "enquiry_received" if the seed hasn't
+  // changed, but derived rather than hardcoded so a re-ordered taxonomy
+  // doesn't silently break this.
+  const fallbackStageId = useMemo(() => stages[0]?.id ?? "enquiry_received", [stages]);
 
   const cardsByStage = useMemo(() => {
     const map = new Map<string, Card[]>();
@@ -122,10 +123,23 @@ export default function PipelineClient({
 
   const activeCard = activeId ? cards.find((c) => c.id === activeId) : null;
 
+  // Left-side roster — everyone the current owner filter matches, as one
+  // flat list, regardless of which of the 13 stage columns they're
+  // currently sitting in. With that many columns, finding a specific
+  // person by scanning across them is slow; this is a fixed, always-visible
+  // drag source instead. Excludes won/lost — those are closed, not people
+  // still being actively worked. Respects whatever OwnerSelect has picked,
+  // so admins get "list this salesperson's people" for free by choosing
+  // them there (or "All owners" for everyone).
+  const rosterCards = useMemo(() => {
+    const stageTypeById = new Map(stages.map((s) => [s.id, s.type]));
+    return filteredCards.filter((c) => stageTypeById.get(c.pipelineStage) === "active");
+  }, [filteredCards, stages]);
+
   async function moveCard(
     cardId: string,
     toStage: string,
-    extras?: { dealValue?: number; lostReason?: string; expectedCloseAt?: string }
+    extras?: { dealValue?: number; lostReason?: string; lossReasonId?: string; expectedCloseAt?: string }
   ) {
     const prev = cards;
     setCards((curr) =>
@@ -160,12 +174,16 @@ export default function PipelineClient({
   }
 
   function onDragStart(e: DragStartEvent) {
-    setActiveId(String(e.active.id));
+    setActiveId(stripRosterPrefix(String(e.active.id)));
   }
 
   function onDragEnd(e: DragEndEvent) {
     setActiveId(null);
-    const cardId = String(e.active.id);
+    // The roster panel renders the same card as an independent draggable
+    // (a "roster-" prefixed id) so it and the card's own column don't
+    // collide inside dnd-kit's registry — strip it back to the real card
+    // id before resolving anything.
+    const cardId = stripRosterPrefix(String(e.active.id));
     const over = e.over?.id ? String(e.over.id) : null;
     if (!over) return;
     const card = cards.find((c) => c.id === cardId);
@@ -223,16 +241,19 @@ export default function PipelineClient({
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
           >
-            <div className="flex gap-4 overflow-x-auto pb-4">
-              {stages.map((s) => (
-                <KanbanColumn
-                  key={s.id}
-                  stage={s}
-                  cards={cardsByStage.get(s.id) ?? []}
-                  totals={totalsByStage.get(s.id) ?? { count: 0, value: 0 }}
-                  onCardClick={setDrawerCardId}
-                />
-              ))}
+            <div className="flex gap-4 items-start">
+              <AssignedRosterPanel cards={rosterCards} onCardClick={setDrawerCardId} />
+              <div className="flex gap-4 overflow-x-auto pb-4 flex-1 min-w-0">
+                {stages.map((s) => (
+                  <KanbanColumn
+                    key={s.id}
+                    stage={s}
+                    cards={cardsByStage.get(s.id) ?? []}
+                    totals={totalsByStage.get(s.id) ?? { count: 0, value: 0 }}
+                    onCardClick={setDrawerCardId}
+                  />
+                ))}
+              </div>
             </div>
             <DragOverlay>
               {activeCard ? <DraggableCard card={activeCard} dragging /> : null}
@@ -247,6 +268,7 @@ export default function PipelineClient({
         <CloseoutModal
           prompt={closeout}
           card={cards.find((c) => c.id === closeout.cardId)!}
+          lossReasons={lossReasons}
           onCancel={() => setCloseout(null)}
           onSubmit={async (extras) => {
             await moveCard(closeout.cardId, closeout.toStage, extras);
@@ -326,6 +348,41 @@ function OwnerSelect({
   );
 }
 
+function AssignedRosterPanel({
+  cards,
+  onCardClick,
+}: {
+  cards: Card[];
+  onCardClick?: (id: string) => void;
+}) {
+  return (
+    <div className="shrink-0 w-64 sm:w-72">
+      <div className="rounded-xl border border-slate-200 bg-slate-50">
+        <div className="px-3 py-2.5 rounded-t-xl bg-slate-100 flex items-center justify-between">
+          <span className="text-sm font-semibold text-slate-700">👥 Assigned to you</span>
+          <span className="text-xs text-slate-500">{cards.length}</span>
+        </div>
+        <p className="px-3 pt-2 text-[11px] text-slate-400 leading-snug">
+          Drag anyone straight into a stage — no need to hunt through the columns for them.
+        </p>
+        <div className="p-2 space-y-2 max-h-[70vh] overflow-y-auto">
+          {cards.length === 0 && (
+            <div className="text-center py-8 text-xs text-slate-400">Nothing open right now</div>
+          )}
+          {cards.map((card) => (
+            <DraggableCard
+              key={card.id}
+              card={card}
+              dragId={rosterDragId(card.id)}
+              onClick={() => onCardClick?.(card.id)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KanbanColumn({
   stage,
   cards,
@@ -338,20 +395,23 @@ function KanbanColumn({
   onCardClick?: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
-  const c = colorFor(stage.color);
+  const v = stageVisual(stage.color);
   return (
     <div className="shrink-0 w-72 sm:w-80">
       <div
-        className={`rounded-xl border-2 border-dashed transition ${
-          isOver ? `${c.ring} ring-2 ring-offset-1 ${c.soft}` : "border-slate-200"
-        }`}
+        className="rounded-xl border-2 border-dashed transition"
+        style={
+          isOver
+            ? { borderColor: v.hex, borderStyle: "solid", background: v.soft }
+            : { borderColor: "#e2e8f0" }
+        }
       >
-        <div className={`px-3 py-2.5 rounded-t-xl ${c.bg} flex items-center justify-between`}>
+        <div className="px-3 py-2.5 rounded-t-xl flex items-center justify-between" style={{ background: v.strong }}>
           <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${c.dot}`} />
-            <span className={`text-sm font-semibold ${c.text}`}>{stage.label}</span>
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: v.hex }} />
+            <span className="text-sm font-semibold" style={{ color: v.hex }}>{stage.label}</span>
           </div>
-          <div className={`text-xs ${c.text}`}>
+          <div className="text-xs" style={{ color: v.hex }}>
             {totals.count} · {formatINRShort(totals.value)}
           </div>
         </div>
@@ -376,15 +436,20 @@ function KanbanColumn({
 
 function DraggableCard({
   card,
+  dragId,
   dragging = false,
   onClick,
 }: {
   card: Card;
+  // Override for the dnd-kit draggable id — the roster panel renders the
+  // same card as a second, independent draggable (see AssignedRosterPanel)
+  // and needs its own id so the two don't collide in dnd-kit's registry.
+  dragId?: string;
   dragging?: boolean;
   onClick?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({
-    id: card.id,
+    id: dragId ?? card.id,
   });
   const days = card.stageChangedAt ? daysSince(new Date(card.stageChangedAt)) : 0;
   const daysColor =
@@ -494,7 +559,7 @@ function FunnelView({
 
       {active.map((s, idx) => {
         const stageData = totals.get(s.id) ?? { count: 0, value: 0 };
-        const c = colorFor(s.color);
+        const v = stageVisual(s.color);
         const widthPct =
           maxCount > 0 ? Math.max(8, (stageData.count / maxCount) * 100) : 8;
         const conv = top > 0 ? (stageData.count / top) * 100 : 0;
@@ -506,10 +571,10 @@ function FunnelView({
             </div>
             <div className="flex-1">
               <div
-                className={`h-12 rounded-r-md flex items-center justify-end px-3 transition-all ${c.bg}`}
-                style={{ width: `${widthPct}%` }}
+                className="h-12 rounded-r-md flex items-center justify-end px-3 transition-all"
+                style={{ width: `${widthPct}%`, background: v.strong }}
               >
-                <span className={`text-xs font-semibold ${c.text}`}>{stageData.count}</span>
+                <span className="text-xs font-semibold" style={{ color: v.hex }}>{stageData.count}</span>
               </div>
             </div>
             <div className="w-16 text-xs text-slate-500 shrink-0">
@@ -525,25 +590,29 @@ function FunnelView({
 function CloseoutModal({
   prompt,
   card,
+  lossReasons,
   onCancel,
   onSubmit,
 }: {
   prompt: CloseoutPrompt;
   card: Card;
+  lossReasons: { id: string; name: string }[];
   onCancel: () => void;
-  onSubmit: (extras: { dealValue?: number; lostReason?: string }) => Promise<void>;
+  onSubmit: (extras: { dealValue?: number; lostReason?: string; lossReasonId?: string }) => Promise<void>;
 }) {
   const [dealValue, setDealValue] = useState(card.dealValue ?? "");
   const [lostReason, setLostReason] = useState(card.lostReason ?? "");
+  const [lossReasonId, setLossReasonId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function handle() {
     if (prompt.type === "won" && (!dealValue || Number(dealValue) <= 0)) return;
-    if (prompt.type === "lost" && !lostReason.trim()) return;
+    if (prompt.type === "lost" && !lostReason.trim() && !lossReasonId) return;
     setSubmitting(true);
     await onSubmit({
       ...(prompt.type === "won" && { dealValue: Number(dealValue) }),
       ...(prompt.type === "lost" && { lostReason: lostReason.trim() }),
+      ...(prompt.type === "lost" && lossReasonId && { lossReasonId }),
     });
     setSubmitting(false);
   }
@@ -573,18 +642,35 @@ function CloseoutModal({
             />
           </div>
         ) : (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Reason for losing
-            </label>
-            <textarea
-              autoFocus
-              value={lostReason}
-              onChange={(e) => setLostReason(e.target.value)}
-              rows={3}
-              placeholder="Budget too high, went with competitor, no longer needed..."
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green resize-none"
-            />
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Reason for losing
+              </label>
+              <select
+                autoFocus
+                value={lossReasonId}
+                onChange={(e) => setLossReasonId(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+              >
+                <option value="">—</option>
+                {lossReasons.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Notes {!lossReasonId && <span className="text-red-500">*</span>}
+              </label>
+              <textarea
+                value={lostReason}
+                onChange={(e) => setLostReason(e.target.value)}
+                rows={3}
+                placeholder="Budget too high, went with competitor, no longer needed..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green resize-none"
+              />
+            </div>
           </div>
         )}
         <div className="flex justify-end gap-2 mt-4">
@@ -600,7 +686,7 @@ function CloseoutModal({
             disabled={
               submitting ||
               (prompt.type === "won" && (!dealValue || Number(dealValue) <= 0)) ||
-              (prompt.type === "lost" && !lostReason.trim())
+              (prompt.type === "lost" && !lostReason.trim() && !lossReasonId)
             }
             className={`px-4 py-2 text-sm font-medium text-white rounded-md disabled:opacity-50 ${
               prompt.type === "won" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"
@@ -612,6 +698,16 @@ function CloseoutModal({
       </div>
     </div>
   );
+}
+
+const ROSTER_DRAG_PREFIX = "roster-";
+
+function rosterDragId(cardId: string): string {
+  return `${ROSTER_DRAG_PREFIX}${cardId}`;
+}
+
+function stripRosterPrefix(dragId: string): string {
+  return dragId.startsWith(ROSTER_DRAG_PREFIX) ? dragId.slice(ROSTER_DRAG_PREFIX.length) : dragId;
 }
 
 function formatINR(amount: number): string {

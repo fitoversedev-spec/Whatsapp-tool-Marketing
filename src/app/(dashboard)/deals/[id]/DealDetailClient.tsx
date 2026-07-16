@@ -22,6 +22,14 @@ type Deal = {
   lossReasonName: string | null;
   lossReasonNote: string | null;
   siteCity: string | null;
+  siteCityTierId: string | null;
+  siteCityTierName: string | null;
+  siteState: string | null;
+  siteAddress: string | null;
+  officeId: string | null;
+  officeName: string | null;
+  primaryContactId: string | null;
+  expectedCloseAt: string | null;
   enquiryAt: string;
   siteVisitAt: string | null;
   firstQuotedAt: string | null;
@@ -70,19 +78,32 @@ export default function DealDetailClient({
   stageHistory,
   activities,
   activityTypes,
+  offices,
+  cityTiers,
 }: {
   deal: Deal;
   stageHistory: StageHistoryRow[];
   activities: Activity[];
   activityTypes: { id: string; name: string }[];
+  offices: { id: string; name: string }[];
+  cityTiers: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const toast = useToast();
   const [showLogActivity, setShowLogActivity] = useState(false);
+  const [showEditDetails, setShowEditDetails] = useState(false);
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
-      <PageHeader title={deal.title} description={deal.code} backHref="/deals" />
+      <div className="flex items-start justify-between gap-3">
+        <PageHeader title={deal.title} description={deal.code} backHref="/deals" />
+        <button
+          onClick={() => setShowEditDetails(true)}
+          className="mt-1 shrink-0 text-xs font-medium text-wa-green hover:underline"
+        >
+          Edit details
+        </button>
+      </div>
 
       <div className="grid sm:grid-cols-3 gap-4 mt-4">
         <div className="sm:col-span-2 space-y-4">
@@ -166,7 +187,31 @@ export default function DealDetailClient({
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Site city</span>
-              <span className="text-slate-800">{deal.siteCity ?? "—"}</span>
+              <span className="text-slate-800">{deal.siteCity ?? "—"}{deal.siteCityTierName ? ` (${deal.siteCityTierName})` : ""}</span>
+            </div>
+            {deal.siteState && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Site state</span>
+                <span className="text-slate-800">{deal.siteState}</span>
+              </div>
+            )}
+            {deal.siteAddress && (
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500 shrink-0">Site address</span>
+                <span className="text-slate-800 text-right">{deal.siteAddress}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-slate-500">Office</span>
+              <span className="text-slate-800">{deal.officeName ?? "—"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Primary contact</span>
+              <span className="text-slate-800">{deal.contacts.find((c) => c.id === deal.primaryContactId)?.name ?? "—"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Expected close</span>
+              <span className="text-slate-800">{deal.expectedCloseAt ? new Date(deal.expectedCloseAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
             </div>
             <div className="border-t border-slate-100 pt-2 flex justify-between">
               <span className="text-slate-500">Est. value</span>
@@ -210,6 +255,155 @@ export default function DealDetailClient({
           }}
         />
       )}
+
+      {showEditDetails && (
+        <EditDealDetailsModal
+          deal={deal}
+          offices={offices}
+          cityTiers={cityTiers}
+          onClose={() => setShowEditDetails(false)}
+          onSaved={() => {
+            setShowEditDetails(false);
+            router.refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Editable fields not already reachable elsewhere (stage/value/loss-reason
+// come from the pipeline board and won/lost close-out, not here — see
+// api/deals/[id]/stage/route.ts). These had columns on Deal since Phase 1
+// but no form ever wrote them (see docs/DECISIONS.md).
+function EditDealDetailsModal({
+  deal,
+  offices,
+  cityTiers,
+  onClose,
+  onSaved,
+}: {
+  deal: Deal;
+  offices: { id: string; name: string }[];
+  cityTiers: { id: string; name: string }[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [siteCity, setSiteCity] = useState(deal.siteCity ?? "");
+  const [siteCityTierId, setSiteCityTierId] = useState(deal.siteCityTierId ?? "");
+  const [siteState, setSiteState] = useState(deal.siteState ?? "");
+  const [siteAddress, setSiteAddress] = useState(deal.siteAddress ?? "");
+  const [officeId, setOfficeId] = useState(deal.officeId ?? "");
+  const [primaryContactId, setPrimaryContactId] = useState(deal.primaryContactId ?? "");
+  const [expectedCloseAt, setExpectedCloseAt] = useState(deal.expectedCloseAt ? deal.expectedCloseAt.slice(0, 10) : "");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const res = await fetch(`/api/deals/${deal.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        siteCity: siteCity.trim() || null,
+        siteCityTierId: siteCityTierId || null,
+        siteState: siteState.trim() || null,
+        siteAddress: siteAddress.trim() || null,
+        officeId: officeId || null,
+        primaryContactId: primaryContactId || null,
+        expectedCloseAt: expectedCloseAt ? new Date(`${expectedCloseAt}T12:00:00`).toISOString() : null,
+      }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      toast.success("Deal updated");
+      onSaved();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Update failed");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[95vh] overflow-y-auto">
+        <div className="p-5 sm:p-6 border-b border-slate-200">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900">Edit deal details</h2>
+        </div>
+        <form onSubmit={submit} className="p-5 sm:p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Site city</label>
+              <input value={siteCity} onChange={(e) => setSiteCity(e.target.value)} className="modal-input" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">City tier</label>
+              <select value={siteCityTierId} onChange={(e) => setSiteCityTierId(e.target.value)} className="modal-input">
+                <option value="">—</option>
+                {cityTiers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Site state</label>
+            <input value={siteState} onChange={(e) => setSiteState(e.target.value)} className="modal-input" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Site address</label>
+            <textarea value={siteAddress} onChange={(e) => setSiteAddress(e.target.value)} className="modal-input" rows={2} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Office</label>
+            <select value={officeId} onChange={(e) => setOfficeId(e.target.value)} className="modal-input">
+              <option value="">—</option>
+              {offices.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Primary contact</label>
+            <select value={primaryContactId} onChange={(e) => setPrimaryContactId(e.target.value)} className="modal-input">
+              <option value="">—</option>
+              {deal.contacts.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}{c.phone ? ` (${c.phone})` : ""}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Expected close date</label>
+            <input type="date" value={expectedCloseAt} onChange={(e) => setExpectedCloseAt(e.target.value)} className="modal-input" />
+          </div>
+          <div className="pt-4 border-t border-slate-200 -mx-5 sm:-mx-6 px-5 sm:px-6 flex flex-col sm:flex-row sm:justify-end gap-2">
+            <button type="button" onClick={onClose} className="order-2 sm:order-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="order-1 sm:order-2 bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 text-white font-medium px-5 py-2.5 rounded-lg"
+            >
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+      <style jsx>{`
+        :global(.modal-input) {
+          width: 100%;
+          padding: 0.625rem 0.75rem;
+          border-radius: 0.5rem;
+          border: 1px solid #cbd5e1;
+          outline: none;
+          font-size: 16px;
+        }
+        @media (min-width: 640px) {
+          :global(.modal-input) { font-size: 14px; }
+        }
+      `}</style>
     </div>
   );
 }

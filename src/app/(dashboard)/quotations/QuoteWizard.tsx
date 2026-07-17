@@ -257,12 +257,21 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
   // WhatsApp displays it instead of hiding it under the document
   // thumbnail. Empty = server uses default.
   const [caption, setCaption] = useState("");
+  // Editable, NOT just prefill?.contactPhone read directly — a quote
+  // started from the standalone /quotations "New Quote" button (no
+  // conversation behind it) has no prefill at all, and send() used to
+  // permanently gate on the read-only prop with no way to ever type a
+  // number in. CourtImageWizard already gets this right (a real editable
+  // field); this mirrors it. Confirmed against production: 21 real drafts
+  // were stuck exactly this way before this fix — see docs/DECISIONS.md.
+  const [contactPhone, setContactPhone] = useState(prefill?.contactPhone ?? "");
 
   // Reset state when modal opens fresh
   useEffect(() => {
     if (open) {
       setStep(1);
       setCustomerName(prefill?.customerName ?? "");
+      setContactPhone(prefill?.contactPhone ?? "");
       setSiteCity("");
       setLeadSourceId("");
       setCustomerProfileId("");
@@ -537,7 +546,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             quoteDate: quoteDateIso,
             validityDays,
             conversationId: prefill?.conversationId ?? null,
-            contactPhone: prefill?.contactPhone ?? null,
+            contactPhone: contactPhone.trim() || null,
           }),
         });
       } catch (err) {
@@ -595,10 +604,8 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
 
   async function send() {
     if (!draftId) return;
-    if (!prefill?.contactPhone) {
-      toast.error(
-        "No contact phone available. Open this customer's chat first, then click 📄 Quote."
-      );
+    if (!contactPhone.trim()) {
+      toast.error("Enter the customer's WhatsApp number before sending.");
       return;
     }
     setSubmitting(true);
@@ -606,7 +613,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
       const res = await fetch(`/api/quotations/${draftId}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption: caption.trim() || null }),
+        body: JSON.stringify({ caption: caption.trim() || null, contactPhone: contactPhone.trim() }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -680,6 +687,19 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   placeholder="e.g. Dr. P. Prabhusankar"
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  WhatsApp phone (E.164) {!prefill?.contactPhone && <span className="text-red-500">*</span>}
+                </label>
+                <input
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="+919876543210"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                />
+                <p className="mt-1 text-xs text-slate-400">Who the finished quote gets sent to — required to send later, even if you save this as a draft for now.</p>
               </div>
 
               <div>
@@ -1316,15 +1336,23 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   to use the default.
                 </div>
               </div>
+              {!contactPhone.trim() && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <label className="block text-xs font-semibold text-amber-900 uppercase tracking-wide mb-1">
+                    ⚠ WhatsApp phone needed to send
+                  </label>
+                  <input
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    placeholder="+919876543210"
+                    className="w-full px-3 py-2 text-sm border border-amber-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+                  />
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <button onClick={downloadDraftPdf} className="text-wa-dark hover:underline">
                   ⬇ Download / open in new tab
                 </button>
-                {!prefill?.contactPhone && (
-                  <span className="text-amber-700 text-xs">
-                    ⚠ No customer phone — saved as draft, send from /quotations page
-                  </span>
-                )}
               </div>
             </div>
           )}
@@ -1386,7 +1414,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             {step === 4 && (
               <button
                 onClick={send}
-                disabled={submitting || !prefill?.contactPhone}
+                disabled={submitting || !contactPhone.trim()}
                 className="px-5 py-2 text-sm font-medium bg-wa-green text-white rounded-md disabled:opacity-50 hover:bg-wa-green/90"
               >
                 {submitting ? "Sending…" : "🚀 Send to customer"}

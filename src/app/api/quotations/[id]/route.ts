@@ -17,6 +17,10 @@ const patchSchema = z.object({
   validityDays: z.number().int().min(1).max(365).optional(),
   status: z.enum(["draft", "sent", "viewed", "accepted", "expired", "rejected", "superseded"]).optional(),
   dealId: z.string().uuid().nullable().optional(),
+  // Lets a draft created with no phone (the standalone "New Quote" flow
+  // previously had no field for this at all — see docs/DECISIONS.md) be
+  // corrected from the /quotations list without recreating the quote.
+  contactPhone: z.string().min(5).max(30).nullable().optional(),
 });
 
 async function loadAuthorized(id: string, userId: string, role: string) {
@@ -83,6 +87,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (parsed.data.notes !== undefined) data.notes = parsed.data.notes;
   if (parsed.data.validityDays !== undefined) data.validityDays = parsed.data.validityDays;
   if (parsed.data.status !== undefined) data.status = parsed.data.status;
+  if (parsed.data.contactPhone !== undefined) data.contactPhone = parsed.data.contactPhone;
   if (parsed.data.lineItems) {
     const totals = recompute(parsed.data.lineItems as QuoteLineItem[]);
     data.lineItems = JSON.stringify(parsed.data.lineItems);

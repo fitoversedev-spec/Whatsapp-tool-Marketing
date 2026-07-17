@@ -15,10 +15,14 @@ import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { advanceDealStageIfEarlier } from "@/lib/funnel/transitionDeal";
 import { z } from "zod";
 
-// Optional caption in the request body — overrides row.caption if
-// provided. Wizard sends this when the user typed a message in Step 3.
+// Optional caption/contactPhone in the request body — override the row's
+// own values if provided. contactPhone lets a quote created with no phone
+// (the standalone /quotations "New Quote" flow, or any historical draft —
+// see docs/DECISIONS.md) be supplied at send time instead of requiring a
+// separate edit step first.
 const bodySchema = z.object({
   caption: z.string().max(1024).nullable().optional(),
+  contactPhone: z.string().min(5).max(30).optional(),
 });
 import type { QuoteLineItem } from "@/lib/quotation/calculator";
 
@@ -32,18 +36,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const body = await req.json().catch(() => ({}));
   const parsed = bodySchema.safeParse(body);
   const bodyCaption = parsed.success ? parsed.data.caption : null;
+  const bodyContactPhone = parsed.success ? parsed.data.contactPhone : undefined;
 
   const q = await prisma.quotation.findUnique({ where: { id: params.id } });
   if (!q) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   // If a caption came in via the body (from the wizard), persist it so
-  // re-sends from the /quotations list use the same wording.
+  // re-sends from the /quotations list use the same wording. Same for
+  // contactPhone — lets a quote created with none (the standalone
+  // "New Quote" flow previously had no field for it at all — see
+  // docs/DECISIONS.md) get one supplied right here instead of failing.
   if (bodyCaption !== undefined && bodyCaption !== q.caption) {
     await prisma.quotation.update({
       where: { id: params.id },
       data: { caption: bodyCaption },
     });
     q.caption = bodyCaption;
+  }
+  if (bodyContactPhone && bodyContactPhone !== q.contactPhone) {
+    await prisma.quotation.update({
+      where: { id: params.id },
+      data: { contactPhone: bodyContactPhone },
+    });
+    q.contactPhone = bodyContactPhone;
   }
   if (user.role !== "admin" && q.createdByUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

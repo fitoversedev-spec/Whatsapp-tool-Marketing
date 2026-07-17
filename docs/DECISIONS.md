@@ -4,6 +4,23 @@ Per the build spec's own rule (§0.5): when a spec requirement conflicts with so
 
 ---
 
+## 2026-07-17 — QuoteWizard's standalone flow could never actually send a quote
+
+User screenshot: Step 4 of "New Quotation" (opened from the standalone `/quotations` page, not from an Inbox conversation), draft created successfully, "Send to customer" reachable but the phone/caption entry the button implies existed wasn't there.
+
+**Root cause: `send()` gated on `prefill?.contactPhone` — a read-only prop, never an editable field.** `prefill` only ever carries a phone when the wizard is opened from an Inbox conversation (`prefill={{contactPhone: current.contactPhone, ...}}`); the standalone "+ New quotation" button on `/quotations` passes no `prefill` at all. So any quote started that way had **no field anywhere in the wizard** to type a phone number into — Step 4's own warning text ("saved as draft, send from /quotations page") pointed at a page with the exact same limitation (its Send button also just doesn't render without `contactPhone`, no entry field there either). `CourtImageWizard.tsx` already does this correctly — a real `useState`-backed editable `contactPhone` field — confirming this was a QuoteWizard-specific regression/gap, not a deliberate design choice.
+
+**Confirmed against production, not assumed: 21 real draft quotations were permanently stuck this way**, including the exact one in the screenshot (`FIT-QT-2026-073`). Checked whether any could be auto-corrected from a linked Deal/Account/Conversation's own phone — zero could; every one of the 21 traces back to this same broken standalone path, and most customer names look like scratch/test entries (`"as"`, `"wr"`, `"gh"`, `"e"`) from repeated attempts to get past this exact wall, not lost real data. Did not invent phone numbers for any of them.
+
+**Fixed in three places:**
+1. `QuoteWizard.tsx` — `contactPhone` is now real `useState` (mirroring `CourtImageWizard`'s already-correct pattern), with an input field in Step 1 (collected up front) and a second inline field that appears in Step 4 only if it's still missing by then (so nobody has to go back to Step 1 to fix a skip). `send()` and the button's `disabled` check both read the local state now, not the read-only prop.
+2. `POST /api/quotations/[id]/send` — previously only ever read `q.contactPhone` from the database row itself, silently ignoring anything the client might send. Extended its existing caption-override pattern to accept and persist `contactPhone` in the request body too, so a number typed at send time (from the wizard's Step 4, or the list-page fix below) actually reaches the row before the not-null guard runs.
+3. `/quotations` list page — `PATCH /api/quotations/[id]` now accepts `contactPhone`, and any **draft** row missing one shows an inline phone input + Save right in the table instead of just never rendering a Send button with no explanation of how to fix it. This is what unsticks the 21 existing rows (and any future edge case) without needing to recreate the quote from scratch.
+
+Verified with 8 direct assertions, including running the exact mechanism the UI now uses directly against the real `FIT-QT-2026-073` row from the screenshot (proving it correctly unsticks) and then reverting it back to `null` immediately — a real customer-facing record, left exactly as found rather than fabricating a phone number on it.
+
+---
+
 ## 2026-07-16 — Two missing indexes, found by a hang/lag audit after the fix batch
 
 Asked directly whether the tool had any hang/lag issues. Hadn't checked performance at all up to that point — everything in the two batches above was verified for correctness (direct DB assertions), not speed. Ran a dedicated code-level audit (no live profiling access this session) covering: every new query this session's 18 fixes added, N+1 patterns across list pages, the Konva 2D canvas and Three.js 3D view, and missing-index risk in the analytics queries.

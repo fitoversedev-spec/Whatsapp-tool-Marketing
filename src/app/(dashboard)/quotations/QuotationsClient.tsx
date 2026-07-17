@@ -57,6 +57,37 @@ export default function QuotationsClient({
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // In-progress phone entry for drafts saved without one — the standalone
+  // "New Quote" flow used to have no phone field at all, so any draft
+  // created that way is permanently unsendable without this (see
+  // docs/DECISIONS.md). Keyed by quotation id so multiple rows can be
+  // edited independently.
+  const [phoneEdits, setPhoneEdits] = useState<Record<string, string>>({});
+  const [savingPhone, setSavingPhone] = useState<string | null>(null);
+
+  async function savePhone(q: Quotation) {
+    const phone = (phoneEdits[q.id] ?? "").trim();
+    if (!phone) return;
+    setSavingPhone(q.id);
+    const res = await fetch(`/api/quotations/${q.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactPhone: phone }),
+    });
+    setSavingPhone(null);
+    if (res.ok) {
+      setQuotations((curr) => curr.map((x) => (x.id === q.id ? { ...x, contactPhone: phone } : x)));
+      setPhoneEdits((curr) => {
+        const next = { ...curr };
+        delete next[q.id];
+        return next;
+      });
+      toast.success("Phone number saved");
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Could not save phone number");
+    }
+  }
 
   const filtered = useMemo(() => {
     return quotations.filter((q) => {
@@ -314,8 +345,26 @@ export default function QuotationsClient({
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-900">{q.customerName}</div>
-                        {q.contactPhone && (
+                        {q.contactPhone ? (
                           <div className="text-xs text-slate-500 font-mono">+{q.contactPhone}</div>
+                        ) : q.status === "draft" ? (
+                          <div className="flex items-center gap-1 mt-1">
+                            <input
+                              value={phoneEdits[q.id] ?? ""}
+                              onChange={(e) => setPhoneEdits((curr) => ({ ...curr, [q.id]: e.target.value }))}
+                              placeholder="+919876543210"
+                              className="w-32 px-1.5 py-0.5 text-xs border border-amber-300 rounded font-mono"
+                            />
+                            <button
+                              onClick={() => savePhone(q)}
+                              disabled={savingPhone === q.id || !(phoneEdits[q.id] ?? "").trim()}
+                              className="text-xs text-blue-700 hover:underline disabled:opacity-40 disabled:no-underline"
+                            >
+                              {savingPhone === q.id ? "…" : "Save"}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-amber-700">⚠ no phone</div>
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-600 capitalize">

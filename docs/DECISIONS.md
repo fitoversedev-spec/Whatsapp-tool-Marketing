@@ -4,6 +4,20 @@ Per the build spec's own rule (§0.5): when a spec requirement conflicts with so
 
 ---
 
+## 2026-07-17 — Vercel Blob storage cleanup (959.1 MB → 761.5 MB)
+
+User screenshot: Step 4 send failed with `Vercel Blob: Storage quota exceeded for Hobby plan (1GB maximum)`.
+
+**Root cause: every quote PDF embeds a full, uncompressed sport catalogue — 20-54 MB per file.** `quotations/` was 788.3 MB of the account's 959.1 MB total (82%). This traces to an earlier, deliberate product decision (prior commit: "quote: always use the real uploaded catalogue, no size-based substitution") — not something to unilaterally reverse.
+
+**Cleanup**: cross-referenced every stored Blob URL against every DB column that's supposed to reference it (`Quotation.pdfUrl`, `CourtImage.*Url`, catalogue `Setting` rows, `Message.mediaUrl`) rather than guessing from filenames. 31 files / 197.5 MB were referenced by zero live rows — unambiguously safe, since the app can never serve them again. Deleted via `@vercel/blob`'s `del()`; confirmed via a fresh inventory pass afterward (959.1 MB → 761.5 MB, matching exactly). The other 70 files / 761.5 MB are all still referenced and were left untouched.
+
+**Not a durable fix on its own**: post-cleanup usage is still 74% of the 1 GB cap, refilling in roughly 10-15 more quotes at current PDF sizes. Presented three root-cause options (shrink the embedded catalogue, upgrade the Vercel plan, build an automatic retention job); user chose to upgrade the Vercel plan themselves (billing decision, outside what I can action).
+
+**Follow-up same day, asked "what else can we clear":** the remaining 761.5 MB was all DB-referenced, so no more zero-risk orphan sweep was available — this pass required an actual judgment call. Found the account had accumulated development/testing debris: a single deal (`FIT-DL-2026-001`, account name literally "Test1") with 19 quote revisions in 11 days (several sent seconds apart — consistent with someone repeatedly testing the send flow, not a real negotiation), plus 11 standalone one-off quotations each with a 2-3 letter scratch name (`"rf"`, `"wr"`, `"dfn"`, `"as"`, etc.) and **no phone number or conversation attached at all** — never reachable by a real customer. Presented both groups with full evidence (account names, deal codes, timestamps, phone presence/absence) and let the user confirm rather than assuming; user approved deleting both. Removed 27 PDF blobs + 30 Quotation rows (3 of the 30 had no pdfUrl — aborted drafts) via a one-time script, then ran `reconcileDealAfterQuotationDelete` on all 12 affected deals to keep `isPrimary`/`quotedValue` consistent. Deliberately left the underlying Deal/Account/Conversation rows untouched — the space was 100% in the PDF blobs, and the "Test1" deal's conversation has a real phone number that might carry other message history worth keeping. **Result: 761.5 MB → 204.6 MB (20% of cap).**
+
+---
+
 ## 2026-07-17 — QuoteWizard's standalone flow could never actually send a quote
 
 User screenshot: Step 4 of "New Quotation" (opened from the standalone `/quotations` page, not from an Inbox conversation), draft created successfully, "Send to customer" reachable but the phone/caption entry the button implies existed wasn't there.

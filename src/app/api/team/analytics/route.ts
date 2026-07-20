@@ -47,9 +47,16 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Explicit from/to (calendar-picked) takes precedence over the older
+  // 7d/30d/90d/all preset — see docs/DECISIONS.md. `to` defaults to "now"
+  // either way, so sinceFilter's shape is unchanged for every existing
+  // caller that only ever passed `range`.
+  const fromParam = req.nextUrl.searchParams.get("from");
+  const toParam = req.nextUrl.searchParams.get("to");
   const rangeParam = (req.nextUrl.searchParams.get("range") ?? "30d") as Range;
-  const since = rangeStart(rangeParam);
-  const sinceFilter = since ? { gte: since } : undefined;
+  const since = fromParam ? new Date(fromParam + "T00:00:00") : rangeStart(rangeParam);
+  const rangeTo = toParam ? new Date(toParam + "T23:59:59") : new Date();
+  const sinceFilter = since ? { gte: since, lte: rangeTo } : undefined;
 
   // Owner filter — "all" (default) or a specific userId, applied to every
   // Phase 4 AnalyticsFilter-based screen below. Every one of those
@@ -419,7 +426,7 @@ export async function GET(req: NextRequest) {
   // pre-existing, unrelated /analytics WhatsApp-broadcast-analytics page).
   // sales-activity + funnel + geography + customers ship first; 5 more follow.
   const analyticsFrom = since ?? new Date(0);
-  const analyticsTo = new Date();
+  const analyticsTo = rangeTo;
   const [salesActivityRows, funnel, geo, customers, products, sources, timelines, forecastResult, overviewResult] = await Promise.all([
     salesActivity({ from: analyticsFrom, to: analyticsTo, ownerIds }),
     funnelSnapshot({ from: analyticsFrom, to: analyticsTo, ownerIds }),
@@ -442,6 +449,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     range: rangeParam,
     since: since?.toISOString() ?? null,
+    from: analyticsFrom.toISOString(),
+    to: analyticsTo.toISOString(),
     teamTotals,
     perUser,
     activity: activity.slice(0, 25),

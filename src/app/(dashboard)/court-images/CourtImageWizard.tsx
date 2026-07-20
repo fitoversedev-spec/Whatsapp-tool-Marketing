@@ -100,11 +100,13 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onComplete: (result: { courtImageId: string; sent: boolean }) => void;
-  // Pre-fill from inbox launch
+  // Pre-fill from inbox launch. dealId attaches the design directly to a
+  // deal (e.g. opened from a CRM Contact/Company page).
   prefill?: {
     customerName?: string;
     contactPhone?: string;
     conversationId?: string;
+    dealId?: string;
   };
   // When set, the wizard loads an existing draft for editing rather than
   // starting fresh. Step 1 is skipped to jump straight into the canvas.
@@ -1745,6 +1747,7 @@ export default function CourtImageWizard({
         caption: caption.trim() || null,
         contactPhone: contactPhone.trim() || null,
         conversationId: prefill?.conversationId ?? null,
+        dealId: prefill?.dealId ?? null,
       };
 
       if (draftId) {

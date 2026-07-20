@@ -201,6 +201,12 @@ export async function findOrCreateDealForConversation(args: {
           currentStageId: stageId,
           conversationId: args.conversationId,
           leadSourceId: args.leadSourceId ?? null,
+          // This whole function is the legacy Quotations/Court Designs/
+          // Reminders deal-creation path — "whatsapp" regardless of whether
+          // conversationId ended up set, since a standalone quote created
+          // without a threaded conversation is still that same subsystem,
+          // not a CRM-page action.
+          dealChannel: "whatsapp",
         },
       });
       break;

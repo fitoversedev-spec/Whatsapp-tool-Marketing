@@ -37,6 +37,10 @@ const createSchema = z.object({
   video3dUrl: z.string().url().nullable().optional(),
   caption: z.string().max(1024).nullable().optional(),
   conversationId: z.string().uuid().nullable().optional(),
+  // An explicit dealId (e.g. opened from a CRM Contact/Company page) skips
+  // the conversation-based find-or-create below entirely — same precedence
+  // rule POST /api/quotations already uses.
+  dealId: z.string().uuid().nullable().optional(),
   contactPhone: z.string().min(5).max(30).nullable().optional(),
   // Tier-1 classification — see docs/DECISIONS.md; same fields the quote
   // wizard now captures, mirrored here so a design-first flow classifies
@@ -108,21 +112,26 @@ export async function POST(req: NextRequest) {
 
   const year = new Date().getFullYear();
 
-  // Same find-or-create-by-conversation resolution quotations uses (see
-  // docs/DECISIONS.md) — court designs previously never got a dealId at
-  // all, under any code path, so every design was permanently invisible to
-  // Deal-based analytics regardless of whether a deal already existed.
-  const resolvedDeal = await findOrCreateDealForConversation({
-    conversationId: parsed.data.conversationId ?? null,
-    accountName: parsed.data.customerName,
-    dealTitle: `Court design for ${parsed.data.customerName}`,
-    ownerUserId: user.id,
-    leadSourceId: parsed.data.leadSourceId,
-    customerProfileId: parsed.data.customerProfileId,
-    businessType: parsed.data.businessType,
-  });
+  // An explicit dealId wins outright; otherwise the same find-or-create-by-
+  // conversation resolution quotations uses (see docs/DECISIONS.md) — court
+  // designs previously never got a dealId at all, under any code path, so
+  // every design was permanently invisible to Deal-based analytics
+  // regardless of whether a deal already existed.
+  let dealId = parsed.data.dealId ?? null;
+  if (!dealId) {
+    const resolvedDeal = await findOrCreateDealForConversation({
+      conversationId: parsed.data.conversationId ?? null,
+      accountName: parsed.data.customerName,
+      dealTitle: `Court design for ${parsed.data.customerName}`,
+      ownerUserId: user.id,
+      leadSourceId: parsed.data.leadSourceId,
+      customerProfileId: parsed.data.customerProfileId,
+      businessType: parsed.data.businessType,
+    });
+    dealId = resolvedDeal.id;
+  }
   if (parsed.data.siteCity) {
-    await prisma.deal.update({ where: { id: resolvedDeal.id }, data: { siteCity: parsed.data.siteCity } }).catch(() => null);
+    await prisma.deal.update({ where: { id: dealId }, data: { siteCity: parsed.data.siteCity } }).catch(() => null);
   }
 
   // Same fix as the quotations route — derive next sequential number
@@ -148,7 +157,7 @@ export async function POST(req: NextRequest) {
           contactPhone: parsed.data.contactPhone ?? null,
           createdByUserId: user.id,
           status: "draft",
-          dealId: resolvedDeal.id,
+          dealId,
         },
       });
       break;

@@ -31,6 +31,9 @@ type TemplateHit = {
   status: string;
   category: string;
 };
+type DealHit = { id: string; code: string; title: string; accountName: string; stageName: string; stageColorHex: string | null };
+type AccountHit = { id: string; name: string; city: string | null };
+type AccountContactHit = { id: string; name: string; phone: string | null; email: string | null; accountId: string; accountName: string };
 
 type Results = {
   query: string;
@@ -38,6 +41,9 @@ type Results = {
   notes: NoteHit[];
   contacts: ContactHit[];
   templates: TemplateHit[];
+  deals: DealHit[];
+  accounts: AccountHit[];
+  accountContacts: AccountContactHit[];
 };
 
 export default function SearchClient({ initialQuery }: { initialQuery: string }) {
@@ -74,7 +80,10 @@ export default function SearchClient({ initialQuery }: { initialQuery: string })
     (results?.messages.length ?? 0) +
     (results?.notes.length ?? 0) +
     (results?.contacts.length ?? 0) +
-    (results?.templates.length ?? 0);
+    (results?.templates.length ?? 0) +
+    (results?.deals.length ?? 0) +
+    (results?.accounts.length ?? 0) +
+    (results?.accountContacts.length ?? 0);
 
   return (
     <>
@@ -150,6 +159,47 @@ export default function SearchClient({ initialQuery }: { initialQuery: string })
                   by {n.authorName} on {n.contactName ?? "+" + n.contactPhone} ·{" "}
                   {new Date(n.createdAt).toLocaleDateString("en-IN")}
                 </div>
+              </Link>
+            ))}
+          </Section>
+        )}
+
+        {results && results.deals.length > 0 && (
+          <Section title={`Deals (${results.deals.length})`} icon="📁">
+            {results.deals.map((d) => (
+              <Link key={d.id} href={`/deals/${d.id}`} className="block px-4 py-3 hover:bg-slate-50 border-t border-slate-100 first:border-t-0">
+                <div className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                  <Highlight text={d.title} query={results.query} />
+                  <span
+                    className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                    style={{ background: (d.stageColorHex ?? "#64748b") + "20", color: d.stageColorHex ?? "#475569" }}
+                  >
+                    {d.stageName}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500">{d.code} · {d.accountName}</div>
+              </Link>
+            ))}
+          </Section>
+        )}
+
+        {results && results.accounts.length > 0 && (
+          <Section title={`Companies (${results.accounts.length})`} icon="🏢">
+            {results.accounts.map((a) => (
+              <Link key={a.id} href={`/crm/companies/${a.id}`} className="block px-4 py-3 hover:bg-slate-50 border-t border-slate-100 first:border-t-0">
+                <div className="text-sm font-medium text-slate-900"><Highlight text={a.name} query={results.query} /></div>
+                {a.city && <div className="text-xs text-slate-500">{a.city}</div>}
+              </Link>
+            ))}
+          </Section>
+        )}
+
+        {results && results.accountContacts.length > 0 && (
+          <Section title={`CRM contacts (${results.accountContacts.length})`} icon="🧑">
+            {results.accountContacts.map((c) => (
+              <Link key={c.id} href={`/crm/contacts/${c.id}`} className="block px-4 py-3 hover:bg-slate-50 border-t border-slate-100 first:border-t-0">
+                <div className="text-sm font-medium text-slate-900"><Highlight text={c.name} query={results.query} /></div>
+                <div className="text-xs text-slate-500">{c.accountName}{c.phone ? ` · ${c.phone}` : ""}</div>
               </Link>
             ))}
           </Section>

@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
@@ -51,6 +51,23 @@ export default function QuotationsClient({
   const toast = useToast();
   const [quotations, setQuotations] = useState<Quotation[]>(initialQuotations);
   const [showWizard, setShowWizard] = useState(false);
+  const [wizardPrefill, setWizardPrefill] = useState<{ customerName?: string; contactPhone?: string; dealId?: string } | undefined>(undefined);
+
+  // Opened from a CRM Contact/Company page's "+ New Quotation" — auto-opens
+  // the wizard pre-attached to that deal instead of starting a standalone
+  // one with nothing to link back to.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const dealId = searchParams.get("dealId");
+    if (!dealId) return;
+    setWizardPrefill({
+      dealId,
+      customerName: searchParams.get("customerName") ?? undefined,
+      contactPhone: searchParams.get("phone") ?? undefined,
+    });
+    setShowWizard(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
@@ -443,9 +460,11 @@ export default function QuotationsClient({
       {showWizard && (
         <QuoteWizard
           open={showWizard}
-          onClose={() => setShowWizard(false)}
+          prefill={wizardPrefill}
+          onClose={() => { setShowWizard(false); setWizardPrefill(undefined); }}
           onComplete={() => {
             setShowWizard(false);
+            setWizardPrefill(undefined);
             router.refresh();
           }}
         />

@@ -79,6 +79,29 @@ function NumberCell({
   );
 }
 
+// Same commit-on-blur pattern as NumberCell, for the Name column — a full
+// table reload on every keystroke would drop focus mid-type.
+function TextCell({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+
+  function commit() {
+    const trimmed = text.trim();
+    if (trimmed && trimmed !== value) onCommit(trimmed);
+    else setText(value);
+  }
+
+  return (
+    <input
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+      className="w-full text-sm border border-transparent hover:border-slate-200 focus:border-slate-300 rounded px-1.5 py-1 -mx-1.5"
+    />
+  );
+}
+
 export default function TaxonomyClient() {
   const toast = useToast();
   const [tab, setTab] = useState(TABS[0].type);
@@ -136,6 +159,28 @@ export default function TaxonomyClient() {
     }
   }
 
+  // Swaps this row's sortOrder with its neighbor in the currently-displayed
+  // (already sortOrder-sorted) list — simplest reorder that only ever
+  // touches the two rows actually moving, not a full renumber.
+  async function moveRow(index: number, direction: -1 | 1) {
+    const other = rows[index + direction];
+    const current = rows[index];
+    if (!other) return;
+    await Promise.all([
+      fetch(`/api/admin/taxonomy/${tab}/${current.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sortOrder: other.sortOrder }),
+      }),
+      fetch(`/api/admin/taxonomy/${tab}/${other.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sortOrder: current.sortOrder }),
+      }),
+    ]);
+    load(tab);
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <PageHeader
@@ -175,7 +220,7 @@ export default function TaxonomyClient() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r, index) => (
                 <tr key={r.id} className="border-b border-slate-100 last:border-0">
                   <td className="px-4 py-2.5">
                     <div className="flex gap-1">
@@ -189,7 +234,9 @@ export default function TaxonomyClient() {
                       ))}
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-800">{r.name}</td>
+                  <td className="px-4 py-2.5 text-slate-800 min-w-[140px]">
+                    <TextCell value={r.name} onCommit={(v) => patchRow(r.id, { name: v })} />
+                  </td>
                   {tab === "funnel-stages" && (
                     <td className="px-4 py-2.5">
                       <select
@@ -233,7 +280,26 @@ export default function TaxonomyClient() {
                   <td className="px-4 py-2.5">
                     <input type="checkbox" checked={r.isActive} onChange={(e) => patchRow(r.id, { isActive: e.target.checked })} />
                   </td>
-                  <td className="px-4 py-2.5 text-slate-500">{r.sortOrder}</td>
+                  <td className="px-4 py-2.5 text-slate-500">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => moveRow(index, -1)}
+                        disabled={index === 0}
+                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                        aria-label="Move up"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        onClick={() => moveRow(index, 1)}
+                        disabled={index === rows.length - 1}
+                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                        aria-label="Move down"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

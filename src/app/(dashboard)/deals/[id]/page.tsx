@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/rbac";
+import { getUnifiedTimeline } from "@/lib/crm/timeline";
 import DealDetailClient from "./DealDetailClient";
 
 export default async function DealDetailPage({ params }: { params: { id: string } }) {
@@ -39,11 +40,9 @@ export default async function DealDetailPage({ params }: { params: { id: string 
   if (!deal || deal.deletedAt) notFound();
   if (!isAdmin(user.role) && deal.ownerUserId && deal.ownerUserId !== user.id) notFound();
 
-  const activities = await prisma.activity.findMany({
-    where: { dealId: deal.id },
-    orderBy: { occurredAt: "desc" },
-    include: { activityType: { select: { name: true } }, owner: { select: { name: true } } },
-  });
+  // Unified Activity+Reminder feed — previously two separate, un-merged
+  // sections (and Reminders weren't shown here at all until this phase).
+  const timeline = await getUnifiedTimeline({ dealId: deal.id });
 
   return (
     <DealDetailClient
@@ -98,15 +97,8 @@ export default async function DealDetailPage({ params }: { params: { id: string 
         changedAt: h.changedAt.toISOString(),
         durationInFromStageSeconds: h.durationInFromStageSeconds,
       }))}
-      activities={activities.map((a) => ({
-        id: a.id,
-        typeName: a.activityType.name,
-        subject: a.subject,
-        notes: a.notes,
-        occurredAt: a.occurredAt.toISOString(),
-        ownerName: a.owner.name,
-      }))}
       activityTypes={activityTypes.map((t) => ({ id: t.id, name: t.name }))}
+      timeline={timeline}
     />
   );
 }

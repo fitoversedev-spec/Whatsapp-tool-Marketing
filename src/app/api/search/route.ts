@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isAdmin } from "@/lib/rbac";
 
 const PER_TYPE = 20;
 const MAX_QUERY_LEN = 200;
@@ -27,6 +28,9 @@ export async function GET(req: NextRequest) {
       notes: [],
       contacts: [],
       templates: [],
+      deals: [],
+      accounts: [],
+      accountContacts: [],
     });
   }
   if (raw.length > MAX_QUERY_LEN) {
@@ -41,7 +45,14 @@ export async function GET(req: NextRequest) {
       ? {}
       : { OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }] };
 
-  const [messagesRaw, notesRaw, contactsRaw, templatesRaw] = await Promise.all([
+  // Same owner-or-admin idiom used by GET /api/deals and friends.
+  const dealScope = isAdmin(user.role) ? {} : { ownerUserId: user.id };
+  const accountScope = isAdmin(user.role) ? {} : { ownerUserId: user.id };
+
+  const [
+    messagesRaw, notesRaw, contactsRaw, templatesRaw,
+    dealsRaw, accountsRaw, accountContactsRaw,
+  ] = await Promise.all([
     prisma.message.findMany({
       where: {
         body: ilike,
@@ -91,6 +102,31 @@ export async function GET(req: NextRequest) {
       orderBy: { name: "asc" },
       take: PER_TYPE,
     }),
+    prisma.deal.findMany({
+      where: {
+        deletedAt: null,
+        ...dealScope,
+        OR: [{ title: ilike }, { code: ilike }, { account: { name: ilike } }],
+      },
+      orderBy: { updatedAt: "desc" },
+      take: PER_TYPE,
+      include: { account: { select: { name: true } }, currentStage: { select: { name: true, colorHex: true } } },
+    }),
+    prisma.account.findMany({
+      where: { deletedAt: null, ...accountScope, name: ilike },
+      orderBy: { updatedAt: "desc" },
+      take: PER_TYPE,
+      select: { id: true, name: true, city: true },
+    }),
+    prisma.accountContact.findMany({
+      where: {
+        OR: [{ name: ilike }, { phone: { contains: raw } }, { email: ilike }],
+        ...(isAdmin(user.role) ? {} : { account: { ownerUserId: user.id } }),
+      },
+      orderBy: { createdAt: "desc" },
+      take: PER_TYPE,
+      include: { account: { select: { id: true, name: true } } },
+    }),
   ]);
 
   return NextResponse.json({
@@ -124,6 +160,23 @@ export async function GET(req: NextRequest) {
       bodySnippet: t.body.slice(0, 140),
       status: t.status,
       category: t.category,
+    })),
+    deals: dealsRaw.map((d) => ({
+      id: d.id,
+      code: d.code,
+      title: d.title,
+      accountName: d.account.name,
+      stageName: d.currentStage.name,
+      stageColorHex: d.currentStage.colorHex,
+    })),
+    accounts: accountsRaw.map((a) => ({ id: a.id, name: a.name, city: a.city })),
+    accountContacts: accountContactsRaw.map((c) => ({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      email: c.email,
+      accountId: c.account.id,
+      accountName: c.account.name,
     })),
   });
 }

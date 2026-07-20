@@ -7,6 +7,7 @@
 import { prisma } from "@/lib/prisma";
 import { transitionDeal, TransitionDealError } from "@/lib/funnel/transitionDeal";
 import { parseNaturalDate, parseStaffCommand, type ParsedCommand } from "@/lib/chatbot/staffParse";
+import { getMyDay } from "@/lib/crm/myDay";
 
 const APP_URL = process.env.APP_URL ?? "https://whatsapp-tool-marketing.vercel.app";
 const PENDING_ACTION_TTL_MS = 10 * 60_000;
@@ -92,10 +93,19 @@ export async function executeStaffCommand(
   if (parsed.type === "help") return HELP_TEXT;
 
   if (parsed.type === "new_lead") {
-    const lead = await prisma.lead.create({
-      data: { name: parsed.name, phone: parsed.phone, city: parsed.city, ownerUserId: user.id, status: "NEW" },
+    // Was prisma.lead.create — the general Lead model (and its /crm/leads
+    // page) was removed 2026-07-20 (see docs/DECISIONS.md): zero real usage
+    // in production, and every row was identifiably test data. Repointed to
+    // create a real Contact instead (auto-named account, same simplified
+    // flow the New Contact form itself uses), so this command still lands
+    // somewhere visible rather than silently writing to a dead table.
+    const account = await prisma.account.create({
+      data: { name: parsed.name, city: parsed.city, ownerUserId: user.id },
     });
-    return `✅ Lead created: ${lead.name} (${lead.city}, ${lead.phone}).`;
+    const contact = await prisma.accountContact.create({
+      data: { accountId: account.id, name: parsed.name, phone: parsed.phone, isPrimary: true },
+    });
+    return `✅ Contact created: ${contact.name} (${account.city}, ${contact.phone}).`;
   }
 
   if (parsed.type === "remind") {
@@ -119,57 +129,28 @@ export async function executeStaffCommand(
   }
 
   if (parsed.type === "my_day") {
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
-    const endOfToday = new Date(now);
-    endOfToday.setHours(23, 59, 59, 999);
-
-    const reminders = await prisma.reminder.findMany({
-      where: { ownerUserId: user.id, completedAt: null, dueAt: { lte: endOfToday } },
-      orderBy: { dueAt: "asc" },
-      select: { message: true, dueAt: true },
-    });
-    const overdue = reminders.filter((r) => r.dueAt < startOfToday);
-    const dueToday = reminders.filter((r) => r.dueAt >= startOfToday);
-
-    const DEFAULT_SLA_HOURS = 72;
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
-    const openDeals = await prisma.deal.findMany({
-      where: { deletedAt: null, outcome: null, ownerUserId: user.id },
-      select: {
-        code: true,
-        enquiryAt: true,
-        currentStage: { select: { slaHours: true } },
-        stageHistory: { orderBy: { changedAt: "desc" }, take: 1, select: { changedAt: true } },
-        activities: { orderBy: { occurredAt: "desc" }, take: 1, select: { occurredAt: true } },
-      },
-    });
-    const stuck = openDeals.filter((d) => {
-      const lastChange = d.stageHistory[0]?.changedAt ?? d.enquiryAt;
-      const slaHours = d.currentStage.slaHours ?? DEFAULT_SLA_HOURS;
-      return (now.getTime() - lastChange.getTime()) / 3_600_000 > slaHours;
-    });
-    const noRecentActivity = openDeals.filter((d) => {
-      const last = d.activities[0]?.occurredAt;
-      return !last || last < sevenDaysAgo;
-    });
+    const { dueToday, overdue, stuckDeals, noRecentActivityDeals, closingThisWeek } = await getMyDay(user.id);
 
     const lines: string[] = [`☀️ My Day — ${user.name}`];
     lines.push("");
     lines.push(`📅 Due today (${dueToday.length}):`);
-    lines.push(...(dueToday.length ? dueToday.map((r) => `  • ${formatDateTime(r.dueAt)} — ${r.message}`) : ["  none"]));
+    lines.push(...(dueToday.length ? dueToday.map((r) => `  • ${formatDateTime(new Date(r.dueAt))} — ${r.message}`) : ["  none"]));
     if (overdue.length) {
       lines.push("");
       lines.push(`⏰ Overdue (${overdue.length}):`);
-      lines.push(...overdue.slice(0, 5).map((r) => `  • ${formatDateTime(r.dueAt)} — ${r.message}`));
+      lines.push(...overdue.slice(0, 5).map((r) => `  • ${formatDateTime(new Date(r.dueAt))} — ${r.message}`));
     }
-    if (stuck.length) {
+    if (stuckDeals.length) {
       lines.push("");
-      lines.push(`⚠️ Stuck deals (${stuck.length}): ${stuck.slice(0, 5).map((d) => d.code).join(", ")}`);
+      lines.push(`⚠️ Stuck deals (${stuckDeals.length}): ${stuckDeals.slice(0, 5).map((d) => d.code).join(", ")}`);
     }
-    if (noRecentActivity.length) {
+    if (noRecentActivityDeals.length) {
       lines.push("");
-      lines.push(`💤 No activity in 7+ days (${noRecentActivity.length}): ${noRecentActivity.slice(0, 5).map((d) => d.code).join(", ")}`);
+      lines.push(`💤 No activity in 7+ days (${noRecentActivityDeals.length}): ${noRecentActivityDeals.slice(0, 5).map((d) => d.code).join(", ")}`);
+    }
+    if (closingThisWeek.length) {
+      lines.push("");
+      lines.push(`🏁 Closing this week (${closingThisWeek.length}): ${closingThisWeek.slice(0, 5).map((d) => d.code).join(", ")}`);
     }
     return lines.join("\n");
   }

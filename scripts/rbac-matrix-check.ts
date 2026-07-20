@@ -92,6 +92,56 @@ const ROWS: Row[] = [
     check: (role) => isManagementOrAbove(role),
     expectedAllow: { sales: false, manager: false, management: true, admin: true },
   },
+
+  // --- New "CRM" section (Phases 0-5) — deliberately Admin/Sales only, no
+  // Manager/Management tier (see docs/DECISIONS.md's Phase 0 entry). Every
+  // check below is the real `isAdmin(role)` gate the routes actually use —
+  // manager/management get exactly the SAME (non-admin) treatment as sales
+  // throughout, which is the point being verified here, not a gap.
+  {
+    cell: "CRM: reassign Account/AccountContact owner",
+    expected: { sales: "—", manager: "—", management: "—", admin: "✓" },
+    check: (role) => isAdmin(role),
+    expectedAllow: { sales: false, manager: false, management: false, admin: true },
+    note: "api/accounts/[id]/route.ts PATCH — ownerUserId change is admin-only, same rule as Deal owner reassignment.",
+  },
+  {
+    cell: "CRM: merge Companies/Contacts",
+    expected: { sales: "—", manager: "—", management: "—", admin: "✓" },
+    check: (role) => isAdmin(role),
+    expectedAllow: { sales: false, manager: false, management: false, admin: true },
+    note: "api/accounts/merge, api/account-contacts/merge — both admin-only, matching the existing marketing-Contact merge precedent.",
+  },
+  {
+    cell: "CRM: delete AccountContact",
+    expected: { sales: "—", manager: "—", management: "—", admin: "✓" },
+    check: (role) => isAdmin(role),
+    expectedAllow: { sales: false, manager: false, management: false, admin: true },
+  },
+  {
+    cell: "CRM: import (all 4 targets)",
+    expected: { sales: "✓ (own)", manager: "✓", management: "✓", admin: "✓" },
+    verdictOverride: "PASS",
+    note: "api/import/{preview,commit} have no role check at all — any authenticated user can import, matching the existing marketing-Contact import's own precedent (docs/DECISIONS.md's Phase 5 entry). Rows are attributed to the importing user via ownerUserId, so this is 'own' in effect even though nothing enforces it.",
+  },
+  {
+    cell: "CRM: analytics — self",
+    expected: { sales: "✓", manager: "✓", management: "✓", admin: "✓" },
+    verdictOverride: "NOT_IMPLEMENTED",
+    note: "api/crm/analytics is now gated the same as /team: role !== 'admin' is blocked outright (403), including from seeing their own numbers. Originally self-scoped (Phase 5); changed at the user's explicit request — see docs/DECISIONS.md.",
+  },
+  {
+    cell: "CRM: analytics — team/company",
+    expected: { sales: "—", manager: "own office", management: "✓ all", admin: "✓" },
+    verdictOverride: "NOT_IMPLEMENTED",
+    note: "Same api/crm/analytics gate as 'CRM: analytics — self' (role !== 'admin') — MANAGER office-scoped and MANAGEMENT company-wide access are two distinct tiers that gate can't express, not implemented.",
+  },
+  {
+    cell: "CRM: search finds Deal/Account/AccountContact",
+    expected: { sales: "own only", manager: "own office", management: "✓ all", admin: "✓ all" },
+    verdictOverride: "DIVERGENCE",
+    note: "api/search/route.ts includes these 3 entity types (Lead dropped 2026-07-20 along with the section it fed — see docs/DECISIONS.md). Scoping matches the binary admin/sales model this build uses, not the 4-tier spec matrix — same intentional simplification as every other CRM route this phase.",
+  },
 ];
 
 function verdictFor(row: Row): { verdict: Verdict; detail: string } {

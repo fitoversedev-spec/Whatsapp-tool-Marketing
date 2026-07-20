@@ -27,6 +27,7 @@ const PRIMARY_NAV = [
   { href: "/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
   { href: "/pipeline", label: "Pipeline", icon: "🎯" },
   { href: "/deals", label: "Deals", icon: "📁" },
+  { href: "/crm", label: "CRM", icon: "🧭" },
   { href: "/leads", label: "Bot leads", icon: "🤖" },
 ];
 
@@ -131,8 +132,8 @@ export default function Sidebar({
     { href: "/court-images", label: "Court Designer" },
     { href: "/products", label: "Products" },
     { href: "/portfolio", label: "Portfolio" },
-    { href: "/analytics", label: "Analytics" },
-    { href: "/team", label: "Team Performance" },
+    { href: "/analytics", label: "Broadcast Analytics" },
+    { href: "/team", label: "WhatsApp Sales Analytics" },
     { href: "/media", label: "Media library" },
     { href: "/settings/quotation-rates", label: "Quotation rates" },
     { href: "/connection", label: "Connection" },

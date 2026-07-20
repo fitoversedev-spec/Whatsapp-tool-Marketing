@@ -13,6 +13,20 @@ import { MIN_SAMPLE_SIZE } from "./types";
 // SLA default in §8.2 — see docs/DATA_GAPS.md).
 const LOW_CONVERSION_THRESHOLD = 0.2;
 
+// Product tracking is scoped to flooring only, per explicit request. Most
+// line items have no matched productId (rate-sheet category labels like
+// "Artificial Turf for Multisports" — see Phase 4's DECISIONS.md entry), and
+// 2 real catalogue products are actually mistyped as "flooring" despite
+// being a lighting system and a netting product — so Product.type alone is
+// unreliable in both directions. Match on the vocabulary Product.type's own
+// schema comment defines flooring as (turf / acrylic / PPE tile / PVC
+// surfaces), checked against whichever text is available: the line's own
+// label, or its matched product's name.
+const FLOORING_KEYWORDS = /turf|flooring|acrylic|\bpvc\b|ppe.?tile/i;
+function isFlooringLine(li: { label: string | null; product: { name: string } | null }): boolean {
+  return FLOORING_KEYWORDS.test([li.label, li.product?.name].filter(Boolean).join(" "));
+}
+
 export type ProductMovementRow = {
   month: string; // "YYYY-MM"
   productName: string; // "(unspecified)" for line items with no matched Product
@@ -53,8 +67,24 @@ function monthKey(d: Date): string {
 export async function productAnalytics(filter: AnalyticsFilter): Promise<ProductAnalytics> {
   const ownerWhere = filter.ownerIds?.length ? { ownerUserId: { in: filter.ownerIds } } : {};
 
-  const lineItems = await prisma.dealLineItem.findMany({
-    where: { deal: { deletedAt: null, ...ownerWhere } },
+  const allLineItems = await prisma.dealLineItem.findMany({
+    where: {
+      deal: { deletedAt: null, ...ownerWhere },
+      // Perf: narrow to line items that can actually affect this window on
+      // at least one of the 3 signals read below (enquiry/quoted/won) —
+      // previously this had no date bound at all and re-fetched every
+      // DealLineItem ever created on every call, growing forever regardless
+      // of the selected range (see docs/DECISIONS.md perf note). A row
+      // matching none of these branches contributes nothing to any of the
+      // maps built below, so this is a pure narrowing of the fetch, not a
+      // behavior change — verified by diffing full output before/after on
+      // live data.
+      OR: [
+        { deal: { enquiryAt: { gte: filter.from, lte: filter.to } } },
+        { quotation: { sentAt: { gte: filter.from, lte: filter.to } } },
+        { deal: { outcome: "WON", closedAt: { gte: filter.from, lte: filter.to } } },
+      ],
+    },
     select: {
       amount: true,
       quotationId: true,
@@ -73,6 +103,7 @@ export async function productAnalytics(filter: AnalyticsFilter): Promise<Product
       },
     },
   });
+  const lineItems = allLineItems.filter(isFlooringLine);
 
   // --- Movement over time: enquiries (distinct deals), quoted, won ---
   const movementMap = new Map<string, { enquiries: Set<string>; quoted: number; quotedValue: number; won: number; wonValue: number }>();

@@ -4,8 +4,8 @@
 // the same table; sales clicks a thumbnail to re-open the wizard at Step 2
 // for editing (only drafts editable — sent designs offer a "Clone" instead).
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
@@ -43,6 +43,21 @@ export default function CourtImagesClient({
   const [rows, setRows] = useState<CourtImageRow[]>(initialCourtImages);
   const [showWizard, setShowWizard] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [wizardPrefill, setWizardPrefill] = useState<{ customerName?: string; contactPhone?: string; dealId?: string } | undefined>(undefined);
+
+  // Opened from a CRM Contact/Company page's "+ New Court Design".
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const dealId = searchParams.get("dealId");
+    if (!dealId) return;
+    setWizardPrefill({
+      dealId,
+      customerName: searchParams.get("customerName") ?? undefined,
+      contactPhone: searchParams.get("phone") ?? undefined,
+    });
+    setShowWizard(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -366,8 +381,10 @@ export default function CourtImagesClient({
 
       <CourtImageWizard
         open={showWizard}
-        onClose={() => setShowWizard(false)}
+        prefill={wizardPrefill}
+        onClose={() => { setShowWizard(false); setWizardPrefill(undefined); }}
         onComplete={() => {
+          setWizardPrefill(undefined);
           reload();
         }}
         editingId={editingId ?? undefined}

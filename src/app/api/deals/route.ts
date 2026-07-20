@@ -26,11 +26,21 @@ const createSchema = z
     account: accountSchema.optional(),
     contactName: z.string().max(200).optional(),
     contactPhone: z.string().max(30).optional(),
+    // An existing AccountContact to set as this deal's primary contact —
+    // e.g. a "+ New Quotation" quick action from a Contact page that needs
+    // a deal to attach to first. Caller is responsible for it belonging to
+    // the same account (accountId or the inline-created account above).
+    primaryContactId: z.string().uuid().optional(),
     leadSourceId: z.string().uuid().optional(),
     sourceDetail: z.string().max(200).optional(),
     siteCity: z.string().max(100).optional(),
     estimatedValue: z.number().min(0).max(999999999).optional(),
     conversationId: z.string().uuid().optional(),
+    // Only the generic "+ New Deal" form actually asks for this — every
+    // other caller of this route (quick-actions, lead-capture) is
+    // unambiguously CRM-originated and leaves it unset, relying on the
+    // "crm" default below.
+    dealChannel: z.enum(["whatsapp", "crm"]).optional(),
     confirmDuplicate: z.boolean().optional(),
     // "Interested in" — spec §7.2's "key requirement": product interest
     // must be capturable BEFORE a quotation exists, so enquiry-volume and
@@ -112,6 +122,7 @@ export async function POST(req: NextRequest) {
           code: buildDealCode(year, nextSeq - 1),
           title: data.title,
           accountId,
+          primaryContactId: data.primaryContactId ?? null,
           ownerUserId: user.id,
           currentStageId,
           leadSourceId: data.leadSourceId ?? null,
@@ -125,6 +136,7 @@ export async function POST(req: NextRequest) {
           siteCity: data.siteCity ?? data.account?.city ?? null,
           estimatedValue: data.estimatedValue ?? null,
           conversationId: data.conversationId ?? null,
+          dealChannel: data.dealChannel ?? "crm",
         },
       });
       break;
@@ -186,6 +198,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const ownerId = searchParams.get("ownerId");
   const stageId = searchParams.get("stageId");
+  const channel = searchParams.get("channel"); // "whatsapp" | "crm"
 
   // Sales sees only their own deals by default; admin sees everything
   // (matches the existing inbox/pipeline ownership-scoping pattern —
@@ -194,6 +207,7 @@ export async function GET(req: NextRequest) {
   const where: Record<string, unknown> = {
     deletedAt: null,
     ...(stageId ? { currentStageId: stageId } : {}),
+    ...(channel === "whatsapp" || channel === "crm" ? { dealChannel: channel } : {}),
   };
   if (ownerId) {
     where.ownerUserId = ownerId;

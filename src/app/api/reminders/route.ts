@@ -12,6 +12,10 @@ const createSchema = z.object({
   // ["whatsapp"] opts into real outbound dispatch via the cron sweep;
   // omitted/empty = in-app only (today's only behavior).
   channels: z.array(z.enum(["whatsapp", "in_app"])).optional(),
+  // Columns already existed on Reminder but were never accepted here —
+  // see docs/DECISIONS.md (Phase 4).
+  location: z.string().max(300).optional(),
+  meetingUrl: z.string().url().max(500).optional(),
 });
 
 const listFilterSchema = z.enum(["overdue", "today", "week", "later", "completed", "all"]);
@@ -127,6 +131,8 @@ export async function POST(req: NextRequest) {
       message: parsed.data.message,
       dueAt: new Date(parsed.data.dueAt),
       channels: parsed.data.channels ?? [],
+      location: parsed.data.location ?? null,
+      meetingUrl: parsed.data.meetingUrl ?? null,
     },
     include: {
       conversation: { select: { contactPhone: true, contactName: true } },

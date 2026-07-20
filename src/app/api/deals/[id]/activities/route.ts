@@ -47,6 +47,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const activity = await prisma.activity.create({
     data: {
       dealId: params.id,
+      // Was never set — an activity logged here never showed up on this
+      // deal's own primary contact's or account's detail page, since both
+      // read by accountContactId/accountId, not dealId. Both are already
+      // on this deal, no extra query needed.
+      accountContactId: deal.primaryContactId,
+      accountId: deal.accountId,
       activityTypeId: parsed.data.activityTypeId,
       ownerUserId: user.id,
       subject: parsed.data.subject,

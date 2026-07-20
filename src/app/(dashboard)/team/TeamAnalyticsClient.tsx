@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
+import DateRangePicker, { defaultDateRange, type DateRange } from "@/components/DateRangePicker";
 import type { Role } from "@/lib/rbac";
 
 type Range = "7d" | "30d" | "90d" | "all";
@@ -192,7 +193,7 @@ const OWNER_FILTERABLE_TABS: Tab[] = [
 ];
 
 export default function TeamAnalyticsClient() {
-  const [range, setRange] = useState<Range>("30d");
+  const [dateRange, setDateRange] = useState<DateRange>(() => defaultDateRange(30));
   const [owner, setOwner] = useState<string>("all");
   const [data, setData] = useState<AnalyticsPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -206,7 +207,7 @@ export default function TeamAnalyticsClient() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/team/analytics?range=${range}&owner=${owner}`)
+    fetch(`/api/team/analytics?from=${dateRange.from}&to=${dateRange.to}&owner=${owner}`)
       .then(async (r) => {
         const text = await r.text();
         let json: AnalyticsPayload | { error?: string; message?: string } | null = null;
@@ -235,7 +236,7 @@ export default function TeamAnalyticsClient() {
     return () => {
       cancelled = true;
     };
-  }, [range, owner]);
+  }, [dateRange, owner]);
 
   const sortedUsers = useMemo(() => {
     if (!data) return [];
@@ -297,24 +298,7 @@ export default function TeamAnalyticsClient() {
       <PageHeader
         title="Sales Team Performance"
         description="Admin-only view of per-rep activity, pipeline health, and recent actions."
-        action={
-          <div className="flex items-center gap-1.5 bg-slate-100 rounded-lg p-1">
-            {(["7d", "30d", "90d", "all"] as Range[]).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRange(r)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
-                  range === r
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                {r === "all" ? "All time" : `Last ${r}`}
-              </button>
-            ))}
-          </div>
-        }
+        action={<DateRangePicker value={dateRange} onApply={setDateRange} />}
       />
 
       <div className="px-4 sm:px-6 lg:px-8 pt-4 flex gap-1.5">
@@ -398,7 +382,7 @@ export default function TeamAnalyticsClient() {
               <Kpi
                 label="Quotes sent"
                 value={data.teamTotals.quotationsSent}
-                hint={rangeHint(range)}
+                hint={rangeHint(dateRange)}
               />
               <Kpi
                 label="Pipeline value"
@@ -408,7 +392,7 @@ export default function TeamAnalyticsClient() {
               <Kpi
                 label="Designs sent"
                 value={data.teamTotals.courtDesignsSent}
-                hint={rangeHint(range)}
+                hint={rangeHint(dateRange)}
               />
             </section>
 
@@ -1474,6 +1458,7 @@ function inr(n: number): string {
   return n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
 
-function rangeHint(r: Range): string {
-  return r === "all" ? "all time" : `last ${r}`;
+function rangeHint(r: DateRange): string {
+  const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return `${fmt(r.from)} – ${fmt(r.to)}`;
 }

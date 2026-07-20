@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/rbac";
+import CrmTabs from "@/components/crm/CrmTabs";
 import DealsClient from "./DealsClient";
 
 export default async function DealsPage() {
@@ -36,7 +37,9 @@ export default async function DealsPage() {
   ]);
 
   return (
-    <DealsClient
+    <>
+      <CrmTabs isAdmin={isAdmin(user.role)} />
+      <DealsClient
       currentUserId={user.id}
       isAdmin={isAdmin(user.role)}
       deals={deals.map((d) => ({
@@ -54,6 +57,7 @@ export default async function DealsPage() {
         quotedValue: d.quotedValue ? Number(d.quotedValue) : null,
         wonValue: d.wonValue ? Number(d.wonValue) : null,
         outcome: d.outcome,
+        dealChannel: d.dealChannel,
         siteCity: d.siteCity,
         createdAt: d.createdAt.toISOString(),
         updatedAt: d.updatedAt.toISOString(),
@@ -64,6 +68,7 @@ export default async function DealsPage() {
       lossReasons={lossReasons.map((l) => ({ id: l.id, name: l.name }))}
       users={users}
       products={products}
-    />
+      />
+    </>
   );
 }

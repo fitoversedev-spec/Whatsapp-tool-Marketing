@@ -21,6 +21,7 @@ type Deal = {
   quotedValue: number | null;
   wonValue: number | null;
   outcome: string | null;
+  dealChannel: string;
   siteCity: string | null;
   createdAt: string;
   updatedAt: string;
@@ -43,6 +44,15 @@ function StageBadge({ name, colorHex }: { name: string; colorHex: string | null 
     >
       <span className="w-1.5 h-1.5 rounded-full" style={{ background: colorHex ?? "#64748b" }} />
       {name}
+    </span>
+  );
+}
+
+function ChannelBadge({ channel }: { channel: string }) {
+  const isWhatsapp = channel === "whatsapp";
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${isWhatsapp ? "bg-wa-green/10 text-wa-dark" : "bg-blue-50 text-blue-700"}`}>
+      {isWhatsapp ? "WhatsApp" : "CRM"}
     </span>
   );
 }
@@ -73,8 +83,13 @@ export default function DealsClient({
   const [showNew, setShowNew] = useState(false);
   const [closeoutFor, setCloseoutFor] = useState<{ deal: Deal; stage: Stage } | null>(null);
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [channelFilter, setChannelFilter] = useState<"all" | "whatsapp" | "crm">("all");
 
-  const visible = ownerFilter === "all" ? deals : deals.filter((d) => d.ownerName === users.find((u) => u.id === ownerFilter)?.name);
+  const visible = deals.filter((d) => {
+    const matchesOwner = ownerFilter === "all" || d.ownerName === users.find((u) => u.id === ownerFilter)?.name;
+    const matchesChannel = channelFilter === "all" || d.dealChannel === channelFilter;
+    return matchesOwner && matchesChannel;
+  });
 
   async function changeStage(deal: Deal, stage: Stage, extra?: { wonValue?: number; lossReasonId?: string; lossReasonNote?: string; note?: string }) {
     const res = await fetch(`/api/deals/${deal.id}/stage`, {
@@ -115,8 +130,17 @@ export default function DealsClient({
         }
       />
 
-      {isAdmin && (
-        <div className="mb-3">
+      <div className="mb-3 flex items-center gap-2 flex-wrap">
+        <select
+          value={channelFilter}
+          onChange={(e) => setChannelFilter(e.target.value as typeof channelFilter)}
+          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
+        >
+          <option value="all">All deals</option>
+          <option value="whatsapp">WhatsApp deals</option>
+          <option value="crm">CRM deals</option>
+        </select>
+        {isAdmin && (
           <select
             value={ownerFilter}
             onChange={(e) => setOwnerFilter(e.target.value)}
@@ -127,8 +151,8 @@ export default function DealsClient({
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
@@ -136,6 +160,7 @@ export default function DealsClient({
             <tr className="text-left text-slate-500 border-b border-slate-200">
               <th className="px-4 py-2.5 font-medium">Deal</th>
               <th className="px-4 py-2.5 font-medium">Account</th>
+              <th className="px-4 py-2.5 font-medium">Channel</th>
               <th className="px-4 py-2.5 font-medium">Stage</th>
               <th className="px-4 py-2.5 font-medium">Owner</th>
               <th className="px-4 py-2.5 font-medium text-right">Value</th>
@@ -144,7 +169,7 @@ export default function DealsClient({
           <tbody>
             {visible.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
                   No deals yet — click "New Deal" to create one.
                 </td>
               </tr>
@@ -160,6 +185,9 @@ export default function DealsClient({
                 <td className="px-4 py-3">
                   <div className="text-slate-700">{d.accountName}</div>
                   {d.accountCity && <div className="text-xs text-slate-400">{d.accountCity}</div>}
+                </td>
+                <td className="px-4 py-3">
+                  <ChannelBadge channel={d.dealChannel} />
                 </td>
                 <td className="px-4 py-3">
                   <select
@@ -283,6 +311,7 @@ function NewDealModal({
 }) {
   const toast = useToast();
   const [title, setTitle] = useState("");
+  const [dealChannel, setDealChannel] = useState<"crm" | "whatsapp">("crm");
   // New vs. attach-to-existing — previously every deal created here spawned
   // a brand-new Account even for a customer who already had one, despite
   // POST /api/deals already accepting accountId directly. See docs/DECISIONS.md.
@@ -327,6 +356,7 @@ function NewDealModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
+        dealChannel,
         ...(accountMode === "existing" && selectedAccount
           ? { accountId: selectedAccount.id }
           : {
@@ -402,6 +432,25 @@ function NewDealModal({
             className="modal-input"
             required
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Deal type</label>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setDealChannel("crm")}
+              className={`px-3 py-1 text-xs font-medium rounded-full ${dealChannel === "crm" ? "bg-wa-green text-white" : "bg-slate-100 text-slate-600"}`}
+            >
+              CRM deal
+            </button>
+            <button
+              type="button"
+              onClick={() => setDealChannel("whatsapp")}
+              className={`px-3 py-1 text-xs font-medium rounded-full ${dealChannel === "whatsapp" ? "bg-wa-green text-white" : "bg-slate-100 text-slate-600"}`}
+            >
+              WhatsApp deal
+            </button>
+          </div>
         </div>
         <div>
           <div className="flex gap-1.5 mb-2">

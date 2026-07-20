@@ -2,8 +2,11 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import UnifiedTimeline from "@/components/crm/UnifiedTimeline";
+import type { TimelineEntry } from "@/lib/crm/timeline";
 
 type Deal = {
   id: string;
@@ -52,14 +55,6 @@ type StageHistoryRow = {
   durationInFromStageSeconds: number | null;
 };
 
-type Activity = {
-  id: string;
-  typeName: string;
-  subject: string;
-  notes: string | null;
-  occurredAt: string;
-  ownerName: string;
-};
 
 function fmtInr(n: number | null): string {
   if (n == null) return "—";
@@ -83,7 +78,6 @@ function fmtDuration(seconds: number | null): string {
 export default function DealDetailClient({
   deal,
   stageHistory,
-  activities,
   activityTypes,
   offices,
   cityTiers,
@@ -91,10 +85,10 @@ export default function DealDetailClient({
   customerProfiles,
   isAdmin,
   users,
+  timeline,
 }: {
   deal: Deal;
   stageHistory: StageHistoryRow[];
-  activities: Activity[];
   activityTypes: { id: string; name: string }[];
   offices: { id: string; name: string }[];
   cityTiers: { id: string; name: string }[];
@@ -102,6 +96,7 @@ export default function DealDetailClient({
   customerProfiles: { id: string; name: string }[];
   isAdmin: boolean;
   users: { id: string; name: string }[];
+  timeline: TimelineEntry[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -166,31 +161,20 @@ export default function DealDetailClient({
 
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-900">Activity log</h3>
-              <button
-                onClick={() => setShowLogActivity(true)}
-                className="text-xs font-medium text-wa-green hover:underline"
-              >
-                + Log activity
-              </button>
-            </div>
-            {activities.length === 0 ? (
-              <p className="text-sm text-slate-400">No activity logged yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {activities.map((a) => (
-                  <div key={a.id} className="text-sm border-l-2 border-slate-200 pl-3">
-                    <div className="font-medium text-slate-800">
-                      {a.typeName} — {a.subject}
-                    </div>
-                    {a.notes && <div className="text-slate-500 text-xs mt-0.5">{a.notes}</div>}
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      {fmtDate(a.occurredAt)} · {a.ownerName}
-                    </div>
-                  </div>
-                ))}
+              <h3 className="text-sm font-semibold text-slate-900">Timeline</h3>
+              <div className="flex items-center gap-3">
+                <Link href="/reminders" className="text-xs font-medium text-slate-500 hover:underline">
+                  Manage reminders →
+                </Link>
+                <button
+                  onClick={() => setShowLogActivity(true)}
+                  className="text-xs font-medium text-wa-green hover:underline"
+                >
+                  + Log activity
+                </button>
               </div>
-            )}
+            </div>
+            <UnifiedTimeline entries={timeline} />
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -570,6 +554,8 @@ function LogActivityModal({
   const [activityTypeId, setActivityTypeId] = useState(activityTypes[0]?.id ?? "");
   const [subject, setSubject] = useState("");
   const [notes, setNotes] = useState("");
+  const [durationMins, setDurationMins] = useState("");
+  const [outcome, setOutcome] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function submit(e: FormEvent) {
@@ -578,7 +564,13 @@ function LogActivityModal({
     const res = await fetch(`/api/deals/${dealId}/activities`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activityTypeId, subject, notes: notes || undefined }),
+      body: JSON.stringify({
+        activityTypeId,
+        subject,
+        notes: notes || undefined,
+        durationMins: durationMins ? Number(durationMins) : undefined,
+        outcome: outcome || undefined,
+      }),
     });
     setSaving(false);
     if (res.ok) {
@@ -614,6 +606,29 @@ function LogActivityModal({
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="modal-input" rows={3} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Duration (minutes)</label>
+              <input
+                type="number"
+                min={0}
+                max={1440}
+                value={durationMins}
+                onChange={(e) => setDurationMins(e.target.value)}
+                className="modal-input"
+                placeholder="Optional"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Outcome</label>
+              <input
+                value={outcome}
+                onChange={(e) => setOutcome(e.target.value)}
+                className="modal-input"
+                placeholder="e.g. Interested"
+              />
+            </div>
           </div>
           <div className="pt-4 border-t border-slate-200 -mx-5 sm:-mx-6 px-5 sm:px-6 flex flex-col sm:flex-row sm:justify-end gap-2">
             <button type="button" onClick={onClose} className="order-2 sm:order-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg">

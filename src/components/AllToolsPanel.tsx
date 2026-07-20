@@ -71,7 +71,7 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
       },
       {
         href: "/analytics",
-        label: "Analytics",
+        label: "Broadcast Analytics",
         icon: "📊",
         description: "Broadcast performance and delivery insights",
       },
@@ -102,11 +102,66 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
     ],
   },
   {
+    title: "CRM",
+    items: [
+      {
+        href: "/crm",
+        label: "CRM dashboard",
+        icon: "🧭",
+        description: "My Day for sales reps, team snapshot for admins",
+      },
+      {
+        href: "/crm/contacts",
+        label: "Contacts",
+        icon: "🧑",
+        description: "People at a company — separate from the WhatsApp broadcast list",
+      },
+      {
+        href: "/crm/companies",
+        label: "Lead types",
+        icon: "🏢",
+        description: "Contacts grouped by customer type, business type, lead source, or city",
+      },
+      {
+        href: "/deals",
+        label: "Deals",
+        icon: "📁",
+        description: "Every sales opportunity, across every channel",
+      },
+      {
+        href: "/crm/activities",
+        label: "Activities",
+        icon: "🗒️",
+        description: "Every logged touchpoint and reminder, in one place",
+      },
+      {
+        href: "/crm/import",
+        label: "Import",
+        icon: "📤",
+        description: "Bulk-load contacts, companies, leads, or deals from a spreadsheet",
+      },
+      {
+        href: "/crm/analytics",
+        label: "CRM analytics",
+        icon: "📈",
+        description: "Individual and team performance, best sellers, platform performance",
+        adminOnly: true,
+      },
+      {
+        href: "/crm/settings",
+        label: "CRM settings",
+        icon: "⚙️",
+        description: "Taxonomies, users, and audit log — gathered in one place",
+        adminOnly: true,
+      },
+    ],
+  },
+  {
     title: "Admin",
     items: [
       {
         href: "/team",
-        label: "Team Performance",
+        label: "WhatsApp Sales Analytics",
         icon: "📈",
         description: "Per-rep activity, quotes sent, pipeline value, recent actions",
         adminOnly: true,

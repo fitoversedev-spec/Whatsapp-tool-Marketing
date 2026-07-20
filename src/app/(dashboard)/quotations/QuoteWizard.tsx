@@ -187,11 +187,14 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onComplete: (result: { quotationId: string; sent: boolean }) => void;
-  // When triggered from inbox, these pre-fill Step 1
+  // When triggered from inbox, these pre-fill Step 1. dealId attaches the
+  // quote directly to a deal (e.g. opened from a CRM Contact/Company page)
+  // instead of going through the conversation-based findOrCreateDeal path.
   prefill?: {
     customerName?: string;
     contactPhone?: string;
     conversationId?: string;
+    dealId?: string;
   };
 };
 
@@ -546,6 +549,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             quoteDate: quoteDateIso,
             validityDays,
             conversationId: prefill?.conversationId ?? null,
+            dealId: prefill?.dealId ?? null,
             contactPhone: contactPhone.trim() || null,
           }),
         });

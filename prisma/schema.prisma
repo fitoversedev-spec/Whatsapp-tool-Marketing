@@ -64,6 +64,7 @@ model User {
   ownedDeals           Deal[]                 @relation("DealOwner")
   dealStageChanges     DealStageHistory[]
   activities           Activity[]             @relation("ActivityOwner")
+  importBatches        ImportBatch[]
   pendingStaffAction   PendingStaffAction?
   auditLogs            AuditLog[]
 
@@ -726,6 +727,12 @@ model CourtImage {
   @@index([conversationId])
   @@index([contactPhone])
   @@index([createdAt])
+  // dealId was added (comment above: "same pattern as Quotation.dealId")
+  // but, unlike Quotation ([dealId, version]), never got its own index —
+  // getRepDeals() (src/lib/analytics/repDeals.ts) filters court_images by
+  // dealId IN (...) for every deal on a rep's roster; without this it's a
+  // full-table scan of court_images on every call.
+  @@index([dealId])
   @@map("court_images")
 }
 
@@ -1093,6 +1100,7 @@ model Account {
   parentAccountId   String?   @map("parent_account_id")
   gstin             String?
   notes             String?
+  importBatchId     String?   @map("import_batch_id")
   deletedAt         DateTime? @map("deleted_at")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
@@ -1104,8 +1112,11 @@ model Account {
   childAccounts   Account[]        @relation("AccountHierarchy")
   contacts        AccountContact[]
   deals           Deal[]
+  activities      Activity[]
+  importBatch     ImportBatch?     @relation("AccountImports", fields: [importBatchId], references: [id], onDelete: SetNull)
 
   @@index([city, customerProfileId])
+  @@index([importBatchId])
   @@map("accounts")
 }
 
@@ -1119,13 +1130,19 @@ model AccountContact {
   phone     String?
   email     String?
   designation String?
+  notes     String?
+  fields    String   @default("{}") // JSON object of ad-hoc custom fields — same shape as Contact.fields
   isPrimary Boolean  @default(false) @map("is_primary")
+  importBatchId String? @map("import_batch_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   dealsAsPrimary Deal[] @relation("DealPrimaryContact")
+  activities Activity[]
+  importBatch ImportBatch? @relation("AccountContactImports", fields: [importBatchId], references: [id], onDelete: SetNull)
 
   @@index([accountId])
+  @@index([importBatchId])
   @@map("account_contacts")
 }
 
@@ -1147,6 +1164,7 @@ model Lead {
   status         String    @default("NEW")
   convertedDealId String?  @unique @map("converted_deal_id")
   convertedAt    DateTime? @map("converted_at")
+  importBatchId  String?   @map("import_batch_id")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
@@ -1154,9 +1172,12 @@ model Lead {
   owner        User?       @relation("LeadOwner", fields: [ownerUserId], references: [id])
   convertedDeal Deal?      @relation("LeadConvertedDeal", fields: [convertedDealId], references: [id])
   botLeads     BotLead[]
+  activities   Activity[]
+  importBatch  ImportBatch? @relation("LeadImports", fields: [importBatchId], references: [id], onDelete: SetNull)
 
   @@index([ownerUserId, createdAt])
   @@index([leadSourceId, createdAt])
+  @@index([importBatchId])
   @@map("leads")
 }
 
@@ -1177,6 +1198,10 @@ model Deal {
   leadSourceId     String?   @map("lead_source_id")
   sourceDetail     String?   @map("source_detail")
   conversationId   String?   @map("conversation_id")
+  // "whatsapp" | "crm" — which side of the app created this deal. Always set
+  // by the creating code path, never left to infer from conversationId at
+  // read time (see docs/DECISIONS.md).
+  dealChannel      String    @default("crm") @map("deal_channel")
 
   siteCity       String? @map("site_city")
   siteCityTierId String? @map("site_city_tier_id")
@@ -1204,6 +1229,8 @@ model Deal {
   // into the LossReason taxonomy (see DECISIONS.md).
   lossReasonNote String?   @map("loss_reason_note")
 
+  importBatchId String? @map("import_batch_id")
+
   deletedAt DateTime? @map("deleted_at")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -1224,6 +1251,7 @@ model Deal {
   courtImages    CourtImage[]
   activities     Activity[]
   reminders      Reminder[]
+  importBatch    ImportBatch?     @relation("DealImports", fields: [importBatchId], references: [id], onDelete: SetNull)
 
   @@index([ownerUserId, currentStageId])
   @@index([siteCity, createdAt])
@@ -1242,6 +1270,8 @@ model Deal {
   // 2026-07-16 — see docs/DECISIONS.md). Flagged by a performance audit,
   // not yet measured as an active slowdown, but additive/free to fix.
   @@index([conversationId])
+  @@index([importBatchId])
+  @@index([deletedAt, dealChannel])
   @@map("deals")
 }
 
@@ -1266,6 +1296,11 @@ model DealStageHistory {
 
   @@index([dealId, changedAt])
   @@index([toStageId, changedAt])
+  // stageVelocity() (src/lib/analytics/timelines.ts) filters changedAt range
+  // + fromStageId not null, then groups by fromStageId — the toStageId
+  // sibling index above doesn't serve that (leading column mismatch), and
+  // there was no fromStageId index at all. Mirrors the toStageId index above.
+  @@index([fromStageId, changedAt])
   @@map("deal_stage_history")
 }
 
@@ -1322,24 +1357,56 @@ model Sport {
 // merging separate queries against ConversationNote/PipelineStageHistory/
 // Reminder/Message in src/app/api/team/analytics/route.ts.
 model Activity {
-  id             String    @id @default(uuid())
-  dealId         String?   @map("deal_id")
-  leadId         String?   @map("lead_id")
-  accountId      String?   @map("account_id")
-  activityTypeId String    @map("activity_type_id")
-  ownerUserId    String    @map("owner_user_id")
-  subject        String
-  notes          String?
-  occurredAt     DateTime  @map("occurred_at")
-  durationMins   Int?      @map("duration_mins")
-  outcome        String?
-  createdAt      DateTime  @default(now()) @map("created_at")
+  id                String    @id @default(uuid())
+  dealId            String?   @map("deal_id")
+  leadId            String?   @map("lead_id")
+  accountId         String?   @map("account_id")
+  accountContactId  String?   @map("account_contact_id")
+  activityTypeId    String    @map("activity_type_id")
+  ownerUserId       String    @map("owner_user_id")
+  subject           String
+  notes             String?
+  occurredAt        DateTime  @map("occurred_at")
+  durationMins      Int?      @map("duration_mins")
+  outcome           String?
+  createdAt         DateTime  @default(now()) @map("created_at")
 
-  deal         Deal?        @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  activityType ActivityType @relation(fields: [activityTypeId], references: [id])
-  owner        User         @relation("ActivityOwner", fields: [ownerUserId], references: [id])
+  deal           Deal?            @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  lead           Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  account        Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  accountContact AccountContact?  @relation(fields: [accountContactId], references: [id], onDelete: SetNull)
+  activityType   ActivityType     @relation(fields: [activityTypeId], references: [id])
+  owner          User             @relation("ActivityOwner", fields: [ownerUserId], references: [id])
 
   @@index([ownerUserId, occurredAt])
   @@index([dealId, occurredAt])
+  @@index([leadId, occurredAt])
+  @@index([accountId, occurredAt])
+  @@index([accountContactId, occurredAt])
   @@map("activities")
+}
+
+// Tracks each CRM import (Contacts/Companies/Leads/Deals) for audit + undo.
+// Rows created BY this batch are stamped with importBatchId on the target
+// table (never on rows the import merely updated) so "undo" is always a
+// safe deleteMany({ importBatchId }) — it can never delete a pre-existing
+// row the import happened to touch.
+model ImportBatch {
+  id              String   @id @default(uuid())
+  importedByUserId String  @map("imported_by_user_id")
+  target          String   // "CONTACTS" | "COMPANIES" | "LEADS" | "DEALS"
+  fileName        String   @map("file_name")
+  rowCount        Int      @map("row_count")
+  successCount    Int      @map("success_count")
+  errorCount      Int      @map("error_count")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  importedBy User @relation(fields: [importedByUserId], references: [id])
+  accounts        Account[]        @relation("AccountImports")
+  accountContacts AccountContact[] @relation("AccountContactImports")
+  leads           Lead[]           @relation("LeadImports")
+  deals           Deal[]           @relation("DealImports")
+
+  @@index([importedByUserId, createdAt])
+  @@map("import_batches")
 }

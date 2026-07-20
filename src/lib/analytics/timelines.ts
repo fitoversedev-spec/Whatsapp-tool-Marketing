@@ -45,6 +45,8 @@ export type TimelineMetrics = {
   stuckDeals: StuckDeal[];
 };
 
+export type StageVelocityRow = { stageId: string; stageName: string; sortOrder: number } & DurationStat;
+
 function percentile(sorted: number[], p: number): number {
   const idx = Math.min(sorted.length - 1, Math.floor(p * sorted.length));
   return sorted[idx];
@@ -63,8 +65,20 @@ function daysBetween(a: Date, b: Date): number {
 export async function timelineMetrics(filter: AnalyticsFilter): Promise<TimelineMetrics> {
   const ownerWhere = filter.ownerIds?.length ? { ownerUserId: { in: filter.ownerIds } } : {};
 
+  // Perf: bounded to deals whose enquiryAt OR closedAt falls in the window —
+  // previously unbounded (no date filter at all), re-fetching every non-
+  // deleted deal ever created on every call regardless of the selected
+  // range (see docs/DECISIONS.md perf note). Below, `deals` only ever feeds
+  // earlyCohort (enquiryAt-filtered) and closedCohort (closedAt-filtered),
+  // so a row matching neither branch would've contributed to neither cohort
+  // anyway — pure narrowing, not a behavior change (verified by diffing
+  // full output before/after on live data).
   const deals = await prisma.deal.findMany({
-    where: { deletedAt: null, ...ownerWhere },
+    where: {
+      deletedAt: null,
+      ...ownerWhere,
+      OR: [{ enquiryAt: { gte: filter.from, lte: filter.to } }, { closedAt: { gte: filter.from, lte: filter.to } }],
+    },
     select: {
       enquiryAt: true,
       firstContactAt: true,
@@ -144,4 +158,44 @@ export async function timelineMetrics(filter: AnalyticsFilter): Promise<Timeline
     timeInStage,
     stuckDeals,
   };
+}
+
+// Per-stage breakdown of timeInStage above (which blends every transition
+// into one number) — "how long does it take to move from stage X to the
+// next one", both overall (no ownerIds) and per rep (ownerIds: [repId]).
+// durationInFromStageSeconds is recorded on DealStageHistory.fromStageId,
+// i.e. time spent IN that stage before advancing — grouping by fromStageId
+// answers exactly that question per real funnel stage, not just the ~6
+// fixed milestone timestamps the rest of this file uses.
+export async function stageVelocity(filter: AnalyticsFilter): Promise<StageVelocityRow[]> {
+  const stages = await prisma.funnelStage.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, name: true, sortOrder: true },
+  });
+
+  const historyRows = await prisma.dealStageHistory.findMany({
+    where: {
+      changedAt: { gte: filter.from, lte: filter.to },
+      durationInFromStageSeconds: { not: null },
+      fromStageId: { not: null },
+      ...(filter.ownerIds?.length ? { deal: { ownerUserId: { in: filter.ownerIds } } } : {}),
+    },
+    select: { fromStageId: true, durationInFromStageSeconds: true },
+  });
+
+  const byStage = new Map<string, number[]>();
+  for (const h of historyRows) {
+    const days = h.durationInFromStageSeconds! / 86_400;
+    const arr = byStage.get(h.fromStageId!) ?? [];
+    arr.push(days);
+    byStage.set(h.fromStageId!, arr);
+  }
+
+  return stages.map((s) => ({
+    stageId: s.id,
+    stageName: s.name,
+    sortOrder: s.sortOrder,
+    ...stat(byStage.get(s.id) ?? []),
+  }));
 }

@@ -44,6 +44,32 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     prisma.lossReason.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
   ]);
 
+  // Quotations/court designs/product interest all hang off this contact's
+  // deals (same as the Deals section above) — none of these 3 models link
+  // to AccountContact directly. Deferred in Phase 1 pending exactly this.
+  const dealIds = deals.map((d) => d.id);
+  const [quotations, courtImages, productInterests] = await Promise.all([
+    prisma.quotation.findMany({
+      where: { dealId: { in: dealIds } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, number: true, grandTotal: true, status: true, contactPhone: true, sentAt: true, createdAt: true },
+    }),
+    prisma.courtImage.findMany({
+      where: { dealId: { in: dealIds } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, number: true, status: true, imageUrl: true, image2dUrl: true, contactPhone: true, sentAt: true, createdAt: true },
+    }),
+    prisma.dealLineItem.findMany({
+      where: { dealId: { in: dealIds }, isEnquiryOnly: true },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true, label: true, createdAt: true,
+        product: { select: { name: true } },
+        sport: { select: { name: true } },
+      },
+    }),
+  ]);
+
   return (
     <ContactDetailClient
       contact={{
@@ -71,6 +97,17 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       activities={activities.map((a) => ({
         id: a.id, subject: a.subject, notes: a.notes, occurredAt: a.occurredAt.toISOString(),
         typeName: a.activityType.name, ownerName: a.owner.name,
+      }))}
+      quotations={quotations.map((q) => ({
+        id: q.id, number: q.number, grandTotal: Number(q.grandTotal), status: q.status,
+        contactPhone: q.contactPhone, sentAt: q.sentAt?.toISOString() ?? null, createdAt: q.createdAt.toISOString(),
+      }))}
+      courtImages={courtImages.map((c) => ({
+        id: c.id, number: c.number, status: c.status, imageUrl: c.image2dUrl ?? c.imageUrl,
+        contactPhone: c.contactPhone, sentAt: c.sentAt?.toISOString() ?? null, createdAt: c.createdAt.toISOString(),
+      }))}
+      productInterests={productInterests.map((p) => ({
+        id: p.id, name: p.product?.name ?? p.label ?? "Unnamed product", sportName: p.sport?.name ?? null,
       }))}
       timeline={timeline}
       products={products}

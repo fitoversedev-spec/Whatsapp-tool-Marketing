@@ -17,10 +17,24 @@ type Deal = {
   estimatedValue: number | null; stageId: string; stageName: string; stageColorHex: string | null;
 };
 type ActivityRow = { id: string; subject: string; notes: string | null; occurredAt: string; typeName: string; ownerName: string };
+type QuotationRow = { id: string; number: string; grandTotal: number; status: string; contactPhone: string | null; sentAt: string | null; createdAt: string };
+type CourtImageRow = { id: string; number: string; status: string; imageUrl: string | null; contactPhone: string | null; sentAt: string | null; createdAt: string };
+type ProductInterestRow = { id: string; name: string; sportName: string | null };
 type ProductOption = { id: string; name: string; type: string };
 type ActivityTypeOption = { id: string; name: string };
 type StageOption = { id: string; name: string; stageType: string; colorHex: string | null; requiresLossReason: boolean };
 type LossReasonOption = { id: string; name: string };
+
+// Same convention as QuotationsClient.tsx / CourtImagesClient.tsx (each
+// already defines this independently — matching that precedent rather
+// than introducing a shared import for one small object).
+const STATUS_COLORS: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-700",
+  sent: "bg-blue-100 text-blue-800",
+  viewed: "bg-purple-100 text-purple-800",
+  accepted: "bg-emerald-100 text-emerald-800",
+  expired: "bg-red-100 text-red-800",
+};
 
 function fmtInr(n: number | null): string {
   if (n == null) return "—";
@@ -38,13 +52,17 @@ function initials(name: string): string {
 const SECTIONS = [
   { id: "details", label: "Details" },
   { id: "deals", label: "Deals" },
+  { id: "quotations", label: "Quotations" },
+  { id: "court-designs", label: "Court Designs" },
+  { id: "products", label: "Product interest" },
   { id: "activities", label: "Activities" },
 ];
 
 export default function ContactDetailClient({
-  contact, deals, activities, timeline, products, activityTypes, funnelStages, lossReasons,
+  contact, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons,
 }: {
-  contact: Contact; deals: Deal[]; activities: ActivityRow[]; timeline: TimelineEntry[]; products: ProductOption[];
+  contact: Contact; deals: Deal[]; activities: ActivityRow[]; quotations: QuotationRow[]; courtImages: CourtImageRow[];
+  productInterests: ProductInterestRow[]; timeline: TimelineEntry[]; products: ProductOption[];
   activityTypes: ActivityTypeOption[]; funnelStages: StageOption[]; lossReasons: LossReasonOption[];
 }) {
   const router = useRouter();
@@ -53,6 +71,7 @@ export default function ContactDetailClient({
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [pendingAction, setPendingAction] = useState<"quote" | "court" | "deal" | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [resending, setResending] = useState<string | null>(null);
   const [showLogActivity, setShowLogActivity] = useState(false);
   const [closeoutFor, setCloseoutFor] = useState<{ deal: Deal; stage: StageOption } | null>(null);
 
@@ -132,6 +151,28 @@ export default function ContactDetailClient({
     if (data.synced > 0) toast.success("Added to WhatsApp marketing contacts");
     else if (data.skippedNoPhone > 0) toast.error("This contact has no phone number to sync");
     else toast.error("Could not sync");
+  }
+
+  // Reuses the same /send endpoints the standalone Quotations/Court Designs
+  // list pages already call — first-send and resend are the same request,
+  // the API is idempotent about re-using an already-rendered PDF (see
+  // its own header comment).
+  async function resendQuotation(q: QuotationRow) {
+    if (!q.contactPhone) { toast.error("No contact phone on this quotation"); return; }
+    setResending(q.id);
+    const res = await fetch(`/api/quotations/${q.id}/send`, { method: "POST" });
+    setResending(null);
+    if (res.ok) { toast.success(`Quotation ${q.number} sent`); router.refresh(); }
+    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? "Send failed"); }
+  }
+
+  async function resendCourtImage(c: CourtImageRow) {
+    if (!c.contactPhone) { toast.error("No phone on this design"); return; }
+    setResending(c.id);
+    const res = await fetch(`/api/court-images/${c.id}/send`, { method: "POST" });
+    setResending(null);
+    if (res.ok) { toast.success(`Design ${c.number} sent`); router.refresh(); }
+    else { const err = await res.json().catch(() => ({})); toast.error(err.message ?? err.error ?? "Send failed"); }
   }
 
   function goToWizard(kind: "quote" | "court", dealId: string) {
@@ -418,6 +459,115 @@ export default function ContactDetailClient({
                         <div className="text-xs text-slate-500">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div id="quotations" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-900">Quotations <span className="text-slate-400 font-normal">{quotations.length}</span></h3>
+                <button
+                  onClick={() => onQuickAction("quote")}
+                  aria-label="New quotation"
+                  title="New quotation"
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
+                >
+                  +
+                </button>
+              </div>
+              {quotations.length === 0 ? (
+                <p className="text-sm text-slate-400">No quotations created for this person yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {quotations.map((q) => (
+                    <div key={q.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-900 font-mono">{q.number}</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-700"}`}>
+                            {q.status}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500">{fmtInr(q.grandTotal)} · {fmtDate(q.sentAt ?? q.createdAt)}</div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-wa-dark hover:underline">
+                          View PDF
+                        </a>
+                        <button onClick={() => resendQuotation(q)} disabled={resending === q.id} className="text-xs text-blue-700 hover:underline disabled:opacity-40">
+                          {resending === q.id ? "…" : q.status === "draft" ? "Send" : "Resend"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div id="court-designs" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-900">Court Designs <span className="text-slate-400 font-normal">{courtImages.length}</span></h3>
+                <button
+                  onClick={() => onQuickAction("court")}
+                  aria-label="New court design"
+                  title="New court design"
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
+                >
+                  +
+                </button>
+              </div>
+              {courtImages.length === 0 ? (
+                <p className="text-sm text-slate-400">No court designs created for this person yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {courtImages.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-900 font-mono">{c.number}</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${STATUS_COLORS[c.status] ?? "bg-slate-100 text-slate-700"}`}>
+                            {c.status}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500">{fmtDate(c.sentAt ?? c.createdAt)}</div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        {c.imageUrl && (
+                          <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-xs text-wa-dark hover:underline">
+                            View design
+                          </a>
+                        )}
+                        <button onClick={() => resendCourtImage(c)} disabled={resending === c.id} className="text-xs text-blue-700 hover:underline disabled:opacity-40">
+                          {resending === c.id ? "…" : c.status === "draft" ? "Send" : "Resend"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div id="products" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-900">Product interest <span className="text-slate-400 font-normal">{productInterests.length}</span></h3>
+                <button
+                  onClick={() => onQuickAction("product")}
+                  aria-label="Add product interest"
+                  title="Add product interest"
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
+                >
+                  +
+                </button>
+              </div>
+              {productInterests.length === 0 ? (
+                <p className="text-sm text-slate-400">No products marked as interesting yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {productInterests.map((p) => (
+                    <span key={p.id} className="text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full">
+                      {p.name}{p.sportName ? ` · ${p.sportName}` : ""}
+                    </span>
                   ))}
                 </div>
               )}

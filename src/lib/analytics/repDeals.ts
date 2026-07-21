@@ -1,7 +1,9 @@
 // Every deal one rep is handling, for the admin drill-down page reached by
-// clicking a name in CRM Analytics' Individual performance tab. A roster,
-// not a date-windowed metric — every open-or-closed deal they own, not just
-// ones touched in the currently-selected date range.
+// clicking a name in CRM Analytics' Individual performance tab. Originally
+// a pure roster (not date-windowed) — every open-or-closed deal they own,
+// regardless of the selected range. Now optionally date-filtered by
+// createdAt per explicit request; omitting the range keeps the original
+// unfiltered roster behavior.
 import { prisma } from "@/lib/prisma";
 
 export type RepDealRow = {
@@ -10,6 +12,7 @@ export type RepDealRow = {
   customerName: string;
   stageName: string;
   stageColorHex: string | null;
+  outcome: string | null;
   quotations: { id: string; number: string; status: string }[];
   courtImages: { id: string; number: string; imageUrl: string | null; status: string }[];
   interestedProducts: string[];
@@ -17,10 +20,14 @@ export type RepDealRow = {
   nextActivity: { message: string; dueAt: string } | null;
 };
 
-export async function getRepDeals(ownerId: string): Promise<RepDealRow[]> {
+export async function getRepDeals(ownerId: string, dateRange?: { from: Date; to: Date }): Promise<RepDealRow[]> {
   const now = new Date();
   const deals = await prisma.deal.findMany({
-    where: { ownerUserId: ownerId, deletedAt: null },
+    where: {
+      ownerUserId: ownerId,
+      deletedAt: null,
+      ...(dateRange ? { createdAt: { gte: dateRange.from, lte: dateRange.to } } : {}),
+    },
     orderBy: { updatedAt: "desc" },
     include: {
       account: { select: { name: true } },
@@ -48,6 +55,7 @@ export async function getRepDeals(ownerId: string): Promise<RepDealRow[]> {
     customerName: d.primaryContact?.name ?? d.account.name,
     stageName: d.currentStage.name,
     stageColorHex: d.currentStage.colorHex,
+    outcome: d.outcome,
     quotations: d.quotations,
     courtImages: d.courtImages,
     interestedProducts: Array.from(new Set(d.lineItems.map((li) => li.product?.name ?? li.label).filter((n): n is string => !!n))),

@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
+import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import { downloadXlsx } from "@/lib/analytics/export";
 import { StageVelocityCard, type StageVelocityRow } from "../../CrmAnalyticsClient";
 import type { RepDealRow } from "@/lib/analytics/repDeals";
@@ -12,13 +15,24 @@ function fmtDate(iso: string): string {
 
 export default function RepDealsClient({
   repName,
-  deals,
+  deals: allDeals,
   stageVelocity,
+  dateRange,
 }: {
   repName: string;
   deals: RepDealRow[];
   stageVelocity: StageVelocityRow[];
+  dateRange: DateRange;
 }) {
+  const router = useRouter();
+  const params = useParams();
+  const [wonOnly, setWonOnly] = useState(false);
+  const deals = wonOnly ? allDeals.filter((d) => d.outcome === "WON") : allDeals;
+
+  function applyDateRange(range: DateRange) {
+    router.push(`/crm/analytics/rep/${params.userId}?from=${range.from}&to=${range.to}`);
+  }
+
   function exportXlsx() {
     const headers = ["Customer", "Deal code", "Quotations", "Court designs", "Products interested", "Stage", "Latest note", "Next activity"];
     const rows = deals.map((d) => [
@@ -39,11 +53,18 @@ export default function RepDealsClient({
       <PageHeader
         large
         title={repName}
-        description={`${deals.length} customer${deals.length === 1 ? "" : "s"} being handled`}
+        description={`${deals.length} customer${deals.length === 1 ? "" : "s"} being handled${wonOnly ? " (won only)" : ""} — created ${fmtDate(new Date(dateRange.from).toISOString())} to ${fmtDate(new Date(dateRange.to).toISOString())}`}
         action={
-          <button onClick={exportXlsx} className="bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium px-4 py-2 rounded-lg">
-            Export xlsx
-          </button>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <DateRangePicker value={dateRange} onApply={applyDateRange} />
+            <label className="flex items-center gap-1.5 text-sm text-slate-700 border border-slate-300 rounded-lg px-3 py-1.5 cursor-pointer">
+              <input type="checkbox" checked={wonOnly} onChange={(e) => setWonOnly(e.target.checked)} className="rounded border-slate-300" />
+              Won only
+            </label>
+            <button onClick={exportXlsx} className="bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium px-4 py-2 rounded-lg">
+              Export xlsx
+            </button>
+          </div>
         }
       />
 
@@ -130,7 +151,7 @@ export default function RepDealsClient({
             {deals.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
-                  No deals for this rep yet.
+                  {wonOnly ? "No won deals for this rep in this range." : "No deals for this rep in this range."}
                 </td>
               </tr>
             )}

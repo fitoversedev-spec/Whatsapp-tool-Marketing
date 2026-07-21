@@ -21,13 +21,18 @@ export default async function RepDealsPage({
 
   const defaultFrom = new Date();
   defaultFrom.setDate(defaultFrom.getDate() - 30);
-  const from = searchParams.from ? new Date(searchParams.from + "T00:00:00") : defaultFrom;
-  const to = searchParams.to ? new Date(searchParams.to + "T23:59:59") : new Date();
+  const fromStr = searchParams.from ?? defaultFrom.toISOString().slice(0, 10);
+  const toStr = searchParams.to ?? new Date().toISOString().slice(0, 10);
+  const from = new Date(fromStr + "T00:00:00");
+  const to = new Date(toStr + "T23:59:59");
 
+  // Same range used for stage velocity now also scopes the roster itself
+  // (createdAt-filtered) — previously the roster ignored the date range
+  // shown right next to it entirely, per explicit request to change that.
   const [deals, velocity] = await Promise.all([
-    getRepDeals(rep.id),
+    getRepDeals(rep.id, { from, to }),
     stageVelocity({ from, to, ownerIds: [rep.id] }),
   ]);
 
-  return <RepDealsClient repName={rep.name} deals={deals} stageVelocity={velocity} />;
+  return <RepDealsClient repName={rep.name} deals={deals} stageVelocity={velocity} dateRange={{ from: fromStr, to: toStr }} />;
 }

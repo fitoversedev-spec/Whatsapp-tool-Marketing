@@ -6,12 +6,16 @@ import Link from "next/link";
 import { useToast } from "@/components/Toast";
 import UnifiedTimeline from "@/components/crm/UnifiedTimeline";
 import type { TimelineEntry } from "@/lib/crm/timeline";
+import { DESIGNATIONS } from "../AccountContactsClient";
 
 type Contact = {
   id: string; name: string; phone: string | null; email: string | null;
   designation: string | null; notes: string | null; fields: Record<string, string>; isPrimary: boolean;
-  accountId: string; accountName: string; accountCity: string | null; createdAt: string;
+  accountId: string; accountName: string; accountCity: string | null;
+  accountCustomerProfileId: string | null; accountBusinessType: string | null;
+  createdAt: string;
 };
+type CustomerProfileOption = { id: string; name: string };
 type Deal = {
   id: string; code: string; title: string; quotedValue: number | null; wonValue: number | null;
   estimatedValue: number | null; stageId: string; stageName: string; stageColorHex: string | null;
@@ -59,11 +63,12 @@ const SECTIONS = [
 ];
 
 export default function ContactDetailClient({
-  contact, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons,
+  contact, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons, customerProfiles,
 }: {
   contact: Contact; deals: Deal[]; activities: ActivityRow[]; quotations: QuotationRow[]; courtImages: CourtImageRow[];
   productInterests: ProductInterestRow[]; timeline: TimelineEntry[]; products: ProductOption[];
   activityTypes: ActivityTypeOption[]; funnelStages: StageOption[]; lossReasons: LossReasonOption[];
+  customerProfiles: CustomerProfileOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -81,16 +86,35 @@ export default function ContactDetailClient({
   const [phone, setPhone] = useState(contact.phone ?? "");
   const [email, setEmail] = useState(contact.email ?? "");
   const [designation, setDesignation] = useState(contact.designation ?? "");
+  const [designationOther, setDesignationOther] = useState("");
+  const [siteCity, setSiteCity] = useState(contact.accountCity ?? "");
+  const [customerProfileId, setCustomerProfileId] = useState(contact.accountCustomerProfileId ?? "");
+  const [businessType, setBusinessType] = useState(contact.accountBusinessType ?? "");
   const [notes, setNotes] = useState(contact.notes ?? "");
   const [isPrimary, setIsPrimary] = useState(contact.isPrimary);
   const [fields, setFields] = useState<Record<string, string>>(contact.fields);
   const [newFieldKey, setNewFieldKey] = useState("");
 
+  // Same preset-dropdown-plus-"Other" pattern as the New Contact form: if the
+  // stored value matches one of the fixed presets, select it; otherwise it's
+  // a free-text value someone typed under "Other" previously.
   function startEdit() {
     setName(contact.name);
     setPhone(contact.phone ?? "");
     setEmail(contact.email ?? "");
-    setDesignation(contact.designation ?? "");
+    if (contact.designation && DESIGNATIONS.includes(contact.designation)) {
+      setDesignation(contact.designation);
+      setDesignationOther("");
+    } else if (contact.designation) {
+      setDesignation("Other");
+      setDesignationOther(contact.designation);
+    } else {
+      setDesignation(DESIGNATIONS[0]);
+      setDesignationOther("");
+    }
+    setSiteCity(contact.accountCity ?? "");
+    setCustomerProfileId(contact.accountCustomerProfileId ?? "");
+    setBusinessType(contact.accountBusinessType ?? "");
     setNotes(contact.notes ?? "");
     setIsPrimary(contact.isPrimary);
     setFields(contact.fields);
@@ -115,6 +139,7 @@ export default function ContactDetailClient({
   async function saveEdit() {
     if (!name.trim()) { toast.error("Name is required"); return; }
     setSaving(true);
+    const resolvedDesignation = designation === "Other" ? designationOther.trim() || null : designation || null;
     const res = await fetch(`/api/account-contacts/${contact.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -122,7 +147,10 @@ export default function ContactDetailClient({
         name: name.trim(),
         phone: phone.trim() || null,
         email: email.trim() || null,
-        designation: designation.trim() || null,
+        designation: resolvedDesignation,
+        siteCity: siteCity.trim() || null,
+        customerProfileId: customerProfileId || null,
+        businessType: businessType || null,
         notes: notes.trim() || null,
         fields,
         isPrimary,
@@ -376,13 +404,51 @@ export default function ContactDetailClient({
                 <div>
                   <div className="text-xs text-slate-600">Designation</div>
                   {editing ? (
-                    <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
+                    <>
+                      <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                        {DESIGNATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                      {designation === "Other" && (
+                        <input value={designationOther} onChange={(e) => setDesignationOther(e.target.value)} placeholder="Enter designation" className="mt-1.5 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
+                      )}
+                    </>
                   ) : (
                     <div className="font-medium text-slate-900">{contact.designation ?? "—"}</div>
                   )}
                 </div>
                 <div><div className="text-xs text-slate-600">Company</div><div className="font-medium text-slate-900">{contact.accountName}</div></div>
-                <div><div className="text-xs text-slate-600">City</div><div className="font-medium text-slate-900">{contact.accountCity ?? "—"}</div></div>
+                <div>
+                  <div className="text-xs text-slate-600">City</div>
+                  {editing ? (
+                    <input value={siteCity} onChange={(e) => setSiteCity(e.target.value)} placeholder="City / site location" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
+                  ) : (
+                    <div className="font-medium text-slate-900">{contact.accountCity ?? "—"}</div>
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600">Customer type</div>
+                  {editing ? (
+                    <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                      <option value="">Unspecified</option>
+                      {customerProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  ) : (
+                    <div className="font-medium text-slate-900">{customerProfiles.find((p) => p.id === contact.accountCustomerProfileId)?.name ?? "—"}</div>
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600">Business type</div>
+                  {editing ? (
+                    <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                      <option value="">Unspecified</option>
+                      <option value="B2B">B2B</option>
+                      <option value="B2C">B2C</option>
+                      <option value="B2G">B2G</option>
+                    </select>
+                  ) : (
+                    <div className="font-medium text-slate-900">{contact.accountBusinessType ?? "—"}</div>
+                  )}
+                </div>
                 <div><div className="text-xs text-slate-600">Contact created</div><div className="font-medium text-slate-900">{fmtDate(contact.createdAt)}</div></div>
               </div>
 

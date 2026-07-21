@@ -43,6 +43,12 @@ const patchSchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
   fields: z.record(z.string()).optional(),
   isPrimary: z.boolean().optional(),
+  // These three live on the parent Account, not AccountContact — same
+  // fields the New Contact flow sets at creation (POST /api/account-contacts),
+  // now editable after the fact too instead of being create-only.
+  siteCity: z.string().max(100).nullable().optional(),
+  customerProfileId: z.string().uuid().nullable().optional(),
+  businessType: z.enum(["B2B", "B2C", "B2G"]).nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -63,6 +69,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (parsed.data.notes !== undefined) data.notes = parsed.data.notes;
   if (parsed.data.fields !== undefined) data.fields = JSON.stringify(parsed.data.fields);
 
+  const accountData: Record<string, unknown> = {};
+  if (parsed.data.siteCity !== undefined) accountData.city = parsed.data.siteCity;
+  if (parsed.data.customerProfileId !== undefined) accountData.customerProfileId = parsed.data.customerProfileId;
+  if (parsed.data.businessType !== undefined) accountData.businessType = parsed.data.businessType;
+
   const updated = await prisma.$transaction(async (tx) => {
     // Was previously only handled in the `true` case, which silently no-opped
     // when unchecking "Primary" — `if (parsed.data.isPrimary)` skips `false`.
@@ -74,6 +85,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         });
       }
       data.isPrimary = parsed.data.isPrimary;
+    }
+    if (Object.keys(accountData).length) {
+      await tx.account.update({ where: { id: res.contact.accountId }, data: accountData });
     }
     return tx.accountContact.update({ where: { id: params.id }, data });
   });

@@ -11,14 +11,18 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
 
   const contact = await prisma.accountContact.findUnique({
     where: { id: params.id },
-    include: { account: { select: { id: true, name: true, city: true, ownerUserId: true } } },
+    include: {
+      account: {
+        select: { id: true, name: true, city: true, ownerUserId: true, customerProfileId: true, businessType: true },
+      },
+    },
   });
   if (!contact) notFound();
   if (!isAdmin(user.role) && contact.account.ownerUserId && contact.account.ownerUserId !== user.id) notFound();
 
   const timeline = await getUnifiedTimeline({ accountContactId: contact.id });
 
-  const [deals, activities, products, activityTypes, funnelStages, lossReasons] = await Promise.all([
+  const [deals, activities, products, activityTypes, funnelStages, lossReasons, customerProfiles] = await Promise.all([
     prisma.deal.findMany({
       where: { primaryContactId: contact.id, deletedAt: null },
       orderBy: { updatedAt: "desc" },
@@ -42,6 +46,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       select: { id: true, name: true, stageType: true, colorHex: true, requiresLossReason: true },
     }),
     prisma.lossReason.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
+    prisma.customerProfile.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
   ]);
 
   // Quotations/court designs/product interest all hang off this contact's
@@ -84,6 +89,8 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
         accountId: contact.account.id,
         accountName: contact.account.name,
         accountCity: contact.account.city,
+        accountCustomerProfileId: contact.account.customerProfileId,
+        accountBusinessType: contact.account.businessType,
         createdAt: contact.createdAt.toISOString(),
       }}
       deals={deals.map((d) => ({
@@ -114,6 +121,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       activityTypes={activityTypes}
       funnelStages={funnelStages}
       lossReasons={lossReasons}
+      customerProfiles={customerProfiles}
     />
   );
 }

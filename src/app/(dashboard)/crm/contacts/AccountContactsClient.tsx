@@ -23,7 +23,7 @@ type Contact = {
 type Option = { id: string; name: string };
 type StageOption = { id: string; name: string; colorHex: string | null };
 
-const DESIGNATIONS = ["Owner / Director", "Principal", "Sports Director / Coach", "Facilities Manager", "Procurement", "Other"];
+export const DESIGNATIONS = ["Owner / Director", "Principal", "Sports Director / Coach", "Facilities Manager", "Procurement", "Other"];
 
 export default function AccountContactsClient({
   isAdmin,

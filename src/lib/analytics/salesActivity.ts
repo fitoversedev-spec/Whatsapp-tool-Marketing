@@ -32,6 +32,11 @@ export type SalesActivityRow = {
 export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActivityRow[]> {
   const { from, to } = filter;
   const ownerWhere = filter.ownerIds?.length ? { id: { in: filter.ownerIds } } : {};
+  const dealChannelWhere = filter.dealChannel ? { dealChannel: filter.dealChannel } : {};
+  // Quotation.dealId is nullable — only add the `deal` relation filter at
+  // all when actually narrowing by channel, so unfiltered callers (Team
+  // Performance) still count standalone/no-deal quotations as before.
+  const quoteDealWhere = filter.dealChannel ? { deal: { dealChannel: filter.dealChannel } } : {};
 
   const [owners, leadGroups, dealGroups, siteVisitGroups, sampleGroups, sentQuotes, closedDeals] = await Promise.all([
     prisma.user.findMany({
@@ -39,6 +44,10 @@ export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActiv
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    // Lead has no dealChannel concept — the general Lead table's only
+    // live creation path is the CRM bulk import (see docs/DECISIONS.md
+    // on the bot's old `new lead` command being repointed away from it),
+    // so every Lead row is already CRM-native. No filter needed here.
     prisma.lead.groupBy({
       by: ["ownerUserId"],
       where: { createdAt: { gte: from, lte: to }, ownerUserId: { not: null } },
@@ -46,7 +55,7 @@ export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActiv
     }),
     prisma.deal.groupBy({
       by: ["ownerUserId"],
-      where: { createdAt: { gte: from, lte: to }, deletedAt: null, ownerUserId: { not: null } },
+      where: { createdAt: { gte: from, lte: to }, deletedAt: null, ownerUserId: { not: null }, ...dealChannelWhere },
       _count: { _all: true },
     }),
     prisma.activity.groupBy({
@@ -63,11 +72,11 @@ export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActiv
     // per owner) can be computed in JS — Prisma's groupBy can't express
     // "count distinct X" directly.
     prisma.quotation.findMany({
-      where: { status: "sent", sentAt: { gte: from, lte: to } },
+      where: { status: "sent", sentAt: { gte: from, lte: to }, ...quoteDealWhere },
       select: { createdByUserId: true, dealId: true, grandTotal: true },
     }),
     prisma.deal.findMany({
-      where: { outcome: { in: ["WON", "LOST"] }, closedAt: { gte: from, lte: to }, ownerUserId: { not: null } },
+      where: { outcome: { in: ["WON", "LOST"] }, closedAt: { gte: from, lte: to }, ownerUserId: { not: null }, ...dealChannelWhere },
       select: { ownerUserId: true, outcome: true, wonValue: true, enquiryAt: true, closedAt: true },
     }),
   ]);

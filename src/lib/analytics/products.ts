@@ -66,10 +66,11 @@ function monthKey(d: Date): string {
 
 export async function productAnalytics(filter: AnalyticsFilter): Promise<ProductAnalytics> {
   const ownerWhere = filter.ownerIds?.length ? { ownerUserId: { in: filter.ownerIds } } : {};
+  const dealChannelWhere = filter.dealChannel ? { dealChannel: filter.dealChannel } : {};
 
   const allLineItems = await prisma.dealLineItem.findMany({
     where: {
-      deal: { deletedAt: null, ...ownerWhere },
+      deal: { deletedAt: null, ...ownerWhere, ...dealChannelWhere },
       // Perf: narrow to line items that can actually affect this window on
       // at least one of the 3 signals read below (enquiry/quoted/won) —
       // previously this had no date bound at all and re-fetched every

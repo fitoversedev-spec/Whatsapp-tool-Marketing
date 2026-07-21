@@ -53,12 +53,21 @@ export async function GET(req: NextRequest) {
   const ownerParam = req.nextUrl.searchParams.get("owner");
   const ownerIds = ownerParam && ownerParam !== "all" ? [ownerParam] : undefined;
 
+  // dealChannel: "crm" is what makes this route actually CRM-only — without
+  // it every one of these 5 functions (shared verbatim with /api/team/
+  // analytics) counts every Deal regardless of source, so the pre-CRM/
+  // WhatsApp-originated deals (all 32 real deals as of 2026-07-20, see
+  // docs/DECISIONS.md) leaked into every screen here. Team Performance's
+  // own route intentionally never sets this — it's supposed to show
+  // everything.
+  const filter = { from, to, ownerIds, dealChannel: "crm" as const };
+
   const [salesActivityRows, funnel, products, sources, stageVelocityRows] = await Promise.all([
-    salesActivity({ from, to, ownerIds }),
-    funnelSnapshot({ from, to, ownerIds }),
-    productAnalytics({ from, to, ownerIds }),
-    sourceAnalytics({ from, to, ownerIds }),
-    stageVelocity({ from, to, ownerIds }),
+    salesActivity(filter),
+    funnelSnapshot(filter),
+    productAnalytics(filter),
+    sourceAnalytics(filter),
+    stageVelocity(filter),
   ]);
 
   return NextResponse.json({

@@ -22,20 +22,21 @@ export type LossReasonRow = {
 };
 
 export async function funnelSnapshot(
-  filter: Pick<AnalyticsFilter, "from" | "to" | "ownerIds">,
+  filter: Pick<AnalyticsFilter, "from" | "to" | "ownerIds" | "dealChannel">,
 ): Promise<{ stages: FunnelStageRow[]; lossReasons: LossReasonRow[] }> {
   const ownerWhere = filter.ownerIds?.length ? { ownerUserId: { in: filter.ownerIds } } : {};
+  const dealChannelWhere = filter.dealChannel ? { dealChannel: filter.dealChannel } : {};
 
   const [stages, dealGroups, lostDeals] = await Promise.all([
     prisma.funnelStage.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     prisma.deal.groupBy({
       by: ["currentStageId"],
-      where: { deletedAt: null, ...ownerWhere },
+      where: { deletedAt: null, ...ownerWhere, ...dealChannelWhere },
       _count: { _all: true },
       _sum: { quotedValue: true, estimatedValue: true, wonValue: true },
     }),
     prisma.deal.findMany({
-      where: { outcome: "LOST", closedAt: { gte: filter.from, lte: filter.to }, deletedAt: null, ...ownerWhere },
+      where: { outcome: "LOST", closedAt: { gte: filter.from, lte: filter.to }, deletedAt: null, ...ownerWhere, ...dealChannelWhere },
       select: { lossReason: { select: { name: true } }, lossReasonNote: true },
     }),
   ]);

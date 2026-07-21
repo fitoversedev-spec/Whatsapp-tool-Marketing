@@ -174,12 +174,19 @@ export async function stageVelocity(filter: AnalyticsFilter): Promise<StageVeloc
     select: { id: true, name: true, sortOrder: true },
   });
 
+  // Merged into one `deal` key (not two separate conditional spreads) —
+  // a second `deal: {...}` object literal would silently clobber the
+  // first instead of combining with it.
+  const dealWhere: { ownerUserId?: { in: string[] }; dealChannel?: "whatsapp" | "crm" } = {};
+  if (filter.ownerIds?.length) dealWhere.ownerUserId = { in: filter.ownerIds };
+  if (filter.dealChannel) dealWhere.dealChannel = filter.dealChannel;
+
   const historyRows = await prisma.dealStageHistory.findMany({
     where: {
       changedAt: { gte: filter.from, lte: filter.to },
       durationInFromStageSeconds: { not: null },
       fromStageId: { not: null },
-      ...(filter.ownerIds?.length ? { deal: { ownerUserId: { in: filter.ownerIds } } } : {}),
+      ...(Object.keys(dealWhere).length ? { deal: dealWhere } : {}),
     },
     select: { fromStageId: true, durationInFromStageSeconds: true },
   });

@@ -36,15 +36,18 @@ export async function sourceAnalytics(filter: AnalyticsFilter): Promise<{
   productCrossTab: SourceProductCell[];
 }> {
   const ownerWhere = filter.ownerIds?.length ? { ownerUserId: { in: filter.ownerIds } } : {};
+  const dealChannelWhere = filter.dealChannel ? { dealChannel: filter.dealChannel } : {};
 
   const [sourceTaxonomy, leads, deals, closedDeals, adSpendRows, lineItems] = await Promise.all([
     prisma.leadSource.findMany({ select: { id: true, name: true } }),
+    // Lead has no dealChannel concept — see salesActivity.ts's own comment
+    // on why the general Lead table is already CRM-native by construction.
     prisma.lead.findMany({
       where: { createdAt: { gte: filter.from, lte: filter.to }, ...ownerWhere },
       select: { leadSourceId: true, status: true, convertedDealId: true },
     }),
     prisma.deal.findMany({
-      where: { deletedAt: null, createdAt: { gte: filter.from, lte: filter.to }, ...ownerWhere },
+      where: { deletedAt: null, createdAt: { gte: filter.from, lte: filter.to }, ...ownerWhere, ...dealChannelWhere },
       select: {
         leadSourceId: true,
         siteCity: true,
@@ -54,12 +57,12 @@ export async function sourceAnalytics(filter: AnalyticsFilter): Promise<{
       },
     }),
     prisma.deal.findMany({
-      where: { deletedAt: null, outcome: { in: ["WON", "LOST"] }, closedAt: { gte: filter.from, lte: filter.to }, ...ownerWhere },
+      where: { deletedAt: null, outcome: { in: ["WON", "LOST"] }, closedAt: { gte: filter.from, lte: filter.to }, ...ownerWhere, ...dealChannelWhere },
       select: { leadSourceId: true, enquiryAt: true, closedAt: true },
     }),
     prisma.adSpend.findMany({ where: { month: { gte: filter.from, lte: filter.to } }, select: { leadSourceId: true, amount: true } }),
     prisma.dealLineItem.findMany({
-      where: { deal: { deletedAt: null, createdAt: { gte: filter.from, lte: filter.to }, ...ownerWhere } },
+      where: { deal: { deletedAt: null, createdAt: { gte: filter.from, lte: filter.to }, ...ownerWhere, ...dealChannelWhere } },
       select: { product: { select: { name: true } }, label: true, deal: { select: { leadSourceId: true } } },
     }),
   ]);

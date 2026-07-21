@@ -87,6 +87,12 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     include: { activityType: { select: { name: true } } },
   });
 
+  const attachments = await prisma.accountContactAttachment.findMany({
+    where: { accountContactId: contact.id },
+    orderBy: { createdAt: "desc" },
+    include: { uploadedBy: { select: { name: true } } },
+  });
+
   return (
     <ContactDetailClient
       contact={{
@@ -141,6 +147,10 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
         id: r.id, message: r.message, dueAt: r.dueAt.toISOString(), completedAt: r.completedAt?.toISOString() ?? null,
         completionNote: r.completionNote, location: r.location, meetingUrl: r.meetingUrl,
         activityTypeName: r.activityType?.name ?? null,
+      }))}
+      attachments={attachments.map((a) => ({
+        id: a.id, fileName: a.fileName, fileUrl: a.fileUrl, fileSize: a.fileSize, mimeType: a.mimeType,
+        createdAt: a.createdAt.toISOString(), uploadedByName: a.uploadedBy.name,
       }))}
     />
   );

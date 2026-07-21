@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast } from "@/components/Toast";
@@ -33,6 +33,7 @@ type ReminderRow = {
   id: string; message: string; dueAt: string; completedAt: string | null; completionNote: string | null;
   location: string | null; meetingUrl: string | null; activityTypeName: string | null;
 };
+type AttachmentRow = { id: string; fileName: string; fileUrl: string; fileSize: number; mimeType: string; createdAt: string; uploadedByName: string };
 
 // Same convention as QuotationsClient.tsx / CourtImagesClient.tsx (each
 // already defines this independently — matching that precedent rather
@@ -55,6 +56,11 @@ function fmtDate(iso: string): string {
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
+function fmtFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
@@ -69,16 +75,17 @@ const SECTIONS = [
   { id: "products", label: "Product interest" },
   { id: "reminders", label: "Reminders" },
   { id: "notes", label: "Notes" },
+  { id: "attachments", label: "Attachments" },
   { id: "activities", label: "Activities" },
 ];
 
 export default function ContactDetailClient({
-  contact, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons, customerProfiles, contactNotes, reminders,
+  contact, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons, customerProfiles, contactNotes, reminders, attachments,
 }: {
   contact: Contact; deals: Deal[]; activities: ActivityRow[]; quotations: QuotationRow[]; courtImages: CourtImageRow[];
   productInterests: ProductInterestRow[]; timeline: TimelineEntry[]; products: ProductOption[];
   activityTypes: ActivityTypeOption[]; funnelStages: StageOption[]; lossReasons: LossReasonOption[];
-  customerProfiles: CustomerProfileOption[]; contactNotes: ContactNoteRow[]; reminders: ReminderRow[];
+  customerProfiles: CustomerProfileOption[]; contactNotes: ContactNoteRow[]; reminders: ReminderRow[]; attachments: AttachmentRow[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -90,6 +97,8 @@ export default function ContactDetailClient({
   const [completingReminderId, setCompletingReminderId] = useState<string | null>(null);
   const [completionNoteDraft, setCompletionNoteDraft] = useState("");
   const [completingBusy, setCompletingBusy] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [syncing, setSyncing] = useState(false);
   const [resending, setResending] = useState<string | null>(null);
   const [showLogActivity, setShowLogActivity] = useState(false);
@@ -318,6 +327,33 @@ export default function ContactDetailClient({
       router.refresh();
     } else {
       toast.error("Could not update reminder");
+    }
+  }
+
+  async function uploadAttachment(file: File) {
+    setUploadingFile(true);
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`/api/account-contacts/${contact.id}/attachments`, { method: "POST", body: form });
+    setUploadingFile(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (res.ok) {
+      toast.success("File uploaded");
+      router.refresh();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Upload failed");
+    }
+  }
+
+  async function deleteAttachment(id: string) {
+    if (!confirm("Delete this file? This cannot be undone.")) return;
+    const res = await fetch(`/api/account-contacts/${contact.id}/attachments/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("File deleted");
+      router.refresh();
+    } else {
+      toast.error("Could not delete file");
     }
   }
 
@@ -868,6 +904,45 @@ export default function ContactDetailClient({
                       {n.title && <div className="text-sm font-semibold text-slate-900">{n.title}</div>}
                       <div className="text-sm text-slate-700 whitespace-pre-wrap">{n.body}</div>
                       <div className="text-xs text-slate-500 mt-0.5">{fmtDateTime(n.createdAt)} · {n.authorName}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div id="attachments" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-slate-900">Attachments <span className="text-slate-400 font-normal">{attachments.length}</span></h3>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingFile}
+                  aria-label="Upload file"
+                  title="Upload file"
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none disabled:opacity-50"
+                >
+                  +
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAttachment(f); }}
+                />
+              </div>
+              {uploadingFile && <p className="text-sm text-slate-400 mb-2">Uploading...</p>}
+              {attachments.length === 0 ? (
+                <p className="text-sm text-slate-400">No files uploaded yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {attachments.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
+                      <a href={a.fileUrl} target="_blank" rel="noreferrer" className="min-w-0">
+                        <div className="text-sm font-medium text-wa-dark hover:underline truncate">{a.fileName}</div>
+                        <div className="text-xs text-slate-500">{fmtFileSize(a.fileSize)} · {fmtDateTime(a.createdAt)} · {a.uploadedByName}</div>
+                      </a>
+                      <button onClick={() => deleteAttachment(a.id)} aria-label={`Delete ${a.fileName}`} className="text-slate-400 hover:text-red-600 text-xs shrink-0 px-2">
+                        ✕
+                      </button>
                     </div>
                   ))}
                 </div>

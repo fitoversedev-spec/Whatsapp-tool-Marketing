@@ -65,6 +65,7 @@ model User {
   dealStageChanges     DealStageHistory[]
   activities           Activity[]             @relation("ActivityOwner")
   accountContactNotes  AccountContactNote[]
+  accountContactAttachments AccountContactAttachment[]
   importBatches        ImportBatch[]
   pendingStaffAction   PendingStaffAction?
   auditLogs            AuditLog[]
@@ -1146,6 +1147,7 @@ model AccountContact {
   activities Activity[]
   importBatch ImportBatch? @relation("AccountContactImports", fields: [importBatchId], references: [id], onDelete: SetNull)
   generalNotes AccountContactNote[]
+  attachments AccountContactAttachment[]
 
   @@index([accountId])
   @@index([importBatchId])
@@ -1170,6 +1172,29 @@ model AccountContactNote {
 
   @@index([accountContactId, createdAt])
   @@map("account_contact_notes")
+}
+
+// Documents uploaded against a contact (ID proofs, signed agreements, site
+// photos, etc.) — one place for everything tied to that person, visible to
+// the owning sales rep and admin alike (same owner-or-admin scoping every
+// other AccountContact-nested write already uses). Files live in the same
+// public Vercel Blob store the rest of the app uses (uploadToBlob), not a
+// separate storage mechanism.
+model AccountContactAttachment {
+  id               String   @id @default(uuid())
+  accountContactId String   @map("account_contact_id")
+  uploadedByUserId String   @map("uploaded_by_user_id")
+  fileName         String   @map("file_name")
+  fileUrl          String   @map("file_url")
+  fileSize         Int      @map("file_size")
+  mimeType         String   @map("mime_type")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  accountContact AccountContact @relation(fields: [accountContactId], references: [id], onDelete: Cascade)
+  uploadedBy     User           @relation(fields: [uploadedByUserId], references: [id])
+
+  @@index([accountContactId, createdAt])
+  @@map("account_contact_attachments")
 }
 
 // A raw enquiry before it's qualified into a Deal. Kept thin — fast capture

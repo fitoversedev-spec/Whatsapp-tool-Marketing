@@ -93,6 +93,7 @@ export default function CompaniesClient({
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <PageHeader
+        large
         title="Lead types"
         description={`${companies.length} ${isAdmin ? "" : "of yours "}on record — grouped by who they are, not a flat company list`}
         action={
@@ -157,13 +158,13 @@ export default function CompaniesClient({
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-500 border-b border-slate-200">
-              <th className="px-4 py-2.5 font-medium">Name</th>
-              <th className="px-4 py-2.5 font-medium">City</th>
-              <th className="px-4 py-2.5 font-medium">{classificationLabel}</th>
-              <th className="px-4 py-2.5 font-medium">Owner</th>
-              <th className="px-4 py-2.5 font-medium text-right">Contacts</th>
-              <th className="px-4 py-2.5 font-medium text-right">Deals</th>
+            <tr className="text-left text-slate-600 border-b border-slate-200">
+              <th className="px-4 py-2.5 font-semibold">Name</th>
+              <th className="px-4 py-2.5 font-semibold">City</th>
+              <th className="px-4 py-2.5 font-semibold">{classificationLabel}</th>
+              <th className="px-4 py-2.5 font-semibold">Owner</th>
+              <th className="px-4 py-2.5 font-semibold text-right">Contacts</th>
+              <th className="px-4 py-2.5 font-semibold text-right">Deals</th>
             </tr>
           </thead>
           <tbody>

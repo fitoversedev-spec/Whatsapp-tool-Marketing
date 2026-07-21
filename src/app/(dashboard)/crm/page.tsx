@@ -24,7 +24,7 @@ export default async function CrmDashboardPage() {
 
     return (
       <>
-        <PageHeader title="Team overview" description="This month vs last month across the whole team" />
+        <PageHeader large title="Team overview" description="This month vs last month across the whole team" />
         <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
@@ -36,7 +36,7 @@ export default async function CrmDashboardPage() {
               const d = delta(m.curr, m.prev);
               return (
                 <div key={m.label} className="bg-white rounded-xl border border-slate-200 p-4">
-                  <div className="text-xs text-slate-500">{m.label}</div>
+                  <div className="text-sm text-slate-600">{m.label}</div>
                   <div className="text-xl font-semibold text-slate-900 mt-1">{m.fmt(m.curr)}</div>
                   {d !== null && (
                     <div className={`text-xs font-medium mt-1 ${d >= 0 ? "text-green-700" : "text-red-600"}`}>
@@ -49,7 +49,7 @@ export default async function CrmDashboardPage() {
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Biggest movers this month</h3>
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Biggest movers this month</h3>
             {topMovers.length === 0 ? (
               <p className="text-sm text-slate-400">Nothing to compare yet.</p>
             ) : (
@@ -79,11 +79,11 @@ export default async function CrmDashboardPage() {
 
   return (
     <>
-      <PageHeader title="My Day" description={new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })} />
+      <PageHeader large title="My Day" description={new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })} />
       <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-4">
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Due today <span className="text-slate-400 font-normal">{myDay.dueToday.length}</span></h3>
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Due today <span className="text-slate-400 font-normal">{myDay.dueToday.length}</span></h3>
             {myDay.dueToday.length === 0 ? (
               <p className="text-sm text-slate-400">Nothing due today.</p>
             ) : (
@@ -96,7 +96,7 @@ export default async function CrmDashboardPage() {
           </div>
 
           <div className="bg-white rounded-xl border border-amber-200 bg-amber-50/40 p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Overdue <span className="text-slate-400 font-normal">{myDay.overdue.length}</span></h3>
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Overdue <span className="text-slate-400 font-normal">{myDay.overdue.length}</span></h3>
             {myDay.overdue.length === 0 ? (
               <p className="text-sm text-slate-400">Nothing overdue — you're caught up.</p>
             ) : (
@@ -109,7 +109,7 @@ export default async function CrmDashboardPage() {
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Untouched 7+ days <span className="text-slate-400 font-normal">{myDay.noRecentActivityDeals.length}</span></h3>
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Untouched 7+ days <span className="text-slate-400 font-normal">{myDay.noRecentActivityDeals.length}</span></h3>
             {myDay.noRecentActivityDeals.length === 0 ? (
               <p className="text-sm text-slate-400">Every open deal has recent activity.</p>
             ) : (
@@ -122,7 +122,7 @@ export default async function CrmDashboardPage() {
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Closing this week <span className="text-slate-400 font-normal">{myDay.closingThisWeek.length}</span></h3>
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Closing this week <span className="text-slate-400 font-normal">{myDay.closingThisWeek.length}</span></h3>
             {myDay.closingThisWeek.length === 0 ? (
               <p className="text-sm text-slate-400">No expected close dates in the next 7 days.</p>
             ) : (
@@ -140,7 +140,7 @@ export default async function CrmDashboardPage() {
 
         {myDay.stuckDeals.length > 0 && (
           <div className="bg-white rounded-xl border border-red-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-2">Stuck in stage <span className="text-slate-400 font-normal">{myDay.stuckDeals.length}</span></h3>
+            <h3 className="text-base font-semibold text-slate-900 mb-2">Stuck in stage <span className="text-slate-400 font-normal">{myDay.stuckDeals.length}</span></h3>
             <div className="flex flex-wrap gap-2">
               {myDay.stuckDeals.map((d) => (
                 <Link key={d.id} href={`/deals/${d.id}`} className="text-xs font-medium bg-red-50 text-red-700 px-2 py-1 rounded-lg hover:bg-red-100">

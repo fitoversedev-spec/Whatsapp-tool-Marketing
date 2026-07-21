@@ -76,8 +76,8 @@ export default function CompanyDetailClient({
             {initials(account.name)}
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-slate-900 truncate">{account.name}</h1>
-            <p className="text-xs text-slate-500">Owner: {account.ownerName ?? "Unassigned"}</p>
+            <h1 className="text-xl font-semibold text-slate-900 truncate">{account.name}</h1>
+            <p className="text-sm text-slate-600">Owner: {account.ownerName ?? "Unassigned"}</p>
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -145,17 +145,17 @@ export default function CompanyDetailClient({
           <div className="flex-1 min-w-0 space-y-4">
             {/* Key-field summary */}
             <div id="details" className="bg-white rounded-xl border border-slate-200 p-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm scroll-mt-4">
-              <div><div className="text-xs text-slate-500">City</div><div className="font-medium text-slate-900">{account.city ?? "—"}</div></div>
-              <div><div className="text-xs text-slate-500">Segment</div><div className="font-medium text-slate-900">{account.customerProfileName ?? "—"}</div></div>
-              <div><div className="text-xs text-slate-500">Business type</div><div className="font-medium text-slate-900">{account.businessType ?? "—"}</div></div>
-              <div><div className="text-xs text-slate-500">GSTIN</div><div className="font-medium text-slate-900">{account.gstin ?? "—"}</div></div>
-              <div className="col-span-2 sm:col-span-3"><div className="text-xs text-slate-500">Notes</div><div className="text-slate-700">{account.notes ?? "—"}</div></div>
+              <div><div className="text-xs text-slate-600">City</div><div className="font-medium text-slate-900">{account.city ?? "—"}</div></div>
+              <div><div className="text-xs text-slate-600">Segment</div><div className="font-medium text-slate-900">{account.customerProfileName ?? "—"}</div></div>
+              <div><div className="text-xs text-slate-600">Business type</div><div className="font-medium text-slate-900">{account.businessType ?? "—"}</div></div>
+              <div><div className="text-xs text-slate-600">GSTIN</div><div className="font-medium text-slate-900">{account.gstin ?? "—"}</div></div>
+              <div className="col-span-2 sm:col-span-3"><div className="text-xs text-slate-600">Notes</div><div className="text-slate-700">{account.notes ?? "—"}</div></div>
             </div>
 
             {/* Contacts */}
             <div id="contacts" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-slate-900">Contacts <span className="text-slate-400 font-normal">{contacts.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Contacts <span className="text-slate-400 font-normal">{contacts.length}</span></h3>
                 <button onClick={() => setShowNewContact(true)} className="text-xs font-medium text-wa-dark hover:underline">+ New contact</button>
               </div>
               {contacts.length === 0 ? (
@@ -172,9 +172,9 @@ export default function CompanyDetailClient({
                         <div className="text-sm font-medium text-slate-900">
                           {c.name} {c.isPrimary && <span className="text-[10px] font-semibold text-wa-dark bg-wa-green/10 px-1.5 py-0.5 rounded ml-1">PRIMARY</span>}
                         </div>
-                        <div className="text-xs text-slate-500">{c.designation ?? "—"}</div>
+                        <div className="text-xs text-slate-600">{c.designation ?? "—"}</div>
                       </div>
-                      <div className="text-xs text-slate-500">{c.phone ?? c.email ?? "—"}</div>
+                      <div className="text-xs text-slate-600">{c.phone ?? c.email ?? "—"}</div>
                     </Link>
                   ))}
                 </div>
@@ -183,7 +183,7 @@ export default function CompanyDetailClient({
 
             {/* Deals */}
             <div id="deals" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Deals <span className="text-slate-400 font-normal">{deals.length}</span></h3>
+              <h3 className="text-base font-semibold text-slate-900 mb-3">Deals <span className="text-slate-400 font-normal">{deals.length}</span></h3>
               {deals.length === 0 ? (
                 <p className="text-sm text-slate-400">No deals yet.</p>
               ) : (
@@ -196,7 +196,7 @@ export default function CompanyDetailClient({
                     >
                       <div>
                         <div className="text-sm font-medium text-slate-900">{d.title}</div>
-                        <div className="text-xs text-slate-500">{d.code}</div>
+                        <div className="text-xs text-slate-600">{d.code}</div>
                       </div>
                       <div className="text-right">
                         <span
@@ -205,7 +205,7 @@ export default function CompanyDetailClient({
                         >
                           {d.stageName}
                         </span>
-                        <div className="text-xs text-slate-500">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
+                        <div className="text-xs text-slate-600">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
                       </div>
                     </Link>
                   ))}
@@ -215,7 +215,7 @@ export default function CompanyDetailClient({
 
             {/* Activities */}
             <div id="activities" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Activities <span className="text-slate-400 font-normal">{activities.length}</span></h3>
+              <h3 className="text-base font-semibold text-slate-900 mb-3">Activities <span className="text-slate-400 font-normal">{activities.length}</span></h3>
               {activities.length === 0 ? (
                 <p className="text-sm text-slate-400">Nothing logged yet — activity logged against this company's deals will show up here.</p>
               ) : (
@@ -225,7 +225,7 @@ export default function CompanyDetailClient({
                       <div className="text-sm text-slate-900">
                         <span className="font-medium">{a.typeName}</span> — {a.subject}
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-slate-600">
                         {new Date(a.occurredAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} · {a.ownerName}
                         {a.dealId && (
                           <>

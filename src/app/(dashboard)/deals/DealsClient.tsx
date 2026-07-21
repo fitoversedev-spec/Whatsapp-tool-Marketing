@@ -119,6 +119,7 @@ export default function DealsClient({
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <PageHeader
+        large
         title="Deals"
         action={
           <button
@@ -157,13 +158,13 @@ export default function DealsClient({
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-500 border-b border-slate-200">
-              <th className="px-4 py-2.5 font-medium">Deal</th>
-              <th className="px-4 py-2.5 font-medium">Account</th>
-              <th className="px-4 py-2.5 font-medium">Channel</th>
-              <th className="px-4 py-2.5 font-medium">Stage</th>
-              <th className="px-4 py-2.5 font-medium">Owner</th>
-              <th className="px-4 py-2.5 font-medium text-right">Value</th>
+            <tr className="text-left text-slate-600 border-b border-slate-200">
+              <th className="px-4 py-2.5 font-semibold">Deal</th>
+              <th className="px-4 py-2.5 font-semibold">Account</th>
+              <th className="px-4 py-2.5 font-semibold">Channel</th>
+              <th className="px-4 py-2.5 font-semibold">Stage</th>
+              <th className="px-4 py-2.5 font-semibold">Owner</th>
+              <th className="px-4 py-2.5 font-semibold text-right">Value</th>
             </tr>
           </thead>
           <tbody>
@@ -177,14 +178,14 @@ export default function DealsClient({
             {visible.map((d) => (
               <tr key={d.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                 <td className="px-4 py-3">
-                  <Link href={`/deals/${d.id}`} className="font-medium text-slate-900 hover:text-wa-green hover:underline">
+                  <Link href={`/deals/${d.id}`} className="text-base font-medium text-slate-900 hover:text-wa-green hover:underline">
                     {d.title}
                   </Link>
-                  <div className="text-xs text-slate-400">{d.code}</div>
+                  <div className="text-xs text-slate-500">{d.code}</div>
                 </td>
                 <td className="px-4 py-3">
                   <div className="text-slate-700">{d.accountName}</div>
-                  {d.accountCity && <div className="text-xs text-slate-400">{d.accountCity}</div>}
+                  {d.accountCity && <div className="text-xs text-slate-500">{d.accountCity}</div>}
                 </td>
                 <td className="px-4 py-3">
                   <ChannelBadge channel={d.dealChannel} />

@@ -140,11 +140,11 @@ export default function ImportWizardClient() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
-      <PageHeader title="Import" description="Bulk-load contacts, companies, leads, or deals from a spreadsheet" />
+      <PageHeader large title="Import" description="Bulk-load contacts, companies, leads, or deals from a spreadsheet" />
 
       {step === "target" && (
         <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">What are you importing?</h3>
+          <h3 className="text-base font-semibold text-slate-900 mb-3">What are you importing?</h3>
           <div className="grid grid-cols-2 gap-3 mb-5">
             {TARGETS.map((t) => (
               <button
@@ -173,7 +173,7 @@ export default function ImportWizardClient() {
       {step === "mapping" && (
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-slate-900">Map columns — {fileName}</h3>
+            <h3 className="text-base font-semibold text-slate-900">Map columns — {fileName}</h3>
             <span className="text-xs text-slate-500">{rows.length - 1} rows</span>
           </div>
 
@@ -206,7 +206,7 @@ export default function ImportWizardClient() {
                   <option value="">Not mapped</option>
                   {headers.map((h, i) => <option key={i} value={h}>{h || `Column ${i + 1}`}</option>)}
                 </select>
-                {f.hint && <span className="text-xs text-slate-400 w-40 shrink-0">{f.hint}</span>}
+                {f.hint && <span className="text-sm text-slate-600 w-40 shrink-0">{f.hint}</span>}
               </div>
             ))}
           </div>
@@ -222,8 +222,8 @@ export default function ImportWizardClient() {
 
       {step === "preview" && preview && (
         <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-sm font-semibold text-slate-900 mb-1">Validation preview</h3>
-          <p className="text-sm text-slate-500 mb-4">
+          <h3 className="text-base font-semibold text-slate-900 mb-1">Validation preview</h3>
+          <p className="text-base text-slate-600 mb-4">
             {preview.validCount} ready · {preview.duplicateCount} possible duplicates · {preview.invalidCount} need fixing
           </p>
 
@@ -285,8 +285,8 @@ export default function ImportWizardClient() {
 
       {step === "result" && result && (
         <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-sm font-semibold text-slate-900 mb-1">Import complete</h3>
-          <p className="text-sm text-slate-500 mb-4">
+          <h3 className="text-base font-semibold text-slate-900 mb-1">Import complete</h3>
+          <p className="text-base text-slate-600 mb-4">
             {result.successCount} imported · {result.skippedCount} skipped · {result.errorCount} failed
           </p>
           {result.rowErrors.length > 0 && (

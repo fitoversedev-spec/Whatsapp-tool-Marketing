@@ -26,12 +26,12 @@ export default function UnifiedTimeline({ entries }: { entries: TimelineEntry[] 
             >
               {e.kind === "reminder" ? (e.completed ? "DONE" : "REMINDER") : e.kind === "created" ? "CREATED" : "ACTIVITY"}
             </span>
-            <span className={`font-medium ${e.kind === "reminder" && e.completed ? "text-slate-400 line-through" : "text-slate-800"}`}>
+            <span className={`text-base font-medium ${e.kind === "reminder" && e.completed ? "text-slate-400 line-through" : "text-slate-800"}`}>
               {e.title}
             </span>
           </div>
-          {e.detail && <div className="text-slate-500 text-xs mt-0.5">{e.detail}</div>}
-          <div className="text-xs text-slate-400 mt-0.5">
+          {e.detail && <div className="text-slate-600 text-sm mt-0.5">{e.detail}</div>}
+          <div className="text-xs text-slate-500 mt-0.5">
             {fmtDate(e.timestamp)} · {e.ownerName}
           </div>
         </div>

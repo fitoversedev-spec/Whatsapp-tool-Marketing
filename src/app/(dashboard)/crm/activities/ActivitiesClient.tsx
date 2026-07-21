@@ -37,6 +37,7 @@ export default function ActivitiesClient({ isAdmin, activities }: { isAdmin: boo
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <PageHeader
+        large
         title="Activities"
         description={`${activities.length} ${isAdmin ? "team-wide" : "of yours"} — every logged touchpoint, most recent first`}
       />
@@ -60,12 +61,12 @@ export default function ActivitiesClient({ isAdmin, activities }: { isAdmin: boo
             <div key={a.id} className="bg-white rounded-xl border border-slate-200 p-3.5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-slate-900">
+                  <div className="text-base font-medium text-slate-900">
                     <span className="text-xs font-semibold text-wa-dark bg-wa-green/10 px-1.5 py-0.5 rounded mr-1.5">{a.typeName}</span>
                     {a.subject}
                   </div>
-                  {a.notes && <div className="text-xs text-slate-500 mt-1">{a.notes}</div>}
-                  <div className="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                  {a.notes && <div className="text-sm text-slate-600 mt-1">{a.notes}</div>}
+                  <div className="text-xs text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
                     <span>{fmtDate(a.occurredAt)}</span>
                     <span>· {a.ownerName}</span>
                     {a.durationMins != null && <span>· {a.durationMins}m</span>}

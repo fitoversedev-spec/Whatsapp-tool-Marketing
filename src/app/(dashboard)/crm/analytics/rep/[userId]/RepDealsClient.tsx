@@ -37,6 +37,7 @@ export default function RepDealsClient({
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-4">
       <PageHeader
+        large
         title={repName}
         description={`${deals.length} customer${deals.length === 1 ? "" : "s"} being handled`}
         action={

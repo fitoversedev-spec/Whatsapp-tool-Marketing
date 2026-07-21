@@ -123,6 +123,7 @@ export default function AccountContactsClient({
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <PageHeader
+        large
         title="Contacts"
         description={`${contacts.length} people — separate from the WhatsApp broadcast contact list`}
         action={
@@ -203,16 +204,16 @@ export default function AccountContactsClient({
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-500 border-b border-slate-200">
-              <th className="px-4 py-2.5 font-medium w-8">
+            <tr className="text-left text-slate-600 border-b border-slate-200">
+              <th className="px-4 py-2.5 font-semibold w-8">
                 <SelectAllCheckbox ids={visible.map((c) => c.id)} selected={selected} onChange={setSelected} />
               </th>
-              <th className="px-4 py-2.5 font-medium">Name</th>
-              <th className="px-4 py-2.5 font-medium">Company</th>
-              <th className="px-4 py-2.5 font-medium">Designation</th>
-              <th className="px-4 py-2.5 font-medium">Phone</th>
-              <th className="px-4 py-2.5 font-medium">Email</th>
-              {isAdmin && <th className="px-4 py-2.5 font-medium">Owner</th>}
+              <th className="px-4 py-2.5 font-semibold">Name</th>
+              <th className="px-4 py-2.5 font-semibold">Company</th>
+              <th className="px-4 py-2.5 font-semibold">Designation</th>
+              <th className="px-4 py-2.5 font-semibold">Phone</th>
+              <th className="px-4 py-2.5 font-semibold">Email</th>
+              {isAdmin && <th className="px-4 py-2.5 font-semibold">Owner</th>}
             </tr>
           </thead>
           <tbody>
@@ -382,8 +383,8 @@ function NewContactModal({
     <div className="fixed inset-0 bg-white z-50 flex flex-col">
       <div className="shrink-0 border-b border-slate-200 px-4 sm:px-6 py-4 flex items-start justify-between">
         <div>
-          <h2 className="font-semibold text-slate-900">New contact</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Capture a person and — if you know where they stand — a deal, all at once.</p>
+          <h2 className="text-lg font-semibold text-slate-900">New contact</h2>
+          <p className="text-sm text-slate-600 mt-0.5">Capture a person and — if you know where they stand — a deal, all at once.</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600 text-xl leading-none px-1">
           ×
@@ -394,7 +395,7 @@ function NewContactModal({
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-6">
               <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 pb-1.5">Contact details</h3>
+                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Contact details</h3>
                 <div><label className="text-xs font-medium text-slate-600">Name</label>
                   <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                 </div>
@@ -417,7 +418,7 @@ function NewContactModal({
               </div>
 
               <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 pb-1.5">Location &amp; organization</h3>
+                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Location &amp; organization</h3>
                 <div><label className="text-xs font-medium text-slate-600">Location</label>
                   <input value={siteCity} onChange={(e) => setSiteCity(e.target.value)} placeholder="City / site location" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                 </div>
@@ -453,7 +454,7 @@ function NewContactModal({
               </div>
 
               <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 pb-1.5">Classification</h3>
+                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Classification</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="text-xs font-medium text-slate-600">Customer type</label>
                     <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
@@ -476,7 +477,7 @@ function NewContactModal({
               </div>
 
               <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 pb-1.5">Lead source &amp; pipeline</h3>
+                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Lead source &amp; pipeline</h3>
                 <div><label className="text-xs font-medium text-slate-600">Lead source</label>
                   <select value={leadSourceId} onChange={(e) => setLeadSourceId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
                     <option value="">Unspecified</option>
@@ -495,18 +496,18 @@ function NewContactModal({
             </div>
 
             <div className="mt-6 space-y-3">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 pb-1.5">Notes</h3>
+              <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Notes</h3>
               <div><label className="text-xs font-medium text-slate-600">What does this lead want?</label>
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="e.g. Wants a football turf, ~10,000 sqft, budget around 8L" className="mt-1 w-full max-w-2xl border border-slate-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
 
             <div className="mt-6 space-y-3">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 pb-1.5">Custom fields</h3>
+              <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Custom fields</h3>
               <div className="max-w-2xl space-y-2">
                 {Object.keys(fields).map((k) => (
                   <div key={k} className="flex gap-2 items-center">
-                    <span className="text-xs text-slate-500 w-28 shrink-0 truncate" title={k}>{k}</span>
+                    <span className="text-xs text-slate-600 w-28 shrink-0 truncate" title={k}>{k}</span>
                     <input
                       value={fields[k] ?? ""}
                       onChange={(e) => setFields((prev) => ({ ...prev, [k]: e.target.value }))}

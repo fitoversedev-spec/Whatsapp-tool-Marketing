@@ -266,9 +266,9 @@ export default function ContactDetailClient({
                 className="text-lg font-semibold text-slate-900 border border-slate-300 rounded-lg px-2 py-1 w-full max-w-xs"
               />
             ) : (
-              <h1 className="text-lg font-semibold text-slate-900 truncate">{contact.name}</h1>
+              <h1 className="text-xl font-semibold text-slate-900 truncate">{contact.name}</h1>
             )}
-            <p className="text-xs text-slate-500">
+            <p className="text-sm text-slate-600">
               <Link href={`/crm/companies/${contact.accountId}`} className="hover:underline">{contact.accountName}</Link>
               {contact.designation ? ` · ${contact.designation}` : ""}
               {contact.isPrimary && <span className="ml-1.5 text-[10px] font-semibold text-wa-dark bg-wa-green/10 px-1.5 py-0.5 rounded">PRIMARY</span>}
@@ -358,7 +358,7 @@ export default function ContactDetailClient({
             <div id="details" className="bg-white rounded-xl border border-slate-200 p-4 text-sm scroll-mt-4">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
-                  <div className="text-xs text-slate-500">Phone</div>
+                  <div className="text-xs text-slate-600">Phone</div>
                   {editing ? (
                     <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
                   ) : (
@@ -366,7 +366,7 @@ export default function ContactDetailClient({
                   )}
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500">Email</div>
+                  <div className="text-xs text-slate-600">Email</div>
                   {editing ? (
                     <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
                   ) : (
@@ -374,24 +374,24 @@ export default function ContactDetailClient({
                   )}
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500">Designation</div>
+                  <div className="text-xs text-slate-600">Designation</div>
                   {editing ? (
                     <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
                   ) : (
                     <div className="font-medium text-slate-900">{contact.designation ?? "—"}</div>
                   )}
                 </div>
-                <div><div className="text-xs text-slate-500">Company</div><div className="font-medium text-slate-900">{contact.accountName}</div></div>
-                <div><div className="text-xs text-slate-500">City</div><div className="font-medium text-slate-900">{contact.accountCity ?? "—"}</div></div>
-                <div><div className="text-xs text-slate-500">Contact created</div><div className="font-medium text-slate-900">{fmtDate(contact.createdAt)}</div></div>
+                <div><div className="text-xs text-slate-600">Company</div><div className="font-medium text-slate-900">{contact.accountName}</div></div>
+                <div><div className="text-xs text-slate-600">City</div><div className="font-medium text-slate-900">{contact.accountCity ?? "—"}</div></div>
+                <div><div className="text-xs text-slate-600">Contact created</div><div className="font-medium text-slate-900">{fmtDate(contact.createdAt)}</div></div>
               </div>
 
               <div className="mt-4">
-                <div className="text-xs text-slate-500">What this lead wants</div>
+                <div className="text-xs text-slate-600">What this lead wants</div>
                 {editing ? (
                   <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
                 ) : contact.notes ? (
-                  <div className="text-slate-700 whitespace-pre-wrap">{contact.notes}</div>
+                  <div className="text-base text-slate-700 whitespace-pre-wrap">{contact.notes}</div>
                 ) : (
                   <div className="text-slate-400">—</div>
                 )}
@@ -405,12 +405,12 @@ export default function ContactDetailClient({
               )}
 
               <div className="mt-4 pt-4 border-t border-slate-100">
-                <div className="text-xs text-slate-500 mb-2">Custom fields</div>
+                <div className="text-xs text-slate-600 mb-2">Custom fields</div>
                 {editing ? (
                   <div className="space-y-2">
                     {Object.keys(fields).map((k) => (
                       <div key={k} className="flex gap-2 items-center">
-                        <span className="text-xs text-slate-500 w-28 shrink-0 truncate" title={k}>{k}</span>
+                        <span className="text-xs text-slate-600 w-28 shrink-0 truncate" title={k}>{k}</span>
                         <input
                           value={fields[k] ?? ""}
                           onChange={(e) => setFields((prev) => ({ ...prev, [k]: e.target.value }))}
@@ -437,7 +437,7 @@ export default function ContactDetailClient({
                   <dl className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {Object.entries(contact.fields).map(([k, v]) => (
                       <div key={k}>
-                        <dt className="text-xs text-slate-500 truncate" title={k}>{k}</dt>
+                        <dt className="text-xs text-slate-600 truncate" title={k}>{k}</dt>
                         <dd className="font-medium text-slate-900">{v || "—"}</dd>
                       </div>
                     ))}
@@ -450,7 +450,7 @@ export default function ContactDetailClient({
 
             <div id="deals" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-slate-900">Deals <span className="text-slate-400 font-normal">{deals.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Deals <span className="text-slate-400 font-normal">{deals.length}</span></h3>
                 <button
                   onClick={() => setPendingAction("deal")}
                   aria-label="New deal"
@@ -468,7 +468,7 @@ export default function ContactDetailClient({
                     <div key={d.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
                       <Link href={`/deals/${d.id}`} className="min-w-0">
                         <div className="text-sm font-medium text-slate-900 hover:underline truncate">{d.title}</div>
-                        <div className="text-xs text-slate-500">{d.code}</div>
+                        <div className="text-xs text-slate-600">{d.code}</div>
                       </Link>
                       <div className="text-right shrink-0 ml-3">
                         <select
@@ -486,7 +486,7 @@ export default function ContactDetailClient({
                             <option key={s.id} value={s.id} style={{ color: s.colorHex ?? "#475569" }}>{s.name}</option>
                           ))}
                         </select>
-                        <div className="text-xs text-slate-500">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
+                        <div className="text-xs text-slate-600">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
                       </div>
                     </div>
                   ))}
@@ -496,7 +496,7 @@ export default function ContactDetailClient({
 
             <div id="quotations" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-slate-900">Quotations <span className="text-slate-400 font-normal">{quotations.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Quotations <span className="text-slate-400 font-normal">{quotations.length}</span></h3>
                 <button
                   onClick={() => onQuickAction("quote")}
                   aria-label="New quotation"
@@ -519,7 +519,7 @@ export default function ContactDetailClient({
                             {q.status}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-500">{fmtInr(q.grandTotal)} · {fmtDate(q.sentAt ?? q.createdAt)}</div>
+                        <div className="text-xs text-slate-600">{fmtInr(q.grandTotal)} · {fmtDate(q.sentAt ?? q.createdAt)}</div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0 ml-3">
                         <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-wa-dark hover:underline">
@@ -537,7 +537,7 @@ export default function ContactDetailClient({
 
             <div id="court-designs" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-slate-900">Court Designs <span className="text-slate-400 font-normal">{courtImages.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Court Designs <span className="text-slate-400 font-normal">{courtImages.length}</span></h3>
                 <button
                   onClick={() => onQuickAction("court")}
                   aria-label="New court design"
@@ -560,7 +560,7 @@ export default function ContactDetailClient({
                             {c.status}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-500">{fmtDate(c.sentAt ?? c.createdAt)}</div>
+                        <div className="text-xs text-slate-600">{fmtDate(c.sentAt ?? c.createdAt)}</div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0 ml-3">
                         {c.imageUrl && (
@@ -580,7 +580,7 @@ export default function ContactDetailClient({
 
             <div id="products" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-slate-900">Product interest <span className="text-slate-400 font-normal">{productInterests.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Product interest <span className="text-slate-400 font-normal">{productInterests.length}</span></h3>
                 <button
                   onClick={() => onQuickAction("product")}
                   aria-label="Add product interest"
@@ -605,7 +605,7 @@ export default function ContactDetailClient({
 
             <div id="activities" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-slate-900">Activities <span className="text-slate-400 font-normal">{activities.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Activities <span className="text-slate-400 font-normal">{activities.length}</span></h3>
                 <button
                   onClick={() => setShowLogActivity(true)}
                   aria-label="Log activity"
@@ -622,7 +622,7 @@ export default function ContactDetailClient({
                   {activities.map((a) => (
                     <div key={a.id} className="border-l-2 border-slate-200 pl-3 py-0.5">
                       <div className="text-sm text-slate-900"><span className="font-medium">{a.typeName}</span> — {a.subject}</div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-slate-600">
                         {fmtDate(a.occurredAt)} · {a.ownerName}
                       </div>
                     </div>
@@ -721,7 +721,7 @@ function CreateDealFirstModal({
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl max-w-sm w-full p-5">
         <h2 className="font-semibold text-slate-900 mb-2">New deal</h2>
-        <p className="text-sm text-slate-500 mb-4">Create a deal for {contactName} to track this opportunity.</p>
+        <p className="text-base text-slate-600 mb-4">Create a deal for {contactName} to track this opportunity.</p>
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
           <button onClick={create} disabled={creating} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
@@ -923,7 +923,7 @@ function ProductInterestModal({
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl max-w-sm w-full p-5">
         <h2 className="font-semibold text-slate-900 mb-1">Product interest</h2>
-        <p className="text-xs text-slate-500 mb-3">What is {contactName} interested in?</p>
+        <p className="text-sm text-slate-600 mb-3">What is {contactName} interested in?</p>
         <div className="border border-slate-300 rounded-lg max-h-64 overflow-y-auto divide-y divide-slate-100 mb-4">
           {products.map((p) => (
             <label key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 cursor-pointer">

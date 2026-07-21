@@ -59,6 +59,7 @@ export default function CrmAnalyticsClient({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <PageHeader
+        large
         title="CRM Analytics"
         description="Individual and team performance, best sellers, and platform performance — across every channel, not just WhatsApp"
         action={<DateRangePicker value={range} onApply={setRange} />}
@@ -107,12 +108,12 @@ function IndividualTab({ rows, range }: { rows: SalesActivityRow[]; range: DateR
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">Per-rep activity</h3>
+        <h3 className="text-base font-semibold text-slate-900">Per-rep activity</h3>
         <ExportButtons filename="individual-performance" headers={headers} rows={dataRows} />
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-slate-500 border-b border-slate-200">{headers.map((h) => <th key={h} className="px-2 py-2 font-medium whitespace-nowrap">{h}</th>)}</tr></thead>
+          <thead><tr className="text-left text-slate-600 border-b border-slate-200">{headers.map((h) => <th key={h} className="px-2 py-2 font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.ownerId} className="border-b border-slate-100 last:border-0">
@@ -149,8 +150,8 @@ export function StageVelocityCard({ rows }: { rows: StageVelocityRow[] }) {
   const maxDays = Math.max(1, ...withData.map((r) => r.medianDays ?? 0));
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <h3 className="text-sm font-semibold text-slate-900 mb-1">Time to move between stages</h3>
-      <p className="text-xs text-slate-400 mb-3">Median days spent in each stage before advancing to the next one</p>
+      <h3 className="text-base font-semibold text-slate-900 mb-1">Time to move between stages</h3>
+      <p className="text-sm text-slate-600 mb-3">Median days spent in each stage before advancing to the next one</p>
       {withData.length === 0 ? (
         <p className="text-sm text-slate-400">No stage transitions in this range yet.</p>
       ) : (
@@ -161,7 +162,7 @@ export function StageVelocityCard({ rows }: { rows: StageVelocityRow[] }) {
               <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
                 {r.medianDays != null && <div className="h-full bg-amber-400 rounded-full" style={{ width: `${(r.medianDays / maxDays) * 100}%` }} />}
               </div>
-              <div className="w-32 shrink-0 text-xs text-slate-500 text-right">
+              <div className="w-32 shrink-0 text-xs text-slate-600 text-right">
                 {r.medianDays == null ? "insufficient data" : `${fmtDays(r.medianDays)} median · ${r.n} moves`}
               </div>
             </div>
@@ -181,26 +182,26 @@ function OverallTab({ funnel, salesActivity, stageVelocity }: { funnel: Analytic
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-xs text-slate-500">Deals created</div><div className="text-xl font-semibold mt-1">{teamTotals.dealsCreated}</div></div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-xs text-slate-500">Quoted value</div><div className="text-xl font-semibold mt-1">{fmtInr(teamTotals.quotedValue)}</div></div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-xs text-slate-500">Deals won</div><div className="text-xl font-semibold mt-1">{teamTotals.dealsWon}</div></div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-xs text-slate-500">Won value</div><div className="text-xl font-semibold mt-1">{fmtInr(teamTotals.wonValue)}</div></div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-sm text-slate-600">Deals created</div><div className="text-xl font-semibold mt-1">{teamTotals.dealsCreated}</div></div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-sm text-slate-600">Quoted value</div><div className="text-xl font-semibold mt-1">{fmtInr(teamTotals.quotedValue)}</div></div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-sm text-slate-600">Deals won</div><div className="text-xl font-semibold mt-1">{teamTotals.dealsWon}</div></div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-sm text-slate-600">Won value</div><div className="text-xl font-semibold mt-1">{fmtInr(teamTotals.wonValue)}</div></div>
       </div>
       <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <h3 className="text-sm font-semibold text-slate-900 mb-3">Pipeline by stage (current snapshot)</h3>
+        <h3 className="text-base font-semibold text-slate-900 mb-3">Pipeline by stage (current snapshot)</h3>
         <div className="space-y-2">
           {funnel.stages.map((s) => (
             <div key={s.stageId} className="flex items-center gap-3">
               <div className="w-32 shrink-0 text-xs text-slate-600 truncate">{s.stageName}</div>
               <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-wa-green rounded-full" style={{ width: `${(s.count / maxCount) * 100}%` }} /></div>
-              <div className="w-28 shrink-0 text-xs text-slate-500 text-right">{s.count} · {fmtInr(s.value)}</div>
+              <div className="w-28 shrink-0 text-xs text-slate-600 text-right">{s.count} · {fmtInr(s.value)}</div>
             </div>
           ))}
         </div>
       </div>
       {funnel.lossReasons.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">Loss reasons</h3>
+          <h3 className="text-base font-semibold text-slate-900 mb-3">Loss reasons</h3>
           <div className="space-y-1.5">
             {funnel.lossReasons.map((l) => (
               <div key={l.reasonName} className="flex items-center justify-between text-sm"><span className="text-slate-700">{l.reasonName}</span><span className="text-slate-500">{l.count}</span></div>
@@ -227,10 +228,10 @@ function ProductsTab({ rows, cityHeatmap }: { rows: ProductConversionRow[]; city
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-sm font-semibold text-slate-900">Best-selling flooring products, by deals won</h3>
+          <h3 className="text-base font-semibold text-slate-900">Best-selling flooring products, by deals won</h3>
           <ExportButtons filename="best-selling-products" headers={headers} rows={dataRows} />
         </div>
-        <p className="text-xs text-slate-400 mb-3">Turf, acrylic, PVC and PPE-tile flooring only — fencing, lighting, nets and sub-base aren't a "product" line here</p>
+        <p className="text-sm text-slate-600 mb-3">Turf, acrylic, PVC and PPE-tile flooring only — fencing, lighting, nets and sub-base aren't a "product" line here</p>
         {sorted.length === 0 ? (
           <p className="text-sm text-slate-400">No product-level data in this range yet.</p>
         ) : (
@@ -239,7 +240,7 @@ function ProductsTab({ rows, cityHeatmap }: { rows: ProductConversionRow[]; city
               <div key={r.productName} className="flex items-center gap-3">
                 <div className="w-40 shrink-0 text-sm text-slate-700 truncate">{r.productName}</div>
                 <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-400 rounded-full" style={{ width: `${(r.won / maxWon) * 100}%` }} /></div>
-                <div className="w-44 shrink-0 text-xs text-slate-500 text-right">
+                <div className="w-44 shrink-0 text-xs text-slate-600 text-right">
                   {r.won} won · {r.quoted} quoted · {fmtPct(r.conversionRate)}
                   {r.flagged && <span className="ml-1.5 text-amber-600 font-medium">low conv.</span>}
                 </div>
@@ -251,7 +252,7 @@ function ProductsTab({ rows, cityHeatmap }: { rows: ProductConversionRow[]; city
 
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-900">Which flooring product sells best, by city</h3>
+          <h3 className="text-base font-semibold text-slate-900">Which flooring product sells best, by city</h3>
           <ExportButtons filename="flooring-by-city" headers={cityHeaders} rows={cityDataRows} />
         </div>
         {cityRows.length === 0 ? (
@@ -260,8 +261,8 @@ function ProductsTab({ rows, cityHeatmap }: { rows: ProductConversionRow[]; city
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-500 border-b border-slate-200">
-                  {cityHeaders.map((h) => <th key={h} className="px-2 py-2 font-medium whitespace-nowrap">{h}</th>)}
+                <tr className="text-left text-slate-600 border-b border-slate-200">
+                  {cityHeaders.map((h) => <th key={h} className="px-2 py-2 font-semibold whitespace-nowrap">{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -290,7 +291,7 @@ function PlatformsTab({ rows }: { rows: SourceRow[] }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">Performance by platform / lead source</h3>
+        <h3 className="text-base font-semibold text-slate-900">Performance by platform / lead source</h3>
         <ExportButtons filename="platform-performance" headers={headers} rows={dataRows} />
       </div>
       {sorted.length === 0 ? (
@@ -301,7 +302,7 @@ function PlatformsTab({ rows }: { rows: SourceRow[] }) {
             <div key={r.sourceName} className="flex items-center gap-3">
               <div className="w-40 shrink-0 text-sm text-slate-700 truncate">{r.sourceName}</div>
               <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-wa-green rounded-full" style={{ width: `${(r.leads / maxLeads) * 100}%` }} /></div>
-              <div className="w-56 shrink-0 text-xs text-slate-500 text-right">{r.leads} leads · {r.won} won · {fmtInr(r.wonValue)} · {fmtPct(r.leadToWonRate)}</div>
+              <div className="w-56 shrink-0 text-xs text-slate-600 text-right">{r.leads} leads · {r.won} won · {fmtInr(r.wonValue)} · {fmtPct(r.leadToWonRate)}</div>
             </div>
           ))}
         </div>

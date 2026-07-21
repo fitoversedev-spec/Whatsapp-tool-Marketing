@@ -125,7 +125,7 @@ export default function DealDetailClient({
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex items-start justify-between gap-3">
-        <PageHeader title={deal.title} description={deal.code} backHref="/deals" />
+        <PageHeader large title={deal.title} description={deal.code} backHref="/deals" />
         <div className="mt-1 shrink-0 flex items-center gap-3">
           <button
             onClick={() => setShowEditDetails(true)}
@@ -148,12 +148,12 @@ export default function DealDetailClient({
       <div className="grid sm:grid-cols-3 gap-4 mt-4">
         <div className="sm:col-span-2 space-y-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Account</h3>
-            <div className="text-sm text-slate-700">{deal.accountName}</div>
-            {deal.accountCity && <div className="text-xs text-slate-400">{deal.accountCity}</div>}
-            {deal.accountOwnerName && <div className="text-xs text-slate-400">Owner: {deal.accountOwnerName}</div>}
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Account</h3>
+            <div className="text-base text-slate-700">{deal.accountName}</div>
+            {deal.accountCity && <div className="text-xs text-slate-500">{deal.accountCity}</div>}
+            {deal.accountOwnerName && <div className="text-xs text-slate-500">Owner: {deal.accountOwnerName}</div>}
             {deal.contacts.map((c) => (
-              <div key={c.id} className="text-xs text-slate-500 mt-1">
+              <div key={c.id} className="text-sm text-slate-600 mt-1">
                 {c.name} {c.phone && `· ${c.phone}`} {c.isPrimary && <span className="text-wa-green">(primary)</span>}
               </div>
             ))}
@@ -161,7 +161,7 @@ export default function DealDetailClient({
 
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-900">Timeline</h3>
+              <h3 className="text-base font-semibold text-slate-900">Timeline</h3>
               <div className="flex items-center gap-3">
                 <Link href="/reminders" className="text-xs font-medium text-slate-500 hover:underline">
                   Manage reminders →
@@ -178,7 +178,7 @@ export default function DealDetailClient({
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Stage history</h3>
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Stage history</h3>
             {stageHistory.length === 0 ? (
               <p className="text-sm text-slate-400">No stage changes yet.</p>
             ) : (
@@ -190,7 +190,7 @@ export default function DealDetailClient({
                       <span className="mx-1.5 text-slate-300">→</span>
                       <span className="font-medium text-slate-800">{h.toStageName}</span>
                     </div>
-                    <div className="text-xs text-slate-400 text-right">
+                    <div className="text-xs text-slate-500 text-right">
                       {fmtDate(h.changedAt)}
                       {h.durationInFromStageSeconds != null && <div>{fmtDuration(h.durationInFromStageSeconds)}</div>}
                     </div>
@@ -204,32 +204,32 @@ export default function DealDetailClient({
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-slate-500">Stage</span>
+              <span className="text-slate-600">Stage</span>
               <span className="font-medium" style={{ color: deal.stageColorHex ?? undefined }}>{deal.stageName}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Owner</span>
+              <span className="text-slate-600">Owner</span>
               <span className="text-slate-800">{deal.ownerName ?? "—"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Source</span>
+              <span className="text-slate-600">Source</span>
               <span className="text-slate-800">{deal.leadSourceName ?? "—"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Customer type</span>
+              <span className="text-slate-600">Customer type</span>
               <span className="text-slate-800">{deal.customerProfileName ?? "—"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Business type</span>
+              <span className="text-slate-600">Business type</span>
               <span className="text-slate-800">{deal.businessType ?? "—"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Site city</span>
+              <span className="text-slate-600">Site city</span>
               <span className="text-slate-800">{deal.siteCity ?? "—"}{deal.siteCityTierName ? ` (${deal.siteCityTierName})` : ""}</span>
             </div>
             {deal.siteState && (
               <div className="flex justify-between">
-                <span className="text-slate-500">Site state</span>
+                <span className="text-slate-600">Site state</span>
                 <span className="text-slate-800">{deal.siteState}</span>
               </div>
             )}
@@ -240,44 +240,44 @@ export default function DealDetailClient({
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-slate-500">Office</span>
+              <span className="text-slate-600">Office</span>
               <span className="text-slate-800">{deal.officeName ?? "—"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Primary contact</span>
+              <span className="text-slate-600">Primary contact</span>
               <span className="text-slate-800">{deal.contacts.find((c) => c.id === deal.primaryContactId)?.name ?? "—"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Expected close</span>
+              <span className="text-slate-600">Expected close</span>
               <span className="text-slate-800">{deal.expectedCloseAt ? new Date(deal.expectedCloseAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
             </div>
             <div className="border-t border-slate-100 pt-2 flex justify-between">
-              <span className="text-slate-500">Est. value</span>
+              <span className="text-slate-600">Est. value</span>
               <span className="text-slate-800">{fmtInr(deal.estimatedValue)}</span>
             </div>
             {deal.wonValue != null && (
               <div className="flex justify-between">
-                <span className="text-slate-500">Won value</span>
+                <span className="text-slate-600">Won value</span>
                 <span className="font-medium text-wa-green">{fmtInr(deal.wonValue)}</span>
               </div>
             )}
             {deal.outcome && (
               <div className="flex justify-between">
-                <span className="text-slate-500">Outcome</span>
+                <span className="text-slate-600">Outcome</span>
                 <span className="text-slate-800">{deal.outcome}</span>
               </div>
             )}
             {(deal.lossReasonName || deal.lossReasonNote) && (
-              <div className="pt-1 text-xs text-slate-500">{deal.lossReasonName ?? deal.lossReasonNote}</div>
+              <div className="pt-1 text-sm text-slate-600">{deal.lossReasonName ?? deal.lossReasonNote}</div>
             )}
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 text-sm">
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Timeline</h3>
-            <div className="flex justify-between"><span className="text-slate-500">Enquiry</span><span>{fmtDate(deal.enquiryAt)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">Site visit</span><span>{fmtDate(deal.siteVisitAt)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">First quoted</span><span>{fmtDate(deal.firstQuotedAt)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">Closed</span><span>{fmtDate(deal.closedAt)}</span></div>
+            <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Timeline</h3>
+            <div className="flex justify-between"><span className="text-slate-600">Enquiry</span><span>{fmtDate(deal.enquiryAt)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Site visit</span><span>{fmtDate(deal.siteVisitAt)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">First quoted</span><span>{fmtDate(deal.firstQuotedAt)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Closed</span><span>{fmtDate(deal.closedAt)}</span></div>
           </div>
         </div>
       </div>

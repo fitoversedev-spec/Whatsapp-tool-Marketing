@@ -48,32 +48,32 @@ export default function RepDealsClient({
 
       <StageVelocityCard rows={stageVelocity} />
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-500 border-b border-slate-200">
-              <th className="px-4 py-2.5 font-medium">Customer</th>
-              <th className="px-4 py-2.5 font-medium">Quote / design / product</th>
-              <th className="px-4 py-2.5 font-medium">Stage</th>
-              <th className="px-4 py-2.5 font-medium">Notes / upcoming</th>
+            <tr className="text-left text-slate-600 border-b-2 border-slate-300">
+              <th className="px-4 py-3 font-semibold">Customer</th>
+              <th className="px-4 py-3 font-semibold">Quote / design / product</th>
+              <th className="px-4 py-3 font-semibold">Stage</th>
+              <th className="px-4 py-3 font-semibold">Notes / upcoming</th>
             </tr>
           </thead>
           <tbody>
             {deals.map((d) => (
-              <tr key={d.dealId} className="border-b border-slate-100 last:border-0 align-top hover:bg-slate-50">
-                <td className="px-4 py-3">
-                  <Link href={`/deals/${d.dealId}`} className="font-medium text-wa-dark hover:underline">
+              <tr key={d.dealId} className="border-b border-slate-200 last:border-0 align-top hover:bg-slate-50">
+                <td className="px-4 py-4">
+                  <Link href={`/deals/${d.dealId}`} className="text-base font-semibold text-wa-dark hover:underline">
                     {d.customerName}
                   </Link>
-                  <div className="text-xs text-slate-400">{d.dealCode}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{d.dealCode}</div>
                 </td>
-                <td className="px-4 py-3 text-xs space-y-1">
+                <td className="px-4 py-4 text-sm space-y-1.5">
                   {d.quotations.length === 0 && d.courtImages.length === 0 && d.interestedProducts.length === 0 && (
                     <span className="text-slate-300">—</span>
                   )}
                   {d.quotations.map((q) => (
                     <div key={q.id}>
-                      <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline">
+                      <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline font-medium">
                         📄 Quote {q.number}
                       </a>
                       <span className="text-slate-400"> ({q.status})</span>
@@ -82,11 +82,11 @@ export default function RepDealsClient({
                   {d.courtImages.map((c) => (
                     <div key={c.id}>
                       {c.imageUrl ? (
-                        <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline">
+                        <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline font-medium">
                           🎨 Design {c.number}
                         </a>
                       ) : (
-                        <span className="text-slate-500">🎨 Design {c.number}</span>
+                        <span className="text-slate-500 font-medium">🎨 Design {c.number}</span>
                       )}
                       <span className="text-slate-400"> ({c.status})</span>
                     </div>
@@ -95,26 +95,31 @@ export default function RepDealsClient({
                     <div className="text-slate-600">📦 {d.interestedProducts.join(", ")}</div>
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-4">
                   <span
-                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
                     style={{ background: (d.stageColorHex ?? "#64748b") + "20", color: d.stageColorHex ?? "#475569" }}
                   >
                     {d.stageName}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-xs text-slate-600 space-y-1 max-w-xs">
+                {/* max-w-sm (not the old max-w-xs) + no `truncate` on the note
+                    body below — the note text used to be forced onto one
+                    line and cut off with an ellipsis, hiding everything
+                    past it (see the screenshot this fixed). It now wraps
+                    in full. */}
+                <td className="px-4 py-4 text-sm text-slate-600 space-y-1.5 max-w-sm">
                   {d.latestNote ? (
                     <div>
-                      <span className="font-medium text-slate-800">{d.latestNote.subject}</span>
-                      {d.latestNote.notes && <div className="text-slate-500 truncate">{d.latestNote.notes}</div>}
-                      <div className="text-slate-400">{fmtDate(d.latestNote.occurredAt)}</div>
+                      <span className="font-semibold text-slate-900">{d.latestNote.subject}</span>
+                      {d.latestNote.notes && <div className="text-slate-600 mt-0.5">{d.latestNote.notes}</div>}
+                      <div className="text-xs text-slate-400 mt-0.5">{fmtDate(d.latestNote.occurredAt)}</div>
                     </div>
                   ) : (
                     <div className="text-slate-300">No notes yet</div>
                   )}
                   {d.nextActivity && (
-                    <div className="text-amber-700">
+                    <div className="text-amber-700 font-medium">
                       Next: {d.nextActivity.message} — {fmtDate(d.nextActivity.dueAt)}
                     </div>
                   )}

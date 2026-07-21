@@ -477,7 +477,14 @@ export default function ContactDetailClient({
                           className="text-[11px] font-medium border-0 rounded-full px-2 py-0.5 mb-0.5"
                           style={{ background: (d.stageColorHex ?? "#64748b") + "20", color: d.stageColorHex ?? "#475569" }}
                         >
-                          {funnelStages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          {funnelStages.map((s) => (
+                            // Without its own color, an <option> inherits the
+                            // <select>'s inline color — every row in the open
+                            // list rendered in the CURRENT stage's color
+                            // (see the screenshot this fixed) instead of its
+                            // own stage's.
+                            <option key={s.id} value={s.id} style={{ color: s.colorHex ?? "#475569" }}>{s.name}</option>
+                          ))}
                         </select>
                         <div className="text-xs text-slate-500">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
                       </div>

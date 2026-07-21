@@ -7,6 +7,9 @@
 declare module "recharts/es6/cartesian/Area" {
   export { Area } from "recharts";
 }
+declare module "recharts/es6/cartesian/Bar" {
+  export { Bar } from "recharts";
+}
 declare module "recharts/es6/cartesian/CartesianGrid" {
   export { CartesianGrid } from "recharts";
 }
@@ -18,6 +21,9 @@ declare module "recharts/es6/cartesian/YAxis" {
 }
 declare module "recharts/es6/chart/AreaChart" {
   export { AreaChart } from "recharts";
+}
+declare module "recharts/es6/chart/BarChart" {
+  export { BarChart } from "recharts";
 }
 declare module "recharts/es6/chart/PieChart" {
   export { PieChart } from "recharts";

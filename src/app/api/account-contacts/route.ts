@@ -48,6 +48,14 @@ export async function POST(req: NextRequest) {
   const data = parsed.data;
 
   let accountId = data.accountId ?? null;
+  // Falls back to the account's own city when the caller doesn't pass an
+  // explicit siteCity — mirrors POST /api/deals's inline-account fallback,
+  // but that route only ever covered its own inline-create branch, leaving
+  // deals attached to an EXISTING account with no site city at all (every
+  // "+ New Quotation"-style deal from an already-known contact showed up as
+  // "(unspecified)" in Geography analytics, even though the account had a
+  // city on file the whole time).
+  let accountCity: string | null = null;
 
   if (accountId) {
     const account = await prisma.account.findUnique({ where: { id: accountId } });
@@ -55,6 +63,7 @@ export async function POST(req: NextRequest) {
     if (!isAdmin(user.role) && account.ownerUserId && account.ownerUserId !== user.id) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+    accountCity = account.city;
   } else if (data.accountName) {
     if (!data.confirmDuplicate) {
       const candidate = await findAccountDuplicate({ name: data.accountName, city: data.siteCity });
@@ -72,6 +81,7 @@ export async function POST(req: NextRequest) {
       },
     });
     accountId = account.id;
+    accountCity = account.city;
   }
   if (!accountId) return NextResponse.json({ error: "invalid_account" }, { status: 400 });
 
@@ -112,7 +122,7 @@ export async function POST(req: NextRequest) {
           ownerUserId: user.id,
           currentStageId: data.dealStageId,
           leadSourceId: data.leadSourceId ?? null,
-          siteCity: data.siteCity ?? null,
+          siteCity: data.siteCity ?? accountCity,
           dealChannel: "crm",
         },
       });

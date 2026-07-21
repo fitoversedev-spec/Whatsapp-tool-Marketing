@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useToast } from "@/components/Toast";
 import BackButton from "@/components/BackButton";
 import UnifiedTimeline from "@/components/crm/UnifiedTimeline";
-import { CALL_TYPE_NAMES, MEETING_TYPE_NAMES, type TimelineEntry } from "@/lib/crm/timeline";
+import { CALL_TYPE_NAMES, MEETING_TYPE_NAMES, type TimelineEntry } from "@/lib/crm/timelineShared";
 import { DESIGNATIONS } from "../AccountContactsClient";
 
 type Contact = {

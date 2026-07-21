@@ -63,8 +63,18 @@ export async function POST(req: NextRequest) {
   const data = parsed.data;
 
   let accountId = data.accountId ?? null;
+  // Falls back to the account's own city when the caller doesn't pass an
+  // explicit siteCity. Previously only set for the inline-account-creation
+  // branch below — deals attached to an EXISTING account (the far more
+  // common "+ New Quotation from an already-known contact" case) got no
+  // fallback at all and showed up as "(unspecified)" in Geography
+  // analytics even though the account had a city on file.
+  let accountCity: string | null = null;
 
-  if (!accountId && data.account) {
+  if (accountId) {
+    const existingAccount = await prisma.account.findUnique({ where: { id: accountId }, select: { city: true } });
+    accountCity = existingAccount?.city ?? null;
+  } else if (data.account) {
     if (!data.confirmDuplicate) {
       const candidate = await prisma.account.findFirst({
         where: {
@@ -92,6 +102,7 @@ export async function POST(req: NextRequest) {
       },
     });
     accountId = account.id;
+    accountCity = account.city;
 
     if (data.contactName || data.contactPhone) {
       await prisma.accountContact.create({
@@ -130,10 +141,12 @@ export async function POST(req: NextRequest) {
           // No dedicated site-city field on this form — for most deals
           // created here the account's own city IS where the project is
           // (a school building a court at its own address). Falls back to
-          // it so Geography analytics has something rather than nothing;
-          // a quote or court design generated later can correct it if the
-          // real site turns out to differ (see docs/DECISIONS.md).
-          siteCity: data.siteCity ?? data.account?.city ?? null,
+          // it (whether the account was just created inline above or
+          // already existed) so Geography analytics has something rather
+          // than nothing; a quote or court design generated later can
+          // correct it if the real site turns out to differ (see
+          // docs/DECISIONS.md).
+          siteCity: data.siteCity ?? accountCity,
           estimatedValue: data.estimatedValue ?? null,
           conversationId: data.conversationId ?? null,
           dealChannel: data.dealChannel ?? "crm",

@@ -4,7 +4,15 @@
 // regardless of the selected range. Now optionally date-filtered by
 // createdAt per explicit request; omitting the range keeps the original
 // unfiltered roster behavior.
+//
+// Excludes deals still sitting in the default/first funnel stage ("Enquiry
+// Received") — every bulk-imported or freshly-created deal starts there
+// (see defaultFunnelStageId), so without this exclusion the roster is just
+// "every contact this rep owns" rather than customers they've actually
+// started working, which is what this drill-down is for per explicit
+// request ("don't list all of them, show only who he's converted to deal").
 import { prisma } from "@/lib/prisma";
+import { defaultFunnelStageId } from "@/lib/crm/deals";
 
 export type RepDealRow = {
   dealId: string;
@@ -22,10 +30,12 @@ export type RepDealRow = {
 
 export async function getRepDeals(ownerId: string, dateRange?: { from: Date; to: Date }): Promise<RepDealRow[]> {
   const now = new Date();
+  const defaultStageId = await defaultFunnelStageId();
   const deals = await prisma.deal.findMany({
     where: {
       ownerUserId: ownerId,
       deletedAt: null,
+      currentStageId: { not: defaultStageId },
       ...(dateRange ? { createdAt: { gte: dateRange.from, lte: dateRange.to } } : {}),
     },
     orderBy: { updatedAt: "desc" },

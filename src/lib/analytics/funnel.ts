@@ -11,6 +11,7 @@ export type FunnelStageRow = {
   stageId: string;
   stageName: string;
   stageType: string;
+  stageColorHex: string | null;
   sortOrder: number;
   count: number;
   value: number;
@@ -45,7 +46,7 @@ export async function funnelSnapshot(
   const stageRows: FunnelStageRow[] = stages.map((s) => {
     const g = byStage.get(s.id);
     const value = g ? Number(g._sum.wonValue ?? g._sum.quotedValue ?? g._sum.estimatedValue ?? 0) : 0;
-    return { stageId: s.id, stageName: s.name, stageType: s.stageType, sortOrder: s.sortOrder, count: g?._count._all ?? 0, value };
+    return { stageId: s.id, stageName: s.name, stageType: s.stageType, stageColorHex: s.colorHex, sortOrder: s.sortOrder, count: g?._count._all ?? 0, value };
   });
 
   const lossCounts = new Map<string, number>();

@@ -4,33 +4,9 @@
 // display, so the live WhatsApp reminder-cron system (src/lib/cron-runner.ts)
 // is never touched.
 import { prisma } from "@/lib/prisma";
+import type { TimelineEntry, TimelineFilter } from "./timelineShared";
 
-// Shared with ContactDetailClient.tsx's own Meetings/Calls sections — one
-// canonical list of which real ActivityType rows count as which, so the
-// timeline's CALL/MEETING badges and those sections never drift apart.
-export const CALL_TYPE_NAMES = new Set(["Inbound Call", "Outbound Call"]);
-export const MEETING_TYPE_NAMES = new Set(["Google Meet", "In-Person Meeting"]);
-
-export type TimelineEntry = {
-  id: string;
-  kind: "activity" | "reminder" | "created" | "stage";
-  title: string;
-  detail: string | null;
-  timestamp: string; // Activity.occurredAt, Reminder.dueAt, DealStageHistory.changedAt, or the record's own createdAt
-  ownerName: string;
-  completed?: boolean; // reminders only
-  // The underlying ActivityType name (activity and reminder kinds only) —
-  // lets the UI show a CALL/MEETING badge instead of a generic
-  // ACTIVITY/REMINDER one when it matches CALL_TYPE_NAMES/MEETING_TYPE_NAMES.
-  typeName?: string | null;
-};
-
-export type TimelineFilter = {
-  dealId?: string;
-  accountId?: string;
-  leadId?: string;
-  accountContactId?: string;
-};
+export type { TimelineEntry, TimelineFilter } from "./timelineShared";
 
 export async function getUnifiedTimeline(filter: TimelineFilter, limit = 50): Promise<TimelineEntry[]> {
   const activityWhere: Record<string, string> = {};

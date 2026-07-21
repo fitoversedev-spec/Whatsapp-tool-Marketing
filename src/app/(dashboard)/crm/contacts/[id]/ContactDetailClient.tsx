@@ -4,8 +4,9 @@ import { useState, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast } from "@/components/Toast";
+import BackButton from "@/components/BackButton";
 import UnifiedTimeline from "@/components/crm/UnifiedTimeline";
-import type { TimelineEntry } from "@/lib/crm/timeline";
+import { CALL_TYPE_NAMES, MEETING_TYPE_NAMES, type TimelineEntry } from "@/lib/crm/timeline";
 import { DESIGNATIONS } from "../AccountContactsClient";
 
 type Contact = {
@@ -34,6 +35,13 @@ type ReminderRow = {
   location: string | null; meetingUrl: string | null; activityTypeName: string | null;
 };
 type AttachmentRow = { id: string; fileName: string; fileUrl: string; fileSize: number; mimeType: string; createdAt: string; uploadedByName: string };
+
+// A Meeting/Call can exist as a scheduled Reminder (future or completed)
+// AND as a logged Activity (already happened, entered via Log Activity) —
+// these sections show both together, merged by timestamp, matching how a
+// rep actually thinks about "everything about calls with this person"
+// rather than splitting by which table it happens to live in.
+type TypedTimelineRow = { id: string; kind: "scheduled" | "logged"; title: string; detail: string | null; timestamp: string; completed?: boolean };
 
 // Same convention as QuotationsClient.tsx / CourtImagesClient.tsx (each
 // already defines this independently — matching that precedent rather
@@ -73,7 +81,8 @@ const SECTIONS = [
   { id: "quotations", label: "Quotations" },
   { id: "court-designs", label: "Court Designs" },
   { id: "products", label: "Product interest" },
-  { id: "reminders", label: "Reminders" },
+  { id: "meetings", label: "Meetings" },
+  { id: "calls", label: "Calls" },
   { id: "notes", label: "Notes" },
   { id: "attachments", label: "Attachments" },
   { id: "activities", label: "Activities" },
@@ -330,6 +339,93 @@ export default function ContactDetailClient({
     }
   }
 
+  function buildTypedRows(typeNames: Set<string>): TypedTimelineRow[] {
+    const scheduled: TypedTimelineRow[] = reminders
+      .filter((r) => r.activityTypeName && typeNames.has(r.activityTypeName))
+      .map((r) => ({
+        id: r.id,
+        kind: "scheduled" as const,
+        title: r.message,
+        detail: r.completedAt ? r.completionNote : r.location ?? r.meetingUrl,
+        timestamp: r.dueAt,
+        completed: !!r.completedAt,
+      }));
+    const logged: TypedTimelineRow[] = activities
+      .filter((a) => typeNames.has(a.typeName))
+      .map((a) => ({ id: a.id, kind: "logged" as const, title: a.subject, detail: a.notes, timestamp: a.occurredAt }));
+    return [...scheduled, ...logged].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+  const meetingRows = buildTypedRows(MEETING_TYPE_NAMES);
+  const callRows = buildTypedRows(CALL_TYPE_NAMES);
+
+  // Shared renderer for the Meetings/Calls sections — a plain function
+  // (not a component) so it closes over the complete-with-note state
+  // directly instead of prop-drilling it through.
+  function renderTypedSection(sectionId: string, label: string, rows: TypedTimelineRow[], onAdd: () => void) {
+    return (
+      <div id={sectionId} className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold text-slate-900">{label} <span className="text-slate-400 font-normal">{rows.length}</span></h3>
+          <button onClick={onAdd} aria-label={`Add ${label.toLowerCase()}`} title={`Add ${label.toLowerCase()}`} className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none">
+            +
+          </button>
+        </div>
+        {rows.length === 0 ? (
+          <p className="text-sm text-slate-400">Nothing here yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {rows.map((r) => (
+              <div key={`${r.kind}-${r.id}`} className="rounded-lg border border-slate-100 px-3 py-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${
+                          r.kind === "logged" ? "bg-wa-green/10 text-wa-dark" : r.completed ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {r.kind === "logged" ? "Logged" : r.completed ? "Completed" : "Scheduled"}
+                      </span>
+                      <span className={`text-sm font-medium ${r.kind === "scheduled" && r.completed ? "text-slate-500 line-through" : "text-slate-900"}`}>{r.title}</span>
+                    </div>
+                    {r.detail && <div className="text-sm text-slate-600 mt-0.5">{r.detail}</div>}
+                    <div className="text-xs text-slate-500 mt-0.5">{fmtDateTime(r.timestamp)}</div>
+                  </div>
+                  {r.kind === "scheduled" && !r.completed && completingReminderId !== r.id && (
+                    <button
+                      onClick={() => { setCompletingReminderId(r.id); setCompletionNoteDraft(""); }}
+                      className="text-xs font-medium text-wa-dark hover:underline shrink-0"
+                    >
+                      Mark complete
+                    </button>
+                  )}
+                </div>
+                {completingReminderId === r.id && (
+                  <div className="mt-2 pt-2 border-t border-slate-100">
+                    <textarea
+                      value={completionNoteDraft}
+                      onChange={(e) => setCompletionNoteDraft(e.target.value)}
+                      rows={2}
+                      autoFocus
+                      placeholder="What happened? (optional)"
+                      className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                    />
+                    <div className="flex gap-2 justify-end mt-1.5">
+                      <button onClick={() => setCompletingReminderId(null)} className="text-xs font-medium text-slate-700 px-2 py-1">Cancel</button>
+                      <button onClick={() => completeReminder(r.id)} disabled={completingBusy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50">
+                        {completingBusy ? "Saving..." : "Confirm"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   async function uploadAttachment(file: File) {
     setUploadingFile(true);
     const form = new FormData();
@@ -388,6 +484,9 @@ export default function ContactDetailClient({
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      <div className="mb-1.5">
+        <BackButton backHref="/crm/contacts" />
+      </div>
       <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-11 h-11 rounded-full bg-blue-100 text-blue-800 font-semibold flex items-center justify-center shrink-0">
@@ -788,69 +887,16 @@ export default function ContactDetailClient({
               )}
             </div>
 
-            {/* Scheduled meetings/calls (Reminder rows) — "Schedule Meeting"/
-                "Schedule Call" above create these; already surface in My Day
-                (Due today/Overdue) with zero extra wiring since they're
-                ordinary owner-scoped Reminders. This section is what gives
-                a rep visibility + the mark-complete-with-a-note action
-                right on the contact itself, matching the Zoho reference. */}
-            <div id="reminders" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
-              <h3 className="text-base font-semibold text-slate-900 mb-3">Reminders <span className="text-slate-400 font-normal">{reminders.filter((r) => !r.completedAt).length}</span></h3>
-              {reminders.length === 0 ? (
-                <p className="text-sm text-slate-400">No meetings, calls, or reminders scheduled yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {reminders.map((r) => (
-                    <div key={r.id} className={`rounded-lg border px-3 py-2 ${r.completedAt ? "border-slate-100 bg-slate-50/50" : "border-slate-200"}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {r.activityTypeName && (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 uppercase tracking-wide">{r.activityTypeName}</span>
-                            )}
-                            <span className={`text-sm font-medium ${r.completedAt ? "text-slate-500 line-through" : "text-slate-900"}`}>{r.message}</span>
-                          </div>
-                          <div className="text-xs text-slate-500 mt-0.5">
-                            {fmtDateTime(r.dueAt)}
-                            {r.meetingUrl && <> · <a href={r.meetingUrl} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline">Join link</a></>}
-                            {r.location && <> · {r.location}</>}
-                          </div>
-                          {r.completedAt && r.completionNote && (
-                            <div className="text-sm text-slate-600 mt-1">{r.completionNote}</div>
-                          )}
-                        </div>
-                        {!r.completedAt && completingReminderId !== r.id && (
-                          <button
-                            onClick={() => { setCompletingReminderId(r.id); setCompletionNoteDraft(""); }}
-                            className="text-xs font-medium text-wa-dark hover:underline shrink-0"
-                          >
-                            Mark complete
-                          </button>
-                        )}
-                      </div>
-                      {completingReminderId === r.id && (
-                        <div className="mt-2 pt-2 border-t border-slate-100">
-                          <textarea
-                            value={completionNoteDraft}
-                            onChange={(e) => setCompletionNoteDraft(e.target.value)}
-                            rows={2}
-                            autoFocus
-                            placeholder="What happened? (optional)"
-                            className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
-                          />
-                          <div className="flex gap-2 justify-end mt-1.5">
-                            <button onClick={() => setCompletingReminderId(null)} className="text-xs font-medium text-slate-700 px-2 py-1">Cancel</button>
-                            <button onClick={() => completeReminder(r.id)} disabled={completingBusy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50">
-                              {completingBusy ? "Saving..." : "Confirm"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Meetings/Calls — each merges scheduled (Reminder) + logged
+                (Activity) entries of that type, same as the Quotations/
+                Court Designs sections mix draft+sent in one list. Scheduled
+                ones already surface in My Day (Due today/Overdue) with zero
+                extra wiring since they're ordinary owner-scoped Reminders;
+                this is what gives a rep visibility + the mark-complete-
+                with-a-note action right on the contact, matching the Zoho
+                reference. */}
+            {renderTypedSection("meetings", "Meetings", meetingRows, () => onQuickAction("meeting"))}
+            {renderTypedSection("calls", "Calls", callRows, () => onQuickAction("call"))}
 
             {/* General running note log — deliberately separate from
                 Activities below (structured: type/subject/duration/outcome).

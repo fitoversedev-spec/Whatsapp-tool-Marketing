@@ -3,15 +3,20 @@ import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/rbac";
 import CompaniesClient from "./CompaniesClient";
 
-export default async function CompaniesPage() {
+export default async function CompaniesPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const user = await requireUser();
   // Lead types is meant to answer "who are our customers, grouped by type"
   // — an account with no real person attached isn't a customer yet, just an
   // artifact of Deal.accountId being required. Most of the pre-CRM backfilled
   // accounts are exactly this (see docs/DECISIONS.md's Lead Segments entry).
+  // Date filter is optional and off by default (unlike the analytics
+  // screens) — this is a browse/list page, not a report; reps expect to
+  // see everything until they narrow it down themselves.
+  const dateRange = searchParams.from && searchParams.to ? { from: searchParams.from, to: searchParams.to } : null;
   const where = {
     ...(isAdmin(user.role) ? { deletedAt: null } : { deletedAt: null, ownerUserId: user.id }),
     contacts: { some: {} },
+    ...(dateRange ? { createdAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
   };
 
   const [accounts, customerProfiles] = await Promise.all([
@@ -48,6 +53,7 @@ export default async function CompaniesPage() {
         updatedAt: a.updatedAt.toISOString(),
       }))}
       customerProfiles={customerProfiles.map((c) => ({ id: c.id, name: c.name }))}
+      dateRange={dateRange}
     />
   );
 }

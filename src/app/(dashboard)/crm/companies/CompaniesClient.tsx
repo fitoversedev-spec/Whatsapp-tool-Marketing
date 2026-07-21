@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import DateRangePicker, { defaultDateRange, type DateRange } from "@/components/DateRangePicker";
 
 type Company = {
   id: string;
@@ -40,12 +41,18 @@ export default function CompaniesClient({
   isAdmin,
   companies,
   customerProfiles,
+  dateRange,
 }: {
   isAdmin: boolean;
   companies: Company[];
   customerProfiles: Option[];
+  dateRange: DateRange | null;
 }) {
   const router = useRouter();
+
+  function applyDateRange(range: DateRange) {
+    router.push(`/crm/companies?from=${range.from}&to=${range.to}`);
+  }
   const toast = useToast();
   const [q, setQ] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -146,13 +153,19 @@ export default function CompaniesClient({
         ))}
       </div>
 
-      <div className="mb-3">
+      <div className="mb-3 flex items-center gap-3 flex-wrap">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by name..."
           className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs"
         />
+        <DateRangePicker value={dateRange ?? defaultDateRange(30)} onApply={applyDateRange} />
+        {dateRange && (
+          <button onClick={() => router.push("/crm/companies")} className="text-xs text-slate-500 hover:underline">
+            Clear date filter
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">

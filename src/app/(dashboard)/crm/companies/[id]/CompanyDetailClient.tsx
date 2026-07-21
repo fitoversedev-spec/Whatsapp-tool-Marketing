@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast } from "@/components/Toast";
+import BackButton from "@/components/BackButton";
 import UnifiedTimeline from "@/components/crm/UnifiedTimeline";
 import type { TimelineEntry } from "@/lib/crm/timeline";
 
@@ -69,6 +70,9 @@ export default function CompanyDetailClient({
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      <div className="mb-1.5">
+        <BackButton backHref="/crm/companies" />
+      </div>
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-4">
         <div className="flex items-center gap-3 min-w-0">

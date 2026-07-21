@@ -5,6 +5,12 @@
 // is never touched.
 import { prisma } from "@/lib/prisma";
 
+// Shared with ContactDetailClient.tsx's own Meetings/Calls sections — one
+// canonical list of which real ActivityType rows count as which, so the
+// timeline's CALL/MEETING badges and those sections never drift apart.
+export const CALL_TYPE_NAMES = new Set(["Inbound Call", "Outbound Call"]);
+export const MEETING_TYPE_NAMES = new Set(["Google Meet", "In-Person Meeting"]);
+
 export type TimelineEntry = {
   id: string;
   kind: "activity" | "reminder" | "created" | "stage";
@@ -13,6 +19,10 @@ export type TimelineEntry = {
   timestamp: string; // Activity.occurredAt, Reminder.dueAt, DealStageHistory.changedAt, or the record's own createdAt
   ownerName: string;
   completed?: boolean; // reminders only
+  // The underlying ActivityType name (activity and reminder kinds only) —
+  // lets the UI show a CALL/MEETING badge instead of a generic
+  // ACTIVITY/REMINDER one when it matches CALL_TYPE_NAMES/MEETING_TYPE_NAMES.
+  typeName?: string | null;
 };
 
 export type TimelineFilter = {
@@ -105,7 +115,7 @@ export async function getUnifiedTimeline(filter: TimelineFilter, limit = 50): Pr
       where: reminderWhere,
       orderBy: { dueAt: "desc" },
       take: limit,
-      include: { owner: { select: { name: true } } },
+      include: { owner: { select: { name: true } }, activityType: { select: { name: true } } },
     }),
     prisma.dealStageHistory.findMany({
       where: stageHistoryWhere,
@@ -128,6 +138,7 @@ export async function getUnifiedTimeline(filter: TimelineFilter, limit = 50): Pr
       detail: a.notes,
       timestamp: a.occurredAt.toISOString(),
       ownerName: a.owner.name,
+      typeName: a.activityType.name,
     })),
     ...reminders.map((r) => ({
       id: r.id,
@@ -139,6 +150,7 @@ export async function getUnifiedTimeline(filter: TimelineFilter, limit = 50): Pr
       timestamp: r.dueAt.toISOString(),
       ownerName: r.owner.name,
       completed: !!r.completedAt,
+      typeName: r.activityType?.name ?? null,
     })),
     ...stageHistory.map((h) => ({
       id: h.id,

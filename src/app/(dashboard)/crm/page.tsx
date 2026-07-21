@@ -140,7 +140,7 @@ export default async function CrmDashboardPage() {
 
         {myDay.stuckDeals.length > 0 && (
           <div className="bg-white rounded-xl border border-red-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-2">Stuck past SLA <span className="text-slate-400 font-normal">{myDay.stuckDeals.length}</span></h3>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Stuck in stage <span className="text-slate-400 font-normal">{myDay.stuckDeals.length}</span></h3>
             <div className="flex flex-wrap gap-2">
               {myDay.stuckDeals.map((d) => (
                 <Link key={d.id} href={`/deals/${d.id}`} className="text-xs font-medium bg-red-50 text-red-700 px-2 py-1 rounded-lg hover:bg-red-100">

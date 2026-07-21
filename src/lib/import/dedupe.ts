@@ -79,11 +79,14 @@ export async function validateRow(
 
   if (target === "CONTACTS") {
     const errors: string[] = [];
-    if (!fields.accountName) errors.push("Company name is required");
     if (!fields.name) errors.push("Contact name is required");
     if (errors.length) return { errors };
+    // Company name is optional — same fallback as commitRow() below and
+    // the New Contact form: an unnamed company auto-creates from the
+    // contact's own name rather than blocking the row.
+    const companyName = fields.accountName || fields.name;
     const account = await prisma.account.findFirst({
-      where: { name: { equals: fields.accountName, mode: "insensitive" }, deletedAt: null },
+      where: { name: { equals: companyName, mode: "insensitive" }, deletedAt: null },
       select: { id: true },
     });
     const dup = await findAccountContactDuplicate(
@@ -221,7 +224,9 @@ export async function commitRow(
       fields.businessType && ["B2B", "B2C", "B2G"].includes(fields.businessType.trim().toUpperCase())
         ? fields.businessType.trim().toUpperCase()
         : undefined;
-    const accountId = await resolveAccountByName(fields.accountName, fields.siteCity, userId, {
+    // Same "no company name given" fallback as validateRow() above.
+    const companyName = fields.accountName || fields.name;
+    const accountId = await resolveAccountByName(companyName, fields.siteCity, userId, {
       customerProfileId: customerProfile?.id,
       businessType,
     });

@@ -19,7 +19,7 @@ export const IMPORT_FIELDS: Record<ImportTarget, ImportFieldDef[]> = {
     { key: "notes", label: "Notes" },
   ],
   CONTACTS: [
-    { key: "accountName", label: "Company name", required: true, hint: "Matched by exact name; created if not found" },
+    { key: "accountName", label: "Company name", hint: "Matched by exact name; created if not found. Leave unmapped/blank to auto-create a company from the contact's own name, same as the New Contact form." },
     { key: "name", label: "Contact name", required: true },
     { key: "phone", label: "Phone" },
     { key: "email", label: "Email" },
@@ -63,14 +63,39 @@ export function templateHeaders(target: ImportTarget): string[] {
 // contains the field's key or label (case-insensitive) — same lightweight
 // heuristic already used by the Contact import's own column detection
 // (src/lib/contacts.ts), not a full fuzzy-match library.
+//
+// Two passes, not one: an early single-pass version matched fields in
+// IMPORT_FIELDS order with no memory of headers already claimed, so a loose
+// `.includes()` fallback could steal a header an earlier field's EXACT match
+// already used — e.g. CONTACTS' "Contact name" field (key "name") matched
+// "Company name" via `"company name".includes("name")` before ever reaching
+// the real "Contact name" header, because "Company name" comes first and
+// contains "name" too. Every field's exact match now runs (and claims its
+// header) before any field's loose substring fallback is tried, and both
+// passes skip headers another field already claimed.
 export function autoMatchColumns(target: ImportTarget, headers: string[]): Record<string, string> {
   const result: Record<string, string> = {};
+  const used = new Set<number>();
+  const norm = (h: string) => h.trim().toLowerCase();
+
   for (const field of IMPORT_FIELDS[target]) {
-    const idx = headers.findIndex((h) => {
-      const norm = h.trim().toLowerCase();
-      return norm === field.key.toLowerCase() || norm === field.label.toLowerCase() || norm.includes(field.key.toLowerCase());
-    });
-    if (idx >= 0) result[field.key] = headers[idx];
+    const idx = headers.findIndex(
+      (h, i) => !used.has(i) && (norm(h) === field.key.toLowerCase() || norm(h) === field.label.toLowerCase()),
+    );
+    if (idx >= 0) {
+      result[field.key] = headers[idx];
+      used.add(idx);
+    }
   }
+
+  for (const field of IMPORT_FIELDS[target]) {
+    if (result[field.key]) continue;
+    const idx = headers.findIndex((h, i) => !used.has(i) && norm(h).includes(field.key.toLowerCase()));
+    if (idx >= 0) {
+      result[field.key] = headers[idx];
+      used.add(idx);
+    }
+  }
+
   return result;
 }

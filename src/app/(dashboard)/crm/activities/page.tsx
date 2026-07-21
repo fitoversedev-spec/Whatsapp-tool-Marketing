@@ -3,9 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/rbac";
 import ActivitiesClient from "./ActivitiesClient";
 
-export default async function ActivitiesPage() {
+export default async function ActivitiesPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const user = await requireUser();
-  const where = isAdmin(user.role) ? {} : { ownerUserId: user.id };
+  const dateRange = searchParams.from && searchParams.to ? { from: searchParams.from, to: searchParams.to } : null;
+  const where = {
+    ...(isAdmin(user.role) ? {} : { ownerUserId: user.id }),
+    ...(dateRange ? { occurredAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
+  };
 
   const activities = await prisma.activity.findMany({
     where,
@@ -36,6 +40,7 @@ export default async function ActivitiesPage() {
         accountId: a.account?.id ?? null,
         accountName: a.account?.name ?? null,
       }))}
+      dateRange={dateRange}
     />
   );
 }

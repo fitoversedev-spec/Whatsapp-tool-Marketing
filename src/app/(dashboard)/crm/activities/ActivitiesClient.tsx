@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
+import DateRangePicker, { defaultDateRange, type DateRange } from "@/components/DateRangePicker";
 
 type ActivityRow = {
   id: string;
@@ -23,8 +25,13 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export default function ActivitiesClient({ isAdmin, activities }: { isAdmin: boolean; activities: ActivityRow[] }) {
+export default function ActivitiesClient({ isAdmin, activities, dateRange }: { isAdmin: boolean; activities: ActivityRow[]; dateRange: DateRange | null }) {
+  const router = useRouter();
   const [q, setQ] = useState("");
+
+  function applyDateRange(range: DateRange) {
+    router.push(`/crm/activities?from=${range.from}&to=${range.to}`);
+  }
 
   const visible = activities.filter(
     (a) =>
@@ -42,13 +49,19 @@ export default function ActivitiesClient({ isAdmin, activities }: { isAdmin: boo
         description={`${activities.length} ${isAdmin ? "team-wide" : "of yours"} — every logged touchpoint, most recent first`}
       />
 
-      <div className="mb-3">
+      <div className="mb-3 flex items-center gap-3 flex-wrap">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by subject, company, or deal code..."
           className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-sm"
         />
+        <DateRangePicker value={dateRange ?? defaultDateRange(30)} onApply={applyDateRange} />
+        {dateRange && (
+          <button onClick={() => router.push("/crm/activities")} className="text-xs text-slate-500 hover:underline">
+            Clear date filter
+          </button>
+        )}
       </div>
 
       {visible.length === 0 ? (

@@ -6,6 +6,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
+import DateRangePicker, { defaultDateRange, type DateRange } from "@/components/DateRangePicker";
 import { matchesContactFilter } from "@/lib/contacts";
 
 type Contact = {
@@ -33,6 +34,7 @@ export default function AccountContactsClient({
   customerProfiles,
   funnelStages,
   users,
+  dateRange,
 }: {
   isAdmin: boolean;
   contacts: Contact[];
@@ -41,9 +43,14 @@ export default function AccountContactsClient({
   customerProfiles: Option[];
   funnelStages: StageOption[];
   users: Option[];
+  dateRange: DateRange | null;
 }) {
   const router = useRouter();
   const toast = useToast();
+
+  function applyDateRange(range: DateRange) {
+    router.push(`/crm/contacts?from=${range.from}&to=${range.to}`);
+  }
   const [q, setQ] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -144,6 +151,12 @@ export default function AccountContactsClient({
             placeholder="Search by name or company..."
             className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs"
           />
+          <DateRangePicker value={dateRange ?? defaultDateRange(30)} onApply={applyDateRange} />
+          {dateRange && (
+            <button onClick={() => router.push("/crm/contacts")} className="text-xs text-slate-500 hover:underline">
+              Clear date filter
+            </button>
+          )}
           {knownFieldKeys.length > 0 && (
             <>
               <select value={filterField} onChange={(e) => setFilterField(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm">

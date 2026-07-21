@@ -4,9 +4,13 @@ import { isAdmin } from "@/lib/rbac";
 import { parseFields } from "@/lib/contacts";
 import AccountContactsClient from "./AccountContactsClient";
 
-export default async function AccountContactsPage() {
+export default async function AccountContactsPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const user = await requireUser();
-  const where = isAdmin(user.role) ? {} : { account: { ownerUserId: user.id } };
+  const dateRange = searchParams.from && searchParams.to ? { from: searchParams.from, to: searchParams.to } : null;
+  const where = {
+    ...(isAdmin(user.role) ? {} : { account: { ownerUserId: user.id } }),
+    ...(dateRange ? { createdAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
+  };
 
   const [contacts, accounts, leadSources, customerProfiles, funnelStages, users] = await Promise.all([
     prisma.accountContact.findMany({
@@ -54,6 +58,7 @@ export default async function AccountContactsPage() {
       customerProfiles={customerProfiles}
       funnelStages={funnelStages}
       users={users}
+      dateRange={dateRange}
     />
   );
 }

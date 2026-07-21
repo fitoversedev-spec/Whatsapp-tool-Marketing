@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import DateRangePicker, { defaultDateRange, type DateRange } from "@/components/DateRangePicker";
 
 type Deal = {
   id: string;
@@ -67,6 +68,7 @@ export default function DealsClient({
   lossReasons,
   users,
   products,
+  dateRange,
 }: {
   currentUserId: string;
   isAdmin: boolean;
@@ -77,9 +79,14 @@ export default function DealsClient({
   lossReasons: Option[];
   users: Option[];
   products: ProductOption[];
+  dateRange: DateRange | null;
 }) {
   const router = useRouter();
   const toast = useToast();
+
+  function applyDateRange(range: DateRange) {
+    router.push(`/deals?from=${range.from}&to=${range.to}`);
+  }
   const [showNew, setShowNew] = useState(false);
   const [closeoutFor, setCloseoutFor] = useState<{ deal: Deal; stage: Stage } | null>(null);
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
@@ -152,6 +159,12 @@ export default function DealsClient({
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
+        )}
+        <DateRangePicker value={dateRange ?? defaultDateRange(30)} onApply={applyDateRange} />
+        {dateRange && (
+          <button onClick={() => router.push("/deals")} className="text-xs text-slate-500 hover:underline">
+            Clear date filter
+          </button>
         )}
       </div>
 

@@ -4,10 +4,14 @@ import { isAdmin } from "@/lib/rbac";
 import CrmTabs from "@/components/crm/CrmTabs";
 import DealsClient from "./DealsClient";
 
-export default async function DealsPage() {
+export default async function DealsPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const user = await requireUser();
 
-  const dealsWhere = isAdmin(user.role) ? {} : { ownerUserId: user.id };
+  const dateRange = searchParams.from && searchParams.to ? { from: searchParams.from, to: searchParams.to } : null;
+  const dealsWhere = {
+    ...(isAdmin(user.role) ? {} : { ownerUserId: user.id }),
+    ...(dateRange ? { createdAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
+  };
 
   const [deals, stages, leadSources, customerProfiles, lossReasons, users, products] = await Promise.all([
     prisma.deal.findMany({
@@ -68,6 +72,7 @@ export default async function DealsPage() {
       lossReasons={lossReasons.map((l) => ({ id: l.id, name: l.name }))}
       users={users}
       products={products}
+      dateRange={dateRange}
       />
     </>
   );

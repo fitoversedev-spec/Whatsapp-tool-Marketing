@@ -1805,6 +1805,10 @@ export default function CourtImageWizard({
       toast.error("Pick at least one format to send");
       return;
     }
+    // Opened synchronously, before any awaits, so browsers don't block it
+    // as a popup — its location is set once we know the WhatsApp Web URL
+    // (only used for CRM-channel deals; see /api/court-images/[id]/send).
+    const pendingTab = window.open("about:blank", "_blank");
     setSending(true);
     try {
       const result = await saveDraft();
@@ -1814,16 +1818,26 @@ export default function CourtImageWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ formats }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.message ?? e.error ?? "Send failed");
+        throw new Error(data.message ?? data.error ?? "Send failed");
       }
-      toast.success(
-        `${formats.length === 1 ? "Design" : `${formats.length} formats`} sent to ${contactPhone}`
-      );
+      if (data.whatsappWebUrl) {
+        if (pendingTab) pendingTab.location.href = data.whatsappWebUrl;
+        else window.open(data.whatsappWebUrl, "_blank");
+        toast.success(
+          `${formats.length === 1 ? "Design" : `${formats.length} formats`} ready — send it from the WhatsApp tab that just opened`
+        );
+      } else {
+        pendingTab?.close();
+        toast.success(
+          `${formats.length === 1 ? "Design" : `${formats.length} formats`} sent to ${contactPhone}`
+        );
+      }
       onComplete({ courtImageId: result.id, sent: true });
       onClose();
     } catch (err) {
+      pendingTab?.close();
       toast.error(err instanceof Error ? err.message : "Send failed");
     } finally {
       setSending(false);

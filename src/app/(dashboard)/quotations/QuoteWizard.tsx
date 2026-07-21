@@ -612,6 +612,10 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
       toast.error("Enter the customer's WhatsApp number before sending.");
       return;
     }
+    // Opened synchronously, before the fetch, so browsers don't block it as
+    // a popup — its location is set once we know the WhatsApp Web URL (only
+    // used for CRM-channel deals; see /api/quotations/[id]/send).
+    const pendingTab = window.open("about:blank", "_blank");
     setSubmitting(true);
     try {
       const res = await fetch(`/api/quotations/${draftId}/send`, {
@@ -621,10 +625,18 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
       });
       const data = await res.json();
       if (!res.ok) {
+        pendingTab?.close();
         toast.error(data.error ?? "Send failed");
         return;
       }
-      toast.success(`Quotation ${draftNumber} sent to ${customerName}`);
+      if (data.whatsappWebUrl) {
+        if (pendingTab) pendingTab.location.href = data.whatsappWebUrl;
+        else window.open(data.whatsappWebUrl, "_blank");
+        toast.success(`Quotation ${draftNumber} ready — send it from the WhatsApp tab that just opened`);
+      } else {
+        pendingTab?.close();
+        toast.success(`Quotation ${draftNumber} sent to ${customerName}`);
+      }
       onComplete({ quotationId: draftId, sent: true });
       onClose();
     } finally {

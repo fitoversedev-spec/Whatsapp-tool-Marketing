@@ -38,7 +38,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const bodyCaption = parsed.success ? parsed.data.caption : null;
   const bodyContactPhone = parsed.success ? parsed.data.contactPhone : undefined;
 
-  const q = await prisma.quotation.findUnique({ where: { id: params.id } });
+  const q = await prisma.quotation.findUnique({
+    where: { id: params.id },
+    include: { deal: { select: { dealChannel: true } } },
+  });
   if (!q) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   // If a caption came in via the body (from the wizard), persist it so
@@ -114,6 +117,38 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         { status: 500 }
       );
     }
+  }
+
+  // CRM-channel deals: hand off to WhatsApp Web/App instead of sending via
+  // the Cloud API directly. Cloud API sends need either an active 24h
+  // customer-service session or a pre-approved template; CRM-originated
+  // contacts (cold leads, not an inbound WhatsApp conversation) usually
+  // have neither, so a human sends it manually from their own WhatsApp —
+  // same message, just not through Meta's API. See docs/DECISIONS.md.
+  // WhatsApp click-to-chat can only pre-fill TEXT, never attach a file, so
+  // the message links to the PDF instead — pdfUrl is a genuinely public
+  // Vercel Blob URL (uploadToBlob always uses access: "public"), unlike
+  // the session-gated /api/quotations/[id]/pdf route the app itself uses.
+  if (q.deal?.dealChannel === "crm") {
+    await prisma.quotation.update({
+      where: { id: params.id },
+      data: { pdfUrl, status: "sent", sentAt: new Date() },
+    });
+    if (q.dealId) {
+      await advanceDealStageIfEarlier({
+        dealId: q.dealId,
+        targetStageSlug: "quotation_sent",
+        userId: user.id,
+        note: `Quotation ${q.number} sent`,
+      });
+    }
+    const introText =
+      q.caption?.trim() ||
+      `Quotation ${q.number} from Fitoverse — total ₹${Number(q.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    const message = `${introText}\n\nView/download: ${pdfUrl}`;
+    const digits = q.contactPhone.replace(/[^0-9]/g, "");
+    const whatsappWebUrl = `https://api.whatsapp.com/send/?phone=${digits}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
+    return NextResponse.json({ ok: true, pdfUrl, waMessageId: null, whatsappWebUrl });
   }
 
   // 2. Send caption as a preceding text message (if provided) then the

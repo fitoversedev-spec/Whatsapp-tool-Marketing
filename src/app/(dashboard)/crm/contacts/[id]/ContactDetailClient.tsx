@@ -159,20 +159,43 @@ export default function ContactDetailClient({
   // its own header comment).
   async function resendQuotation(q: QuotationRow) {
     if (!q.contactPhone) { toast.error("No contact phone on this quotation"); return; }
+    // Opened synchronously so browsers don't block it as a popup — its
+    // location is set once we know the WhatsApp Web URL (only used for
+    // CRM-channel deals; see /api/quotations/[id]/send).
+    const pendingTab = window.open("about:blank", "_blank");
     setResending(q.id);
     const res = await fetch(`/api/quotations/${q.id}/send`, { method: "POST" });
     setResending(null);
-    if (res.ok) { toast.success(`Quotation ${q.number} sent`); router.refresh(); }
-    else { const err = await res.json().catch(() => ({})); toast.error(err.error ?? "Send failed"); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { pendingTab?.close(); toast.error(data.error ?? "Send failed"); return; }
+    if (data.whatsappWebUrl) {
+      if (pendingTab) pendingTab.location.href = data.whatsappWebUrl;
+      else window.open(data.whatsappWebUrl, "_blank");
+      toast.success(`Quotation ${q.number} ready — send it from the WhatsApp tab that just opened`);
+    } else {
+      pendingTab?.close();
+      toast.success(`Quotation ${q.number} sent`);
+    }
+    router.refresh();
   }
 
   async function resendCourtImage(c: CourtImageRow) {
     if (!c.contactPhone) { toast.error("No phone on this design"); return; }
+    const pendingTab = window.open("about:blank", "_blank");
     setResending(c.id);
     const res = await fetch(`/api/court-images/${c.id}/send`, { method: "POST" });
     setResending(null);
-    if (res.ok) { toast.success(`Design ${c.number} sent`); router.refresh(); }
-    else { const err = await res.json().catch(() => ({})); toast.error(err.message ?? err.error ?? "Send failed"); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { pendingTab?.close(); toast.error(data.message ?? data.error ?? "Send failed"); return; }
+    if (data.whatsappWebUrl) {
+      if (pendingTab) pendingTab.location.href = data.whatsappWebUrl;
+      else window.open(data.whatsappWebUrl, "_blank");
+      toast.success(`Design ${c.number} ready — send it from the WhatsApp tab that just opened`);
+    } else {
+      pendingTab?.close();
+      toast.success(`Design ${c.number} sent`);
+    }
+    router.refresh();
   }
 
   function goToWizard(kind: "quote" | "court", dealId: string) {

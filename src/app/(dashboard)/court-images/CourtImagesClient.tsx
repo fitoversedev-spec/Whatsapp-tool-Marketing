@@ -161,13 +161,25 @@ export default function CourtImagesClient({
       return;
     }
     if (!confirm(`Re-send design ${r.number} to ${r.contactPhone}?`)) return;
+    // Opened synchronously so browsers don't block it as a popup — its
+    // location is set once we know the WhatsApp Web URL (only used for
+    // CRM-channel deals; see /api/court-images/[id]/send).
+    const pendingTab = window.open("about:blank", "_blank");
     const res = await fetch(`/api/court-images/${id}/send`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const e = await res.json().catch(() => ({}));
-      toast.error(e.message ?? e.error ?? "Send failed");
+      pendingTab?.close();
+      toast.error(data.message ?? data.error ?? "Send failed");
       return;
     }
-    toast.success("Sent");
+    if (data.whatsappWebUrl) {
+      if (pendingTab) pendingTab.location.href = data.whatsappWebUrl;
+      else window.open(data.whatsappWebUrl, "_blank");
+      toast.success("Ready — send it from the WhatsApp tab that just opened");
+    } else {
+      pendingTab?.close();
+      toast.success("Sent");
+    }
     reload();
   }
 

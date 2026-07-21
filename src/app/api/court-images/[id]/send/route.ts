@@ -35,7 +35,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const row = await prisma.courtImage.findUnique({ where: { id: params.id } });
+  const row = await prisma.courtImage.findUnique({
+    where: { id: params.id },
+    include: { deal: { select: { dealChannel: true } } },
+  });
   if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (user.role !== "admin" && row.createdByUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -102,6 +105,32 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const baseCaption =
     row.caption?.trim() ||
     `Court design ${row.number} from Fitoverse — ${row.customerName}`;
+
+  // CRM-channel deals: hand off to WhatsApp Web/App instead of sending via
+  // the Cloud API directly — same reasoning as the quotation /send route
+  // (see its own comment, and docs/DECISIONS.md). Click-to-chat can only
+  // pre-fill TEXT, never attach a file, so the message links to each
+  // selected format instead — these are genuinely public Vercel Blob URLs
+  // (uploadToBlob always uses access: "public").
+  if (row.deal?.dealChannel === "crm") {
+    await prisma.courtImage.update({
+      where: { id: params.id },
+      data: { status: "sent", sentAt: new Date() },
+    });
+    if (row.dealId) {
+      await advanceDealStageIfEarlier({
+        dealId: row.dealId,
+        targetStageSlug: "design_shared",
+        userId: user.id,
+        note: `Court design ${row.number} sent`,
+      });
+    }
+    const links = items.map((i) => `${i.format}: ${i.url}`).join("\n");
+    const message = `${baseCaption}\n\n${links}`;
+    const digits = row.contactPhone.replace(/[^0-9]/g, "");
+    const whatsappWebUrl = `https://api.whatsapp.com/send/?phone=${digits}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
+    return NextResponse.json({ ok: true, sent: [], whatsappWebUrl });
+  }
 
   type Sent = {
     format: string;

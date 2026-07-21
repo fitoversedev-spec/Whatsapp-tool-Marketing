@@ -143,13 +143,25 @@ export default function QuotationsClient({
       toast.error("No contact phone on this quotation");
       return;
     }
+    // Opened synchronously so browsers don't block it as a popup — its
+    // location is set once we know the WhatsApp Web URL (only used for
+    // CRM-channel deals; see /api/quotations/[id]/send).
+    const pendingTab = window.open("about:blank", "_blank");
     const res = await fetch(`/api/quotations/${q.id}/send`, { method: "POST" });
     const data = await res.json();
     if (!res.ok) {
+      pendingTab?.close();
       toast.error(data.error ?? "Send failed");
       return;
     }
-    toast.success(`Quotation ${q.number} sent`);
+    if (data.whatsappWebUrl) {
+      if (pendingTab) pendingTab.location.href = data.whatsappWebUrl;
+      else window.open(data.whatsappWebUrl, "_blank");
+      toast.success(`Quotation ${q.number} ready — send it from the WhatsApp tab that just opened`);
+    } else {
+      pendingTab?.close();
+      toast.success(`Quotation ${q.number} sent`);
+    }
     router.refresh();
   }
 

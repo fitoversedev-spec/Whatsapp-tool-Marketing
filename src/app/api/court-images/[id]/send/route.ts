@@ -14,6 +14,9 @@ import { prisma } from "@/lib/prisma";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { advanceDealStageIfEarlier } from "@/lib/funnel/transitionDeal";
 
+// Same convention as staffCommands.ts's own APP_URL constant.
+const APP_URL = process.env.APP_URL ?? "https://whatsapp-tool-marketing.vercel.app";
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -110,8 +113,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // the Cloud API directly — same reasoning as the quotation /send route
   // (see its own comment, and docs/DECISIONS.md). Click-to-chat can only
   // pre-fill TEXT, never attach a file, so the message links to each
-  // selected format instead — these are genuinely public Vercel Blob URLs
-  // (uploadToBlob always uses access: "public").
+  // selected format instead — through /d/[id] (this app's own domain,
+  // unauthenticated, 302s to the real media URL) rather than the raw
+  // Blob URL, which reads as untrustworthy to a customer.
   if (row.deal?.dealChannel === "crm") {
     await prisma.courtImage.update({
       where: { id: params.id },
@@ -125,7 +129,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         note: `Court design ${row.number} sent`,
       });
     }
-    const links = items.map((i) => `${i.format}: ${i.url}`).join("\n");
+    const links = items.map((i) => `${i.format}: ${APP_URL}/d/${row.id}?format=${i.format}`).join("\n");
     const message = `${baseCaption}\n\n${links}`;
     const digits = row.contactPhone.replace(/[^0-9]/g, "");
     const whatsappWebUrl = `https://api.whatsapp.com/send/?phone=${digits}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;

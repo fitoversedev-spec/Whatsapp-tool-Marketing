@@ -15,6 +15,9 @@ import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { advanceDealStageIfEarlier } from "@/lib/funnel/transitionDeal";
 import { z } from "zod";
 
+// Same convention as staffCommands.ts's own APP_URL constant.
+const APP_URL = process.env.APP_URL ?? "https://whatsapp-tool-marketing.vercel.app";
+
 // Optional caption/contactPhone in the request body — override the row's
 // own values if provided. contactPhone lets a quote created with no phone
 // (the standalone /quotations "New Quote" flow, or any historical draft —
@@ -126,9 +129,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // have neither, so a human sends it manually from their own WhatsApp —
   // same message, just not through Meta's API. See docs/DECISIONS.md.
   // WhatsApp click-to-chat can only pre-fill TEXT, never attach a file, so
-  // the message links to the PDF instead — pdfUrl is a genuinely public
-  // Vercel Blob URL (uploadToBlob always uses access: "public"), unlike
-  // the session-gated /api/quotations/[id]/pdf route the app itself uses.
+  // the message links to the PDF instead. Links through /q/[id] (this
+  // app's own domain) rather than the raw pdfUrl — the Vercel Blob
+  // storage subdomain reads as a random/untrustworthy link to a customer;
+  // see docs/DECISIONS.md. /q/[id] is itself unauthenticated (unlike the
+  // session-gated /api/quotations/[id]/pdf the app uses internally) and
+  // just 302s to pdfUrl, which is genuinely public either way.
   if (q.deal?.dealChannel === "crm") {
     await prisma.quotation.update({
       where: { id: params.id },
@@ -145,7 +151,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const introText =
       q.caption?.trim() ||
       `Quotation ${q.number} from Fitoverse — total ₹${Number(q.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-    const message = `${introText}\n\nView/download: ${pdfUrl}`;
+    const message = `${introText}\n\nView/download: ${APP_URL}/q/${q.id}`;
     const digits = q.contactPhone.replace(/[^0-9]/g, "");
     const whatsappWebUrl = `https://api.whatsapp.com/send/?phone=${digits}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
     return NextResponse.json({ ok: true, pdfUrl, waMessageId: null, whatsappWebUrl });

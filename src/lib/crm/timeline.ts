@@ -7,10 +7,10 @@ import { prisma } from "@/lib/prisma";
 
 export type TimelineEntry = {
   id: string;
-  kind: "activity" | "reminder" | "created";
+  kind: "activity" | "reminder" | "created" | "stage";
   title: string;
   detail: string | null;
-  timestamp: string; // Activity.occurredAt, Reminder.dueAt, or the record's own createdAt
+  timestamp: string; // Activity.occurredAt, Reminder.dueAt, DealStageHistory.changedAt, or the record's own createdAt
   ownerName: string;
   completed?: boolean; // reminders only
 };
@@ -30,16 +30,35 @@ export async function getUnifiedTimeline(filter: TimelineFilter, limit = 50): Pr
   if (filter.accountContactId) activityWhere.accountContactId = filter.accountContactId;
 
   // Reminder only carries dealId directly (no account/lead/contact FK) —
-  // scope those filters through the deals they belong to instead.
+  // scope those filters through the deals they belong to instead. It CAN
+  // reach a contact this way, through the deal's primaryContactId (same
+  // path stageHistoryWhere below uses) — a bare accountContactId filter
+  // used to fall through to "nothing to fetch", which silently hid every
+  // scheduled meeting/call from a contact's own timeline.
   const reminderWhere: Record<string, unknown> = {};
   if (filter.dealId) {
     reminderWhere.dealId = filter.dealId;
   } else if (filter.accountId) {
     reminderWhere.deal = { accountId: filter.accountId };
+  } else if (filter.accountContactId) {
+    reminderWhere.deal = { primaryContactId: filter.accountContactId };
   } else {
-    // No dealId/accountId given (a bare lead or contact filter) — Reminder
-    // has no path to either, so there's nothing to fetch on this side.
     reminderWhere.id = "__none__";
+  }
+
+  // DealStageHistory has no account/lead/contact FK either, but unlike
+  // Reminder it CAN reach a contact — through the deal's primaryContactId —
+  // so a bare accountContactId filter gets real stage-change entries where
+  // Reminder gets none.
+  const stageHistoryWhere: Record<string, unknown> = {};
+  if (filter.dealId) {
+    stageHistoryWhere.dealId = filter.dealId;
+  } else if (filter.accountId) {
+    stageHistoryWhere.deal = { accountId: filter.accountId };
+  } else if (filter.accountContactId) {
+    stageHistoryWhere.deal = { primaryContactId: filter.accountContactId };
+  } else {
+    stageHistoryWhere.id = "__none__";
   }
 
   // A synthetic "created" entry for the record itself — matches the
@@ -73,7 +92,7 @@ export async function getUnifiedTimeline(filter: TimelineFilter, limit = 50): Pr
     return null;
   })();
 
-  const [activities, reminders, createdEntry] = await Promise.all([
+  const [activities, reminders, stageHistory, createdEntry] = await Promise.all([
     Object.keys(activityWhere).length
       ? prisma.activity.findMany({
           where: activityWhere,
@@ -87,6 +106,16 @@ export async function getUnifiedTimeline(filter: TimelineFilter, limit = 50): Pr
       orderBy: { dueAt: "desc" },
       take: limit,
       include: { owner: { select: { name: true } } },
+    }),
+    prisma.dealStageHistory.findMany({
+      where: stageHistoryWhere,
+      orderBy: { changedAt: "desc" },
+      take: limit,
+      include: {
+        fromStage: { select: { name: true } },
+        toStage: { select: { name: true } },
+        changedBy: { select: { name: true } },
+      },
     }),
     createdEntryPromise,
   ]);
@@ -103,11 +132,21 @@ export async function getUnifiedTimeline(filter: TimelineFilter, limit = 50): Pr
     ...reminders.map((r) => ({
       id: r.id,
       kind: "reminder" as const,
+      // Once completed, what actually happened (the completion note) is
+      // more useful than the original scheduling detail.
       title: r.message,
-      detail: r.location ?? r.meetingUrl ?? null,
+      detail: r.completedAt && r.completionNote ? r.completionNote : r.location ?? r.meetingUrl ?? null,
       timestamp: r.dueAt.toISOString(),
       ownerName: r.owner.name,
       completed: !!r.completedAt,
+    })),
+    ...stageHistory.map((h) => ({
+      id: h.id,
+      kind: "stage" as const,
+      title: `Stage changed — ${h.fromStage?.name ?? "(start)"} → ${h.toStage.name}`,
+      detail: h.note,
+      timestamp: h.changedAt.toISOString(),
+      ownerName: h.changedBy?.name ?? "System",
     })),
     ...(createdEntry ? [createdEntry] : []),
   ];

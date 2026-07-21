@@ -7,6 +7,10 @@ const patchSchema = z.object({
   message: z.string().min(1).max(500).optional(),
   dueAt: z.string().datetime().optional(),
   completed: z.boolean().optional(),
+  // Short "what actually happened" note — typically set together with
+  // completed: true, but accepted independently too (editable after the
+  // fact without re-toggling completion).
+  completionNote: z.string().max(1000).nullable().optional(),
 });
 
 async function loadOwn(id: string, userId: string) {
@@ -43,6 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // on uncomplete either.
     data.status = parsed.data.completed ? "DONE" : res.reminder.notifiedAt ? "SENT" : "PENDING";
   }
+  if (parsed.data.completionNote !== undefined) data.completionNote = parsed.data.completionNote;
 
   const updated = await prisma.reminder.update({
     where: { id: params.id },

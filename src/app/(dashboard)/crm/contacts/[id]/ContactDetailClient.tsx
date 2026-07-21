@@ -28,6 +28,11 @@ type ProductOption = { id: string; name: string; type: string };
 type ActivityTypeOption = { id: string; name: string };
 type StageOption = { id: string; name: string; stageType: string; colorHex: string | null; requiresLossReason: boolean };
 type LossReasonOption = { id: string; name: string };
+type ContactNoteRow = { id: string; title: string | null; body: string; createdAt: string; authorName: string };
+type ReminderRow = {
+  id: string; message: string; dueAt: string; completedAt: string | null; completionNote: string | null;
+  location: string | null; meetingUrl: string | null; activityTypeName: string | null;
+};
 
 // Same convention as QuotationsClient.tsx / CourtImagesClient.tsx (each
 // already defines this independently — matching that precedent rather
@@ -47,6 +52,9 @@ function fmtInr(n: number | null): string {
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
+function fmtDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
@@ -59,25 +67,56 @@ const SECTIONS = [
   { id: "quotations", label: "Quotations" },
   { id: "court-designs", label: "Court Designs" },
   { id: "products", label: "Product interest" },
+  { id: "reminders", label: "Reminders" },
+  { id: "notes", label: "Notes" },
   { id: "activities", label: "Activities" },
 ];
 
 export default function ContactDetailClient({
-  contact, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons, customerProfiles,
+  contact, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons, customerProfiles, contactNotes, reminders,
 }: {
   contact: Contact; deals: Deal[]; activities: ActivityRow[]; quotations: QuotationRow[]; courtImages: CourtImageRow[];
   productInterests: ProductInterestRow[]; timeline: TimelineEntry[]; products: ProductOption[];
   activityTypes: ActivityTypeOption[]; funnelStages: StageOption[]; lossReasons: LossReasonOption[];
-  customerProfiles: CustomerProfileOption[];
+  customerProfiles: CustomerProfileOption[]; contactNotes: ContactNoteRow[]; reminders: ReminderRow[];
 }) {
   const router = useRouter();
   const toast = useToast();
   const [tab, setTab] = useState<"overview" | "timeline">("overview");
   const [showProductPicker, setShowProductPicker] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"quote" | "court" | "deal" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"quote" | "court" | "deal" | "meeting" | "call" | null>(null);
+  const [scheduleDealId, setScheduleDealId] = useState<string | null>(null);
+  const [scheduleMode, setScheduleMode] = useState<"meeting" | "call" | null>(null);
+  const [completingReminderId, setCompletingReminderId] = useState<string | null>(null);
+  const [completionNoteDraft, setCompletionNoteDraft] = useState("");
+  const [completingBusy, setCompletingBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [resending, setResending] = useState<string | null>(null);
   const [showLogActivity, setShowLogActivity] = useState(false);
+  const [showAddNote, setShowAddNote] = useState(false);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteBody, setNoteBody] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  async function submitNote() {
+    if (!noteBody.trim()) return;
+    setSavingNote(true);
+    const res = await fetch(`/api/account-contacts/${contact.id}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: noteTitle.trim() || undefined, body: noteBody.trim() }),
+    });
+    setSavingNote(false);
+    if (res.ok) {
+      setNoteTitle("");
+      setNoteBody("");
+      setShowAddNote(false);
+      toast.success("Note added");
+      router.refresh();
+    } else {
+      toast.error("Could not save note");
+    }
+  }
   const [closeoutFor, setCloseoutFor] = useState<{ deal: Deal; stage: StageOption } | null>(null);
 
   const [editing, setEditing] = useState(false);
@@ -90,6 +129,8 @@ export default function ContactDetailClient({
   const [siteCity, setSiteCity] = useState(contact.accountCity ?? "");
   const [customerProfileId, setCustomerProfileId] = useState(contact.accountCustomerProfileId ?? "");
   const [businessType, setBusinessType] = useState(contact.accountBusinessType ?? "");
+  const [businessTypeOther, setBusinessTypeOther] = useState("");
+  const isBusinessTypeOther = businessType === "Other";
   const [notes, setNotes] = useState(contact.notes ?? "");
   const [isPrimary, setIsPrimary] = useState(contact.isPrimary);
   const [fields, setFields] = useState<Record<string, string>>(contact.fields);
@@ -115,6 +156,7 @@ export default function ContactDetailClient({
     setSiteCity(contact.accountCity ?? "");
     setCustomerProfileId(contact.accountCustomerProfileId ?? "");
     setBusinessType(contact.accountBusinessType ?? "");
+    setBusinessTypeOther("");
     setNotes(contact.notes ?? "");
     setIsPrimary(contact.isPrimary);
     setFields(contact.fields);
@@ -140,6 +182,16 @@ export default function ContactDetailClient({
     if (!name.trim()) { toast.error("Name is required"); return; }
     setSaving(true);
     const resolvedDesignation = designation === "Other" ? designationOther.trim() || null : designation || null;
+    // businessType stays a strict B2B/B2C/B2G enum (other code buckets
+    // Accounts by it) — "Other" is sent as no businessType at all, with the
+    // free text folded into notes instead, same composition the New Contact
+    // form already uses for its own Customer type "Other".
+    const resolvedBusinessType = isBusinessTypeOther ? null : businessType || null;
+    const composedNotes =
+      [
+        isBusinessTypeOther && businessTypeOther.trim() ? `Business type detail: ${businessTypeOther.trim()}` : "",
+        notes.trim(),
+      ].filter(Boolean).join("\n\n") || null;
     const res = await fetch(`/api/account-contacts/${contact.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -150,8 +202,8 @@ export default function ContactDetailClient({
         designation: resolvedDesignation,
         siteCity: siteCity.trim() || null,
         customerProfileId: customerProfileId || null,
-        businessType: businessType || null,
-        notes: notes.trim() || null,
+        businessType: resolvedBusinessType,
+        notes: composedNotes,
         fields,
         isPrimary,
       }),
@@ -232,22 +284,41 @@ export default function ContactDetailClient({
     router.push(`${kind === "quote" ? "/quotations" : "/court-images"}?${params.toString()}`);
   }
 
-  function onQuickAction(kind: "quote" | "court" | "product") {
+  function openSchedule(mode: "meeting" | "call", dealId: string) {
+    setScheduleMode(mode);
+    setScheduleDealId(dealId);
+  }
+
+  function onQuickAction(kind: "quote" | "court" | "product" | "meeting" | "call") {
     if (deals.length === 0) {
       if (kind === "product") { setShowProductPicker(true); return; } // product picker handles deal-creation itself
       setPendingAction(kind);
       return;
     }
-    if (deals.length === 1) {
-      if (kind === "product") setShowProductPicker(true);
-      else goToWizard(kind, deals[0].id);
-      return;
-    }
     // Multiple deals — default to the most recently updated one (deals is
     // already sorted that way) rather than forcing a picker for the common
     // case; DealDetail is always one click away to pick a different one.
-    if (kind === "product") setShowProductPicker(true);
-    else goToWizard(kind, deals[0].id);
+    if (kind === "product") { setShowProductPicker(true); return; }
+    if (kind === "meeting" || kind === "call") { openSchedule(kind, deals[0].id); return; }
+    goToWizard(kind, deals[0].id);
+  }
+
+  async function completeReminder(id: string) {
+    setCompletingBusy(true);
+    const res = await fetch(`/api/reminders/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completed: true, completionNote: completionNoteDraft.trim() || null }),
+    });
+    setCompletingBusy(false);
+    if (res.ok) {
+      setCompletingReminderId(null);
+      setCompletionNoteDraft("");
+      toast.success("Marked complete");
+      router.refresh();
+    } else {
+      toast.error("Could not update reminder");
+    }
   }
 
   // Same transitionDeal() endpoint the Deals list uses — this is the sole
@@ -322,7 +393,7 @@ export default function ContactDetailClient({
                   rel="noreferrer"
                   className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1.5 text-sm font-medium"
                 >
-                  Send WhatsApp
+                  Send message
                 </a>
               )}
               <button
@@ -351,6 +422,12 @@ export default function ContactDetailClient({
         </button>
         <button onClick={() => onQuickAction("product")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5">
           <span>📦</span> Product interest
+        </button>
+        <button onClick={() => onQuickAction("meeting")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5">
+          <span>📅</span> Schedule Meeting
+        </button>
+        <button onClick={() => onQuickAction("call")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5">
+          <span>📞</span> Schedule Call
         </button>
       </div>
 
@@ -439,12 +516,18 @@ export default function ContactDetailClient({
                 <div>
                   <div className="text-xs text-slate-600">Business type</div>
                   {editing ? (
-                    <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
-                      <option value="">Unspecified</option>
-                      <option value="B2B">B2B</option>
-                      <option value="B2C">B2C</option>
-                      <option value="B2G">B2G</option>
-                    </select>
+                    <>
+                      <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                        <option value="">Unspecified</option>
+                        <option value="B2B">B2B</option>
+                        <option value="B2C">B2C</option>
+                        <option value="B2G">B2G</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      {isBusinessTypeOther && (
+                        <input value={businessTypeOther} onChange={(e) => setBusinessTypeOther(e.target.value)} placeholder="Describe the business type" className="mt-1.5 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
+                      )}
+                    </>
                   ) : (
                     <div className="font-medium text-slate-900">{contact.accountBusinessType ?? "—"}</div>
                   )}
@@ -669,6 +752,128 @@ export default function ContactDetailClient({
               )}
             </div>
 
+            {/* Scheduled meetings/calls (Reminder rows) — "Schedule Meeting"/
+                "Schedule Call" above create these; already surface in My Day
+                (Due today/Overdue) with zero extra wiring since they're
+                ordinary owner-scoped Reminders. This section is what gives
+                a rep visibility + the mark-complete-with-a-note action
+                right on the contact itself, matching the Zoho reference. */}
+            <div id="reminders" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+              <h3 className="text-base font-semibold text-slate-900 mb-3">Reminders <span className="text-slate-400 font-normal">{reminders.filter((r) => !r.completedAt).length}</span></h3>
+              {reminders.length === 0 ? (
+                <p className="text-sm text-slate-400">No meetings, calls, or reminders scheduled yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {reminders.map((r) => (
+                    <div key={r.id} className={`rounded-lg border px-3 py-2 ${r.completedAt ? "border-slate-100 bg-slate-50/50" : "border-slate-200"}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {r.activityTypeName && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 uppercase tracking-wide">{r.activityTypeName}</span>
+                            )}
+                            <span className={`text-sm font-medium ${r.completedAt ? "text-slate-500 line-through" : "text-slate-900"}`}>{r.message}</span>
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            {fmtDateTime(r.dueAt)}
+                            {r.meetingUrl && <> · <a href={r.meetingUrl} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline">Join link</a></>}
+                            {r.location && <> · {r.location}</>}
+                          </div>
+                          {r.completedAt && r.completionNote && (
+                            <div className="text-sm text-slate-600 mt-1">{r.completionNote}</div>
+                          )}
+                        </div>
+                        {!r.completedAt && completingReminderId !== r.id && (
+                          <button
+                            onClick={() => { setCompletingReminderId(r.id); setCompletionNoteDraft(""); }}
+                            className="text-xs font-medium text-wa-dark hover:underline shrink-0"
+                          >
+                            Mark complete
+                          </button>
+                        )}
+                      </div>
+                      {completingReminderId === r.id && (
+                        <div className="mt-2 pt-2 border-t border-slate-100">
+                          <textarea
+                            value={completionNoteDraft}
+                            onChange={(e) => setCompletionNoteDraft(e.target.value)}
+                            rows={2}
+                            autoFocus
+                            placeholder="What happened? (optional)"
+                            className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                          />
+                          <div className="flex gap-2 justify-end mt-1.5">
+                            <button onClick={() => setCompletingReminderId(null)} className="text-xs font-medium text-slate-700 px-2 py-1">Cancel</button>
+                            <button onClick={() => completeReminder(r.id)} disabled={completingBusy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50">
+                              {completingBusy ? "Saving..." : "Confirm"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* General running note log — deliberately separate from
+                Activities below (structured: type/subject/duration/outcome).
+                A plain scratchpad, like Zoho's own Notes tab; excluded from
+                analytics on purpose (see AccountContactNote's own schema
+                comment). */}
+            <div id="notes" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-slate-900">Notes <span className="text-slate-400 font-normal">{contactNotes.length}</span></h3>
+                <button
+                  onClick={() => setShowAddNote((v) => !v)}
+                  aria-label="Add note"
+                  title="Add note"
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
+                >
+                  +
+                </button>
+              </div>
+              {showAddNote && (
+                <div className="border border-slate-200 rounded-lg p-3 mb-3">
+                  <input
+                    value={noteTitle}
+                    onChange={(e) => setNoteTitle(e.target.value)}
+                    placeholder="Title (optional)"
+                    className="w-full border-0 border-b border-slate-200 px-0 py-1.5 text-sm font-medium focus:outline-none focus:border-wa-green mb-2"
+                  />
+                  <textarea
+                    value={noteBody}
+                    onChange={(e) => setNoteBody(e.target.value)}
+                    rows={3}
+                    autoFocus
+                    placeholder="What's this note about?"
+                    className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                  />
+                  <div className="flex gap-2 justify-end mt-2">
+                    <button onClick={() => { setShowAddNote(false); setNoteTitle(""); setNoteBody(""); }} className="text-sm font-medium text-slate-700 px-3 py-1.5">
+                      Cancel
+                    </button>
+                    <button onClick={submitNote} disabled={savingNote || !noteBody.trim()} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50">
+                      {savingNote ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {contactNotes.length === 0 ? (
+                <p className="text-sm text-slate-400">No notes yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {contactNotes.map((n) => (
+                    <div key={n.id} className="border-l-2 border-slate-200 pl-3 py-0.5">
+                      {n.title && <div className="text-sm font-semibold text-slate-900">{n.title}</div>}
+                      <div className="text-sm text-slate-700 whitespace-pre-wrap">{n.body}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{fmtDateTime(n.createdAt)} · {n.authorName}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div id="activities" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-slate-900">Activities <span className="text-slate-400 font-normal">{activities.length}</span></h3>
@@ -712,6 +917,8 @@ export default function ContactDetailClient({
             if (action === "deal") {
               toast.success("Deal created");
               router.refresh();
+            } else if (action === "meeting" || action === "call") {
+              openSchedule(action, dealId);
             } else {
               goToWizard(action, dealId);
             }
@@ -726,6 +933,22 @@ export default function ContactDetailClient({
           activityTypes={activityTypes}
           onClose={() => setShowLogActivity(false)}
           onLogged={() => { setShowLogActivity(false); toast.success("Activity logged"); router.refresh(); }}
+        />
+      )}
+
+      {scheduleMode && scheduleDealId && (
+        <ScheduleReminderModal
+          mode={scheduleMode}
+          dealId={scheduleDealId}
+          contactName={contact.name}
+          activityTypes={activityTypes}
+          onClose={() => { setScheduleMode(null); setScheduleDealId(null); }}
+          onScheduled={() => {
+            setScheduleMode(null);
+            setScheduleDealId(null);
+            toast.success(scheduleMode === "meeting" ? "Meeting scheduled" : "Call scheduled");
+            router.refresh();
+          }}
         />
       )}
 
@@ -753,6 +976,108 @@ export default function ContactDetailClient({
           onSaved={() => { setShowProductPicker(false); toast.success("Product interest recorded"); router.refresh(); }}
         />
       )}
+    </div>
+  );
+}
+
+// "Schedule Meeting"/"Schedule Call" quick actions — both just create a
+// Reminder (already the thing that surfaces in My Day's Due today/Overdue
+// with zero extra wiring), tagged with the matching real ActivityType
+// (Google Meet / In-Person Meeting / Outbound Call) so it reads correctly
+// everywhere those are already shown. "Log a call" (something that
+// already happened) is deliberately NOT here — that's the existing Log
+// Activity flow, which already supports picking Inbound/Outbound Call.
+function ScheduleReminderModal({
+  mode, dealId, contactName, activityTypes, onClose, onScheduled,
+}: {
+  mode: "meeting" | "call"; dealId: string; contactName: string; activityTypes: ActivityTypeOption[];
+  onClose: () => void; onScheduled: () => void;
+}) {
+  const toast = useToast();
+  const [title, setTitle] = useState(mode === "meeting" ? `Meeting with ${contactName}` : `Call with ${contactName}`);
+  const [venueType, setVenueType] = useState<"online" | "physical">("online");
+  const [location, setLocation] = useState("");
+  const [meetingUrl, setMeetingUrl] = useState("");
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1); // sensible default: tomorrow
+    return d.toISOString().slice(0, 10);
+  });
+  const [time, setTime] = useState("10:00");
+  const [saving, setSaving] = useState(false);
+
+  function findType(name: string) {
+    return activityTypes.find((t) => t.name === name)?.id;
+  }
+
+  async function submit() {
+    if (!title.trim() || !date || !time) return;
+    setSaving(true);
+    const dueAt = new Date(`${date}T${time}:00`);
+    const activityTypeId =
+      mode === "call" ? findType("Outbound Call") : venueType === "online" ? findType("Google Meet") : findType("In-Person Meeting");
+    const res = await fetch("/api/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dealId,
+        message: title.trim(),
+        dueAt: dueAt.toISOString(),
+        activityTypeId: activityTypeId ?? undefined,
+        location: mode === "meeting" && venueType === "physical" ? location.trim() || undefined : undefined,
+        meetingUrl: mode === "meeting" && venueType === "online" ? meetingUrl.trim() || undefined : undefined,
+      }),
+    });
+    setSaving(false);
+    if (res.ok) onScheduled();
+    else toast.error("Could not schedule");
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full p-5">
+        <h2 className="font-semibold text-slate-900 mb-3">{mode === "meeting" ? "Schedule meeting" : "Schedule call"}</h2>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-slate-600">Title</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          {mode === "meeting" && (
+            <div>
+              <label className="text-xs font-medium text-slate-600">Venue</label>
+              <div className="flex gap-2 mt-1 mb-2">
+                <button type="button" onClick={() => setVenueType("online")} className={`text-xs px-2.5 py-1 rounded-lg border ${venueType === "online" ? "bg-wa-green/10 border-wa-green text-wa-dark font-medium" : "border-slate-200 text-slate-500"}`}>
+                  Online
+                </button>
+                <button type="button" onClick={() => setVenueType("physical")} className={`text-xs px-2.5 py-1 rounded-lg border ${venueType === "physical" ? "bg-wa-green/10 border-wa-green text-wa-dark font-medium" : "border-slate-200 text-slate-500"}`}>
+                  Physical
+                </button>
+              </div>
+              {venueType === "online" ? (
+                <input value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} placeholder="Meeting link (optional)" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              ) : (
+                <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              )}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600">Date</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Time</label>
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-4">
+          <button onClick={onClose} className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
+          <button onClick={submit} disabled={saving || !title.trim()} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
+            {saving ? "Scheduling..." : "Schedule"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -952,14 +1277,18 @@ function ProductInterestModal({
 }: { contactId: string; accountId: string; contactName: string; existingDealId: string | null; products: ProductOption[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [picked, setPicked] = useState<string[]>([]);
+  const [otherChecked, setOtherChecked] = useState(false);
+  const [otherLabel, setOtherLabel] = useState("");
   const [saving, setSaving] = useState(false);
 
   function toggle(id: string) {
     setPicked((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
   }
 
+  const canSubmit = picked.length > 0 || (otherChecked && otherLabel.trim().length > 0);
+
   async function submit() {
-    if (!picked.length) return;
+    if (!canSubmit) return;
     setSaving(true);
     let dealId = existingDealId;
     if (!dealId) {
@@ -978,7 +1307,10 @@ function ProductInterestModal({
     const res = await fetch(`/api/deals/${dealId}/interested-products`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ productIds: picked }),
+      body: JSON.stringify({
+        productIds: picked,
+        otherLabel: otherChecked && otherLabel.trim() ? otherLabel.trim() : undefined,
+      }),
     });
     setSaving(false);
     if (res.ok) onSaved();
@@ -999,10 +1331,23 @@ function ProductInterestModal({
             </label>
           ))}
           {products.length === 0 && <p className="px-3 py-4 text-sm text-slate-400">No products in the catalogue.</p>}
+          <label className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 cursor-pointer">
+            <input type="checkbox" checked={otherChecked} onChange={(e) => setOtherChecked(e.target.checked)} className="rounded border-slate-300" />
+            <span className="text-slate-700">Other — not in the catalogue</span>
+          </label>
         </div>
+        {otherChecked && (
+          <input
+            value={otherLabel}
+            onChange={(e) => setOtherLabel(e.target.value)}
+            placeholder="Describe the product"
+            autoFocus
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-4"
+          />
+        )}
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
-          <button onClick={submit} disabled={saving || !picked.length} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
+          <button onClick={submit} disabled={saving || !canSubmit} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
             {saving ? "Saving..." : "Save"}
           </button>
         </div>

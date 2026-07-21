@@ -9,9 +9,18 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/rbac";
 
-const schema = z.object({
-  productIds: z.array(z.string().uuid()).min(1).max(20),
-});
+const schema = z
+  .object({
+    productIds: z.array(z.string().uuid()).max(20).default([]),
+    // Free-text entry for something not in the catalogue — same
+    // productId-null/label pattern quote line items already use for
+    // rate-sheet categories with no matched Product (see DealLineItem's
+    // own schema comment).
+    otherLabel: z.string().max(200).optional(),
+  })
+  .refine((d) => d.productIds.length > 0 || (d.otherLabel && d.otherLabel.trim()), {
+    message: "Pick at least one product or describe one",
+  });
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -26,37 +35,63 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
-  const products = await prisma.product.findMany({
-    where: { id: { in: parsed.data.productIds } },
-    select: { id: true, name: true, unit: true, priceInr: true },
-  });
-  if (!products.length) return NextResponse.json({ error: "no_matching_products" }, { status: 400 });
+  const products = parsed.data.productIds.length
+    ? await prisma.product.findMany({
+        where: { id: { in: parsed.data.productIds } },
+        select: { id: true, name: true, unit: true, priceInr: true },
+      })
+    : [];
+  if (parsed.data.productIds.length && !products.length && !parsed.data.otherLabel?.trim()) {
+    return NextResponse.json({ error: "no_matching_products" }, { status: 400 });
+  }
 
   // Skip products already recorded as enquiry-only for this deal, so
   // clicking the quick-action twice doesn't duplicate line items.
   const existing = await prisma.dealLineItem.findMany({
-    where: { dealId: deal.id, isEnquiryOnly: true, productId: { in: products.map((p) => p.id) } },
-    select: { productId: true },
+    where: { dealId: deal.id, isEnquiryOnly: true },
+    select: { productId: true, label: true },
   });
-  const existingIds = new Set(existing.map((e) => e.productId));
+  const existingIds = new Set(existing.map((e) => e.productId).filter(Boolean));
   const toAdd = products.filter((p) => !existingIds.has(p.id));
 
-  if (toAdd.length) {
+  const otherLabel = parsed.data.otherLabel?.trim();
+  const existingLabels = new Set(existing.filter((e) => !e.productId).map((e) => e.label?.toLowerCase()));
+  const addOther = !!otherLabel && !existingLabels.has(otherLabel.toLowerCase());
+
+  if (toAdd.length || addOther) {
     await prisma.dealLineItem.createMany({
-      data: toAdd.map((p) => ({
-        dealId: deal.id,
-        quotationId: null,
-        productId: p.id,
-        sportId: null,
-        label: p.name,
-        quantity: 1,
-        unit: p.unit ?? null,
-        rate: p.priceInr ?? null,
-        amount: null,
-        isEnquiryOnly: true,
-      })),
+      data: [
+        ...toAdd.map((p) => ({
+          dealId: deal.id,
+          quotationId: null,
+          productId: p.id,
+          sportId: null,
+          label: p.name,
+          quantity: 1,
+          unit: p.unit ?? null,
+          rate: p.priceInr ?? null,
+          amount: null,
+          isEnquiryOnly: true,
+        })),
+        ...(addOther
+          ? [{
+              dealId: deal.id,
+              quotationId: null,
+              productId: null,
+              sportId: null,
+              label: otherLabel!,
+              quantity: 1,
+              unit: null,
+              rate: null,
+              amount: null,
+              isEnquiryOnly: true,
+            }]
+          : []),
+      ],
     });
   }
 
-  return NextResponse.json({ added: toAdd.length, skipped: products.length - toAdd.length });
+  const added = toAdd.length + (addOther ? 1 : 0);
+  const skipped = products.length - toAdd.length + (otherLabel && !addOther ? 1 : 0);
+  return NextResponse.json({ added, skipped });
 }

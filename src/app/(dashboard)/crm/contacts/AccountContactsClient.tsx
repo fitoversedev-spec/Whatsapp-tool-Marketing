@@ -320,6 +320,12 @@ function NewContactModal({
 
   const isCustomerTypeOther = customerProfiles.find((p) => p.id === customerProfileId)?.name.toLowerCase() === "other";
   const [customerTypeOther, setCustomerTypeOther] = useState("");
+  // businessType itself stays a strict B2B/B2C/B2G enum (other code groups
+  // Accounts by it — a free-text value would fragment that bucketing), so
+  // "Other" here is a UI-only sentinel: send no businessType at all and
+  // fold the free text into notes, same as Customer type's own "Other".
+  const isBusinessTypeOther = businessType === "Other";
+  const [businessTypeOther, setBusinessTypeOther] = useState("");
 
   async function submit(e: FormEvent, confirmDuplicate = false) {
     e.preventDefault();
@@ -348,7 +354,7 @@ function NewContactModal({
           : { accountName: name.trim() }),
         siteCity: siteCity.trim() || undefined,
         customerProfileId: customerProfileId || undefined,
-        businessType: businessType || undefined,
+        businessType: isBusinessTypeOther ? undefined : businessType || undefined,
         name: name.trim(),
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
@@ -358,6 +364,7 @@ function NewContactModal({
         notes: [
           sourceDetail.trim() ? `Source detail: ${sourceDetail.trim()}` : "",
           isCustomerTypeOther && customerTypeOther.trim() ? `Customer type detail: ${customerTypeOther.trim()}` : "",
+          isBusinessTypeOther && businessTypeOther.trim() ? `Business type detail: ${businessTypeOther.trim()}` : "",
           notes.trim(),
         ].filter(Boolean).join("\n\n") || undefined,
         dealStageId: dealStageId || undefined,
@@ -471,7 +478,11 @@ function NewContactModal({
                       <option value="B2B">B2B</option>
                       <option value="B2C">B2C</option>
                       <option value="B2G">B2G</option>
+                      <option value="Other">Other</option>
                     </select>
+                    {isBusinessTypeOther && (
+                      <input value={businessTypeOther} onChange={(e) => setBusinessTypeOther(e.target.value)} placeholder="Describe the business type" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                    )}
                   </div>
                 </div>
               </div>

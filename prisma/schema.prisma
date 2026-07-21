@@ -64,6 +64,7 @@ model User {
   ownedDeals           Deal[]                 @relation("DealOwner")
   dealStageChanges     DealStageHistory[]
   activities           Activity[]             @relation("ActivityOwner")
+  accountContactNotes  AccountContactNote[]
   importBatches        ImportBatch[]
   pendingStaffAction   PendingStaffAction?
   auditLogs            AuditLog[]
@@ -351,6 +352,10 @@ model Reminder {
   recurrenceRule String?   @map("recurrence_rule")
   meetingUrl     String?   @map("meeting_url")
   location       String?
+  // Short note left when marking a reminder (meeting/call/task) complete —
+  // "what actually happened", surfaced in the unified timeline in place of
+  // the original location/meetingUrl once set. See docs/DECISIONS.md.
+  completionNote String?   @map("completion_note")
 
   conversation Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   owner        User               @relation(fields: [ownerUserId], references: [id])
@@ -1140,10 +1145,31 @@ model AccountContact {
   dealsAsPrimary Deal[] @relation("DealPrimaryContact")
   activities Activity[]
   importBatch ImportBatch? @relation("AccountContactImports", fields: [importBatchId], references: [id], onDelete: SetNull)
+  generalNotes AccountContactNote[]
 
   @@index([accountId])
   @@index([importBatchId])
   @@map("account_contacts")
+}
+
+// A free-form running note log per contact — deliberately separate from
+// Activity (which is structured: a type, a subject, duration, outcome).
+// This is the plain scratchpad Zoho's own Notes tab is, not a logged
+// touchpoint, so it's excluded from every analytics function on purpose —
+// don't wire it into salesActivity.ts's notesWritten-style counts.
+model AccountContactNote {
+  id               String   @id @default(uuid())
+  accountContactId String   @map("account_contact_id")
+  authorUserId     String   @map("author_user_id")
+  title            String?
+  body             String
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  accountContact AccountContact @relation(fields: [accountContactId], references: [id], onDelete: Cascade)
+  author         User           @relation(fields: [authorUserId], references: [id])
+
+  @@index([accountContactId, createdAt])
+  @@map("account_contact_notes")
 }
 
 // A raw enquiry before it's qualified into a Deal. Kept thin — fast capture

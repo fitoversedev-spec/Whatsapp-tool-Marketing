@@ -16,6 +16,9 @@ const createSchema = z.object({
   // see docs/DECISIONS.md (Phase 4).
   location: z.string().max(300).optional(),
   meetingUrl: z.string().url().max(500).optional(),
+  // Tags a scheduled reminder as a Meeting/Call/etc — the CRM's "Schedule a
+  // meeting/call" quick actions set this to the matching ActivityType.
+  activityTypeId: z.string().uuid().nullable().optional(),
 });
 
 const listFilterSchema = z.enum(["overdue", "today", "week", "later", "completed", "all"]);
@@ -133,6 +136,7 @@ export async function POST(req: NextRequest) {
       channels: parsed.data.channels ?? [],
       location: parsed.data.location ?? null,
       meetingUrl: parsed.data.meetingUrl ?? null,
+      activityTypeId: parsed.data.activityTypeId ?? null,
     },
     include: {
       conversation: { select: { contactPhone: true, contactName: true } },

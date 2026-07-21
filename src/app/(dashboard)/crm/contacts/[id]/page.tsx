@@ -49,6 +49,12 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     prisma.customerProfile.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
   ]);
 
+  const contactNotes = await prisma.accountContactNote.findMany({
+    where: { accountContactId: contact.id },
+    orderBy: { createdAt: "desc" },
+    include: { author: { select: { name: true } } },
+  });
+
   // Quotations/court designs/product interest all hang off this contact's
   // deals (same as the Deals section above) — none of these 3 models link
   // to AccountContact directly. Deferred in Phase 1 pending exactly this.
@@ -74,6 +80,12 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       },
     }),
   ]);
+
+  const reminders = await prisma.reminder.findMany({
+    where: { dealId: { in: dealIds } },
+    orderBy: [{ completedAt: { sort: "asc", nulls: "first" } }, { dueAt: "asc" }],
+    include: { activityType: { select: { name: true } } },
+  });
 
   return (
     <ContactDetailClient
@@ -122,6 +134,14 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       funnelStages={funnelStages}
       lossReasons={lossReasons}
       customerProfiles={customerProfiles}
+      contactNotes={contactNotes.map((n) => ({
+        id: n.id, title: n.title, body: n.body, createdAt: n.createdAt.toISOString(), authorName: n.author.name,
+      }))}
+      reminders={reminders.map((r) => ({
+        id: r.id, message: r.message, dueAt: r.dueAt.toISOString(), completedAt: r.completedAt?.toISOString() ?? null,
+        completionNote: r.completionNote, location: r.location, meetingUrl: r.meetingUrl,
+        activityTypeName: r.activityType?.name ?? null,
+      }))}
     />
   );
 }

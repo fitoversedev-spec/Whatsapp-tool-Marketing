@@ -120,6 +120,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.accountContact.findMany({
       where: {
+        deletedAt: null,
         OR: [{ name: ilike }, { phone: { contains: raw } }, { email: ilike }],
         ...(isAdmin(user.role) ? {} : { account: { ownerUserId: user.id } }),
       },

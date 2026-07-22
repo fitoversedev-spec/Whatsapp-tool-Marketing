@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
   const contacts = await prisma.accountContact.findMany({
-    where: { id: { in: parsed.data.contactIds } },
+    where: { id: { in: parsed.data.contactIds }, deletedAt: null },
     include: { account: { select: { ownerUserId: true } } },
   });
 

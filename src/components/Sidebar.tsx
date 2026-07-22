@@ -133,7 +133,6 @@ export default function Sidebar({
     { href: "/products", label: "Products" },
     { href: "/portfolio", label: "Portfolio" },
     { href: "/analytics", label: "Broadcast Analytics" },
-    { href: "/team", label: "WhatsApp Sales Analytics" },
     { href: "/media", label: "Media library" },
     { href: "/settings/quotation-rates", label: "Quotation rates" },
     { href: "/connection", label: "Connection" },

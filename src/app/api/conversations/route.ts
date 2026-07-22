@@ -62,6 +62,14 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // See src/app/(dashboard)/inbox/page.tsx for why this is a separate
+  // batched lookup rather than a relation include.
+  const linkedContacts = await prisma.contact.findMany({
+    where: { phone: { in: conversations.map((c) => c.contactPhone) } },
+    select: { phone: true, accountContactId: true },
+  });
+  const accountContactIdByPhone = new Map(linkedContacts.map((c) => [c.phone, c.accountContactId]));
+
   return NextResponse.json({
     conversations: conversations.map((c) => ({
       id: c.id,
@@ -79,6 +87,7 @@ export async function GET(req: NextRequest) {
         name: l.label.name,
         color: l.label.color,
       })),
+      accountContactId: accountContactIdByPhone.get(c.contactPhone) ?? null,
     })),
   });
 }

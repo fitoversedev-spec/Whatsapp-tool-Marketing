@@ -42,7 +42,7 @@ export type DedupeContext = {
 export async function buildDedupeContext(target: ImportTarget): Promise<DedupeContext> {
   if (target === "CONTACTS") {
     const rows = await prisma.accountContact.findMany({
-      where: { phone: { not: null } },
+      where: { phone: { not: null }, deletedAt: null },
       select: { id: true, name: true, phone: true, accountId: true },
     });
     const contactPhoneIndex = new Map<string, AccountContactDuplicateCandidate>();

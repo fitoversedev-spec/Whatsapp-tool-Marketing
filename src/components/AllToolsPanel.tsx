@@ -160,13 +160,6 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
     title: "Admin",
     items: [
       {
-        href: "/team",
-        label: "WhatsApp Sales Analytics",
-        icon: "📈",
-        description: "Per-rep activity, quotes sent, pipeline value, recent actions",
-        adminOnly: true,
-      },
-      {
         href: "/connection",
         label: "Connection",
         icon: "🔌",

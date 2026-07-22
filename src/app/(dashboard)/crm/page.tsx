@@ -68,7 +68,6 @@ export default async function CrmDashboardPage() {
 
           <div className="flex gap-3 text-sm">
             <Link href="/crm/analytics" className="text-wa-dark hover:underline font-medium">Full CRM Analytics →</Link>
-            <Link href="/team" className="text-slate-500 hover:underline">WhatsApp Sales Analytics →</Link>
           </div>
         </div>
       </>

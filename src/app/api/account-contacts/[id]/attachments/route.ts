@@ -15,9 +15,9 @@ export const maxDuration = 60;
 async function loadAuthorized(id: string, userId: string, role: string) {
   const contact = await prisma.accountContact.findUnique({
     where: { id },
-    select: { id: true, account: { select: { ownerUserId: true } } },
+    select: { id: true, deletedAt: true, account: { select: { ownerUserId: true } } },
   });
-  if (!contact) return { error: "not_found" as const, status: 404 };
+  if (!contact || contact.deletedAt) return { error: "not_found" as const, status: 404 };
   if (!isAdmin(role) && contact.account.ownerUserId && contact.account.ownerUserId !== userId) {
     return { error: "forbidden" as const, status: 403 };
   }

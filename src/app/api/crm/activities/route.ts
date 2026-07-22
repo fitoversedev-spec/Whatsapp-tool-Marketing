@@ -76,9 +76,9 @@ export async function POST(req: NextRequest) {
 
   const contact = await prisma.accountContact.findUnique({
     where: { id: parsed.data.accountContactId },
-    select: { id: true, accountId: true, account: { select: { ownerUserId: true } } },
+    select: { id: true, accountId: true, deletedAt: true, account: { select: { ownerUserId: true } } },
   });
-  if (!contact) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!contact || contact.deletedAt) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (!isAdmin(user.role) && contact.account.ownerUserId && contact.account.ownerUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

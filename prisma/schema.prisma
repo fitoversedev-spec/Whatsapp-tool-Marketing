@@ -216,10 +216,17 @@ model Contact {
   name          String?
   allowCampaign Boolean  @default(true) @map("allow_campaign") // consent gate — false = never broadcast
   fields        String   @default("{}") // JSON object of extra columns (location, category, etc.)
+  // Set when someone clicks "Move to CRM" on this contact's conversation in
+  // the Inbox. Nullable — most marketing contacts never become a CRM lead.
+  // @unique makes this a true 1:1: one WhatsApp phone number maps to at
+  // most one CRM person, matching how the reverse ("Sync to WhatsApp
+  // Marketing") direction already treats phone as the identity key.
+  accountContactId String? @unique @map("account_contact_id")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  tags ContactTag[]
+  tags           ContactTag[]
+  accountContact AccountContact? @relation(fields: [accountContactId], references: [id], onDelete: SetNull)
 
   @@map("contacts")
 }
@@ -1141,6 +1148,12 @@ model AccountContact {
   isPrimary Boolean  @default(false) @map("is_primary")
   importBatchId String? @map("import_batch_id")
   createdAt DateTime @default(now()) @map("created_at")
+  // Soft delete, matching Account/Deal's own convention — a hard delete
+  // would hit a bare FK RESTRICT the moment any Deal still points at this
+  // contact as its primaryContactId (that relation has no onDelete set),
+  // so anyone with an active deal could never actually be deleted. Every
+  // read site filters deletedAt: null.
+  deletedAt DateTime? @map("deleted_at")
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   dealsAsPrimary Deal[] @relation("DealPrimaryContact")
@@ -1148,6 +1161,9 @@ model AccountContact {
   importBatch ImportBatch? @relation("AccountContactImports", fields: [importBatchId], references: [id], onDelete: SetNull)
   generalNotes AccountContactNote[]
   attachments AccountContactAttachment[]
+  // The WhatsApp marketing Contact this was linked from, if any — the
+  // other side of Contact.accountContactId.
+  marketingContact Contact?
 
   @@index([accountId])
   @@index([importBatchId])

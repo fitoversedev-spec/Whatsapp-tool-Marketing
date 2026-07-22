@@ -132,6 +132,16 @@ export async function POST(req: NextRequest) {
   }
   if (parsed.data.siteCity) {
     await prisma.deal.update({ where: { id: dealId }, data: { siteCity: parsed.data.siteCity } }).catch(() => null);
+  } else {
+    // No explicit site city on this design — backfill the deal's from its
+    // account's city if it doesn't have one yet (same fallback deal
+    // creation itself applies). A Court Design is often the first real
+    // touch an older/imported deal gets, so this is a natural point to
+    // self-heal a deal that predates that fallback existing.
+    const current = await prisma.deal.findUnique({ where: { id: dealId }, select: { siteCity: true, account: { select: { city: true } } } });
+    if (current && !current.siteCity && current.account.city) {
+      await prisma.deal.update({ where: { id: dealId }, data: { siteCity: current.account.city } }).catch(() => null);
+    }
   }
 
   // Same fix as the quotations route — derive next sequential number

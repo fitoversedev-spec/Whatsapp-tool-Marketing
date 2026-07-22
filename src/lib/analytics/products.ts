@@ -6,6 +6,15 @@ import { prisma } from "@/lib/prisma";
 import type { AnalyticsFilter } from "./types";
 import { MIN_SAMPLE_SIZE } from "./types";
 
+// Same fallback as geography.ts's resolveCity — Deal.siteCity is rarely set
+// directly, but its Account.city almost always is (captured when the
+// contact/company was created or imported), so prefer siteCity when present
+// and fall back to the account's city rather than showing "(unspecified)"
+// for deals that never got a distinct site location typed in.
+function resolveCity(deal: { siteCity: string | null; account: { city: string | null } }): string {
+  return deal.siteCity?.trim() || deal.account.city?.trim() || "(unspecified)";
+}
+
 // Below this conversion rate (won/quoted), a product with enough quoted
 // volume to be meaningful gets flagged. Spec says "flag high-enquiry,
 // low-conversion products" without naming a number — this is a visible
@@ -99,7 +108,7 @@ export async function productAnalytics(filter: AnalyticsFilter): Promise<Product
           outcome: true,
           closedAt: true,
           siteCity: true,
-          account: { select: { customerProfile: { select: { name: true } } } },
+          account: { select: { city: true, customerProfile: { select: { name: true } } } },
         },
       },
     },
@@ -133,7 +142,7 @@ export async function productAnalytics(filter: AnalyticsFilter): Promise<Product
       m.enquiries.add(li.deal.id);
       movementMap.set(key, m);
 
-      const city = li.deal.siteCity?.trim() || "(unspecified)";
+      const city = resolveCity(li.deal);
       const cKey = `${productName}|${city}`;
       const cEntry = cityMap.get(cKey) ?? { wonValue: 0, enquiries: new Set() };
       cEntry.enquiries.add(li.deal.id);
@@ -171,7 +180,7 @@ export async function productAnalytics(filter: AnalyticsFilter): Promise<Product
       m.wonValue += amount;
       movementMap.set(key, m);
 
-      const city = li.deal.siteCity?.trim() || "(unspecified)";
+      const city = resolveCity(li.deal);
       const cKey = `${productName}|${city}`;
       const cEntry = cityMap.get(cKey) ?? { wonValue: 0, enquiries: new Set() };
       cEntry.wonValue += amount;

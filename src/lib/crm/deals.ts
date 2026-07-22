@@ -178,11 +178,42 @@ export async function findOrCreateDealForConversation(args: {
         select: { contactName: true, contactPhone: true },
       })
     : null;
-  const accountName = convo?.contactName?.trim() || args.accountName;
-  const accountId = await resolveAccountId(accountName, args.ownerUserId, convo?.contactPhone ?? null, {
-    customerProfileId: args.customerProfileId,
-    businessType: args.businessType,
-  });
+
+  // If this conversation's phone was already explicitly linked to a CRM
+  // contact (the Inbox's "Move to CRM" button), use that account directly —
+  // skip resolveAccountId's fuzzy name match entirely, since we have an
+  // exact answer instead of a guess. Also attaches the deal's
+  // primaryContactId, which the fuzzy-match path below never sets.
+  const linkedContact = convo?.contactPhone
+    ? await prisma.contact.findUnique({
+        where: { phone: convo.contactPhone },
+        select: { accountContact: { select: { id: true, accountId: true } } },
+      })
+    : null;
+
+  let accountId: string;
+  let primaryContactId: string | null = null;
+  if (linkedContact?.accountContact) {
+    accountId = linkedContact.accountContact.accountId;
+    primaryContactId = linkedContact.accountContact.id;
+    if (args.customerProfileId || args.businessType) {
+      await prisma.account
+        .update({
+          where: { id: accountId },
+          data: {
+            ...(args.customerProfileId ? { customerProfileId: args.customerProfileId } : {}),
+            ...(args.businessType ? { businessType: args.businessType } : {}),
+          },
+        })
+        .catch(() => null);
+    }
+  } else {
+    const accountName = convo?.contactName?.trim() || args.accountName;
+    accountId = await resolveAccountId(accountName, args.ownerUserId, convo?.contactPhone ?? null, {
+      customerProfileId: args.customerProfileId,
+      businessType: args.businessType,
+    });
+  }
 
   const year = new Date().getFullYear();
   const stageId = await defaultFunnelStageId();
@@ -197,16 +228,19 @@ export async function findOrCreateDealForConversation(args: {
           code: buildDealCode(year, nextSeq - 1),
           title: args.dealTitle,
           accountId,
+          primaryContactId,
           ownerUserId: args.ownerUserId,
           currentStageId: stageId,
           conversationId: args.conversationId,
           leadSourceId: args.leadSourceId ?? null,
-          // This whole function is the legacy Quotations/Court Designs/
-          // Reminders deal-creation path — "whatsapp" regardless of whether
-          // conversationId ended up set, since a standalone quote created
-          // without a threaded conversation is still that same subsystem,
-          // not a CRM-page action.
-          dealChannel: "whatsapp",
+          // Used to hardcode "whatsapp" here (this function backs the
+          // Quotations/Court Designs/Reminders deal-creation path, reached
+          // from the Inbox rather than the CRM UI) — changed to "crm" once
+          // Team Performance (the one thing that ever looked at
+          // dealChannel:"whatsapp" deals as a separate bucket) was removed
+          // and every deal creation path was consolidated onto one channel.
+          // See docs/DECISIONS.md.
+          dealChannel: "crm",
         },
       });
       break;

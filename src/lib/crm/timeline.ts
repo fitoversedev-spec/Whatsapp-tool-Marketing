@@ -64,9 +64,9 @@ export async function getUnifiedTimeline(filter: TimelineFilter, limit = 50): Pr
     if (filter.accountContactId) {
       const contact = await prisma.accountContact.findUnique({
         where: { id: filter.accountContactId },
-        select: { name: true, createdAt: true, account: { select: { owner: { select: { name: true } } } } },
+        select: { name: true, createdAt: true, deletedAt: true, account: { select: { owner: { select: { name: true } } } } },
       });
-      return contact ? { id: `created-${filter.accountContactId}`, kind: "created" as const, title: `Contact created — ${contact.name}`, detail: null, timestamp: contact.createdAt.toISOString(), ownerName: contact.account.owner?.name ?? "—" } : null;
+      return contact && !contact.deletedAt ? { id: `created-${filter.accountContactId}`, kind: "created" as const, title: `Contact created — ${contact.name}`, detail: null, timestamp: contact.createdAt.toISOString(), ownerName: contact.account.owner?.name ?? "—" } : null;
     }
     if (filter.accountId) {
       const account = await prisma.account.findUnique({

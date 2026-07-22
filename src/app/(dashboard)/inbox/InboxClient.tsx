@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, FormEvent } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import NotesPanel from "./NotesPanel";
 import RemindersPanel from "./RemindersPanel";
@@ -38,6 +39,7 @@ type Conversation = {
   status: string;
   labelIds: string[];
   labels: ConversationLabel[];
+  accountContactId: string | null;
 };
 
 type Message = {
@@ -59,13 +61,21 @@ type AssignableUser = { id: string; name: string; role: Role; email: string };
 export default function InboxClient({
   currentUser,
   initialConversations,
+  initialSelectedId,
 }: {
   currentUser: { id: string; name: string; role: Role };
   initialConversations: Conversation[];
+  initialSelectedId?: string | null;
 }) {
   const toast = useToast();
+  const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [movingToCrm, setMovingToCrm] = useState(false);
+  // "Open chat" links elsewhere (Bot Leads, Contact Timeline) pass this via
+  // ?conversation= on /inbox — see page.tsx, which also makes sure the
+  // target conversation is present in initialConversations even if it
+  // wasn't among the default 100 most-recently-active ones.
+  const [selected, setSelected] = useState<string | null>(initialSelectedId ?? null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
@@ -316,6 +326,27 @@ export default function InboxClient({
   const current = conversations.find((c) => c.id === selected);
   const isClosed = current?.status === "closed";
 
+  async function moveToCrm() {
+    if (!current) return;
+    if (current.accountContactId) {
+      router.push(`/crm/contacts/${current.accountContactId}`);
+      return;
+    }
+    setMovingToCrm(true);
+    const res = await fetch(`/api/conversations/${current.id}/move-to-crm`, { method: "POST" });
+    setMovingToCrm(false);
+    if (!res.ok) {
+      toast.error("Could not move to CRM");
+      return;
+    }
+    const data: { accountContactId: string; matchedExisting: boolean } = await res.json();
+    setConversations((prev) =>
+      prev.map((c) => (c.id === current.id ? { ...c, accountContactId: data.accountContactId } : c))
+    );
+    toast.success(data.matchedExisting ? "Linked to existing CRM contact" : "Moved to CRM");
+    router.push(`/crm/contacts/${data.accountContactId}`);
+  }
+
   return (
     <div className="flex flex-1 lg:h-screen h-[calc(100vh-3.5rem)] lg:items-stretch">
       {/* Conversation list */}
@@ -489,6 +520,19 @@ export default function InboxClient({
                   title="Reminders"
                 >
                   ⏰<span className="hidden sm:inline ml-1">Reminders</span>
+                </button>
+                <button
+                  onClick={moveToCrm}
+                  disabled={movingToCrm}
+                  className={`px-2.5 py-1.5 text-xs rounded-md font-medium disabled:opacity-50 ${
+                    current.accountContactId ? "text-wa-dark hover:bg-wa-green/10" : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                  title={current.accountContactId ? "Open this contact in the CRM" : "Create/link a CRM contact for this conversation"}
+                >
+                  {current.accountContactId ? "🗂️" : "➕"}
+                  <span className="hidden sm:inline ml-1">
+                    {movingToCrm ? "Moving..." : current.accountContactId ? "View in CRM" : "Move to CRM"}
+                  </span>
                 </button>
                 <button
                   onClick={() => setShowQuote(true)}

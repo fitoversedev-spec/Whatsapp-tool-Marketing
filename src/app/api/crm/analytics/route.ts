@@ -1,20 +1,15 @@
-// CRM-wide analytics — reuses 6 of the same 9 analytics functions Team
-// Performance's API calls, but scoped to ALL deals regardless of source
-// (not just WhatsApp-linked ones). Admin-only, same as Team Performance
-// (/team) — Sales does not get a self-scoped view here.
-// None of these functions filter by conversationId/WhatsApp-only —
-// confirmed real reuse, not a parallel analytics engine.
+// CRM-wide analytics — the single analytics surface in the app (Team
+// Performance / "WhatsApp Sales Analytics", the older /team page this was
+// once one of two parallel systems alongside, was removed once every deal
+// creation path started routing through the CRM contact model — see
+// docs/DECISIONS.md). Admin-only.
 //
-// Perf: customerSegments/timelineMetrics/forecast were originally called
-// here too (all 9, alongside geography), but CrmAnalyticsClient.tsx's tabs
-// never read customers, timelines, or forecast off the response — only
-// salesActivity, funnel, products, sources, stageVelocity, and (since the
-// Geography tab was added) geography. Those 3 still-unused calls (incl.
-// timelineMetrics, which does an unfiltered deal.findMany — see its own
-// file) ran and were serialized into the JSON on every load/date-range
-// change for nothing. Team Performance's own route
-// (src/app/api/team/analytics/route.ts) still calls all 4 of the original
-// extras — its client actually renders them — so they stay there.
+// Perf: customerSegments/timelineMetrics/forecast used to also get called
+// here (Team Performance's client rendered them; this route's client,
+// CrmAnalyticsClient.tsx, never did), so they were dropped from this route
+// as dead weight before Team Performance itself was deleted entirely along
+// with the underlying customers.ts/forecast.ts files and timelineMetrics()
+// — see docs/DECISIONS.md.
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
@@ -55,13 +50,12 @@ export async function GET(req: NextRequest) {
   const ownerParam = req.nextUrl.searchParams.get("owner");
   const ownerIds = ownerParam && ownerParam !== "all" ? [ownerParam] : undefined;
 
-  // dealChannel: "crm" is what makes this route actually CRM-only — without
-  // it every one of these 5 functions (shared verbatim with /api/team/
-  // analytics) counts every Deal regardless of source, so the pre-CRM/
-  // WhatsApp-originated deals (all 32 real deals as of 2026-07-20, see
-  // docs/DECISIONS.md) leaked into every screen here. Team Performance's
-  // own route intentionally never sets this — it's supposed to show
-  // everything.
+  // dealChannel: "crm" is now mostly a defensive filter rather than a real
+  // split — every deal creation path stamps "crm" going forward (see
+  // findOrCreateDealForConversation), and the ~32 legacy dealChannel:
+  // "whatsapp" deals from before that change are soft-deleted (see
+  // docs/DECISIONS.md) — but keeping the filter costs nothing and guards
+  // against any future path that forgets to set it.
   const filter = { from, to, ownerIds, dealChannel: "crm" as const };
 
   const [salesActivityRows, funnel, products, sources, stageVelocityRows, geo] = await Promise.all([

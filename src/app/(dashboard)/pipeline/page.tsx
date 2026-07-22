@@ -32,7 +32,12 @@ export default async function PipelinePage({
   const [stages, conversations, salesUsers, lossReasons] = await Promise.all([
     getPipelineStages(),
     prisma.conversation.findMany({
-      where: ownerWhere,
+      // Every conversation defaults to pipelineStage:"new" the moment it's
+      // created (Conversation.pipelineStage's own schema default) — without
+      // this, raw chats that were never actually worked into a deal showed
+      // up on the board alongside real ones. Scoped to the same dealChannel
+      // the rest of the CRM now uses (see docs/DECISIONS.md).
+      where: { ...ownerWhere, deals: { some: { deletedAt: null, dealChannel: "crm" } } },
       include: {
         assignedTo: { select: { name: true } },
         messages: {

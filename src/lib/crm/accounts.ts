@@ -83,7 +83,7 @@ export async function findAccountContactDuplicate(
         if (byPhone) return byPhone;
       } else {
         const withPhones = await prisma.accountContact.findMany({
-          where: { phone: { not: null } },
+          where: { phone: { not: null }, deletedAt: null },
           select: { id: true, name: true, phone: true, accountId: true },
         });
         const byPhone = withPhones.find((c) => c.phone && normalizePhone(c.phone) === canonical);
@@ -93,7 +93,7 @@ export async function findAccountContactDuplicate(
   }
   if (input.accountId) {
     const byNameInCompany = await prisma.accountContact.findFirst({
-      where: { accountId: input.accountId, name: { equals: input.name, mode: "insensitive" } },
+      where: { accountId: input.accountId, name: { equals: input.name, mode: "insensitive" }, deletedAt: null },
       select: { id: true, name: true, phone: true, accountId: true },
     });
     if (byNameInCompany) return byNameInCompany;

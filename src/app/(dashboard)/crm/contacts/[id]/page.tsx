@@ -17,7 +17,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       },
     },
   });
-  if (!contact) notFound();
+  if (!contact || contact.deletedAt) notFound();
   if (!isAdmin(user.role) && contact.account.ownerUserId && contact.account.ownerUserId !== user.id) notFound();
 
   const timeline = await getUnifiedTimeline({ accountContactId: contact.id });

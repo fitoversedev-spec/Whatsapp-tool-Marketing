@@ -12,11 +12,9 @@ export type AnalyticsFilter = {
   customerProfileIds?: string[];
   stageIds?: string[];
   outcomes?: ("WON" | "LOST" | "DROPPED")[];
-  // Set only by /api/crm/analytics, to exclude the pre-CRM/WhatsApp-sourced
-  // Deal rows (see Deal.dealChannel's own schema comment). Left unset by
-  // /api/team/analytics, which is meant to keep showing everything —
-  // every query below treats an unset dealChannel as "no filter", so this
-  // is additive and changes no existing caller's behavior.
+  // Set by /api/crm/analytics as a defensive filter (see Deal.dealChannel's
+  // own schema comment) — every query below treats an unset dealChannel as
+  // "no filter" for any caller that doesn't need it.
   dealChannel?: "whatsapp" | "crm";
 };
 

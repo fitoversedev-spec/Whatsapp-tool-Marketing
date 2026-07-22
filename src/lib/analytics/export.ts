@@ -1,6 +1,4 @@
-// Generalizes TeamAnalyticsClient.tsx's hand-rolled downloadCsv() (wired
-// into only 4 of its 9 tabs) into a shared CSV + XLSX exporter, usable from
-// any analytics table on either page.
+// Shared CSV + XLSX exporter, usable from any analytics table.
 import * as XLSX from "xlsx";
 
 export function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {

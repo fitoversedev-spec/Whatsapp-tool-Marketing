@@ -9,7 +9,7 @@ async function loadAuthorized(id: string, userId: string, role: string) {
     where: { id },
     include: { account: { select: { id: true, name: true, city: true, ownerUserId: true } } },
   });
-  if (!contact) return { error: "not_found" as const, status: 404 };
+  if (!contact || contact.deletedAt) return { error: "not_found" as const, status: 404 };
   if (!isAdmin(role) && contact.account.ownerUserId && contact.account.ownerUserId !== userId) {
     return { error: "forbidden" as const, status: 403 };
   }
@@ -95,14 +95,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json({ contact: updated });
 }
 
+// Soft delete (deletedAt, not a real row delete) — sales can delete a
+// contact on an account they own, admin can delete any, same owner-or-admin
+// scoping loadAuthorized already applies to GET/PATCH. A hard delete would
+// hit a bare FK RESTRICT the instant any Deal still points at this contact
+// as primaryContactId (see the schema comment), so soft delete isn't just
+// the safer choice here, it's the only one that reliably works.
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
-  if (!user || !isAdmin(user.role)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const res = await loadAuthorized(params.id, user.id, user.role);
   if ("error" in res) return NextResponse.json({ error: res.error }, { status: res.status });
 
-  await prisma.accountContact.delete({ where: { id: params.id } });
+  await prisma.accountContact.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
   return NextResponse.json({ ok: true });
 }

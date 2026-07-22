@@ -60,13 +60,13 @@ const ROWS: Row[] = [
     cell: "Analytics — self",
     expected: { sales: "✓", manager: "✓", management: "✓", admin: "✓" },
     verdictOverride: "NOT_IMPLEMENTED",
-    note: "/team (all 9 analytics screens) is gated role !== 'admin' — SALES/MANAGER/MANAGEMENT are blocked outright, including from seeing their own numbers.",
+    note: "/crm/analytics (the one analytics surface, since /team was removed — see docs/DECISIONS.md) is gated role !== 'admin' — SALES/MANAGER/MANAGEMENT are blocked outright, including from seeing their own numbers.",
   },
   {
     cell: "Analytics — team/company",
     expected: { sales: "—", manager: "own office", management: "✓ all", admin: "✓" },
     verdictOverride: "NOT_IMPLEMENTED",
-    note: "Same /team gate as 'Analytics — self' (role !== 'admin') — MANAGER office-scoped and MANAGEMENT company-wide access are two distinct tiers that gate can't express, not implemented.",
+    note: "Same /crm/analytics gate as 'Analytics — self' (role !== 'admin') — MANAGER office-scoped and MANAGEMENT company-wide access are two distinct tiers that gate can't express, not implemented.",
   },
   {
     cell: "Manage taxonomies",

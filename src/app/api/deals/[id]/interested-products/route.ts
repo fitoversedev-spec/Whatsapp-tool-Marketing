@@ -26,10 +26,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const deal = await prisma.deal.findUnique({ where: { id: params.id } });
+  const deal = await prisma.deal.findUnique({ where: { id: params.id }, include: { account: { select: { city: true } } } });
   if (!deal || deal.deletedAt) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (!isAdmin(user.role) && deal.ownerUserId && deal.ownerUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // DealLineItem has no location field of its own — product interest is
+  // grouped by the parent Deal's city everywhere it's analyzed (products.ts).
+  // Backfill the deal's site city from its account here if it's missing,
+  // same self-heal court-images/route.ts applies — recording interest is
+  // often the first real touch an older/imported deal gets.
+  if (!deal.siteCity && deal.account.city) {
+    await prisma.deal.update({ where: { id: deal.id }, data: { siteCity: deal.account.city } }).catch(() => null);
   }
 
   const parsed = schema.safeParse(await req.json().catch(() => null));

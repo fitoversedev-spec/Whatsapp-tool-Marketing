@@ -35,6 +35,7 @@ export default function AccountContactsClient({
   funnelStages,
   users,
   dateRange,
+  repFilter,
 }: {
   isAdmin: boolean;
   contacts: Contact[];
@@ -44,12 +45,39 @@ export default function AccountContactsClient({
   funnelStages: StageOption[];
   users: Option[];
   dateRange: DateRange | null;
+  repFilter: string;
 }) {
   const router = useRouter();
   const toast = useToast();
 
+  // Shared so changing one filter (date range or rep) never drops the other
+  // — each call only overrides the piece it's changing, current values of
+  // everything else carry forward from props.
+  function navigate(next: { from?: string; to?: string; rep?: string }) {
+    const params = new URLSearchParams();
+    const from = next.from ?? dateRange?.from;
+    const to = next.to ?? dateRange?.to;
+    const rep = next.rep ?? repFilter;
+    if (from && to) {
+      params.set("from", from);
+      params.set("to", to);
+    }
+    if (rep) params.set("rep", rep);
+    router.push(`/crm/contacts${params.toString() ? `?${params}` : ""}`);
+  }
+
   function applyDateRange(range: DateRange) {
-    router.push(`/crm/contacts?from=${range.from}&to=${range.to}`);
+    navigate({ from: range.from, to: range.to });
+  }
+
+  function clearDateRange() {
+    const params = new URLSearchParams();
+    if (repFilter) params.set("rep", repFilter);
+    router.push(`/crm/contacts${params.toString() ? `?${params}` : ""}`);
+  }
+
+  function applyRepFilter(rep: string) {
+    navigate({ rep });
   }
   const [q, setQ] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -57,6 +85,8 @@ export default function AccountContactsClient({
   const [bulkSyncing, setBulkSyncing] = useState(false);
   const [reassignTo, setReassignTo] = useState("");
   const [reassigning, setReassigning] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [filterField, setFilterField] = useState("");
   const [filterCondition, setFilterCondition] = useState<"contains" | "equals" | "not_empty">("contains");
   const [filterValue, setFilterValue] = useState("");
@@ -127,12 +157,59 @@ export default function AccountContactsClient({
     router.refresh();
   }
 
+  async function deleteOne(id: string, name: string) {
+    if (!confirm(`Delete ${name}? This removes them from every list — recoverable by an admin if needed, but not from here.`)) return;
+    setDeletingId(id);
+    const res = await fetch(`/api/account-contacts/${id}`, { method: "DELETE" });
+    setDeletingId(null);
+    if (!res.ok) {
+      toast.error("Could not delete");
+      return;
+    }
+    toast.success(`${name} deleted`);
+    setSelected((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    router.refresh();
+  }
+
+  async function deleteSelected() {
+    const count = selected.size;
+    if (!confirm(`Delete ${count} contact${count === 1 ? "" : "s"}? This removes them from every list — recoverable by an admin if needed, but not from here.`)) return;
+    setBulkDeleting(true);
+    const res = await fetch("/api/account-contacts/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactIds: Array.from(selected) }),
+    });
+    setBulkDeleting(false);
+    if (!res.ok) {
+      toast.error("Could not delete");
+      return;
+    }
+    const data = await res.json();
+    const parts: string[] = [];
+    if (data.deleted > 0) parts.push(`${data.deleted} deleted`);
+    if (data.skippedForbidden > 0) parts.push(`${data.skippedForbidden} skipped — not yours`);
+    if (data.deleted > 0) toast.success(parts.join(", "));
+    else toast.error(parts.join(", ") || "Nothing deleted");
+    setSelected(new Set());
+    router.refresh();
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <PageHeader
         large
         title="Contacts"
-        description={`${contacts.length} people — separate from the WhatsApp broadcast contact list`}
+        description={
+          repFilter
+            ? `${contacts.length} people handled by ${users.find((u) => u.id === repFilter)?.name ?? "this rep"}`
+            : `${contacts.length} people — separate from the WhatsApp broadcast contact list`
+        }
         action={
           <button
             onClick={() => setShowNew(true)}
@@ -153,9 +230,19 @@ export default function AccountContactsClient({
           />
           <DateRangePicker value={dateRange ?? defaultDateRange(30)} onApply={applyDateRange} />
           {dateRange && (
-            <button onClick={() => router.push("/crm/contacts")} className="text-xs text-slate-500 hover:underline">
+            <button onClick={clearDateRange} className="text-xs text-slate-500 hover:underline">
               Clear date filter
             </button>
+          )}
+          {isAdmin && (
+            <select
+              value={repFilter}
+              onChange={(e) => applyRepFilter(e.target.value)}
+              className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+            >
+              <option value="">All reps</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
           )}
           {knownFieldKeys.length > 0 && (
             <>
@@ -207,6 +294,13 @@ export default function AccountContactsClient({
                 </button>
               </div>
             )}
+            <button
+              onClick={deleteSelected}
+              disabled={bulkDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white font-medium px-3 py-1 rounded-md text-xs disabled:opacity-50 border-l border-wa-green/30 pl-2 ml-1"
+            >
+              {bulkDeleting ? "Deleting..." : `Delete ${selected.size}`}
+            </button>
             <button onClick={() => setSelected(new Set())} className="text-xs text-slate-500 hover:underline">
               Clear
             </button>
@@ -227,6 +321,7 @@ export default function AccountContactsClient({
               <th className="px-4 py-2.5 font-semibold">Phone</th>
               <th className="px-4 py-2.5 font-semibold">Email</th>
               {isAdmin && <th className="px-4 py-2.5 font-semibold">Owner</th>}
+              <th className="px-4 py-2.5 font-semibold w-8"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -252,11 +347,22 @@ export default function AccountContactsClient({
                     {users.find((u) => u.id === c.accountOwnerUserId)?.name ?? "—"}
                   </td>
                 )}
+                <td className="px-4 py-2.5 text-right">
+                  <button
+                    onClick={() => deleteOne(c.id, c.name)}
+                    disabled={deletingId === c.id}
+                    aria-label={`Delete ${c.name}`}
+                    title="Delete contact"
+                    className="text-slate-400 hover:text-red-600 disabled:opacity-50"
+                  >
+                    🗑️
+                  </button>
+                </td>
               </tr>
             ))}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 7 : 6} className="px-4 py-8 text-center text-slate-400">No contacts found.</td>
+                <td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-slate-400">No contacts found.</td>
               </tr>
             )}
           </tbody>

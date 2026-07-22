@@ -144,6 +144,7 @@ export async function GET(req: NextRequest) {
   const accountId = searchParams.get("accountId");
 
   const where: Record<string, unknown> = {
+    deletedAt: null,
     ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
     ...(accountId ? { accountId } : {}),
   };

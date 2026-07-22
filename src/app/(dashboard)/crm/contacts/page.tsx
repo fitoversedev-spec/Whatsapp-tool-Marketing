@@ -4,11 +4,17 @@ import { isAdmin } from "@/lib/rbac";
 import { parseFields } from "@/lib/contacts";
 import AccountContactsClient from "./AccountContactsClient";
 
-export default async function AccountContactsPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
+export default async function AccountContactsPage({ searchParams }: { searchParams: { from?: string; to?: string; rep?: string } }) {
   const user = await requireUser();
   const dateRange = searchParams.from && searchParams.to ? { from: searchParams.from, to: searchParams.to } : null;
+  // Admin-only — sales already only ever sees their own contacts (the
+  // ownerUserId branch just below), so a rep filter is only meaningful for
+  // admin's cross-team view. Answers "how many is this rep handling" via the
+  // same {contacts.length} count the page already shows.
+  const repFilter = isAdmin(user.role) ? searchParams.rep : undefined;
   const where = {
-    ...(isAdmin(user.role) ? {} : { account: { ownerUserId: user.id } }),
+    deletedAt: null,
+    ...(isAdmin(user.role) ? (repFilter ? { account: { ownerUserId: repFilter } } : {}) : { account: { ownerUserId: user.id } }),
     ...(dateRange ? { createdAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
   };
 
@@ -59,6 +65,7 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
       funnelStages={funnelStages}
       users={users}
       dateRange={dateRange}
+      repFilter={repFilter ?? ""}
     />
   );
 }

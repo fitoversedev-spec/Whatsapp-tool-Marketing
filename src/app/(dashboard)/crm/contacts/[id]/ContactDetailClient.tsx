@@ -98,7 +98,7 @@ export default function ContactDetailClient({
 }) {
   const router = useRouter();
   const toast = useToast();
-  const [tab, setTab] = useState<"overview" | "timeline">("overview");
+  const [tab, setTab] = useState<"overview" | "calls-meetings" | "timeline">("overview");
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [pendingAction, setPendingAction] = useState<"quote" | "court" | "deal" | "meeting" | "call" | null>(null);
   const [scheduleDealId, setScheduleDealId] = useState<string | null>(null);
@@ -357,10 +357,76 @@ export default function ContactDetailClient({
   }
   const meetingRows = buildTypedRows(MEETING_TYPE_NAMES);
   const callRows = buildTypedRows(CALL_TYPE_NAMES);
+  // Merged, re-sorted view of both — every meeting and call from contact
+  // creation to now, one chronological feed instead of two separate lists,
+  // for the "Calls & Meetings" tab specifically requested as its own view
+  // (distinct from the Overview sidebar's per-type Meetings/Calls sections,
+  // which stay as they are).
+  const callsAndMeetingsRows: (TypedTimelineRow & { typeLabel: "CALL" | "MEETING" })[] = [
+    ...meetingRows.map((r) => ({ ...r, typeLabel: "MEETING" as const })),
+    ...callRows.map((r) => ({ ...r, typeLabel: "CALL" as const })),
+  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  // Shared renderer for the Meetings/Calls sections — a plain function
-  // (not a component) so it closes over the complete-with-note state
-  // directly instead of prop-drilling it through.
+  // Shared row card — used by both the Overview sidebar's single-type
+  // Meetings/Calls sections and the combined Calls & Meetings tab. Only the
+  // latter passes typeLabel (it mixes both types, so each row needs its own
+  // badge); the sidebar sections already know which type they are from
+  // their own heading.
+  function renderTypedRow(r: TypedTimelineRow & { typeLabel?: "CALL" | "MEETING" }) {
+    return (
+      <div key={`${r.kind}-${r.id}`} className="rounded-lg border border-slate-100 px-3 py-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${
+                  r.kind === "logged" ? "bg-wa-green/10 text-wa-dark" : r.completed ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {r.kind === "logged" ? "Logged" : r.completed ? "Completed" : "Scheduled"}
+              </span>
+              {r.typeLabel && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide bg-slate-100 text-slate-600">{r.typeLabel}</span>
+              )}
+              <span className={`text-sm font-medium ${r.kind === "scheduled" && r.completed ? "text-slate-500 line-through" : "text-slate-900"}`}>{r.title}</span>
+            </div>
+            {r.detail && <div className="text-sm text-slate-600 mt-0.5">{r.detail}</div>}
+            <div className="text-xs text-slate-500 mt-0.5">{fmtDateTime(r.timestamp)}</div>
+          </div>
+          {r.kind === "scheduled" && !r.completed && completingReminderId !== r.id && (
+            <button
+              onClick={() => { setCompletingReminderId(r.id); setCompletionNoteDraft(""); }}
+              className="text-xs font-medium text-wa-dark hover:underline shrink-0"
+            >
+              Mark complete
+            </button>
+          )}
+        </div>
+        {completingReminderId === r.id && (
+          <div className="mt-2 pt-2 border-t border-slate-100">
+            <textarea
+              value={completionNoteDraft}
+              onChange={(e) => setCompletionNoteDraft(e.target.value)}
+              rows={2}
+              autoFocus
+              placeholder="What happened? (optional)"
+              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+            />
+            <div className="flex gap-2 justify-end mt-1.5">
+              <button onClick={() => setCompletingReminderId(null)} className="text-xs font-medium text-slate-700 px-2 py-1">Cancel</button>
+              <button onClick={() => completeReminder(r.id)} disabled={completingBusy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50">
+                {completingBusy ? "Saving..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Shared wrapper for the Meetings/Calls sections — a plain function (not
+  // a component) so it closes over the complete-with-note state directly
+  // instead of prop-drilling it through.
   function renderTypedSection(sectionId: string, label: string, rows: TypedTimelineRow[], onAdd: () => void) {
     return (
       <div id={sectionId} className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
@@ -373,54 +439,7 @@ export default function ContactDetailClient({
         {rows.length === 0 ? (
           <p className="text-sm text-slate-400">Nothing here yet.</p>
         ) : (
-          <div className="space-y-2">
-            {rows.map((r) => (
-              <div key={`${r.kind}-${r.id}`} className="rounded-lg border border-slate-100 px-3 py-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span
-                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${
-                          r.kind === "logged" ? "bg-wa-green/10 text-wa-dark" : r.completed ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"
-                        }`}
-                      >
-                        {r.kind === "logged" ? "Logged" : r.completed ? "Completed" : "Scheduled"}
-                      </span>
-                      <span className={`text-sm font-medium ${r.kind === "scheduled" && r.completed ? "text-slate-500 line-through" : "text-slate-900"}`}>{r.title}</span>
-                    </div>
-                    {r.detail && <div className="text-sm text-slate-600 mt-0.5">{r.detail}</div>}
-                    <div className="text-xs text-slate-500 mt-0.5">{fmtDateTime(r.timestamp)}</div>
-                  </div>
-                  {r.kind === "scheduled" && !r.completed && completingReminderId !== r.id && (
-                    <button
-                      onClick={() => { setCompletingReminderId(r.id); setCompletionNoteDraft(""); }}
-                      className="text-xs font-medium text-wa-dark hover:underline shrink-0"
-                    >
-                      Mark complete
-                    </button>
-                  )}
-                </div>
-                {completingReminderId === r.id && (
-                  <div className="mt-2 pt-2 border-t border-slate-100">
-                    <textarea
-                      value={completionNoteDraft}
-                      onChange={(e) => setCompletionNoteDraft(e.target.value)}
-                      rows={2}
-                      autoFocus
-                      placeholder="What happened? (optional)"
-                      className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
-                    />
-                    <div className="flex gap-2 justify-end mt-1.5">
-                      <button onClick={() => setCompletingReminderId(null)} className="text-xs font-medium text-slate-700 px-2 py-1">Cancel</button>
-                      <button onClick={() => completeReminder(r.id)} disabled={completingBusy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50">
-                        {completingBusy ? "Saving..." : "Confirm"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <div className="space-y-2">{rows.map((r) => renderTypedRow(r))}</div>
         )}
       </div>
     );
@@ -567,15 +586,15 @@ export default function ContactDetailClient({
       </div>
 
       <div className="flex gap-1 border-b border-slate-200 mb-5">
-        {(["overview", "timeline"] as const).map((t) => (
+        {(["overview", "calls-meetings", "timeline"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
               tab === t ? "border-wa-green text-wa-dark" : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
-            {t === "overview" ? "Overview" : "Timeline"}
+            {t === "overview" ? "Overview" : t === "calls-meetings" ? "Calls & Meetings" : "Timeline"}
           </button>
         ))}
       </div>
@@ -583,6 +602,28 @@ export default function ContactDetailClient({
       {tab === "timeline" ? (
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <UnifiedTimeline entries={timeline} />
+        </div>
+      ) : tab === "calls-meetings" ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-base font-semibold text-slate-900">
+              Calls &amp; Meetings <span className="text-slate-400 font-normal">{callsAndMeetingsRows.length}</span>
+            </h3>
+            <div className="flex gap-2">
+              <button onClick={() => onQuickAction("meeting")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+                + Meeting
+              </button>
+              <button onClick={() => onQuickAction("call")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+                + Call
+              </button>
+            </div>
+          </div>
+          <p className="text-sm text-slate-600 mb-3">Every meeting and call for this contact, scheduled and logged, from first contact to now</p>
+          {callsAndMeetingsRows.length === 0 ? (
+            <p className="text-sm text-slate-400">No meetings or calls yet.</p>
+          ) : (
+            <div className="space-y-2">{callsAndMeetingsRows.map((r) => renderTypedRow(r))}</div>
+          )}
         </div>
       ) : (
         <div className="flex gap-6">

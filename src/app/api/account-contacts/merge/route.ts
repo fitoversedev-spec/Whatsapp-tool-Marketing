@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   const primary = await prisma.accountContact.findUnique({ where: { id: primaryId } });
-  if (!primary) return NextResponse.json({ error: "primary not found" }, { status: 404 });
+  if (!primary || primary.deletedAt) return NextResponse.json({ error: "primary not found" }, { status: 404 });
 
   await mergeAccountContacts(primaryId, secondaryIds);
 

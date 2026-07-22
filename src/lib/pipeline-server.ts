@@ -21,6 +21,7 @@ export async function getPipelineStages(): Promise<PipelineStage[]> {
   });
   return stages.map((s) => ({
     id: s.slug,
+    stageId: s.id,
     label: s.name,
     color: s.colorHex ?? "#64748b",
     type: s.stageType as PipelineStage["type"],

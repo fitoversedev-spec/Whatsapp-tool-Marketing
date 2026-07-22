@@ -21,8 +21,9 @@ import { stageVisual, daysSince, type PipelineStage } from "@/lib/pipeline";
 import type { Role } from "@/lib/rbac";
 
 type Card = {
-  id: string;
-  contactPhone: string;
+  id: string; // Deal.id
+  dealCode: string;
+  contactPhone: string | null; // not every deal has a primary contact with a phone, or a conversation
   contactName: string | null;
   pipelineStage: string;
   stageChangedAt: string | null;
@@ -32,6 +33,10 @@ type Card = {
   assignedToName: string | null;
   assignedToUserId: string | null;
   lastMessage: { body: string; direction: string; createdAt: string } | null;
+  // Only set when this deal has a real WhatsApp thread behind it — gates
+  // whether clicking the card opens the conversation drawer or navigates to
+  // the Deal page instead.
+  conversationId: string | null;
   createdAt: string;
 };
 
@@ -85,7 +90,7 @@ export default function PipelineClient({
     return cards.filter(
       (c) =>
         (c.contactName ?? "").toLowerCase().includes(q) ||
-        c.contactPhone.includes(q) ||
+        (c.contactPhone ?? "").includes(q) ||
         (c.lastMessage?.body ?? "").toLowerCase().includes(q)
     );
   }, [cards, search]);
@@ -123,6 +128,19 @@ export default function PipelineClient({
 
   const activeCard = activeId ? cards.find((c) => c.id === activeId) : null;
 
+  // A deal with a real WhatsApp thread behind it opens the conversation
+  // drawer, same as always; a deal created straight in the CRM (no
+  // conversation — the majority now that "Move to CRM" is the intended
+  // flow) has nothing for that drawer to show, so it goes to the Deal page
+  // instead.
+  function handleCardClick(card: Card) {
+    if (card.conversationId) {
+      setDrawerCardId(card.conversationId);
+    } else {
+      router.push(`/deals/${card.id}`);
+    }
+  }
+
   // Left-side roster — everyone the current owner filter matches, as one
   // flat list, regardless of which of the 13 stage columns they're
   // currently sitting in. With that many columns, finding a specific
@@ -139,8 +157,14 @@ export default function PipelineClient({
   async function moveCard(
     cardId: string,
     toStage: string,
-    extras?: { dealValue?: number; lostReason?: string; lossReasonId?: string; expectedCloseAt?: string }
+    extras?: { wonValue?: number; lossReasonNote?: string; lossReasonId?: string; expectedCloseAt?: string }
   ) {
+    // toStage is a FunnelStage.slug (dnd-kit droppable id, matches
+    // stage.id) — POST /api/deals/[id]/stage needs the real FunnelStage
+    // uuid instead, resolved from the same stages list.
+    const targetStage = stages.find((s) => s.id === toStage);
+    if (!targetStage) return;
+
     const prev = cards;
     setCards((curr) =>
       curr.map((c) =>
@@ -149,18 +173,18 @@ export default function PipelineClient({
               ...c,
               pipelineStage: toStage,
               stageChangedAt: new Date().toISOString(),
-              ...(extras?.dealValue !== undefined && { dealValue: String(extras.dealValue) }),
-              ...(extras?.lostReason !== undefined && { lostReason: extras.lostReason }),
+              ...(extras?.wonValue !== undefined && { dealValue: String(extras.wonValue) }),
+              ...(extras?.lossReasonNote !== undefined && { lostReason: extras.lossReasonNote }),
               ...(extras?.expectedCloseAt !== undefined && { expectedCloseAt: extras.expectedCloseAt }),
             }
           : c
       )
     );
     try {
-      const res = await fetch(`/api/conversations/${cardId}/stage`, {
+      const res = await fetch(`/api/deals/${cardId}/stage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toStage, ...extras }),
+        body: JSON.stringify({ toStageId: targetStage.stageId, ...extras }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -242,7 +266,7 @@ export default function PipelineClient({
             onDragEnd={onDragEnd}
           >
             <div className="flex gap-4 items-start">
-              <AssignedRosterPanel cards={rosterCards} onCardClick={setDrawerCardId} />
+              <AssignedRosterPanel cards={rosterCards} onCardClick={handleCardClick} />
               <div className="flex gap-4 overflow-x-auto pb-4 flex-1 min-w-0">
                 {stages.map((s) => (
                   <KanbanColumn
@@ -250,7 +274,7 @@ export default function PipelineClient({
                     stage={s}
                     cards={cardsByStage.get(s.id) ?? []}
                     totals={totalsByStage.get(s.id) ?? { count: 0, value: 0 }}
-                    onCardClick={setDrawerCardId}
+                    onCardClick={handleCardClick}
                   />
                 ))}
               </div>
@@ -353,7 +377,7 @@ function AssignedRosterPanel({
   onCardClick,
 }: {
   cards: Card[];
-  onCardClick?: (id: string) => void;
+  onCardClick?: (card: Card) => void;
 }) {
   return (
     <div className="shrink-0 w-64 sm:w-72">
@@ -374,7 +398,7 @@ function AssignedRosterPanel({
               key={card.id}
               card={card}
               dragId={rosterDragId(card.id)}
-              onClick={() => onCardClick?.(card.id)}
+              onClick={() => onCardClick?.(card)}
             />
           ))}
         </div>
@@ -392,7 +416,7 @@ function KanbanColumn({
   stage: PipelineStage;
   cards: Card[];
   totals: { count: number; value: number };
-  onCardClick?: (id: string) => void;
+  onCardClick?: (card: Card) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const v = stageVisual(stage.color);
@@ -425,7 +449,7 @@ function KanbanColumn({
             <DraggableCard
               key={card.id}
               card={card}
-              onClick={() => onCardClick?.(card.id)}
+              onClick={() => onCardClick?.(card)}
             />
           ))}
         </div>
@@ -480,9 +504,9 @@ function DraggableCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="font-medium text-sm text-slate-900 truncate">
-            {card.contactName || card.contactPhone}
+            {card.contactName || card.contactPhone || card.dealCode}
           </div>
-          <div className="text-xs text-slate-500 truncate">{card.contactPhone}</div>
+          <div className="text-xs text-slate-500 truncate">{card.contactPhone || card.dealCode}</div>
         </div>
         {card.dealValue && (
           <div className="text-xs font-semibold text-slate-700 shrink-0">
@@ -598,7 +622,7 @@ function CloseoutModal({
   card: Card;
   lossReasons: { id: string; name: string }[];
   onCancel: () => void;
-  onSubmit: (extras: { dealValue?: number; lostReason?: string; lossReasonId?: string }) => Promise<void>;
+  onSubmit: (extras: { wonValue?: number; lossReasonNote?: string; lossReasonId?: string }) => Promise<void>;
 }) {
   const [dealValue, setDealValue] = useState(card.dealValue ?? "");
   const [lostReason, setLostReason] = useState(card.lostReason ?? "");
@@ -610,8 +634,8 @@ function CloseoutModal({
     if (prompt.type === "lost" && !lostReason.trim() && !lossReasonId) return;
     setSubmitting(true);
     await onSubmit({
-      ...(prompt.type === "won" && { dealValue: Number(dealValue) }),
-      ...(prompt.type === "lost" && { lostReason: lostReason.trim() }),
+      ...(prompt.type === "won" && { wonValue: Number(dealValue) }),
+      ...(prompt.type === "lost" && { lossReasonNote: lostReason.trim() }),
       ...(prompt.type === "lost" && lossReasonId && { lossReasonId }),
     });
     setSubmitting(false);

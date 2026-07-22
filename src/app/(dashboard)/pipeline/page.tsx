@@ -14,39 +14,51 @@ export default async function PipelinePage({
   const view = searchParams.view === "funnel" ? "funnel" : "kanban";
 
   // Owner filter — "me" / "all" / specific userId. Sales defaults to "me".
+  // Keyed on Deal.ownerUserId now (was Conversation.assignedToUserId before
+  // this board became Deal-centric — see docs/DECISIONS.md).
   const ownerFilter = searchParams.owner ?? (user.role === "sales" ? "me" : "all");
   const ownerWhere =
     ownerFilter === "all"
       ? user.role === "admin"
         ? {}
-        : { OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }] }
+        : { OR: [{ ownerUserId: user.id }, { ownerUserId: null }] }
       : ownerFilter === "me"
-        ? { assignedToUserId: user.id }
+        ? { ownerUserId: user.id }
         : ownerFilter === "unassigned"
-          ? { assignedToUserId: null }
-          : { assignedToUserId: ownerFilter };
+          ? { ownerUserId: null }
+          : { ownerUserId: ownerFilter };
 
-  // Stages, the conversation list, and the sales-user list are independent of
-  // one another (their inputs are already derived from `user`), so run them
-  // concurrently instead of as three serial round-trips.
-  const [stages, conversations, salesUsers, lossReasons] = await Promise.all([
+  // Stages, the deal list, and the sales-user list are independent of one
+  // another, so run them concurrently instead of as three serial round-trips.
+  const [stages, deals, salesUsers, lossReasons] = await Promise.all([
     getPipelineStages(),
-    prisma.conversation.findMany({
-      // Every conversation defaults to pipelineStage:"new" the moment it's
-      // created (Conversation.pipelineStage's own schema default) — without
-      // this, raw chats that were never actually worked into a deal showed
-      // up on the board alongside real ones. Scoped to the same dealChannel
-      // the rest of the CRM now uses (see docs/DECISIONS.md).
-      where: { ...ownerWhere, deals: { some: { deletedAt: null, dealChannel: "crm" } } },
+    prisma.deal.findMany({
+      // Pipeline used to be a straight Conversation query — every
+      // conversation defaults to pipelineStage:"new" on creation, so it
+      // showed every WhatsApp thread regardless of whether it was ever
+      // actually worked into a deal, AND it could never show a deal created
+      // directly in the CRM with no underlying conversation at all (most of
+      // them, now that "Move to CRM" is the intended flow). Deal-centric
+      // fixes both — see docs/DECISIONS.md.
+      where: { deletedAt: null, dealChannel: "crm", ...ownerWhere },
       include: {
-        assignedTo: { select: { name: true } },
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { body: true, direction: true, createdAt: true },
+        account: { select: { name: true } },
+        primaryContact: { select: { name: true, phone: true } },
+        currentStage: { select: { slug: true } },
+        owner: { select: { id: true, name: true } },
+        conversation: {
+          select: {
+            id: true,
+            contactPhone: true,
+            messages: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { body: true, direction: true, createdAt: true },
+            },
+          },
         },
       },
-      orderBy: [{ stageChangedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      orderBy: [{ updatedAt: "desc" }],
       take: 500,
     }),
     user.role === "admin"
@@ -59,30 +71,31 @@ export default async function PipelinePage({
     prisma.lossReason.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 
-  // Group conversations by stage. Any conversation with a stage not in the
-  // configured list lands in the earliest active stage (graceful degradation
-  // if stages were removed/renamed) — was a stale literal "new" here, which
-  // stopped being a real FunnelStage slug once the vocabulary unification
-  // (see docs/DECISIONS.md) renamed it to "enquiry_received"; an unrecognized
-  // value would have silently vanished from every column instead of landing
-  // somewhere visible. Mirrors PipelineClient.tsx's own fallbackStageId.
+  // Group deals by stage. Any deal whose current stage isn't in the
+  // configured active list (deactivated stage) lands in the earliest active
+  // stage — graceful degradation, same reasoning PipelineClient.tsx's own
+  // fallbackStageId already documents.
   const validStageIds = new Set(stages.map((s) => s.id));
   const fallbackStageId = stages[0]?.id ?? "enquiry_received";
-  const cards = conversations.map((c) => {
-    const lastMsg = c.messages[0];
+  const cards = deals.map((d) => {
+    const lastMsg = d.conversation?.messages[0];
     return {
-      id: c.id,
-      contactPhone: c.contactPhone,
-      contactName: c.contactName,
-      pipelineStage: validStageIds.has(c.pipelineStage ?? "")
-        ? c.pipelineStage!
-        : fallbackStageId,
-      stageChangedAt: c.stageChangedAt?.toISOString() ?? null,
-      dealValue: c.dealValue?.toString() ?? null,
-      expectedCloseAt: c.expectedCloseAt?.toISOString() ?? null,
-      lostReason: c.lostReason,
-      assignedToName: c.assignedTo?.name ?? null,
-      assignedToUserId: c.assignedToUserId,
+      id: d.id,
+      dealCode: d.code,
+      contactName: d.primaryContact?.name ?? d.account.name,
+      contactPhone: d.primaryContact?.phone ?? d.conversation?.contactPhone ?? null,
+      pipelineStage: validStageIds.has(d.currentStage.slug) ? d.currentStage.slug : fallbackStageId,
+      // Deal has no dedicated stageChangedAt field (see transitionDeal.ts's
+      // own "best-effort: no separate stageChangedAt on Deal today" note) —
+      // same approximation used there.
+      stageChangedAt: d.updatedAt.toISOString(),
+      // Most-concrete-figure-wins — same precedence transitionDeal.ts's own
+      // Conversation write-through already uses.
+      dealValue: (d.wonValue ?? d.quotedValue ?? d.estimatedValue)?.toString() ?? null,
+      expectedCloseAt: d.expectedCloseAt?.toISOString() ?? null,
+      lostReason: d.lossReasonNote,
+      assignedToName: d.owner?.name ?? null,
+      assignedToUserId: d.ownerUserId,
       lastMessage: lastMsg
         ? {
             body: lastMsg.body?.slice(0, 120) ?? "",
@@ -90,7 +103,11 @@ export default async function PipelinePage({
             createdAt: lastMsg.createdAt.toISOString(),
           }
         : null,
-      createdAt: c.createdAt.toISOString(),
+      // Present only when this deal actually has a WhatsApp thread behind
+      // it — gates whether clicking the card opens the (conversation-only)
+      // detail drawer or navigates straight to the Deal page instead.
+      conversationId: d.conversationId,
+      createdAt: d.createdAt.toISOString(),
     };
   });
 

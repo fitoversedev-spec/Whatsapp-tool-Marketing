@@ -18,6 +18,7 @@ export type StageType = "active" | "won" | "lost";
 
 export type PipelineStage = {
   id: string; // FunnelStage.slug, also the value stored in Conversation.pipelineStage
+  stageId: string; // FunnelStage's real uuid — what POST /api/deals/[id]/stage's toStageId actually expects
   label: string;
   color: string; // hex, e.g. "#3b82f6"
   type: StageType;

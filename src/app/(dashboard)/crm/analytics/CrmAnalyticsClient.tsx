@@ -117,6 +117,32 @@ function ExportButtons({ filename, headers, rows }: { filename: string; headers:
   );
 }
 
+// The actual numbers behind every chart on this page, always shown below
+// it (not just on hover) — same headers/rows each section already builds
+// for its own ExportButtons, so chart and table can never drift apart.
+function DataTable({ headers, rows }: { headers: string[]; rows: (string | number)[][] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-slate-600 border-b border-slate-200">
+            {headers.map((h) => <th key={h} className="px-2 py-2 font-semibold whitespace-nowrap">{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="border-b border-slate-100 last:border-0">
+              {row.map((cell, j) => (
+                <td key={j} className={`px-2 py-2 whitespace-nowrap ${j === 0 ? "font-medium text-slate-900" : "text-slate-700"}`}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function IndividualTab({ rows, range }: { rows: SalesActivityRow[]; range: DateRange }) {
   const headers = ["Rep", "Leads", "Deals created", "Site visits", "Quotations sent", "Quoted value", "Deals won", "Won value", "Win rate", "Avg cycle days"];
   const dataRows = rows.map((r) => [r.ownerName, r.leadsCreated, r.dealsCreated, r.siteVisits, r.quotationsSentInclRevisions, r.quotedValue, r.dealsWon, r.wonValue, fmtPct(r.winRate), r.avgCycleDays ?? "—"]);
@@ -204,6 +230,8 @@ function HorizontalBarChart<T extends Record<string, unknown>>({
 
 export function StageVelocityCard({ rows }: { rows: StageVelocityRow[] }) {
   const withData = rows.filter((r) => r.n > 0 && r.medianDays != null);
+  const headers = ["Stage", "Median time", "Moves"];
+  const dataRows = withData.map((r) => [r.stageName, fmtDays(r.medianDays), r.n]);
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       <h3 className="text-base font-semibold text-slate-900 mb-1">Time to move between stages</h3>
@@ -211,14 +239,19 @@ export function StageVelocityCard({ rows }: { rows: StageVelocityRow[] }) {
       {withData.length === 0 ? (
         <p className="text-sm text-slate-400">No stage transitions in this range yet.</p>
       ) : (
-        <HorizontalBarChart
-          data={withData}
-          dataKey="medianDays"
-          labelKey="stageName"
-          height={Math.max(80, withData.length * 40)}
-          colorFor={() => "#fbbf24"}
-          tooltipFormatter={(r) => `${fmtDays(r.medianDays)} median · ${r.n} move${r.n === 1 ? "" : "s"}`}
-        />
+        <>
+          <HorizontalBarChart
+            data={withData}
+            dataKey="medianDays"
+            labelKey="stageName"
+            height={Math.max(80, withData.length * 40)}
+            colorFor={() => "#fbbf24"}
+            tooltipFormatter={(r) => `${fmtDays(r.medianDays)} median · ${r.n} move${r.n === 1 ? "" : "s"}`}
+          />
+          <div className="mt-3">
+            <DataTable headers={headers} rows={dataRows} />
+          </div>
+        </>
       )}
       {rows.some((r) => r.n > 0 && r.medianDays == null) && (
         <p className="text-xs text-slate-400 mt-2">Some stages have moves but insufficient data for a median — not charted.</p>
@@ -233,6 +266,8 @@ function OverallTab({ funnel, salesActivity, stageVelocity }: { funnel: Analytic
     { dealsCreated: 0, dealsWon: 0, wonValue: 0, quotedValue: 0 },
   );
   const stagesWithDeals = funnel.stages.filter((s) => s.count > 0);
+  const stageHeaders = ["Stage", "Deals", "Value"];
+  const stageDataRows = stagesWithDeals.map((s) => [s.stageName, s.count, fmtInr(s.value)]);
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -246,14 +281,19 @@ function OverallTab({ funnel, salesActivity, stageVelocity }: { funnel: Analytic
         {stagesWithDeals.length === 0 ? (
           <p className="text-sm text-slate-400">No open deals in any stage right now.</p>
         ) : (
-          <HorizontalBarChart
-            data={stagesWithDeals}
-            dataKey="count"
-            labelKey="stageName"
-            height={Math.max(80, stagesWithDeals.length * 40)}
-            colorFor={(s) => s.stageColorHex ?? "#64748b"}
-            tooltipFormatter={(s) => `${s.count} deal${s.count === 1 ? "" : "s"} · ${fmtInr(s.value)}`}
-          />
+          <>
+            <HorizontalBarChart
+              data={stagesWithDeals}
+              dataKey="count"
+              labelKey="stageName"
+              height={Math.max(80, stagesWithDeals.length * 40)}
+              colorFor={(s) => s.stageColorHex ?? "#64748b"}
+              tooltipFormatter={(s) => `${s.count} deal${s.count === 1 ? "" : "s"} · ${fmtInr(s.value)}`}
+            />
+            <div className="mt-3">
+              <DataTable headers={stageHeaders} rows={stageDataRows} />
+            </div>
+          </>
         )}
       </div>
       {funnel.lossReasons.length > 0 && (
@@ -303,6 +343,11 @@ function ProductsTab({ rows, cityHeatmap }: { rows: ProductConversionRow[]; city
             tooltipFormatter={(r) => `${r.won} won · ${r.quoted} quoted · ${fmtPct(r.conversionRate)}${r.flagged ? " · low conv." : ""}`}
           />
         )}
+        {sorted.length > 0 && (
+          <div className="mt-3">
+            <DataTable headers={headers} rows={dataRows} />
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -351,14 +396,19 @@ function PlatformsTab({ rows }: { rows: SourceRow[] }) {
       {sorted.length === 0 ? (
         <p className="text-sm text-slate-400">No source-level data in this range yet.</p>
       ) : (
-        <HorizontalBarChart
-          data={sorted}
-          dataKey="leads"
-          labelKey="sourceName"
-          height={Math.max(80, sorted.length * 40)}
-          colorFor={() => "#25D366"}
-          tooltipFormatter={(r) => `${r.leads} leads · ${r.won} won · ${fmtInr(r.wonValue)} · ${fmtPct(r.leadToWonRate)}`}
-        />
+        <>
+          <HorizontalBarChart
+            data={sorted}
+            dataKey="leads"
+            labelKey="sourceName"
+            height={Math.max(80, sorted.length * 40)}
+            colorFor={() => "#25D366"}
+            tooltipFormatter={(r) => `${r.leads} leads · ${r.won} won · ${fmtInr(r.wonValue)} · ${fmtPct(r.leadToWonRate)}`}
+          />
+          <div className="mt-3">
+            <DataTable headers={headers} rows={dataRows} />
+          </div>
+        </>
       )}
     </div>
   );
@@ -393,29 +443,7 @@ function GeographyTab({ rows }: { rows: CityRow[] }) {
       {sorted.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <h3 className="text-base font-semibold text-slate-900 mb-3">City breakdown</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-slate-600 border-b border-slate-200">
-                  {headers.map((h) => <th key={h} className="px-2 py-2 font-semibold whitespace-nowrap">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((r) => (
-                  <tr key={r.city} className="border-b border-slate-100 last:border-0">
-                    <td className="px-2 py-2 font-medium text-slate-900">{r.city}</td>
-                    <td className="px-2 py-2">{r.enquiries}</td>
-                    <td className="px-2 py-2">{r.quotations}</td>
-                    <td className="px-2 py-2">{r.won}</td>
-                    <td className="px-2 py-2">{fmtInr(r.wonValue)}</td>
-                    <td className="px-2 py-2">{fmtPct(r.winRate)}</td>
-                    <td className="px-2 py-2">{r.avgDealSize != null ? fmtInr(r.avgDealSize) : "—"}</td>
-                    <td className="px-2 py-2">{fmtDays(r.avgCycleDays)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable headers={headers} rows={dataRows} />
         </div>
       )}
     </div>

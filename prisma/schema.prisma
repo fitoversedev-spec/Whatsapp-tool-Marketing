@@ -351,6 +351,9 @@ model Reminder {
   // based logic in api/reminders/** keeps working unchanged; new dispatch
   // code (cron-runner.ts) is what actually reads/writes these.
   dealId         String?   @map("deal_id")
+  // A Reminder (task/meeting/call) can now anchor to a contact directly, not
+  // only a Deal — Zoho-style activities on a contact with no deal.
+  accountContactId String? @map("account_contact_id")
   activityTypeId String?   @map("activity_type_id")
   // e.g. ["whatsapp","in_app"]. Empty/absent = in-app only (today's behavior).
   channels       String[]  @default([])
@@ -373,12 +376,14 @@ model Reminder {
   conversation Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   owner        User               @relation(fields: [ownerUserId], references: [id])
   deal         Deal?              @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  accountContact AccountContact?  @relation(fields: [accountContactId], references: [id], onDelete: SetNull)
   activityType ActivityType?      @relation(fields: [activityTypeId], references: [id])
   dispatches   ReminderDispatch[]
 
   @@index([ownerUserId, dueAt])
   @@index([dueAt, completedAt])
   @@index([dealId])
+  @@index([accountContactId])
   @@map("reminders")
 }
 
@@ -1211,6 +1216,7 @@ model AccountContact {
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   dealsAsPrimary Deal[] @relation("DealPrimaryContact")
+  reminders Reminder[]
   activities Activity[]
   importBatch ImportBatch? @relation("AccountContactImports", fields: [importBatchId], references: [id], onDelete: SetNull)
   generalNotes AccountContactNote[]

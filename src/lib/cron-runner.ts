@@ -22,11 +22,13 @@ const DIGEST_DAY_OF_WEEK = 1;
 // Resolves the phone number to WhatsApp-dispatch a reminder to: the
 // reminder's own conversation first (pre-existing behavior's data source),
 // falling back to its Deal's primary account contact, then the Deal's own
-// linked conversation. Null = no resolvable number, WhatsApp channel skipped
-// silently (the reminder still fires in-app either way).
+// linked conversation, and finally its directly-attached account contact
+// (dealless contact-page activities). Null = no resolvable number, WhatsApp
+// channel skipped silently (the reminder still fires in-app either way).
 async function resolveReminderPhone(reminder: {
   conversationId: string | null;
   dealId: string | null;
+  accountContactId: string | null;
 }): Promise<string | null> {
   if (reminder.conversationId) {
     const c = await prisma.conversation.findUnique({ where: { id: reminder.conversationId }, select: { contactPhone: true } });
@@ -43,6 +45,10 @@ async function resolveReminderPhone(reminder: {
     const contactPhone = deal?.account.contacts[0]?.phone;
     if (contactPhone) return contactPhone;
     if (deal?.conversation?.contactPhone) return deal.conversation.contactPhone;
+  }
+  if (reminder.accountContactId) {
+    const contact = await prisma.accountContact.findUnique({ where: { id: reminder.accountContactId }, select: { phone: true } });
+    if (contact?.phone) return contact.phone;
   }
   return null;
 }

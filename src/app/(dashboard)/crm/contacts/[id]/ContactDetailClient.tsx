@@ -107,10 +107,14 @@ export default function ContactDetailClient({
   const toast = useToast();
   const [tab, setTab] = useState<"overview" | "calls-meetings" | "timeline">("overview");
   const [showProductPicker, setShowProductPicker] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"quote" | "court" | "deal" | "meeting" | "call" | "task" | null>(null);
-  // Task = a one-off Reminder with a priority; needs a deal to hang off (same
-  // as meetings/calls), so it shares the CreateDealFirstModal fallback path.
-  const [taskDealId, setTaskDealId] = useState<string | null>(null);
+  // Only quote/court still need a deal (their wizards key off dealId); the
+  // "deal" case is the standalone +New Deal. Task/meeting/call no longer gate
+  // on a deal — they anchor to the contact directly.
+  const [pendingAction, setPendingAction] = useState<"quote" | "court" | "deal" | null>(null);
+  // Task = a one-off Reminder with a priority. It anchors to the contact
+  // (deal optional), so a plain open-flag drives the modal — the deal, if any,
+  // is passed straight from deals[0].
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [convertingLead, setConvertingLead] = useState(false);
   const [scheduleDealId, setScheduleDealId] = useState<string | null>(null);
@@ -118,7 +122,7 @@ export default function ContactDetailClient({
   // "+Call"/"+Meeting" used to always open Schedule (a future Reminder) —
   // per explicit request, ask first: sometimes the call/meeting already
   // happened and needs logging immediately, not scheduling then completing.
-  const [choosingFor, setChoosingFor] = useState<{ mode: "meeting" | "call"; dealId: string } | null>(null);
+  const [choosingFor, setChoosingFor] = useState<{ mode: "meeting" | "call"; dealId: string | null } | null>(null);
   const [logPresetTypeId, setLogPresetTypeId] = useState<string | null>(null);
   const [completingReminderId, setCompletingReminderId] = useState<string | null>(null);
   const [completionNoteDraft, setCompletionNoteDraft] = useState("");
@@ -319,22 +323,20 @@ export default function ContactDetailClient({
     router.push(`${kind === "quote" ? "/quotations" : "/court-images"}?${params.toString()}`);
   }
 
-  function openSchedule(mode: "meeting" | "call", dealId: string) {
+  function openSchedule(mode: "meeting" | "call", dealId: string | null) {
     setScheduleMode(mode);
     setScheduleDealId(dealId);
   }
 
   function onQuickAction(kind: "quote" | "court" | "product" | "meeting" | "call") {
-    if (deals.length === 0) {
-      if (kind === "product") { setShowProductPicker(true); return; } // product picker handles deal-creation itself
-      setPendingAction(kind);
-      return;
-    }
-    // Multiple deals — default to the most recently updated one (deals is
-    // already sorted that way) rather than forcing a picker for the common
-    // case; DealDetail is always one click away to pick a different one.
+    // Product keeps its own picker (which creates a deal itself when needed).
     if (kind === "product") { setShowProductPicker(true); return; }
-    if (kind === "meeting" || kind === "call") { setChoosingFor({ mode: kind, dealId: deals[0].id }); return; }
+    // Meeting/Call anchor to the contact directly — open the schedule/log
+    // choice with the most-recent deal if one exists, else no deal at all.
+    if (kind === "meeting" || kind === "call") { setChoosingFor({ mode: kind, dealId: deals[0]?.id ?? null }); return; }
+    // Quote/Court genuinely need a deal — gate on one, creating it first if
+    // this contact has none; otherwise default to the most-recently-updated.
+    if (deals.length === 0) { setPendingAction(kind); return; }
     goToWizard(kind, deals[0].id);
   }
 
@@ -362,8 +364,7 @@ export default function ContactDetailClient({
 
   function onAddTask() {
     setAddMenuOpen(false);
-    if (deals.length === 0) { setPendingAction("task"); return; }
-    setTaskDealId(deals[0].id);
+    setTaskModalOpen(true);
   }
 
   async function convertToLead() {
@@ -1267,11 +1268,9 @@ export default function ContactDetailClient({
             if (action === "deal") {
               toast.success("Deal created");
               router.refresh();
-            } else if (action === "meeting" || action === "call") {
-              setChoosingFor({ mode: action, dealId });
-            } else if (action === "task") {
-              setTaskDealId(dealId);
-            } else {
+            } else if (action) {
+              // Only quote/court reach here now — task/meeting/call anchor to
+              // the contact and never open this deal-first modal.
               goToWizard(action, dealId);
             }
           }}
@@ -1310,10 +1309,11 @@ export default function ContactDetailClient({
         />
       )}
 
-      {scheduleMode && scheduleDealId && (
+      {scheduleMode && (
         <ScheduleReminderModal
           mode={scheduleMode}
           dealId={scheduleDealId}
+          accountContactId={contact.id}
           contactName={contact.name}
           activityTypes={activityTypes}
           onClose={() => { setScheduleMode(null); setScheduleDealId(null); }}
@@ -1326,13 +1326,14 @@ export default function ContactDetailClient({
         />
       )}
 
-      {taskDealId && (
+      {taskModalOpen && (
         <TaskModal
-          dealId={taskDealId}
+          dealId={deals[0]?.id ?? null}
+          accountContactId={contact.id}
           contactName={contact.name}
           taskTypeId={taskTypeId}
-          onClose={() => setTaskDealId(null)}
-          onCreated={() => { setTaskDealId(null); toast.success("Task added"); router.refresh(); }}
+          onClose={() => setTaskModalOpen(false)}
+          onCreated={() => { setTaskModalOpen(false); toast.success("Task added"); router.refresh(); }}
         />
       )}
 
@@ -1372,9 +1373,9 @@ export default function ContactDetailClient({
 // already happened) is deliberately NOT here — that's the existing Log
 // Activity flow, which already supports picking Inbound/Outbound Call.
 function ScheduleReminderModal({
-  mode, dealId, contactName, activityTypes, onClose, onScheduled,
+  mode, dealId, accountContactId, contactName, activityTypes, onClose, onScheduled,
 }: {
-  mode: "meeting" | "call"; dealId: string; contactName: string; activityTypes: ActivityTypeOption[];
+  mode: "meeting" | "call"; dealId: string | null; accountContactId: string; contactName: string; activityTypes: ActivityTypeOption[];
   onClose: () => void; onScheduled: () => void;
 }) {
   const toast = useToast();
@@ -1404,7 +1405,9 @@ function ScheduleReminderModal({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        dealId,
+        // Anchor to the contact always; include the deal only when one exists.
+        accountContactId,
+        ...(dealId ? { dealId } : {}),
         message: title.trim(),
         dueAt: dueAt.toISOString(),
         activityTypeId: activityTypeId ?? undefined,
@@ -1513,8 +1516,8 @@ function CreateDealFirstModal({
 // no repeat. "Reminder on" just widens the delivery channels; either way it's
 // an in-app reminder that surfaces in My Day like every other Reminder.
 function TaskModal({
-  dealId, contactName, taskTypeId, onClose, onCreated,
-}: { dealId: string; contactName: string; taskTypeId: string | null; onClose: () => void; onCreated: () => void }) {
+  dealId, accountContactId, contactName, taskTypeId, onClose, onCreated,
+}: { dealId: string | null; accountContactId: string; contactName: string; taskTypeId: string | null; onClose: () => void; onCreated: () => void }) {
   const toast = useToast();
   const [subject, setSubject] = useState(`Follow up with ${contactName}`);
   const [date, setDate] = useState(() => {
@@ -1533,7 +1536,9 @@ function TaskModal({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        dealId,
+        // Anchor to the contact always; include the deal only when one exists.
+        accountContactId,
+        ...(dealId ? { dealId } : {}),
         message: subject.trim(),
         dueAt: new Date(`${date}T09:00:00`).toISOString(),
         priority,

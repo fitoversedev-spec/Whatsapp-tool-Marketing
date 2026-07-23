@@ -7,6 +7,10 @@ import { findOrCreateDealForConversation } from "@/lib/crm/deals";
 const createSchema = z.object({
   conversationId: z.string().uuid().nullable().optional(),
   dealId: z.string().uuid().nullable().optional(),
+  // A reminder can now attach straight to a CRM contact (Zoho-style) with no
+  // deal — the contact page's Task/Meeting/Call actions send this so activities
+  // no longer force a deal-first gate.
+  accountContactId: z.string().uuid().nullable().optional(),
   message: z.string().min(1).max(500),
   dueAt: z.string().datetime(),
   // ["whatsapp"] opts into real outbound dispatch via the cron sweep;
@@ -133,6 +137,7 @@ export async function POST(req: NextRequest) {
     data: {
       conversationId: parsed.data.conversationId ?? null,
       dealId,
+      accountContactId: parsed.data.accountContactId ?? null,
       ownerUserId: user.id,
       message: parsed.data.message,
       dueAt: new Date(parsed.data.dueAt),

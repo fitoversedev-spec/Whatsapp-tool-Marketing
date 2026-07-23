@@ -81,8 +81,11 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     }),
   ]);
 
+  // A reminder for this contact either hangs off one of their deals OR is
+  // anchored directly to the contact (Zoho-style: task/meeting/call needs no
+  // deal). The OR still resolves correctly when dealIds is empty.
   const reminders = await prisma.reminder.findMany({
-    where: { dealId: { in: dealIds } },
+    where: { OR: [{ dealId: { in: dealIds } }, { accountContactId: contact.id }] },
     orderBy: [{ completedAt: { sort: "asc", nulls: "first" } }, { dueAt: "asc" }],
     include: { activityType: { select: { name: true } } },
   });

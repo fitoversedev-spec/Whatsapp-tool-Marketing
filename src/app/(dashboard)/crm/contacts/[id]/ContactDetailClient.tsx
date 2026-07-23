@@ -741,11 +741,39 @@ export default function ContactDetailClient({
       ) : (
         <div className="flex gap-6">
           <nav className="hidden lg:block w-40 shrink-0 sticky top-4 self-start space-y-0.5">
-            {SECTIONS.map((s) => (
-              <a key={s.id} href={`#${s.id}`} className="block px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-                {s.label}
-              </a>
-            ))}
+            {SECTIONS.map((s) =>
+              s.id === "open-activities" ? (
+                // "+" here opens the same Task/Meeting/Call menu as the card,
+                // Zoho-style — a quick-add right on the section nav.
+                <div key={s.id} className="relative flex items-center">
+                  <a href={`#${s.id}`} className="flex-1 block px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                    {s.label}
+                  </a>
+                  <button
+                    onClick={() => setAddMenuOpen((v) => !v)}
+                    aria-label="Add activity"
+                    title="Add task, meeting or call"
+                    className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-wa-dark text-base leading-none"
+                  >
+                    +
+                  </button>
+                  {addMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setAddMenuOpen(false)} />
+                      <div className="absolute left-full top-0 ml-1 z-20 w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+                        <button onClick={() => { setAddMenuOpen(false); onAddTask(); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">✅ Task</button>
+                        <button onClick={() => { setAddMenuOpen(false); onQuickAction("meeting"); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">📅 Meeting</button>
+                        <button onClick={() => { setAddMenuOpen(false); onQuickAction("call"); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">📞 Call</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <a key={s.id} href={`#${s.id}`} className="block px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                  {s.label}
+                </a>
+              ),
+            )}
           </nav>
 
           <div className="flex-1 min-w-0 space-y-4">
@@ -1055,7 +1083,9 @@ export default function ContactDetailClient({
             <div id="open-activities" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-slate-900">Open activities <span className="text-slate-400 font-normal">{openCount}</span></h3>
-                <div className="relative">
+                {/* Mobile-only: the desktop entry point is the "+" on the
+                    left section nav (which is hidden on mobile). */}
+                <div className="relative lg:hidden">
                   <button
                     onClick={() => setAddMenuOpen((v) => !v)}
                     className="text-xs font-medium border border-slate-300 rounded-lg px-2.5 py-1 hover:bg-slate-50"

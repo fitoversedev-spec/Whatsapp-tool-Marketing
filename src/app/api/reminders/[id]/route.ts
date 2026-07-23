@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 
 const patchSchema = z.object({
@@ -13,10 +14,14 @@ const patchSchema = z.object({
   completionNote: z.string().max(1000).nullable().optional(),
 });
 
-async function loadOwn(id: string, userId: string) {
+// A reminder can be updated/deleted by its own owner OR by an admin — the
+// contact page surfaces reminders across every owner on the contact's deals,
+// so an admin managing that contact must be able to complete a rep's reminder
+// (mirrors the owner-or-admin gate on deals/account-contacts).
+async function loadOwn(id: string, user: { id: string; role: string }) {
   const r = await prisma.reminder.findUnique({ where: { id } });
   if (!r) return { error: "not_found" as const, status: 404 };
-  if (r.ownerUserId !== userId) return { error: "forbidden" as const, status: 403 };
+  if (r.ownerUserId !== user.id && !isAdmin(user.role)) return { error: "forbidden" as const, status: 403 };
   return { reminder: r };
 }
 
@@ -24,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const res = await loadOwn(params.id, user.id);
+  const res = await loadOwn(params.id, user);
   if ("error" in res) return NextResponse.json({ error: res.error }, { status: res.status });
 
   const body = await req.json().catch(() => null);
@@ -71,7 +76,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const res = await loadOwn(params.id, user.id);
+  const res = await loadOwn(params.id, user);
   if ("error" in res) return NextResponse.json({ error: res.error }, { status: res.status });
 
   await prisma.reminder.delete({ where: { id: params.id } });

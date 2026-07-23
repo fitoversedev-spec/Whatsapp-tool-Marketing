@@ -103,6 +103,11 @@ export default function ContactDetailClient({
   const [pendingAction, setPendingAction] = useState<"quote" | "court" | "deal" | "meeting" | "call" | null>(null);
   const [scheduleDealId, setScheduleDealId] = useState<string | null>(null);
   const [scheduleMode, setScheduleMode] = useState<"meeting" | "call" | null>(null);
+  // "+Call"/"+Meeting" used to always open Schedule (a future Reminder) —
+  // per explicit request, ask first: sometimes the call/meeting already
+  // happened and needs logging immediately, not scheduling then completing.
+  const [choosingFor, setChoosingFor] = useState<{ mode: "meeting" | "call"; dealId: string } | null>(null);
+  const [logPresetTypeId, setLogPresetTypeId] = useState<string | null>(null);
   const [completingReminderId, setCompletingReminderId] = useState<string | null>(null);
   const [completionNoteDraft, setCompletionNoteDraft] = useState("");
   const [completingBusy, setCompletingBusy] = useState(false);
@@ -317,7 +322,7 @@ export default function ContactDetailClient({
     // already sorted that way) rather than forcing a picker for the common
     // case; DealDetail is always one click away to pick a different one.
     if (kind === "product") { setShowProductPicker(true); return; }
-    if (kind === "meeting" || kind === "call") { openSchedule(kind, deals[0].id); return; }
+    if (kind === "meeting" || kind === "call") { setChoosingFor({ mode: kind, dealId: deals[0].id }); return; }
     goToWizard(kind, deals[0].id);
   }
 
@@ -1080,7 +1085,7 @@ export default function ContactDetailClient({
               toast.success("Deal created");
               router.refresh();
             } else if (action === "meeting" || action === "call") {
-              openSchedule(action, dealId);
+              setChoosingFor({ mode: action, dealId });
             } else {
               goToWizard(action, dealId);
             }
@@ -1088,13 +1093,35 @@ export default function ContactDetailClient({
         />
       )}
 
-      {showLogActivity && (
+      {(showLogActivity || logPresetTypeId !== null) && (
         <LogActivityModal
           contactId={contact.id}
           deals={deals}
           activityTypes={activityTypes}
-          onClose={() => setShowLogActivity(false)}
-          onLogged={() => { setShowLogActivity(false); toast.success("Activity logged"); router.refresh(); }}
+          initialActivityTypeId={logPresetTypeId || undefined}
+          onClose={() => { setShowLogActivity(false); setLogPresetTypeId(null); }}
+          onLogged={() => {
+            setShowLogActivity(false);
+            setLogPresetTypeId(null);
+            toast.success("Activity logged");
+            router.refresh();
+          }}
+        />
+      )}
+
+      {choosingFor && (
+        <ScheduleOrLogChoice
+          mode={choosingFor.mode}
+          onCancel={() => setChoosingFor(null)}
+          onSchedule={() => {
+            openSchedule(choosingFor.mode, choosingFor.dealId);
+            setChoosingFor(null);
+          }}
+          onLog={() => {
+            const names = choosingFor.mode === "call" ? CALL_TYPE_NAMES : MEETING_TYPE_NAMES;
+            setLogPresetTypeId(activityTypes.find((t) => names.has(t.name))?.id ?? "");
+            setChoosingFor(null);
+          }}
         />
       )}
 
@@ -1287,11 +1314,17 @@ function CreateDealFirstModal({
 }
 
 function LogActivityModal({
-  contactId, deals, activityTypes, onClose, onLogged,
-}: { contactId: string; deals: Deal[]; activityTypes: ActivityTypeOption[]; onClose: () => void; onLogged: () => void }) {
+  contactId, deals, activityTypes, initialActivityTypeId, onClose, onLogged,
+}: {
+  contactId: string; deals: Deal[]; activityTypes: ActivityTypeOption[];
+  // Set when opened from the Call/Meeting "Log now" choice, so the type
+  // dropdown already lands on the right kind instead of whatever's first.
+  initialActivityTypeId?: string;
+  onClose: () => void; onLogged: () => void;
+}) {
   const toast = useToast();
   const [dealId, setDealId] = useState(deals[0]?.id ?? "");
-  const [activityTypeId, setActivityTypeId] = useState(activityTypes[0]?.id ?? "");
+  const [activityTypeId, setActivityTypeId] = useState(initialActivityTypeId || activityTypes[0]?.id || "");
   const [subject, setSubject] = useState("");
   const [notes, setNotes] = useState("");
   const [durationMins, setDurationMins] = useState("");
@@ -1367,6 +1400,43 @@ function LogActivityModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// "+Call"/"+Meeting" used to jump straight to Schedule (a future Reminder),
+// with no way to record one that already happened without first scheduling
+// it, then separately marking it complete. This is the fork: Schedule keeps
+// working exactly as before; Log opens LogActivityModal pre-set to the
+// matching Call/Meeting type, so it's captured as a real Activity with
+// today's date, not a completed reminder with no original schedule time.
+function ScheduleOrLogChoice({
+  mode, onCancel, onSchedule, onLog,
+}: { mode: "meeting" | "call"; onCancel: () => void; onSchedule: () => void; onLog: () => void }) {
+  const label = mode === "call" ? "call" : "meeting";
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full p-5">
+        <h2 className="font-semibold text-slate-900 mb-1">{mode === "call" ? "📞" : "📅"} {mode === "call" ? "Call" : "Meeting"}</h2>
+        <p className="text-sm text-slate-600 mb-4">Is this {label} still ahead of you, or did it already happen?</p>
+        <div className="space-y-2">
+          <button
+            onClick={onSchedule}
+            className="w-full text-left border border-slate-300 rounded-lg px-3 py-2.5 text-sm hover:bg-slate-50"
+          >
+            <div className="font-medium text-slate-900">📅 Schedule for later</div>
+            <div className="text-xs text-slate-500 mt-0.5">Sets a reminder for an upcoming {label}</div>
+          </button>
+          <button
+            onClick={onLog}
+            className="w-full text-left border border-slate-300 rounded-lg px-3 py-2.5 text-sm hover:bg-slate-50"
+          >
+            <div className="font-medium text-slate-900">📝 Log now</div>
+            <div className="text-xs text-slate-500 mt-0.5">Already happened — record it right away</div>
+          </button>
+        </div>
+        <button onClick={onCancel} className="w-full mt-3 text-sm text-slate-500 hover:underline">Cancel</button>
       </div>
     </div>
   );

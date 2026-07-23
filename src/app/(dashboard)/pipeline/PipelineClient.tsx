@@ -16,6 +16,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import PageHeader from "@/components/PageHeader";
+import CrmBadge from "@/components/crm/CrmBadge";
 import ContactDetailDrawer from "@/components/ContactDetailDrawer";
 import { stageVisual, daysSince, type PipelineStage } from "@/lib/pipeline";
 import type { Role } from "@/lib/rbac";
@@ -223,6 +224,11 @@ export default function PipelineClient({
 
   return (
     <>
+      {/* CRM indicator — /pipeline is conceptually CRM but outside crm/layout
+          (and renders no tab bar), so the badge sits above the header. */}
+      <div className="bg-white px-4 sm:px-6 lg:px-8 pt-2.5">
+        <CrmBadge />
+      </div>
       <PageHeader
         title="Sales pipeline"
         description={`${filteredCards.length} leads · ${formatINR(

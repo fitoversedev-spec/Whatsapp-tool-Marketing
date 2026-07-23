@@ -19,6 +19,15 @@ declare module "recharts/es6/cartesian/XAxis" {
 declare module "recharts/es6/cartesian/YAxis" {
   export { YAxis } from "recharts";
 }
+declare module "recharts/es6/cartesian/ZAxis" {
+  export { ZAxis } from "recharts";
+}
+declare module "recharts/es6/cartesian/ReferenceLine" {
+  export { ReferenceLine } from "recharts";
+}
+declare module "recharts/es6/cartesian/Scatter" {
+  export { Scatter } from "recharts";
+}
 declare module "recharts/es6/chart/AreaChart" {
   export { AreaChart } from "recharts";
 }
@@ -27,6 +36,9 @@ declare module "recharts/es6/chart/BarChart" {
 }
 declare module "recharts/es6/chart/PieChart" {
   export { PieChart } from "recharts";
+}
+declare module "recharts/es6/chart/ScatterChart" {
+  export { ScatterChart } from "recharts";
 }
 declare module "recharts/es6/polar/Pie" {
   export { Pie } from "recharts";

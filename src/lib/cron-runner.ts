@@ -10,6 +10,14 @@
 import { prisma } from "@/lib/prisma";
 import { runBroadcast } from "@/lib/sender";
 import { sendText } from "@/lib/whatsapp";
+import { runWeeklyDigest } from "@/lib/analytics/digestJob";
+
+// The weekday the weekly digest fires on — Monday (getDay() 0=Sun..6=Sat).
+// A visible default, not a business-mandated day: Monday so the digest lands
+// as the week's first working-day briefing. This is a GATE inside the existing
+// daily sweep (per the analytics-v2 plan: "reuses the existing daily cron
+// rather than adding a second one"), not a second cron entry.
+const DIGEST_DAY_OF_WEEK = 1;
 
 // Resolves the phone number to WhatsApp-dispatch a reminder to: the
 // reminder's own conversation first (pre-existing behavior's data source),
@@ -145,5 +153,23 @@ export async function sweepAll() {
     fireDueReminders(),
     launchDueScheduledBroadcasts(),
   ]);
-  return { reminders, broadcasts, sweptAt: new Date().toISOString() };
+
+  // Day-of-week-gated weekly digest. Wrapped in its own try/catch — and
+  // runWeeklyDigest is itself no-throw by contract — so a digest failure can
+  // NEVER break the reminders/broadcasts sweep above (which already ran and
+  // must always report its result). Same per-item isolation discipline the
+  // reminder/broadcast loops use internally. Only attempted on DIGEST_DAY_OF_WEEK.
+  let digest: Awaited<ReturnType<typeof runWeeklyDigest>> | { skipped: string } | null = null;
+  if (new Date().getDay() === DIGEST_DAY_OF_WEEK) {
+    try {
+      digest = await runWeeklyDigest();
+    } catch (err) {
+      // Defence-in-depth: runWeeklyDigest already swallows its own errors, but
+      // if it ever regressed to throwing, the sweep still succeeds.
+      console.error("[cron] weekly digest failed", err);
+      digest = { skipped: err instanceof Error ? err.message : "digest_threw" };
+    }
+  }
+
+  return { reminders, broadcasts, digest, sweptAt: new Date().toISOString() };
 }

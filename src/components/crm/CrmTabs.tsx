@@ -6,21 +6,26 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/crm", label: "Dashboard" },
   { href: "/crm/contacts", label: "Contacts" },
-  { href: "/crm/companies", label: "Lead types" },
+  { href: "/crm/leads", label: "Leads" },
+  { href: "/crm/companies", label: "Customer types" },
   { href: "/deals", label: "Deals" },
   { href: "/crm/activities", label: "Activities" },
   { href: "/crm/import", label: "Import" },
-  { href: "/crm/analytics", label: "Analytics", adminOnly: true },
+  // No longer admin-only — every approved role gets a self-scoped view
+  // (see requireAnalyticsAccess() in src/lib/auth.ts / resolveAnalyticsScope()
+  // in src/lib/analytics/scope.ts).
+  { href: "/crm/analytics", label: "Analytics" },
 ];
 
+// isAdmin kept as a prop for any future admin-only tab — none currently
+// need it now that Analytics is self-service for every approved role.
 export default function CrmTabs({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
-  const tabs = TABS.filter((tab) => !tab.adminOnly || isAdmin);
 
   return (
     <div className="border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8 overflow-x-auto">
       <nav className="flex gap-1 -mb-px min-w-max">
-        {tabs.map((tab) => {
+        {TABS.map((tab) => {
           // "/crm" itself must match exactly — every other CRM route starts
           // with "/crm/" too, which would otherwise light up Dashboard always.
           const active =

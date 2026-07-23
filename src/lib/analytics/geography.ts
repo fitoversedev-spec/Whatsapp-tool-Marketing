@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 import type { AnalyticsFilter } from "./types";
 import { MIN_SAMPLE_SIZE } from "./types";
 
-function resolveCity(d: { siteCity: string | null; account: { city: string | null } }): string {
+export function resolveCity(d: { siteCity: string | null; account: { city: string | null } }): string {
   return d.siteCity?.trim() || d.account.city?.trim() || "(unspecified)";
 }
 

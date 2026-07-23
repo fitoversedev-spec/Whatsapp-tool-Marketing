@@ -2,7 +2,14 @@
 // Performance / "WhatsApp Sales Analytics", the older /team page this was
 // once one of two parallel systems alongside, was removed once every deal
 // creation path started routing through the CRM contact model — see
-// docs/DECISIONS.md). Admin-only.
+// docs/DECISIONS.md). Open to every approved role — resolveAnalyticsScope()
+// below is what actually decides whose deals a given request can see, not
+// this route's own gate.
+//
+// Split out of the former /api/crm/analytics/route.ts (Phase 0) so this
+// endpoint doesn't keep growing into one ever-larger Promise.all as later
+// analytics groups (Comparators, Quadrants, Industry Insights, ...) ship
+// their own routes instead — see docs/DECISIONS.md.
 //
 // Perf: customerSegments/timelineMetrics/forecast used to also get called
 // here (Team Performance's client rendered them; this route's client,
@@ -12,7 +19,8 @@
 // — see docs/DECISIONS.md.
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, type Role } from "@/lib/rbac";
+import { resolveAnalyticsScope } from "@/lib/analytics/scope";
 import { salesActivity } from "@/lib/analytics/salesActivity";
 import { funnelSnapshot } from "@/lib/analytics/funnel";
 import { productAnalytics } from "@/lib/analytics/products";
@@ -35,9 +43,8 @@ function parseDateParam(raw: string | null, fallback: Date): Date {
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!isAdmin(user.role)) {
-    return NextResponse.json({ error: "forbidden", message: "Admin only" }, { status: 403 });
-  }
+
+  const scope = resolveAnalyticsScope({ id: user.id, role: user.role as Role });
 
   const defaultFrom = new Date();
   defaultFrom.setDate(defaultFrom.getDate() - 30);
@@ -47,8 +54,12 @@ export async function GET(req: NextRequest) {
   const toParam = req.nextUrl.searchParams.get("to");
   const to = toParam ? new Date(toParam + "T23:59:59") : new Date();
 
+  // An "owner" query param can only ever narrow an admin's company-wide
+  // view — for a non-admin, resolveAnalyticsScope()'s own ownerIds always
+  // wins, regardless of what the client asked for.
   const ownerParam = req.nextUrl.searchParams.get("owner");
-  const ownerIds = ownerParam && ownerParam !== "all" ? [ownerParam] : undefined;
+  const requestedOwnerIds = ownerParam && ownerParam !== "all" ? [ownerParam] : undefined;
+  const ownerIds = scope.companyWide ? requestedOwnerIds : scope.ownerIds;
 
   // dealChannel: "crm" is now mostly a defensive filter rather than a real
   // split — every deal creation path stamps "crm" going forward (see

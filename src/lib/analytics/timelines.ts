@@ -4,6 +4,7 @@
 // with that page; see docs/DECISIONS.md). Reports median and p90 (not mean —
 // a few stalled deals wreck an average) plus n, suppressed to "insufficient
 // data" below MIN_SAMPLE_SIZE.
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { AnalyticsFilter } from "./types";
 import { MIN_SAMPLE_SIZE } from "./types";
@@ -17,7 +18,10 @@ function percentile(sorted: number[], p: number): number {
   return sorted[idx];
 }
 
-function stat(values: number[]): DurationStat {
+// Exported — cohorts.ts (A7) reuses this exact median/p90/MIN_SAMPLE_SIZE
+// gate for its own per-stage and repeat-purchase duration stats rather than
+// re-deriving the same logic.
+export function stat(values: number[]): DurationStat {
   if (values.length < MIN_SAMPLE_SIZE) return { medianDays: null, p90Days: null, n: values.length };
   const sorted = [...values].sort((a, b) => a - b);
   return { medianDays: percentile(sorted, 0.5), p90Days: percentile(sorted, 0.9), n: values.length };
@@ -37,10 +41,25 @@ export async function stageVelocity(filter: AnalyticsFilter): Promise<StageVeloc
 
   // Merged into one `deal` key (not two separate conditional spreads) —
   // a second `deal: {...}` object literal would silently clobber the
-  // first instead of combining with it.
-  const dealWhere: { ownerUserId?: { in: string[] }; dealChannel?: "whatsapp" | "crm" } = {};
+  // first instead of combining with it. productIds/sportIds/
+  // customerProfileIds (A10 "sliceable by X") are mutated onto this same
+  // object for the same reason — each is its own `if`, never its own
+  // `deal: {...}` literal.
+  const dealWhere: Prisma.DealWhereInput = {};
   if (filter.ownerIds?.length) dealWhere.ownerUserId = { in: filter.ownerIds };
   if (filter.dealChannel) dealWhere.dealChannel = filter.dealChannel;
+  if (filter.customerProfileIds?.length) dealWhere.account = { customerProfileId: { in: filter.customerProfileIds } };
+  if (filter.productIds?.length || filter.sportIds?.length) {
+    // Same lineItems.some pattern as dealsDrilldown.ts (Phase 0) — a deal
+    // qualifies if ANY of its line items matches the product/sport filter,
+    // not that every line item must.
+    dealWhere.lineItems = {
+      some: {
+        ...(filter.productIds?.length ? { productId: { in: filter.productIds } } : {}),
+        ...(filter.sportIds?.length ? { sportId: { in: filter.sportIds } } : {}),
+      },
+    };
+  }
 
   const historyRows = await prisma.dealStageHistory.findMany({
     where: {

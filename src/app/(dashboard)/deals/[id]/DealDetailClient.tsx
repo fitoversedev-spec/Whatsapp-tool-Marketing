@@ -44,6 +44,12 @@ type Deal = {
   siteVisitAt: string | null;
   firstQuotedAt: string | null;
   closedAt: string | null;
+  // Post-won delivery tracking (analytics v2 Phase 4's execution.ts reads
+  // these) — null until the controls below are used, and only ever
+  // meaningful once outcome === "WON".
+  executionStatus: string | null;
+  executionStartedAt: string | null;
+  deliveryCompletedAt: string | null;
 };
 
 type StageHistoryRow = {
@@ -103,6 +109,27 @@ export default function DealDetailClient({
   const [showLogActivity, setShowLogActivity] = useState(false);
   const [showEditDetails, setShowEditDetails] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [executionSaving, setExecutionSaving] = useState(false);
+
+  // Same simple-button, no-modal pattern as handleDelete above — a deal's
+  // execution status is a one-off state transition, not a form, so it gets
+  // the same fetch-PATCH-then-refresh shape rather than a new modal.
+  async function handleSetExecutionStatus(status: "IN_EXECUTION" | "COMPLETED") {
+    setExecutionSaving(true);
+    const res = await fetch(`/api/deals/${deal.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ executionStatus: status }),
+    });
+    setExecutionSaving(false);
+    if (res.ok) {
+      toast.success(status === "IN_EXECUTION" ? "Marked in execution" : "Marked delivered");
+      router.refresh();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Update failed");
+    }
+  }
 
   async function handleDelete() {
     if (!confirm(`Delete deal ${deal.code}? This removes it from every list and analytics view — its quotations and designs stay on record, just no longer attached to a visible deal.`)) return;
@@ -279,6 +306,43 @@ export default function DealDetailClient({
             <div className="flex justify-between"><span className="text-slate-600">First quoted</span><span>{fmtDate(deal.firstQuotedAt)}</span></div>
             <div className="flex justify-between"><span className="text-slate-600">Closed</span><span>{fmtDate(deal.closedAt)}</span></div>
           </div>
+
+          {deal.outcome === "WON" && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 text-sm">
+              <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Delivery</h3>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Execution started</span>
+                <span>{fmtDate(deal.executionStartedAt)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Delivered</span>
+                <span>{fmtDate(deal.deliveryCompletedAt)}</span>
+              </div>
+              <div className="pt-1 flex gap-2">
+                {deal.executionStatus == null && (
+                  <button
+                    onClick={() => handleSetExecutionStatus("IN_EXECUTION")}
+                    disabled={executionSaving}
+                    className="text-xs font-medium bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg"
+                  >
+                    Start execution
+                  </button>
+                )}
+                {deal.executionStatus === "IN_EXECUTION" && (
+                  <button
+                    onClick={() => handleSetExecutionStatus("COMPLETED")}
+                    disabled={executionSaving}
+                    className="text-xs font-medium bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg"
+                  >
+                    Mark delivered
+                  </button>
+                )}
+                {deal.executionStatus === "COMPLETED" && (
+                  <span className="text-xs font-medium text-wa-green">Delivered</span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

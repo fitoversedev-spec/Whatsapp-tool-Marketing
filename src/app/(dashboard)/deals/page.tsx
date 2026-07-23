@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/rbac";
 import CrmTabs from "@/components/crm/CrmTabs";
+import CrmBadge from "@/components/crm/CrmBadge";
 import DealsClient from "./DealsClient";
 
 export default async function DealsPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
@@ -42,6 +43,11 @@ export default async function DealsPage({ searchParams }: { searchParams: { from
 
   return (
     <>
+      {/* CRM indicator band — /deals is conceptually CRM but lives outside
+          crm/layout, so the badge is added here alongside its tab bar. */}
+      <div className="bg-white px-4 sm:px-6 lg:px-8 pt-2.5">
+        <CrmBadge />
+      </div>
       <CrmTabs isAdmin={isAdmin(user.role)} />
       <DealsClient
       currentUserId={user.id}

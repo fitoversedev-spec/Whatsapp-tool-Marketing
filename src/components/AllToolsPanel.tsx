@@ -117,8 +117,14 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         description: "People at a company — separate from the WhatsApp broadcast list",
       },
       {
+        href: "/crm/leads",
+        label: "Leads",
+        icon: "🎯",
+        description: "Promoted leads — the ones being actively worked toward a deal",
+      },
+      {
         href: "/crm/companies",
-        label: "Lead types",
+        label: "Customer types",
         icon: "🏢",
         description: "Contacts grouped by customer type, business type, lead source, or city",
       },
@@ -178,6 +184,13 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         label: "Taxonomies",
         icon: "🏷️",
         description: "Funnel stages, lead sources, customer profiles, and other editable lists",
+        adminOnly: true,
+      },
+      {
+        href: "/admin/targets",
+        label: "Targets",
+        icon: "🎯",
+        description: "Set company-wide or per-rep revenue targets by month, quarter, or FY",
         adminOnly: true,
       },
       {

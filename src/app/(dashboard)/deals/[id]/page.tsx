@@ -84,6 +84,9 @@ export default async function DealDetailPage({ params }: { params: { id: string 
         siteVisitAt: deal.siteVisitAt?.toISOString() ?? null,
         firstQuotedAt: deal.firstQuotedAt?.toISOString() ?? null,
         closedAt: deal.closedAt?.toISOString() ?? null,
+        executionStatus: deal.executionStatus,
+        executionStartedAt: deal.executionStartedAt?.toISOString() ?? null,
+        deliveryCompletedAt: deal.deliveryCompletedAt?.toISOString() ?? null,
       }}
       offices={offices.map((o) => ({ id: o.id, name: o.name }))}
       cityTiers={cityTiers.map((c) => ({ id: c.id, name: c.name }))}

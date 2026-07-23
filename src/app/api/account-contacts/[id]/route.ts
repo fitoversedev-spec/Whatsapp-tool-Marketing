@@ -49,6 +49,9 @@ const patchSchema = z.object({
   siteCity: z.string().max(100).nullable().optional(),
   customerProfileId: z.string().uuid().nullable().optional(),
   businessType: z.enum(["B2B", "B2C", "B2G"]).nullable().optional(),
+  // "Convert to Lead" (set "LEAD") / undo (null). Only these two values —
+  // "converted" is derived from having a Deal, never stored here.
+  pipelineStage: z.enum(["LEAD"]).nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -68,6 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (parsed.data.designation !== undefined) data.designation = parsed.data.designation;
   if (parsed.data.notes !== undefined) data.notes = parsed.data.notes;
   if (parsed.data.fields !== undefined) data.fields = JSON.stringify(parsed.data.fields);
+  if (parsed.data.pipelineStage !== undefined) data.pipelineStage = parsed.data.pipelineStage;
 
   const accountData: Record<string, unknown> = {};
   if (parsed.data.siteCity !== undefined) accountData.city = parsed.data.siteCity;

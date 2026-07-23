@@ -101,7 +101,7 @@ export default function CompaniesClient({
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <PageHeader
         large
-        title="Lead types"
+        title="Customer types"
         description={`${companies.length} ${isAdmin ? "" : "of yours "}on record — grouped by who they are, not a flat company list`}
         action={
           <button

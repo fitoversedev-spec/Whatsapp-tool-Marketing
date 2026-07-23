@@ -32,7 +32,9 @@ const LOW_CONVERSION_THRESHOLD = 0.2;
 // surfaces), checked against whichever text is available: the line's own
 // label, or its matched product's name.
 const FLOORING_KEYWORDS = /turf|flooring|acrylic|\bpvc\b|ppe.?tile/i;
-function isFlooringLine(li: { label: string | null; product: { name: string } | null }): boolean {
+// Exported so quadrants.ts's productQuadrant() applies the identical
+// flooring-only scoping decision rather than re-deriving its own filter.
+export function isFlooringLine(li: { label: string | null; product: { name: string } | null }): boolean {
   return FLOORING_KEYWORDS.test([li.label, li.product?.name].filter(Boolean).join(" "));
 }
 

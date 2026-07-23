@@ -69,6 +69,8 @@ model User {
   importBatches        ImportBatch[]
   pendingStaffAction   PendingStaffAction?
   auditLogs            AuditLog[]
+  targetsSet           Target[]
+  decisionsLogged      DecisionLog[]
 
   @@map("users")
 }
@@ -364,6 +366,9 @@ model Reminder {
   // "what actually happened", surfaced in the unified timeline in place of
   // the original location/meetingUrl once set. See docs/DECISIONS.md.
   completionNote String?   @map("completion_note")
+  // Task priority — set only for CRM "Task" reminders; null for every other
+  // reminder kind (scheduled call/meeting follow-ups).
+  priority       String?   @map("priority") // "HIGH" | "MEDIUM" | "LOW", null for non-task reminders
 
   conversation Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   owner        User               @relation(fields: [ownerUserId], references: [id])
@@ -454,6 +459,26 @@ model AuditLog {
   @@index([entity, entityId, at])
   @@index([actorId, at])
   @@map("audit_log")
+}
+
+// Phase 5 insight-engine companion to AuditLog: records the human decision a
+// surfaced insight led to (or a standalone call), so the digest/insight feed
+// can close the loop ("you acted on this"). triggeredByInsightId is the
+// deterministic rule-id/key from insights.ts, nullable for decisions logged
+// without an originating insight. Mirrors AuditLog's single-chokepoint
+// convention (see src/lib/decisionLog.ts).
+model DecisionLog {
+  id                   String   @id @default(uuid())
+  recordedByUserId     String   @map("recorded_by_user_id")
+  decision             String
+  triggeredByInsightId String?  @map("triggered_by_insight_id")
+  decidedAt            DateTime @map("decided_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  recordedBy User @relation(fields: [recordedByUserId], references: [id])
+
+  @@index([decidedAt])
+  @@map("decision_log")
 }
 
 // Colored, named tags applied to contacts. Tag names are globally unique;
@@ -1098,6 +1123,31 @@ model ValueBand {
   @@map("value_bands")
 }
 
+// Phase 1 (analytics v2) — admin-entered revenue/deal-count goals a period's
+// actuals are measured against. scopeId is the userId when scopeType=USER,
+// null for a company-wide row (scopeType=COMPANY) — never both null and
+// USER, enforced at the write layer (targets.ts), not the DB. periodStart is
+// always the first day of the period (month/quarter/FY start) so the unique
+// constraint below can't collide on two different in-period dates for the
+// same scope.
+model Target {
+  id            String   @id @default(uuid())
+  scopeType     String   @map("scope_type") // "USER" | "COMPANY"
+  scopeId       String?  @map("scope_id") // userId when scopeType=USER, null for company-wide
+  periodType    String   @map("period_type") // "MONTH" | "QUARTER" | "FY"
+  periodStart   DateTime @map("period_start")
+  targetRevenue Decimal  @map("target_revenue") @db.Decimal(12, 2)
+  targetDeals   Int?     @map("target_deals")
+  setByUserId   String   @map("set_by_user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  setByUser User @relation(fields: [setByUserId], references: [id])
+
+  @@unique([scopeType, scopeId, periodType, periodStart])
+  @@map("targets")
+}
+
 // The buying organisation — distinct from AccountContact (the human) and
 // Lead (the raw enquiry). Anchor for repeat-customer analysis: when the same
 // school buys a second court, it attaches to this same Account.
@@ -1146,6 +1196,10 @@ model AccountContact {
   notes     String?
   fields    String   @default("{}") // JSON object of ad-hoc custom fields — same shape as Contact.fields
   isPrimary Boolean  @default(false) @map("is_primary")
+  // Leads funnel stage — null = plain contact, "LEAD" = promoted lead. A lead
+  // counts as "converted" once it has a Deal via dealsAsPrimary (derived, not
+  // stored here).
+  pipelineStage String? @map("pipeline_stage") // null = plain contact, "LEAD" = promoted lead
   importBatchId String? @map("import_batch_id")
   createdAt DateTime @default(now()) @map("created_at")
   // Soft delete, matching Account/Deal's own convention — a hard delete
@@ -1279,6 +1333,13 @@ model Deal {
   quotedValue    Decimal? @map("quoted_value") @db.Decimal(12, 2)
   wonValue       Decimal? @map("won_value") @db.Decimal(12, 2)
 
+  // Post-won delivery tracking, so analytics/execution.ts can measure backlog
+  // and delivery time — null = not yet started (or deal isn't WON). Nothing
+  // sets these yet; that's DealDetailClient.tsx's job in this same phase.
+  executionStatus     String?   @map("execution_status") // "IN_EXECUTION" | "COMPLETED"
+  executionStartedAt  DateTime? @map("execution_started_at")
+  deliveryCompletedAt DateTime? @map("delivery_completed_at")
+
   enquiryAt       DateTime  @default(now()) @map("enquiry_at")
   firstContactAt  DateTime? @map("first_contact_at")
   siteVisitAt     DateTime? @map("site_visit_at")
@@ -1297,6 +1358,12 @@ model Deal {
   lossReasonNote String?   @map("loss_reason_note")
 
   importBatchId String? @map("import_batch_id")
+
+  // Manually-typed next step surfaced on the contact/deal page (Zoho-style
+  // "next action" line) — free text plus its own due date, independent of the
+  // structured Reminder task list.
+  nextActionNote  String?   @map("next_action_note")
+  nextActionDueAt DateTime? @map("next_action_due_at")
 
   deletedAt DateTime? @map("deleted_at")
   createdAt DateTime  @default(now()) @map("created_at")

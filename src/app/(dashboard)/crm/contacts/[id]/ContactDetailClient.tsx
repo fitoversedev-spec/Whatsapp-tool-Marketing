@@ -12,6 +12,7 @@ import { DESIGNATIONS } from "../AccountContactsClient";
 type Contact = {
   id: string; name: string; phone: string | null; email: string | null;
   designation: string | null; notes: string | null; fields: Record<string, string>; isPrimary: boolean;
+  pipelineStage: string | null;
   accountId: string; accountName: string; accountCity: string | null;
   accountCustomerProfileId: string | null; accountBusinessType: string | null;
   createdAt: string;
@@ -20,9 +21,10 @@ type CustomerProfileOption = { id: string; name: string };
 type Deal = {
   id: string; code: string; title: string; quotedValue: number | null; wonValue: number | null;
   estimatedValue: number | null; stageId: string; stageName: string; stageColorHex: string | null;
+  nextActionNote: string | null; nextActionDueAt: string | null;
 };
 type ActivityRow = { id: string; subject: string; notes: string | null; occurredAt: string; typeName: string; ownerName: string };
-type QuotationRow = { id: string; number: string; grandTotal: number; status: string; contactPhone: string | null; sentAt: string | null; createdAt: string };
+type QuotationRow = { id: string; number: string; sport: string; grandTotal: number; status: string; contactPhone: string | null; sentAt: string | null; createdAt: string };
 type CourtImageRow = { id: string; number: string; status: string; imageUrl: string | null; contactPhone: string | null; sentAt: string | null; createdAt: string };
 type ProductInterestRow = { id: string; name: string; sportName: string | null };
 type ProductOption = { id: string; name: string; type: string };
@@ -32,7 +34,7 @@ type LossReasonOption = { id: string; name: string };
 type ContactNoteRow = { id: string; title: string | null; body: string; createdAt: string; authorName: string };
 type ReminderRow = {
   id: string; message: string; dueAt: string; completedAt: string | null; completionNote: string | null;
-  location: string | null; meetingUrl: string | null; activityTypeName: string | null;
+  location: string | null; meetingUrl: string | null; priority: string | null; activityTypeName: string | null;
 };
 type AttachmentRow = { id: string; fileName: string; fileUrl: string; fileSize: number; mimeType: string; createdAt: string; uploadedByName: string };
 
@@ -52,6 +54,12 @@ const STATUS_COLORS: Record<string, string> = {
   viewed: "bg-purple-100 text-purple-800",
   accepted: "bg-emerald-100 text-emerald-800",
   expired: "bg-red-100 text-red-800",
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  HIGH: "bg-red-100 text-red-700",
+  MEDIUM: "bg-amber-100 text-amber-700",
+  LOW: "bg-slate-100 text-slate-600",
 };
 
 function fmtInr(n: number | null): string {
@@ -81,11 +89,10 @@ const SECTIONS = [
   { id: "quotations", label: "Quotations" },
   { id: "court-designs", label: "Court Designs" },
   { id: "products", label: "Product interest" },
-  { id: "meetings", label: "Meetings" },
-  { id: "calls", label: "Calls" },
+  { id: "open-activities", label: "Open activities" },
+  { id: "closed-activities", label: "Closed activities" },
   { id: "notes", label: "Notes" },
   { id: "attachments", label: "Attachments" },
-  { id: "activities", label: "Activities" },
 ];
 
 export default function ContactDetailClient({
@@ -100,7 +107,12 @@ export default function ContactDetailClient({
   const toast = useToast();
   const [tab, setTab] = useState<"overview" | "calls-meetings" | "timeline">("overview");
   const [showProductPicker, setShowProductPicker] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"quote" | "court" | "deal" | "meeting" | "call" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"quote" | "court" | "deal" | "meeting" | "call" | "task" | null>(null);
+  // Task = a one-off Reminder with a priority; needs a deal to hang off (same
+  // as meetings/calls), so it shares the CreateDealFirstModal fallback path.
+  const [taskDealId, setTaskDealId] = useState<string | null>(null);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [convertingLead, setConvertingLead] = useState(false);
   const [scheduleDealId, setScheduleDealId] = useState<string | null>(null);
   const [scheduleMode, setScheduleMode] = useState<"meeting" | "call" | null>(null);
   // "+Call"/"+Meeting" used to always open Schedule (a future Reminder) —
@@ -344,6 +356,28 @@ export default function ContactDetailClient({
     }
   }
 
+  // The seeded "Task" ActivityType — tags a task-kind Reminder so it reads as
+  // a Task everywhere the type name is shown (Open activities here, My Day).
+  const taskTypeId = activityTypes.find((t) => t.name === "Task")?.id ?? null;
+
+  function onAddTask() {
+    setAddMenuOpen(false);
+    if (deals.length === 0) { setPendingAction("task"); return; }
+    setTaskDealId(deals[0].id);
+  }
+
+  async function convertToLead() {
+    setConvertingLead(true);
+    const res = await fetch(`/api/account-contacts/${contact.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pipelineStage: "LEAD" }),
+    });
+    setConvertingLead(false);
+    if (res.ok) { toast.success("Converted to lead"); router.refresh(); }
+    else toast.error("Could not convert to lead");
+  }
+
   function buildTypedRows(typeNames: Set<string>): TypedTimelineRow[] {
     const scheduled: TypedTimelineRow[] = reminders
       .filter((r) => r.activityTypeName && typeNames.has(r.activityTypeName))
@@ -371,6 +405,29 @@ export default function ContactDetailClient({
     ...meetingRows.map((r) => ({ ...r, typeLabel: "MEETING" as const })),
     ...callRows.map((r) => ({ ...r, typeLabel: "CALL" as const })),
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  // Open = every not-yet-completed reminder (task/meeting/call alike), the
+  // rep's outstanding to-dos; sorted soonest-due first so what's overdue or
+  // due today sits at the top.
+  const openReminders = [...reminders]
+    .filter((r) => !r.completedAt)
+    .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+
+  // Closed = anything already done — completed reminders merged with logged
+  // Activities — grouped by calendar day, newest day first (Zoho-style).
+  type ClosedItem = { id: string; kind: "reminder" | "activity"; typeLabel: string; subject: string; detail: string | null; timestamp: string };
+  const closedItems: ClosedItem[] = [
+    ...reminders
+      .filter((r) => r.completedAt)
+      .map((r) => ({ id: r.id, kind: "reminder" as const, typeLabel: r.activityTypeName ?? "Reminder", subject: r.message, detail: r.completionNote, timestamp: r.completedAt as string })),
+    ...activities.map((a) => ({ id: a.id, kind: "activity" as const, typeLabel: a.typeName, subject: a.subject, detail: a.notes, timestamp: a.occurredAt })),
+  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const closedGroups = new Map<string, ClosedItem[]>();
+  for (const item of closedItems) {
+    const day = fmtDate(item.timestamp);
+    (closedGroups.get(day) ?? closedGroups.set(day, []).get(day)!).push(item);
+  }
+  const openCount = openReminders.length;
 
   // Shared row card — used by both the Overview sidebar's single-type
   // Meetings/Calls sections and the combined Calls & Meetings tab. Only the
@@ -429,22 +486,58 @@ export default function ContactDetailClient({
     );
   }
 
-  // Shared wrapper for the Meetings/Calls sections — a plain function (not
-  // a component) so it closes over the complete-with-note state directly
-  // instead of prop-drilling it through.
-  function renderTypedSection(sectionId: string, label: string, rows: TypedTimelineRow[], onAdd: () => void) {
+  // Open-activity row — an outstanding Reminder of any kind (task/meeting/
+  // call). A plain function (not a component) so it closes over the
+  // complete-with-note state directly instead of prop-drilling it. Tasks
+  // additionally show their priority chip; the type name comes straight from
+  // the linked ActivityType so it reads correctly for every kind.
+  function renderOpenReminder(r: ReminderRow) {
+    const isOverdue = new Date(r.dueAt).getTime() < Date.now();
     return (
-      <div id={sectionId} className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-semibold text-slate-900">{label} <span className="text-slate-400 font-normal">{rows.length}</span></h3>
-          <button onClick={onAdd} aria-label={`Add ${label.toLowerCase()}`} title={`Add ${label.toLowerCase()}`} className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none">
-            +
-          </button>
+      <div key={r.id} className="rounded-lg border border-slate-100 px-3 py-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide bg-slate-100 text-slate-600">
+                {r.activityTypeName ?? "Reminder"}
+              </span>
+              {r.priority && (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${PRIORITY_COLORS[r.priority] ?? "bg-slate-100 text-slate-600"}`}>
+                  {r.priority}
+                </span>
+              )}
+              <span className="text-sm font-medium text-slate-900">{r.message}</span>
+            </div>
+            <div className={`text-xs mt-0.5 ${isOverdue ? "text-red-600 font-medium" : "text-slate-500"}`}>
+              {isOverdue ? "Overdue · " : "Due "}{fmtDateTime(r.dueAt)}
+            </div>
+          </div>
+          {completingReminderId !== r.id && (
+            <button
+              onClick={() => { setCompletingReminderId(r.id); setCompletionNoteDraft(""); }}
+              className="text-xs font-medium text-wa-dark hover:underline shrink-0"
+            >
+              Mark complete
+            </button>
+          )}
         </div>
-        {rows.length === 0 ? (
-          <p className="text-sm text-slate-400">Nothing here yet.</p>
-        ) : (
-          <div className="space-y-2">{rows.map((r) => renderTypedRow(r))}</div>
+        {completingReminderId === r.id && (
+          <div className="mt-2 pt-2 border-t border-slate-100">
+            <textarea
+              value={completionNoteDraft}
+              onChange={(e) => setCompletionNoteDraft(e.target.value)}
+              rows={2}
+              autoFocus
+              placeholder="What happened? (optional)"
+              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+            />
+            <div className="flex gap-2 justify-end mt-1.5">
+              <button onClick={() => setCompletingReminderId(null)} className="text-xs font-medium text-slate-700 px-2 py-1">Cancel</button>
+              <button onClick={() => completeReminder(r.id)} disabled={completingBusy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50">
+                {completingBusy ? "Saving..." : "Confirm"}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     );
@@ -530,6 +623,9 @@ export default function ContactDetailClient({
               <Link href={`/crm/companies/${contact.accountId}`} className="hover:underline">{contact.accountName}</Link>
               {contact.designation ? ` · ${contact.designation}` : ""}
               {contact.isPrimary && <span className="ml-1.5 text-[10px] font-semibold text-wa-dark bg-wa-green/10 px-1.5 py-0.5 rounded">PRIMARY</span>}
+              {contact.pipelineStage === "LEAD" && <span className="ml-1.5 text-[10px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">LEAD</span>}
+              {/* "Converted" is derived, never stored — a lead with a deal has moved on. */}
+              {contact.pipelineStage === "LEAD" && deals.length > 0 && <span className="ml-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">CONVERTED</span>}
             </p>
           </div>
         </div>
@@ -563,6 +659,16 @@ export default function ContactDetailClient({
               >
                 {syncing ? "Syncing..." : "Sync to WhatsApp Marketing"}
               </button>
+              {contact.pipelineStage !== "LEAD" && (
+                <button
+                  onClick={convertToLead}
+                  disabled={convertingLead}
+                  title="Promote this contact into the Leads funnel"
+                  className="border border-indigo-300 text-indigo-700 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-indigo-50 disabled:opacity-50"
+                >
+                  {convertingLead ? "Converting..." : "Convert to Lead"}
+                </button>
+              )}
               <button onClick={startEdit} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 Edit
               </button>
@@ -570,6 +676,8 @@ export default function ContactDetailClient({
           )}
         </div>
       </div>
+
+      <NextActionCard deal={deals[0] ?? null} />
 
       {/* Quick actions — attach a new quotation/court design/product interest against this lead. Deal and Activity each have their own + in their own section below instead. */}
       <div className="flex flex-wrap gap-2 mb-5">
@@ -843,8 +951,11 @@ export default function ContactDetailClient({
                   {quotations.map((q) => (
                     <div key={q.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
                       <div className="min-w-0">
+                        {/* This is the customer's own page — the quote NUMBER is
+                            meaningless here, so label by sport instead (status +
+                            date sit alongside, matching the CRM quote-label rule). */}
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-900 font-mono">{q.number}</span>
+                          <span className="text-sm font-medium text-slate-900 capitalize">{q.sport} quote</span>
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-700"}`}>
                             {q.status}
                           </span>
@@ -933,16 +1044,85 @@ export default function ContactDetailClient({
               )}
             </div>
 
-            {/* Meetings/Calls — each merges scheduled (Reminder) + logged
-                (Activity) entries of that type, same as the Quotations/
-                Court Designs sections mix draft+sent in one list. Scheduled
-                ones already surface in My Day (Due today/Overdue) with zero
-                extra wiring since they're ordinary owner-scoped Reminders;
-                this is what gives a rep visibility + the mark-complete-
-                with-a-note action right on the contact, matching the Zoho
-                reference. */}
-            {renderTypedSection("meetings", "Meetings", meetingRows, () => onQuickAction("meeting"))}
-            {renderTypedSection("calls", "Calls", callRows, () => onQuickAction("call"))}
+            {/* Open activities — every outstanding Reminder (task/meeting/
+                call), Zoho-style. Scheduled meetings/calls already surface in
+                My Day (Due today/Overdue) with zero extra wiring since they're
+                ordinary owner-scoped Reminders; this is what gives a rep the
+                full open list + a mark-complete-with-a-note action right on
+                the contact. The per-type Meetings/Calls split still lives in
+                the Calls & Meetings tab (which also shows logged ones); this
+                sidebar view is deliberately the open-vs-closed cut instead. */}
+            <div id="open-activities" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-slate-900">Open activities <span className="text-slate-400 font-normal">{openCount}</span></h3>
+                <div className="relative">
+                  <button
+                    onClick={() => setAddMenuOpen((v) => !v)}
+                    className="text-xs font-medium border border-slate-300 rounded-lg px-2.5 py-1 hover:bg-slate-50"
+                  >
+                    + Add activity
+                  </button>
+                  {addMenuOpen && (
+                    <>
+                      {/* Click-catcher so an outside click closes the menu without a document listener. */}
+                      <div className="fixed inset-0 z-10" onClick={() => setAddMenuOpen(false)} />
+                      <div className="absolute right-0 mt-1 z-20 w-40 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+                        <button onClick={onAddTask} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">✅ Task</button>
+                        <button onClick={() => { setAddMenuOpen(false); onQuickAction("meeting"); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">📅 Meeting</button>
+                        <button onClick={() => { setAddMenuOpen(false); onQuickAction("call"); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">📞 Call</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+              {openReminders.length === 0 ? (
+                <p className="text-sm text-slate-400">Nothing open. Add a task, meeting, or call.</p>
+              ) : (
+                <div className="space-y-2">{openReminders.map((r) => renderOpenReminder(r))}</div>
+              )}
+            </div>
+
+            {/* Closed activities — completed reminders + logged Activities,
+                merged and grouped by day (newest first). "Log activity"
+                records a past activity of any type (Email/WhatsApp/etc.), the
+                capability that used to live on the standalone Activities
+                section. */}
+            <div id="closed-activities" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-slate-900">Closed activities <span className="text-slate-400 font-normal">{closedItems.length}</span></h3>
+                <button
+                  onClick={() => setShowLogActivity(true)}
+                  className="text-xs font-medium border border-slate-300 rounded-lg px-2.5 py-1 hover:bg-slate-50"
+                >
+                  Log activity
+                </button>
+              </div>
+              {closedItems.length === 0 ? (
+                <p className="text-sm text-slate-400">Nothing completed or logged yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {Array.from(closedGroups.entries()).map(([day, items]) => (
+                    <div key={day}>
+                      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{day}</div>
+                      <div className="space-y-2">
+                        {items.map((item) => (
+                          <div key={`${item.kind}-${item.id}`} className="rounded-lg border border-slate-100 px-3 py-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${item.kind === "reminder" ? "bg-slate-100 text-slate-600" : "bg-wa-green/10 text-wa-dark"}`}>
+                                {item.typeLabel}
+                              </span>
+                              <span className="text-sm font-medium text-slate-900">{item.subject}</span>
+                            </div>
+                            {item.detail && <div className="text-sm text-slate-600 mt-0.5">{item.detail}</div>}
+                            <div className="text-xs text-slate-500 mt-0.5">{fmtDateTime(item.timestamp)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* General running note log — deliberately separate from
                 Activities below (structured: type/subject/duration/outcome).
@@ -1041,33 +1221,6 @@ export default function ContactDetailClient({
               )}
             </div>
 
-            <div id="activities" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-slate-900">Activities <span className="text-slate-400 font-normal">{activities.length}</span></h3>
-                <button
-                  onClick={() => setShowLogActivity(true)}
-                  aria-label="Log activity"
-                  title="Log activity"
-                  className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
-                >
-                  +
-                </button>
-              </div>
-              {activities.length === 0 ? (
-                <p className="text-sm text-slate-400">Nothing logged against this person specifically yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {activities.map((a) => (
-                    <div key={a.id} className="border-l-2 border-slate-200 pl-3 py-0.5">
-                      <div className="text-sm text-slate-900"><span className="font-medium">{a.typeName}</span> — {a.subject}</div>
-                      <div className="text-xs text-slate-600">
-                        {fmtDate(a.occurredAt)} · {a.ownerName}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -1086,6 +1239,8 @@ export default function ContactDetailClient({
               router.refresh();
             } else if (action === "meeting" || action === "call") {
               setChoosingFor({ mode: action, dealId });
+            } else if (action === "task") {
+              setTaskDealId(dealId);
             } else {
               goToWizard(action, dealId);
             }
@@ -1138,6 +1293,16 @@ export default function ContactDetailClient({
             toast.success(scheduleMode === "meeting" ? "Meeting scheduled" : "Call scheduled");
             router.refresh();
           }}
+        />
+      )}
+
+      {taskDealId && (
+        <TaskModal
+          dealId={taskDealId}
+          contactName={contact.name}
+          taskTypeId={taskTypeId}
+          onClose={() => setTaskDealId(null)}
+          onCreated={() => { setTaskDealId(null); toast.success("Task added"); router.refresh(); }}
         />
       )}
 
@@ -1308,6 +1473,168 @@ function CreateDealFirstModal({
             {creating ? "Creating..." : "Create deal"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// A Task is a one-off Reminder with a priority — owned by the current user
+// (the POST endpoint forces ownerUserId to the caller), no assignee picker,
+// no repeat. "Reminder on" just widens the delivery channels; either way it's
+// an in-app reminder that surfaces in My Day like every other Reminder.
+function TaskModal({
+  dealId, contactName, taskTypeId, onClose, onCreated,
+}: { dealId: string; contactName: string; taskTypeId: string | null; onClose: () => void; onCreated: () => void }) {
+  const toast = useToast();
+  const [subject, setSubject] = useState(`Follow up with ${contactName}`);
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1); // sensible default: due tomorrow
+    return d.toISOString().slice(0, 10);
+  });
+  const [priority, setPriority] = useState<"HIGH" | "MEDIUM" | "LOW">("MEDIUM");
+  const [reminderOn, setReminderOn] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    if (!subject.trim() || !date) return;
+    setSaving(true);
+    const res = await fetch("/api/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dealId,
+        message: subject.trim(),
+        dueAt: new Date(`${date}T09:00:00`).toISOString(),
+        priority,
+        channels: reminderOn ? ["whatsapp", "in_app"] : ["in_app"],
+        activityTypeId: taskTypeId ?? undefined,
+      }),
+    });
+    setSaving(false);
+    if (res.ok) onCreated();
+    else toast.error("Could not add task");
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full p-5">
+        <h2 className="font-semibold text-slate-900 mb-3">New task</h2>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-slate-600">Subject</label>
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} autoFocus className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600">Due date</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Priority</label>
+              <select value={priority} onChange={(e) => setPriority(e.target.value as "HIGH" | "MEDIUM" | "LOW")} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
+              </select>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={reminderOn} onChange={(e) => setReminderOn(e.target.checked)} />
+            Remind me on WhatsApp too (otherwise in-app only)
+          </label>
+        </div>
+        <div className="flex gap-2 mt-4">
+          <button onClick={onClose} className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
+          <button onClick={submit} disabled={saving || !subject.trim() || !date} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
+            {saving ? "Saving..." : "Add task"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The prominent Zoho-style "Next Action" strip — a manually-typed next step
+// + date living on the Deal (the primary/first deal for this contact). It's
+// the deal's own field, so editing here is the single source of truth read
+// by Deal Detail / Pipeline too, not a copy to sync.
+function NextActionCard({ deal }: { deal: Deal | null }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [note, setNote] = useState(deal?.nextActionNote ?? "");
+  const [date, setDate] = useState(deal?.nextActionDueAt ? deal.nextActionDueAt.slice(0, 10) : "");
+  const [saving, setSaving] = useState(false);
+
+  if (!deal) {
+    return (
+      <div className="mb-4 text-xs text-slate-400">Create a deal to set a next action for this contact.</div>
+    );
+  }
+
+  function startEdit() {
+    setNote(deal!.nextActionNote ?? "");
+    setDate(deal!.nextActionDueAt ? deal!.nextActionDueAt.slice(0, 10) : "");
+    setEditing(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    const res = await fetch(`/api/deals/${deal!.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nextActionNote: note.trim() || null,
+        nextActionDueAt: date ? new Date(`${date}T00:00:00`).toISOString() : null,
+      }),
+    });
+    setSaving(false);
+    if (res.ok) { setEditing(false); toast.success("Next action updated"); router.refresh(); }
+    else toast.error("Could not save next action");
+  }
+
+  const hasAction = !!(deal.nextActionNote || deal.nextActionDueAt);
+
+  return (
+    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Next action</div>
+          {editing ? (
+            <div className="mt-2 flex flex-col sm:flex-row gap-2">
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm shrink-0" />
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                autoFocus
+                placeholder="What's the next step?"
+                className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm min-w-0"
+              />
+            </div>
+          ) : hasAction ? (
+            <div className="mt-1 flex items-center gap-2 flex-wrap">
+              {deal.nextActionDueAt && (
+                <span className="text-[11px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded uppercase">{fmtDate(deal.nextActionDueAt)}</span>
+              )}
+              <span className="text-sm text-slate-800">{deal.nextActionNote ?? "—"}</span>
+            </div>
+          ) : (
+            <div className="mt-1 text-sm text-slate-400">No next action set.</div>
+          )}
+        </div>
+        {editing ? (
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => setEditing(false)} disabled={saving} className="text-xs font-medium text-slate-700 px-2 py-1">Cancel</button>
+            <button onClick={save} disabled={saving} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50">
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        ) : (
+          <button onClick={startEdit} className="text-xs font-medium text-amber-800 hover:underline shrink-0">
+            {hasAction ? "Edit" : "Set"}
+          </button>
+        )}
       </div>
     </div>
   );

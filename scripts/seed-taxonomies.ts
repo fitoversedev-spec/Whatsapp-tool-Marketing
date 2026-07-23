@@ -120,6 +120,7 @@ const ACTIVITY_TYPES = [
   "Negotiation Meeting",
   "Follow-up",
   "Site Measurement",
+  "Task",
 ];
 
 // Matches the two independently-duplicated hardcoded unions in

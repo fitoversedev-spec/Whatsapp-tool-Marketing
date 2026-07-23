@@ -65,6 +65,16 @@ const patchSchema = z.object({
   quotedValue: z.number().min(0).max(999999999).nullable().optional(),
   expectedCloseAt: z.string().datetime().nullable().optional(),
   deleted: z.boolean().optional(),
+  // Post-won delivery tracking (Deal.executionStatus/executionStartedAt/
+  // deliveryCompletedAt — analytics v2 Phase 4's execution.ts reads these).
+  // Timestamps are stamped server-side below, never trusted from the
+  // client, same "set once, never overwritten on re-entry" discipline
+  // transitionDeal.ts uses for firstContactAt/siteVisitAt/etc.
+  executionStatus: z.enum(["IN_EXECUTION", "COMPLETED"]).optional(),
+  // Manually-typed next step + its date, edited on the contact/deal page
+  // (Zoho-style "next action"). Free text, no ActivityType involved.
+  nextActionNote: z.string().max(500).nullable().optional(),
+  nextActionDueAt: z.string().datetime().nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -95,6 +105,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (parsed.data.deleted && !isAdmin(user.role)) {
     return NextResponse.json({ error: "Only admin can delete a deal" }, { status: 403 });
   }
+  if (parsed.data.executionStatus !== undefined && deal.outcome !== "WON") {
+    return NextResponse.json({ error: "Execution status can only be set on a WON deal" }, { status: 422 });
+  }
   if (parsed.data.ownerUserId) {
     const target = await prisma.user.findUnique({ where: { id: parsed.data.ownerUserId } });
     if (!target || target.deletedAt || !target.isActive || target.approvalStatus !== "approved") {
@@ -108,10 +121,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
-  const { deleted, expectedCloseAt, customerProfileId, businessType, accountName, accountCity, accountOwnerUserId, ...rest } = parsed.data;
+  const { deleted, expectedCloseAt, customerProfileId, businessType, accountName, accountCity, accountOwnerUserId, executionStatus, nextActionDueAt, ...rest } = parsed.data;
   const patch: Record<string, unknown> = { ...rest };
   if (expectedCloseAt !== undefined) patch.expectedCloseAt = expectedCloseAt ? new Date(expectedCloseAt) : null;
+  if (nextActionDueAt !== undefined) patch.nextActionDueAt = nextActionDueAt ? new Date(nextActionDueAt) : null;
   if (deleted) patch.deletedAt = new Date();
+  // Stamped server-side, set-once — a later re-click of the same button
+  // (e.g. a double-submit) must not push executionStartedAt/
+  // deliveryCompletedAt forward again.
+  if (executionStatus !== undefined) {
+    patch.executionStatus = executionStatus;
+    if (executionStatus === "IN_EXECUTION" && !deal.executionStartedAt) patch.executionStartedAt = new Date();
+    if (executionStatus === "COMPLETED") {
+      patch.deliveryCompletedAt = new Date();
+      if (!deal.executionStartedAt) patch.executionStartedAt = new Date();
+    }
+  }
 
   const updated = await prisma.deal.update({ where: { id: params.id }, data: patch });
 

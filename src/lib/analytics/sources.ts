@@ -16,6 +16,10 @@ export type SourceRow = {
   sourceName: string;
   leads: number;
   qualified: number;
+  // Total deals attributed to this source (Deal.leadSourceId). Distinct from
+  // `leads` (the separate Lead table, which is empty for CRM-native deals) —
+  // this is the real per-source volume most deals actually have.
+  deals: number;
   quoted: number;
   won: number;
   wonValue: number;
@@ -86,11 +90,12 @@ export async function sourceAnalytics(filter: AnalyticsFilter): Promise<{
     leadMap.set(name, e);
   }
 
-  const dealMap = new Map<string, { quoted: number; won: number; wonValue: number }>();
+  const dealMap = new Map<string, { deals: number; quoted: number; won: number; wonValue: number }>();
   const cityMap = new Map<string, Map<string, number>>();
   for (const d of deals) {
     const name = nameFor(d.leadSourceId);
-    const e = dealMap.get(name) ?? { quoted: 0, won: 0, wonValue: 0 };
+    const e = dealMap.get(name) ?? { deals: 0, quoted: 0, won: 0, wonValue: 0 };
+    e.deals += 1;
     if (d.quotations.length > 0) e.quoted += 1;
     if (d.outcome === "WON") {
       e.won += 1;
@@ -133,13 +138,14 @@ export async function sourceAnalytics(filter: AnalyticsFilter): Promise<{
   const sources: SourceRow[] = [...allNames]
     .map((sourceName) => {
       const l = leadMap.get(sourceName) ?? { leads: 0, qualified: 0, won: 0 };
-      const d = dealMap.get(sourceName) ?? { quoted: 0, won: 0, wonValue: 0 };
+      const d = dealMap.get(sourceName) ?? { deals: 0, quoted: 0, won: 0, wonValue: 0 };
       const cycle = cycleMap.get(sourceName);
       const spend = adSpendMap.get(sourceName) ?? null;
       return {
         sourceName,
         leads: l.leads,
         qualified: l.qualified,
+        deals: d.deals,
         quoted: d.quoted,
         won: d.won,
         wonValue: d.wonValue,

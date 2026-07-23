@@ -28,7 +28,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       orderBy: { updatedAt: "desc" },
       select: {
         id: true, code: true, title: true, quotedValue: true, wonValue: true, estimatedValue: true,
-        currentStageId: true,
+        currentStageId: true, nextActionNote: true, nextActionDueAt: true,
         currentStage: { select: { name: true, colorHex: true } },
       },
     }),
@@ -63,7 +63,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     prisma.quotation.findMany({
       where: { dealId: { in: dealIds } },
       orderBy: { createdAt: "desc" },
-      select: { id: true, number: true, grandTotal: true, status: true, contactPhone: true, sentAt: true, createdAt: true },
+      select: { id: true, number: true, sport: true, grandTotal: true, status: true, contactPhone: true, sentAt: true, createdAt: true },
     }),
     prisma.courtImage.findMany({
       where: { dealId: { in: dealIds } },
@@ -104,6 +104,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
         notes: contact.notes,
         fields: parseFields(contact.fields),
         isPrimary: contact.isPrimary,
+        pipelineStage: contact.pipelineStage,
         accountId: contact.account.id,
         accountName: contact.account.name,
         accountCity: contact.account.city,
@@ -118,13 +119,14 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
         estimatedValue: d.estimatedValue ? Number(d.estimatedValue) : null,
         stageId: d.currentStageId,
         stageName: d.currentStage.name, stageColorHex: d.currentStage.colorHex,
+        nextActionNote: d.nextActionNote, nextActionDueAt: d.nextActionDueAt?.toISOString() ?? null,
       }))}
       activities={activities.map((a) => ({
         id: a.id, subject: a.subject, notes: a.notes, occurredAt: a.occurredAt.toISOString(),
         typeName: a.activityType.name, ownerName: a.owner.name,
       }))}
       quotations={quotations.map((q) => ({
-        id: q.id, number: q.number, grandTotal: Number(q.grandTotal), status: q.status,
+        id: q.id, number: q.number, sport: q.sport, grandTotal: Number(q.grandTotal), status: q.status,
         contactPhone: q.contactPhone, sentAt: q.sentAt?.toISOString() ?? null, createdAt: q.createdAt.toISOString(),
       }))}
       courtImages={courtImages.map((c) => ({
@@ -146,7 +148,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       reminders={reminders.map((r) => ({
         id: r.id, message: r.message, dueAt: r.dueAt.toISOString(), completedAt: r.completedAt?.toISOString() ?? null,
         completionNote: r.completionNote, location: r.location, meetingUrl: r.meetingUrl,
-        activityTypeName: r.activityType?.name ?? null,
+        priority: r.priority, activityTypeName: r.activityType?.name ?? null,
       }))}
       attachments={attachments.map((a) => ({
         id: a.id, fileName: a.fileName, fileUrl: a.fileUrl, fileSize: a.fileSize, mimeType: a.mimeType,

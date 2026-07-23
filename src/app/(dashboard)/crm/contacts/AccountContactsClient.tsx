@@ -87,6 +87,7 @@ export default function AccountContactsClient({
   const [reassigning, setReassigning] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [movingToLeads, setMovingToLeads] = useState(false);
   const [filterField, setFilterField] = useState("");
   const [filterCondition, setFilterCondition] = useState<"contains" | "equals" | "not_empty">("contains");
   const [filterValue, setFilterValue] = useState("");
@@ -173,6 +174,31 @@ export default function AccountContactsClient({
       next.delete(id);
       return next;
     });
+    router.refresh();
+  }
+
+  async function moveSelectedToLeads() {
+    setMovingToLeads(true);
+    // Owner-scoping is enforced server-side: /api/account-contacts/bulk-pipeline
+    // updates only contacts the caller owns (or admin), skipping the rest —
+    // mirrors bulk-delete's ownership loop.
+    const res = await fetch("/api/account-contacts/bulk-pipeline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactIds: Array.from(selected), pipelineStage: "LEAD" }),
+    });
+    setMovingToLeads(false);
+    if (!res.ok) {
+      toast.error("Could not move to Leads");
+      return;
+    }
+    const data = await res.json();
+    const parts: string[] = [];
+    if (data.updated > 0) parts.push(`${data.updated} moved to Leads`);
+    if (data.skippedForbidden > 0) parts.push(`${data.skippedForbidden} skipped — not yours`);
+    if (data.updated > 0) toast.success(parts.join(", "));
+    else toast.error(parts.join(", ") || "Nothing moved");
+    setSelected(new Set());
     router.refresh();
   }
 
@@ -294,6 +320,13 @@ export default function AccountContactsClient({
                 </button>
               </div>
             )}
+            <button
+              onClick={moveSelectedToLeads}
+              disabled={movingToLeads}
+              className="bg-slate-900 hover:bg-slate-800 text-white font-medium px-3 py-1 rounded-md text-xs disabled:opacity-50 border-l border-wa-green/30 pl-2 ml-1"
+            >
+              {movingToLeads ? "Moving..." : `Move ${selected.size} to Leads`}
+            </button>
             <button
               onClick={deleteSelected}
               disabled={bulkDeleting}
@@ -627,8 +660,9 @@ function NewContactModal({
 
             <div className="mt-6 space-y-3">
               <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Notes</h3>
-              <div><label className="text-xs font-medium text-slate-600">What does this lead want?</label>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="e.g. Wants a football turf, ~10,000 sqft, budget around 8L" className="mt-1 w-full max-w-2xl border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <div className="max-w-2xl">
+                <label className="text-xs font-medium text-slate-600">What does this lead want?</label>
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="e.g. Wants a football turf, ~10,000 sqft, budget around 8L" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
 

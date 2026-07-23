@@ -19,6 +19,9 @@ const createSchema = z.object({
   // Tags a scheduled reminder as a Meeting/Call/etc — the CRM's "Schedule a
   // meeting/call" quick actions set this to the matching ActivityType.
   activityTypeId: z.string().uuid().nullable().optional(),
+  // Set only by the "Task" activity flow — a Task is a Reminder with a
+  // priority; plain scheduled reminders leave it null.
+  priority: z.enum(["HIGH", "MEDIUM", "LOW"]).optional(),
 });
 
 const listFilterSchema = z.enum(["overdue", "today", "week", "later", "completed", "all"]);
@@ -137,6 +140,7 @@ export async function POST(req: NextRequest) {
       location: parsed.data.location ?? null,
       meetingUrl: parsed.data.meetingUrl ?? null,
       activityTypeId: parsed.data.activityTypeId ?? null,
+      priority: parsed.data.priority ?? null,
     },
     include: {
       conversation: { select: { contactPhone: true, contactName: true } },

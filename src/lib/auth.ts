@@ -25,3 +25,10 @@ export async function requireAdmin() {
   if (user.role !== "admin") redirect("/inbox");
   return user;
 }
+
+// Analytics is open to every approved role — access, not scope. Which
+// deals a role actually sees is decided downstream, once, by
+// src/lib/analytics/scope.ts.
+export async function requireAnalyticsAccess() {
+  return requireUser();
+}

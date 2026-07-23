@@ -38,7 +38,7 @@ export default function RepDealsClient({
     const rows = deals.map((d) => [
       d.customerName,
       d.dealCode,
-      d.quotations.map((q) => q.number).join(", "),
+      d.quotations.map((q) => `${q.sport} quote (${q.status})`).join(", "),
       d.courtImages.map((c) => c.number).join(", "),
       d.interestedProducts.join(", "),
       d.stageName,
@@ -93,12 +93,13 @@ export default function RepDealsClient({
                   {d.quotations.length === 0 && d.courtImages.length === 0 && d.interestedProducts.length === 0 && (
                     <span className="text-slate-300">—</span>
                   )}
+                  {/* No quote NUMBER in CRM areas (per spec) — customer is
+                      already its own column, so the label is sport + status. */}
                   {d.quotations.map((q) => (
                     <div key={q.id}>
                       <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline font-medium">
-                        📄 Quote {q.number}
+                        📄 {q.sport} quote · {q.status}
                       </a>
-                      <span className="text-slate-400"> ({q.status})</span>
                     </div>
                   ))}
                   {d.courtImages.map((c) => (

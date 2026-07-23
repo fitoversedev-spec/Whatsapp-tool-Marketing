@@ -12,6 +12,10 @@ export type AnalyticsFilter = {
   customerProfileIds?: string[];
   stageIds?: string[];
   outcomes?: ("WON" | "LOST" | "DROPPED")[];
+  // Typed but not yet wired into every function — same status as
+  // leadSourceIds/customerProfileIds/stageIds/outcomes above.
+  productIds?: string[];
+  sportIds?: string[];
   // Set by /api/crm/analytics as a defensive filter (see Deal.dealChannel's
   // own schema comment) — every query below treats an unset dealChannel as
   // "no filter" for any caller that doesn't need it.

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { requireAnalyticsAccess } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { getRepDeals } from "@/lib/analytics/repDeals";
 import { stageVelocity } from "@/lib/analytics/timelines";
@@ -14,7 +15,10 @@ export default async function RepDealsPage({
   params: { userId: string };
   searchParams: { from?: string; to?: string };
 }) {
-  await requireAdmin();
+  const user = await requireAnalyticsAccess();
+  // A non-admin can only ever drill into their OWN rep page — never someone
+  // else's, no matter what userId is typed into the URL.
+  if (!isAdmin(user.role) && params.userId !== user.id) notFound();
 
   const rep = await prisma.user.findUnique({ where: { id: params.userId }, select: { id: true, name: true } });
   if (!rep) notFound();

@@ -116,6 +116,7 @@ export default function ContactDetailClient({
   // is passed straight from deals[0].
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [convertingLead, setConvertingLead] = useState(false);
   const [scheduleDealId, setScheduleDealId] = useState<string | null>(null);
   const [scheduleMode, setScheduleMode] = useState<"meeting" | "call" | null>(null);
@@ -770,21 +771,43 @@ export default function ContactDetailClient({
                   )}
                 </div>
               ) : s.id === "attachments" ? (
-                // "+" here opens the file picker (upload from computer) — same
-                // quick-add pattern as the open-activities nav item above.
-                <div key={s.id} className="flex items-center">
+                // "+" opens an upload-source menu — same quick-add pattern as
+                // the open-activities nav item above. "Drive upload" is shown
+                // but disabled until Google Drive is wired up.
+                <div key={s.id} className="relative flex items-center">
                   <a href={`#${s.id}`} className="flex-1 block px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900">
                     {s.label}
                   </a>
                   <button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => setAttachMenuOpen((v) => !v)}
                     disabled={uploadingFile}
-                    aria-label="Upload file"
-                    title="Upload from computer"
+                    aria-label="Add attachment"
+                    title="Upload a file"
                     className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-wa-dark text-base leading-none disabled:opacity-40"
                   >
                     +
                   </button>
+                  {attachMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setAttachMenuOpen(false)} />
+                      <div className="absolute left-full top-0 ml-1 z-20 w-48 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+                        <button
+                          onClick={() => { setAttachMenuOpen(false); fileInputRef.current?.click(); }}
+                          className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          💻 Upload from computer
+                        </button>
+                        <button
+                          disabled
+                          title="Coming soon"
+                          className="w-full text-left px-3 py-1.5 text-sm text-slate-400 cursor-not-allowed flex items-center justify-between"
+                        >
+                          <span>☁️ Drive upload</span>
+                          <span className="text-[10px] font-semibold text-slate-400">Soon</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <a key={s.id} href={`#${s.id}`} className="block px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900">

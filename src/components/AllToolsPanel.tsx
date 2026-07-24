@@ -123,12 +123,6 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         description: "Promoted leads — the ones being actively worked toward a deal",
       },
       {
-        href: "/crm/companies",
-        label: "Customer types",
-        icon: "🏢",
-        description: "Contacts grouped by customer type, business type, lead source, or city",
-      },
-      {
         href: "/deals",
         label: "Deals",
         icon: "📁",
@@ -139,6 +133,12 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         label: "Activities",
         icon: "🗒️",
         description: "Every logged touchpoint and reminder, in one place",
+      },
+      {
+        href: "/crm/companies",
+        label: "Customer types",
+        icon: "🏢",
+        description: "Contacts grouped by customer type, business type, lead source, or city",
       },
       {
         href: "/crm/import",

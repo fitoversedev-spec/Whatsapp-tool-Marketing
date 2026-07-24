@@ -26,9 +26,11 @@ export async function GET(req: NextRequest) {
 
   const scope = resolveAnalyticsScope({ id: user.id, role: user.role as Role });
 
-  const defaultFrom = new Date();
-  defaultFrom.setDate(defaultFrom.getDate() - 30);
-  defaultFrom.setHours(0, 0, 0, 0);
+  // No pre-applied dates: a blank picker => ALL-TIME data. The fallback
+  // window is 2000-01-01..now (wide enough to cover every record) instead
+  // of now-30, so an unfiltered first load shows everything. A picked
+  // range still narrows to exactly that range.
+  const defaultFrom = new Date("2000-01-01T00:00:00Z");
 
   const from = parseDateParam(req.nextUrl.searchParams.get("from"), defaultFrom);
   const toParam = req.nextUrl.searchParams.get("to");

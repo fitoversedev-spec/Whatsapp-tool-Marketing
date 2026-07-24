@@ -37,9 +37,17 @@ export async function POST(req: NextRequest) {
   }
 
   if (allowedIds.length) {
+    const promoting = parsed.data.pipelineStage === "LEAD";
+    // On promotion, stamp promotedToLeadAt for the analytics Leads window — but
+    // only rows not already promoted (promotedToLeadAt IS NULL), so a repeat
+    // "Move to Leads" never overwrites the original first-promotion timestamp.
     await prisma.accountContact.updateMany({
-      where: { id: { in: allowedIds } },
-      data: { pipelineStage: parsed.data.pipelineStage },
+      where: promoting
+        ? { id: { in: allowedIds }, promotedToLeadAt: null }
+        : { id: { in: allowedIds } },
+      data: promoting
+        ? { pipelineStage: "LEAD", promotedToLeadAt: new Date() }
+        : { pipelineStage: parsed.data.pipelineStage },
     });
   }
 

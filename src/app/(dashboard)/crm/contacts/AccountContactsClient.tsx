@@ -6,7 +6,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
-import DateRangePicker, { defaultDateRange, type DateRange } from "@/components/DateRangePicker";
+import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import { matchesContactFilter } from "@/lib/contacts";
 
 type Contact = {
@@ -254,7 +254,7 @@ export default function AccountContactsClient({
             placeholder="Search by name or company..."
             className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs"
           />
-          <DateRangePicker value={dateRange ?? defaultDateRange(30)} onApply={applyDateRange} />
+          <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
           {dateRange && (
             <button onClick={clearDateRange} className="text-xs text-slate-500 hover:underline">
               Clear date filter

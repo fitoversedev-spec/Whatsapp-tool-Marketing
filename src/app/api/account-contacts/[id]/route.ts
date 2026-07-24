@@ -71,7 +71,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (parsed.data.designation !== undefined) data.designation = parsed.data.designation;
   if (parsed.data.notes !== undefined) data.notes = parsed.data.notes;
   if (parsed.data.fields !== undefined) data.fields = JSON.stringify(parsed.data.fields);
-  if (parsed.data.pipelineStage !== undefined) data.pipelineStage = parsed.data.pipelineStage;
+  if (parsed.data.pipelineStage !== undefined) {
+    data.pipelineStage = parsed.data.pipelineStage;
+    // Stamp the FIRST promotion to LEAD for the analytics Leads window; guard
+    // against overwriting an existing timestamp when the row is already a LEAD.
+    if (parsed.data.pipelineStage === "LEAD" && !res.contact.promotedToLeadAt) {
+      data.promotedToLeadAt = new Date();
+    }
+  }
 
   const accountData: Record<string, unknown> = {};
   if (parsed.data.siteCity !== undefined) accountData.city = parsed.data.siteCity;

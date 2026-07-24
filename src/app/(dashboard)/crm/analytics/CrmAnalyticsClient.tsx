@@ -4,13 +4,13 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
-import DateRangePicker, { defaultDateRange, type DateRange } from "@/components/DateRangePicker";
+import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import { HorizontalBarChart, StackedBarChart, DonutChart, DONUT_PALETTE, QuadrantScatter, BubbleChart, fmtInr, fmtPct, fmtDays } from "@/components/analytics/charts";
 import { DataTable } from "@/components/analytics/DataTable";
 import { ExportButtons } from "@/components/analytics/ExportButtons";
 import { AnalyticsCard } from "@/components/analytics/AnalyticsCard";
 import { PeriodPicker } from "@/components/analytics/PeriodPicker";
-import { currentPeriod, type Period } from "@/lib/analytics/periodPresets";
+import { allTimePeriod, type Period } from "@/lib/analytics/periodPresets";
 import { MIN_SAMPLE_SIZE } from "@/lib/analytics/types";
 import type { Role } from "@/lib/rbac";
 
@@ -251,7 +251,9 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
     ? ["performance", "patterns", "quadrants", "insights", "digest"]
     : ["performance"];
 
-  const [range, setRange] = useState<DateRange>(() => defaultDateRange(30));
+  // Blank by default → the fetches send ?from=&to=, and each analytics route
+  // falls back to an all-time window. Applying a range then filters.
+  const [range, setRange] = useState<DateRange>({ from: "", to: "" });
   const [group, setGroup] = useState<Group>("performance");
   const [tab, setTab] = useState<Tab>("overview");
   const [data, setData] = useState<AnalyticsResponse | null>(null);
@@ -740,7 +742,9 @@ function stackedSeries(rows: { x: string; group: string; value: number }[], topN
 }
 
 function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
-  const [period, setPeriod] = useState<Period>(() => currentPeriod("MONTH"));
+  // Default all-time: no Target keys on an all-time boundary, so
+  // targetProgress is null and the pace/target UI shows its "no target" state.
+  const [period, setPeriod] = useState<Period>(() => allTimePeriod());
   const [data, setData] = useState<OverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
 

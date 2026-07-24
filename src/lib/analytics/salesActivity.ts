@@ -38,20 +38,27 @@ export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActiv
   // Performance) still count standalone/no-deal quotations as before.
   const quoteDealWhere = filter.dealChannel ? { deal: { dealChannel: filter.dealChannel } } : {};
 
-  const [owners, leadGroups, dealGroups, siteVisitGroups, sampleGroups, sentQuotes, closedDeals] = await Promise.all([
+  const [owners, promotedLeads, dealGroups, siteVisitGroups, sampleGroups, sentQuotes, closedDeals] = await Promise.all([
     prisma.user.findMany({
       where: { deletedAt: null, isActive: true, ...ownerWhere },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    // Lead has no dealChannel concept — the general Lead table's only
-    // live creation path is the CRM bulk import (see docs/DECISIONS.md
-    // on the bot's old `new lead` command being repointed away from it),
-    // so every Lead row is already CRM-native. No filter needed here.
-    prisma.lead.groupBy({
-      by: ["ownerUserId"],
-      where: { createdAt: { gte: from, lte: to }, ownerUserId: { not: null } },
-      _count: { _all: true },
+    // "Leads" now means CRM contacts promoted to the LEAD pipeline stage,
+    // windowed by when they were promoted (promotedToLeadAt) — the legacy
+    // Lead table is effectively empty and no longer the live leads source.
+    // AccountContact has no owner of its own, so attribution is by the
+    // parent Account.ownerUserId (same as /crm/leads scopes reps). Fetched
+    // as rows + tallied in JS because Prisma groupBy can't group across the
+    // account relation (mirrors the sentQuotes JS-tally below).
+    prisma.accountContact.findMany({
+      where: {
+        pipelineStage: "LEAD",
+        deletedAt: null,
+        promotedToLeadAt: { gte: from, lte: to },
+        account: { ownerUserId: { not: null } },
+      },
+      select: { account: { select: { ownerUserId: true } } },
     }),
     prisma.deal.groupBy({
       by: ["ownerUserId"],
@@ -81,7 +88,12 @@ export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActiv
     }),
   ]);
 
-  const leadMap = new Map(leadGroups.map((g) => [g.ownerUserId, g._count._all]));
+  const leadMap = new Map<string, number>();
+  for (const c of promotedLeads) {
+    const ownerId = c.account.ownerUserId;
+    if (!ownerId) continue; // guarded by the where-clause, narrows the type
+    leadMap.set(ownerId, (leadMap.get(ownerId) ?? 0) + 1);
+  }
   const dealMap = new Map(dealGroups.map((g) => [g.ownerUserId, g._count._all]));
   const visitMap = new Map(siteVisitGroups.map((g) => [g.ownerUserId, g._count._all]));
   const sampleMap = new Map(sampleGroups.map((g) => [g.ownerUserId, g._count._all]));

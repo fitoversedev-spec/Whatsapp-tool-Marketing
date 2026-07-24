@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { ExportButtons } from "@/components/analytics/ExportButtons";
-import DateRangePicker, { defaultDateRange, type DateRange } from "@/components/DateRangePicker";
+import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import type { RepDealRow } from "@/lib/analytics/repDeals";
 
 function fmtDate(iso: string): string {
@@ -191,10 +191,10 @@ export default function DealsDrilldownClient({
     router.push(`/crm/analytics/deals${qs ? `?${qs}` : ""}`);
   }
 
-  // Date filter seeds from the URL's from/to; absent either end we show a
-  // sensible 90-day default in the picker without pushing until Apply.
+  // Date filter seeds from the URL's from/to; absent either end the picker
+  // starts blank (no date pre-applied) and only filters once the user applies.
   const dateRange: DateRange =
-    filters.from && filters.to ? { from: filters.from, to: filters.to } : defaultDateRange(90);
+    filters.from && filters.to ? { from: filters.from, to: filters.to } : { from: "", to: "" };
 
   // Apply a new date range to the same page, preserving every other active
   // param (reps, city, stageId, outcome, productId, …) so filtering by date

@@ -23,12 +23,12 @@ export default async function RepDealsPage({
   const rep = await prisma.user.findUnique({ where: { id: params.userId }, select: { id: true, name: true } });
   if (!rep) notFound();
 
-  const defaultFrom = new Date();
-  defaultFrom.setDate(defaultFrom.getDate() - 30);
-  const fromStr = searchParams.from ?? defaultFrom.toISOString().slice(0, 10);
-  const toStr = searchParams.to ?? new Date().toISOString().slice(0, 10);
-  const from = new Date(fromStr + "T00:00:00");
-  const to = new Date(toStr + "T23:59:59");
+  // No pre-applied dates: when neither end is picked, query the ALL-TIME
+  // window (2000-01-01..now) so the roster + velocity show everything,
+  // but hand the picker BLANK strings so it renders empty (not a
+  // fabricated range). A picked range narrows to exactly that range.
+  const from = searchParams.from ? new Date(searchParams.from + "T00:00:00") : new Date("2000-01-01T00:00:00Z");
+  const to = searchParams.to ? new Date(searchParams.to + "T23:59:59") : new Date();
 
   // Same range used for stage velocity now also scopes the roster itself
   // (createdAt-filtered) — previously the roster ignored the date range
@@ -38,5 +38,12 @@ export default async function RepDealsPage({
     stageVelocity({ from, to, ownerIds: [rep.id] }),
   ]);
 
-  return <RepDealsClient repName={rep.name} deals={deals} stageVelocity={velocity} dateRange={{ from: fromStr, to: toStr }} />;
+  return (
+    <RepDealsClient
+      repName={rep.name}
+      deals={deals}
+      stageVelocity={velocity}
+      dateRange={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}
+    />
+  );
 }

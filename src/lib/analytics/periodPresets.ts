@@ -7,10 +7,19 @@
 // client components, same convention as fiscalYear.ts.
 import { fyContaining } from "./fiscalYear";
 
-export type PeriodType = "MONTH" | "QUARTER" | "FY";
+// "ALL" is deliberately NOT a Target-alignable period — no Target row keys on
+// an all-time boundary — so getTargetProgress finds no match and the Overview
+// simply renders its existing "no target" state. It's the default so the
+// Overview opens on all-time data, not the current month.
+export type PeriodType = "ALL" | "MONTH" | "QUARTER" | "FY";
 export type Period = { type: PeriodType; start: Date; end: Date; label: string };
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Wide fixed floor (matches the analytics routes' all-time fallback) → now.
+export function allTimePeriod(): Period {
+  return { type: "ALL", start: new Date("2000-01-01T00:00:00Z"), end: new Date(), label: "All time" };
+}
 
 export function monthPeriod(year: number, monthIndex: number): Period {
   const start = new Date(year, monthIndex, 1);
@@ -48,6 +57,7 @@ export function quarterOf(date: Date): { fyStartYear: number; quarter: 1 | 2 | 3
 }
 
 export function describePeriod(type: PeriodType, start: Date): string {
+  if (type === "ALL") return "All time";
   if (type === "MONTH") return `${MONTH_NAMES[start.getMonth()]} ${start.getFullYear()}`;
   if (type === "FY") return fyContaining(start).label;
   const { fyStartYear, quarter } = quarterOf(start);
@@ -56,6 +66,7 @@ export function describePeriod(type: PeriodType, start: Date): string {
 
 export function currentPeriod(type: PeriodType): Period {
   const now = new Date();
+  if (type === "ALL") return allTimePeriod();
   if (type === "MONTH") return monthPeriod(now.getFullYear(), now.getMonth());
   if (type === "FY") return fyPeriod(fyContaining(now).start.getFullYear());
   const { fyStartYear, quarter } = quarterOf(now);

@@ -1205,6 +1205,8 @@ model AccountContact {
   // counts as "converted" once it has a Deal via dealsAsPrimary (derived, not
   // stored here).
   pipelineStage String? @map("pipeline_stage") // null = plain contact, "LEAD" = promoted lead
+  // Records when a contact was promoted to pipelineStage=LEAD; null = never promoted; used by analytics to window the Leads metric.
+  promotedToLeadAt DateTime? @map("promoted_to_lead_at")
   importBatchId String? @map("import_batch_id")
   createdAt DateTime @default(now()) @map("created_at")
   // Soft delete, matching Account/Deal's own convention — a hard delete

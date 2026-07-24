@@ -33,6 +33,14 @@ export default function RepDealsClient({
     router.push(`/crm/analytics/rep/${params.userId}?from=${range.from}&to=${range.to}`);
   }
 
+  // Blank range => all-time (no pre-applied dates); only show the created-in
+  // window phrasing once an actual range is picked, since new Date("") is an
+  // Invalid Date and would throw in fmtDate.
+  const rangeLabel =
+    dateRange.from && dateRange.to
+      ? ` — created ${fmtDate(new Date(dateRange.from).toISOString())} to ${fmtDate(new Date(dateRange.to).toISOString())}`
+      : " — all time";
+
   function exportXlsx() {
     const headers = ["Customer", "Deal code", "Quotations", "Court designs", "Products interested", "Stage", "Latest note", "Next activity"];
     const rows = deals.map((d) => [
@@ -53,7 +61,7 @@ export default function RepDealsClient({
       <PageHeader
         large
         title={repName}
-        description={`${deals.length} customer${deals.length === 1 ? "" : "s"} being handled${wonOnly ? " (won only)" : ""} — created ${fmtDate(new Date(dateRange.from).toISOString())} to ${fmtDate(new Date(dateRange.to).toISOString())}`}
+        description={`${deals.length} customer${deals.length === 1 ? "" : "s"} being handled${wonOnly ? " (won only)" : ""}${rangeLabel}`}
         action={
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <DateRangePicker value={dateRange} onApply={applyDateRange} />

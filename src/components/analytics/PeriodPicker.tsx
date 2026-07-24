@@ -8,7 +8,7 @@
 // DateRangePicker.
 import { useState, useEffect } from "react";
 import type { Period, PeriodType } from "@/lib/analytics/periodPresets";
-import { monthPeriod, quarterPeriod, fyPeriod, quarterOf } from "@/lib/analytics/periodPresets";
+import { monthPeriod, quarterPeriod, fyPeriod, quarterOf, allTimePeriod } from "@/lib/analytics/periodPresets";
 
 function monthInputValue(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -22,7 +22,8 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
   function changeType(next: PeriodType) {
     setType(next);
     const now = new Date();
-    if (next === "MONTH") onChange(monthPeriod(now.getFullYear(), now.getMonth()));
+    if (next === "ALL") onChange(allTimePeriod());
+    else if (next === "MONTH") onChange(monthPeriod(now.getFullYear(), now.getMonth()));
     else if (next === "FY") onChange(fyPeriod(quarterOf(now).fyStartYear));
     else onChange(quarterPeriod(quarterOf(now).fyStartYear, quarterOf(now).quarter));
   }
@@ -34,6 +35,7 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
         onChange={(e) => changeType(e.target.value as PeriodType)}
         className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
       >
+        <option value="ALL">All time</option>
         <option value="MONTH">Month</option>
         <option value="QUARTER">Quarter</option>
         <option value="FY">Fiscal year</option>

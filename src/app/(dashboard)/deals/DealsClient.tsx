@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
-import DateRangePicker, { defaultDateRange, type DateRange } from "@/components/DateRangePicker";
+import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 
 type Deal = {
   id: string;
@@ -160,7 +160,7 @@ export default function DealsClient({
             ))}
           </select>
         )}
-        <DateRangePicker value={dateRange ?? defaultDateRange(30)} onApply={applyDateRange} />
+        <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
         {dateRange && (
           <button onClick={() => router.push("/deals")} className="text-xs text-slate-500 hover:underline">
             Clear date filter

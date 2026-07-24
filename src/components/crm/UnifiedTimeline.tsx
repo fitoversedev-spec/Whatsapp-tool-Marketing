@@ -34,7 +34,7 @@ export default function UnifiedTimeline({ entries }: { entries: TimelineEntry[] 
           <div key={`${e.kind}-${e.id}`} className={`text-sm border-l-2 pl-3 ${style.border}`}>
             <div className="flex items-center gap-1.5">
               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${style.badge}`}>{style.label}</span>
-              <span className={`text-base font-medium ${e.kind === "reminder" && e.completed ? "text-slate-400 line-through" : "text-slate-800"}`}>
+              <span className={`text-base font-medium ${e.kind === "reminder" && e.completed ? "text-slate-400" : "text-slate-800"}`}>
                 {e.title}
               </span>
             </div>

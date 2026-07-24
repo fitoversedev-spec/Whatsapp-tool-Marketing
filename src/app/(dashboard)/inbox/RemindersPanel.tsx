@@ -216,7 +216,7 @@ export default function RemindersPanel({
                     <div className="flex-1 min-w-0">
                       <div
                         className={`text-sm whitespace-pre-wrap break-words ${
-                          r.completedAt ? "line-through text-slate-500" : "text-slate-800"
+                          r.completedAt ? "text-slate-400" : "text-slate-800"
                         }`}
                       >
                         {r.message}

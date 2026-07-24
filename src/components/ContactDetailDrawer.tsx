@@ -468,7 +468,7 @@ export default function ContactDetailDrawer({
                           <div
                             className={`text-sm ${
                               r.completedAt
-                                ? "line-through text-slate-500"
+                                ? "text-slate-400"
                                 : "text-slate-800"
                             }`}
                           >

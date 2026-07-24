@@ -179,7 +179,7 @@ function Row({
         className="rounded"
       />
       <div className="flex-1 min-w-0">
-        <div className={`text-sm ${isCompleted ? "line-through text-slate-500" : "text-slate-900 font-medium"}`}>
+        <div className={`text-sm ${isCompleted ? "text-slate-400" : "text-slate-900 font-medium"}`}>
           {reminder.message}
         </div>
         <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">

@@ -19,6 +19,7 @@ export default async function DealDetailPage({ params }: { params: { id: string 
         leadSource: true,
         lossReason: true,
         siteCityTier: true,
+        primaryContact: { select: { name: true } },
         stageHistory: {
           orderBy: { changedAt: "desc" },
           include: { fromStage: { select: { name: true } }, toStage: { select: { name: true } }, changedBy: { select: { name: true } } },
@@ -39,6 +40,32 @@ export default async function DealDetailPage({ params }: { params: { id: string 
 
   if (!deal || deal.deletedAt) notFound();
   if (!isAdmin(user.role) && deal.ownerUserId && deal.ownerUserId !== user.id) notFound();
+
+  // Show the primary contact's quotations / court designs / product interest
+  // across that contact's deals (same set the contact detail page shows) — a
+  // customer's documents should be visible from any of their deals, not only
+  // the specific deal a given quote/design was created on. Owner-scoped: a
+  // non-admin only aggregates their OWN deals for this contact, so they can't
+  // see another rep's deal documents through a shared contact (an admin sees
+  // all of the contact's deals).
+  const contactDealIds = deal.primaryContactId
+    ? (
+        await prisma.deal.findMany({
+          where: {
+            primaryContactId: deal.primaryContactId,
+            deletedAt: null,
+            ...(isAdmin(user.role) ? {} : { ownerUserId: user.id }),
+          },
+          select: { id: true },
+        })
+      ).map((d) => d.id)
+    : [deal.id];
+
+  const [dealQuotations, dealCourtImages, dealLineItems] = await Promise.all([
+    prisma.quotation.findMany({ where: { dealId: { in: contactDealIds } }, select: { id: true, number: true, sport: true, grandTotal: true, status: true, sentAt: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
+    prisma.courtImage.findMany({ where: { dealId: { in: contactDealIds } }, select: { id: true, number: true, status: true, imageUrl: true, image2dUrl: true, sentAt: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
+    prisma.dealLineItem.findMany({ where: { dealId: { in: contactDealIds }, OR: [{ isEnquiryOnly: true }, { productId: { not: null } }] }, select: { label: true, product: { select: { name: true } } } }),
+  ]);
 
   // Unified Activity+Reminder feed — previously two separate, un-merged
   // sections (and Reminders weren't shown here at all until this phase).
@@ -102,6 +129,25 @@ export default async function DealDetailPage({ params }: { params: { id: string 
       }))}
       activityTypes={activityTypes.map((t) => ({ id: t.id, name: t.name }))}
       timeline={timeline}
+      customerName={deal.primaryContact?.name ?? deal.account.name}
+      quotations={dealQuotations.map((q) => ({
+        id: q.id,
+        number: q.number,
+        sport: q.sport,
+        grandTotal: Number(q.grandTotal),
+        status: q.status,
+        date: (q.sentAt ?? q.createdAt).toISOString(),
+      }))}
+      courtImages={dealCourtImages.map((c) => ({
+        id: c.id,
+        number: c.number,
+        status: c.status,
+        imageUrl: c.image2dUrl ?? c.imageUrl,
+        date: (c.sentAt ?? c.createdAt).toISOString(),
+      }))}
+      productInterests={Array.from(
+        new Set(dealLineItems.map((li) => li.product?.name ?? li.label).filter((n): n is string => !!n)),
+      )}
     />
   );
 }

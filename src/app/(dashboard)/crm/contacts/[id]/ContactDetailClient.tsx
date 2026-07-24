@@ -451,7 +451,7 @@ export default function ContactDetailClient({
               {r.typeLabel && (
                 <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide bg-slate-100 text-slate-600">{r.typeLabel}</span>
               )}
-              <span className={`text-sm font-medium ${r.kind === "scheduled" && r.completed ? "text-slate-500 line-through" : "text-slate-900"}`}>{r.title}</span>
+              <span className={`text-sm font-medium ${r.kind === "scheduled" && r.completed ? "text-slate-400" : "text-slate-900"}`}>{r.title}</span>
             </div>
             {r.detail && <div className="text-sm text-slate-600 mt-0.5">{r.detail}</div>}
             <div className="text-xs text-slate-500 mt-0.5">{fmtDateTime(r.timestamp)}</div>
@@ -769,6 +769,23 @@ export default function ContactDetailClient({
                     </>
                   )}
                 </div>
+              ) : s.id === "attachments" ? (
+                // "+" here opens the file picker (upload from computer) — same
+                // quick-add pattern as the open-activities nav item above.
+                <div key={s.id} className="flex items-center">
+                  <a href={`#${s.id}`} className="flex-1 block px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                    {s.label}
+                  </a>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFile}
+                    aria-label="Upload file"
+                    title="Upload from computer"
+                    className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-wa-dark text-base leading-none disabled:opacity-40"
+                  >
+                    +
+                  </button>
+                </div>
               ) : (
                 <a key={s.id} href={`#${s.id}`} className="block px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900">
                   {s.label}
@@ -980,16 +997,15 @@ export default function ContactDetailClient({
                   {quotations.map((q) => (
                     <div key={q.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
                       <div className="min-w-0">
-                        {/* This is the customer's own page — the quote NUMBER is
-                            meaningless here, so label by sport instead (status +
-                            date sit alongside, matching the CRM quote-label rule). */}
+                        {/* Label by customer name (not the quote number/sport) —
+                            sport, value and date sit alongside as detail. */}
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-900 capitalize">{q.sport} quote</span>
+                          <span className="text-sm font-medium text-slate-900">{contact.name}</span>
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-700"}`}>
                             {q.status}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-600">{fmtInr(q.grandTotal)} · {fmtDate(q.sentAt ?? q.createdAt)}</div>
+                        <div className="text-xs text-slate-600"><span className="capitalize">{q.sport}</span> · {fmtInr(q.grandTotal)} · {fmtDate(q.sentAt ?? q.createdAt)}</div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0 ml-3">
                         <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-wa-dark hover:underline">
@@ -1024,13 +1040,15 @@ export default function ContactDetailClient({
                   {courtImages.map((c) => (
                     <div key={c.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
                       <div className="min-w-0">
+                        {/* Label by customer name (not the design code) — the
+                            code + date stay as a small reference below. */}
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-900 font-mono">{c.number}</span>
+                          <span className="text-sm font-medium text-slate-900">{contact.name}</span>
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${STATUS_COLORS[c.status] ?? "bg-slate-100 text-slate-700"}`}>
                             {c.status}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-600">{fmtDate(c.sentAt ?? c.createdAt)}</div>
+                        <div className="text-xs text-slate-600"><span className="font-mono">{c.number}</span> · {fmtDate(c.sentAt ?? c.createdAt)}</div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0 ml-3">
                         {c.imageUrl && (

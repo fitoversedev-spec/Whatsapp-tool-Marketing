@@ -27,7 +27,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: {
         owner: { select: { id: true, name: true } },
         deal: { select: { id: true, code: true, title: true } },
         account: { select: { id: true, name: true } },
-        accountContact: { select: { name: true, phone: true } },
+        accountContact: { select: { id: true, name: true, phone: true } },
       },
     }),
     prisma.reminder.findMany({
@@ -42,8 +42,8 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: {
         owner: { select: { id: true, name: true } },
         // deal.primaryContact is the fallback source for name/phone when the
         // reminder itself isn't anchored to a contact.
-        deal: { select: { id: true, code: true, title: true, primaryContact: { select: { name: true, phone: true } } } },
-        accountContact: { select: { name: true, phone: true } },
+        deal: { select: { id: true, code: true, title: true, primaryContact: { select: { id: true, name: true, phone: true } } } },
+        accountContact: { select: { id: true, name: true, phone: true } },
       },
     }),
   ]);
@@ -64,6 +64,8 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: {
     accountName: a.account?.name ?? null,
     contactName: a.accountContact?.name ?? a.account?.name ?? null,
     contactPhone: a.accountContact?.phone ?? null,
+    // Only a real contact links to the contact page; the account-name fallback is a company, not a person.
+    contactId: a.accountContact?.id ?? null,
   }));
 
   const reminderRows: ActivityRow[] = reminders.map((r) => ({
@@ -82,6 +84,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: {
     accountName: null,
     contactName: r.accountContact?.name ?? r.deal?.primaryContact?.name ?? null,
     contactPhone: r.accountContact?.phone ?? r.deal?.primaryContact?.phone ?? null,
+    contactId: r.accountContact?.id ?? r.deal?.primaryContact?.id ?? null,
   }));
 
   const merged = [...activityRows, ...reminderRows]

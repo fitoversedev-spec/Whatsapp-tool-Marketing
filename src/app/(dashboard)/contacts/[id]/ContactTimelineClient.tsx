@@ -269,9 +269,9 @@ function EventCard({ event }: { event: Event }) {
       <div className={`rounded-xl border p-3 ${done ? "bg-slate-50 border-slate-200 opacity-70" : "bg-orange-50 border-orange-200"}`}>
         <div className="text-xs text-orange-700 mb-1">
           ⏰ Reminder · {event.ownerName} · due {when}
-          {done && <span className="ml-1 line-through text-slate-500">· completed</span>}
+          {done && <span className="ml-1 text-slate-400">· completed</span>}
         </div>
-        <div className={`text-sm ${done ? "line-through text-slate-500" : "text-slate-800"}`}>
+        <div className={`text-sm ${done ? "text-slate-400" : "text-slate-800"}`}>
           {event.message}
         </div>
       </div>

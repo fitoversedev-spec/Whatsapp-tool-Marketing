@@ -72,6 +72,18 @@ function fmtDate(iso: string | null): string {
   return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
 
+// Quotation/court-design status pill colours (same convention as the contact page).
+const STATUS_COLORS: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-600",
+  sent: "bg-blue-100 text-blue-700",
+  viewed: "bg-amber-100 text-amber-700",
+  accepted: "bg-wa-green/10 text-wa-dark",
+  expired: "bg-red-100 text-red-700",
+};
+function statusPill(status: string): string {
+  return `text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${STATUS_COLORS[status] ?? "bg-slate-100 text-slate-700"}`;
+}
+
 function fmtDuration(seconds: number | null): string {
   if (seconds == null) return "";
   const days = Math.floor(seconds / 86400);
@@ -92,6 +104,10 @@ export default function DealDetailClient({
   isAdmin,
   users,
   timeline,
+  customerName,
+  quotations,
+  courtImages,
+  productInterests,
 }: {
   deal: Deal;
   stageHistory: StageHistoryRow[];
@@ -103,6 +119,10 @@ export default function DealDetailClient({
   isAdmin: boolean;
   users: { id: string; name: string }[];
   timeline: TimelineEntry[];
+  customerName: string;
+  quotations: { id: string; number: string; sport: string; grandTotal: number; status: string; date: string }[];
+  courtImages: { id: string; number: string; status: string; imageUrl: string | null; date: string }[];
+  productInterests: string[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -184,6 +204,65 @@ export default function DealDetailClient({
                 {c.name} {c.phone && `· ${c.phone}`} {c.isPrimary && <span className="text-wa-green">(primary)</span>}
               </div>
             ))}
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Quotations sent <span className="text-slate-400 font-normal">{quotations.length}</span></h3>
+            {quotations.length === 0 ? (
+              <p className="text-sm text-slate-400">No quotations sent for this customer yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {quotations.map((q) => (
+                  <div key={q.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-900">{customerName}</span>
+                        <span className={statusPill(q.status)}>{q.status}</span>
+                      </div>
+                      <div className="text-xs text-slate-600"><span className="capitalize">{q.sport}</span> · {fmtInr(q.grandTotal)} · {fmtDate(q.date)}</div>
+                    </div>
+                    <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-wa-dark hover:underline shrink-0 ml-3">View PDF</a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Court designs sent <span className="text-slate-400 font-normal">{courtImages.length}</span></h3>
+            {courtImages.length === 0 ? (
+              <p className="text-sm text-slate-400">No court designs sent for this customer yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {courtImages.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-900">{customerName}</span>
+                        <span className={statusPill(c.status)}>{c.status}</span>
+                      </div>
+                      <div className="text-xs text-slate-600"><span className="font-mono">{c.number}</span> · {fmtDate(c.date)}</div>
+                    </div>
+                    {c.imageUrl && (
+                      <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-xs text-wa-dark hover:underline shrink-0 ml-3">View design</a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Product interest <span className="text-slate-400 font-normal">{productInterests.length}</span></h3>
+            {productInterests.length === 0 ? (
+              <p className="text-sm text-slate-400">No products noted for this customer yet.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {productInterests.map((p) => (
+                  <span key={p} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-lg">{p}</span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-4">

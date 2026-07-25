@@ -23,6 +23,8 @@ import {
   type Anomaly,
 } from "./anomalies";
 import { getKpiBoard } from "./kpiBoard";
+import { companyBenchmarks } from "./benchmarks";
+import { salesActivity } from "./salesActivity";
 import type { TargetProgress } from "./targets";
 
 export type Insight = {
@@ -207,6 +209,17 @@ export async function generateInsights(
   const scopedFilter: AnalyticsFilter = { ...filter, ownerIds };
   const scopedToSelf = !scope.companyWide;
 
+  // The current-window company benchmark and scoped salesActivity rows are each
+  // needed by MORE THAN ONE consumer below (cycleTimeSpike + getKpiBoard both
+  // want the benchmark; repActivityUpConversionDown + getKpiBoard both want the
+  // rows). Kick each off ONCE here and pass the in-flight promise to every
+  // consumer, so the underlying salesActivity (7 queries) runs a single time
+  // instead of 2-3×. No added latency — the promises start immediately and each
+  // consumer just awaits the same one. companyBenchmarks forces company-wide
+  // internally, so scopedFilter vs filter produces the identical benchmark.
+  const currentBenchmarksP = companyBenchmarks(filter);
+  const currentActivityRowsP = salesActivity(scopedFilter);
+
   // The anomaly family runs against the scoped filter. The target family goes
   // through getKpiBoard (which re-applies the identical scope internally and
   // owns the periodType inference + Target-row selection) so pace/gap math is
@@ -216,10 +229,13 @@ export async function generateInsights(
     Promise.all([
       enquiriesUpWinsFlat(scopedFilter),
       sourceWinRateDecay(scopedFilter),
-      cycleTimeSpike(scopedFilter),
-      repActivityUpConversionDown(scopedFilter),
+      cycleTimeSpike(scopedFilter, currentBenchmarksP),
+      repActivityUpConversionDown(scopedFilter, currentActivityRowsP),
     ]),
-    getKpiBoard(user, filter, { start: filter.from, end: filter.to }),
+    getKpiBoard(user, filter, { start: filter.from, end: filter.to }, {
+      activityRows: currentActivityRowsP,
+      benchmarks: currentBenchmarksP,
+    }),
   ]);
 
   const anomalyInsights = anomalyGroups

@@ -7,8 +7,8 @@
 import { prisma } from "@/lib/prisma";
 import type { AnalyticsFilter } from "./types";
 import { MIN_SAMPLE_SIZE } from "./types";
-import { companyBenchmarks } from "./benchmarks";
-import { salesActivity } from "./salesActivity";
+import { companyBenchmarks, type Benchmarks } from "./benchmarks";
+import { salesActivity, type SalesActivityRow } from "./salesActivity";
 
 export type Anomaly = { rule: string; severity: "info" | "warning"; subject: string; detail: string; n: number };
 
@@ -128,7 +128,13 @@ export async function sourceWinRateDecay(filter: AnalyticsFilter): Promise<Anoma
   return anomalies.sort((a, b) => b.n - a.n);
 }
 
-export async function cycleTimeSpike(filter: AnalyticsFilter): Promise<Anomaly[]> {
+export async function cycleTimeSpike(
+  filter: AnalyticsFilter,
+  // The current-window company benchmark is identical to the one getKpiBoard
+  // and the other insight rules need; a composing caller (generateInsights)
+  // passes the in-flight promise so it's computed ONCE, not per consumer.
+  currentBenchmark?: Benchmarks | Promise<Benchmarks>,
+): Promise<Anomaly[]> {
   const prev = precedingPeriod(filter);
   // companyBenchmarks forces company-wide scope (ownerIds cleared,
   // dealChannel:"crm") and its own MIN_SAMPLE_SIZE gate internally — reused
@@ -136,7 +142,7 @@ export async function cycleTimeSpike(filter: AnalyticsFilter): Promise<Anomaly[]
   // expose the raw closed-deal count behind avgCycleDays, so that's counted
   // separately here (same company-wide scope) purely to populate `n`.
   const [current, previous, currentClosedCount] = await Promise.all([
-    companyBenchmarks(filter),
+    currentBenchmark ?? companyBenchmarks(filter),
     companyBenchmarks({ ...filter, from: prev.from, to: prev.to }),
     prisma.deal.count({
       where: { deletedAt: null, outcome: { in: ["WON", "LOST"] }, closedAt: { gte: filter.from, lte: filter.to }, dealChannel: "crm" },
@@ -159,10 +165,16 @@ export async function cycleTimeSpike(filter: AnalyticsFilter): Promise<Anomaly[]
   ];
 }
 
-export async function repActivityUpConversionDown(filter: AnalyticsFilter): Promise<Anomaly[]> {
+export async function repActivityUpConversionDown(
+  filter: AnalyticsFilter,
+  // Same as cycleTimeSpike: the current-window scoped salesActivity rows are
+  // the same set getKpiBoard fetches, so a composing caller passes the shared
+  // in-flight promise instead of triggering a second identical query.
+  currentRows?: SalesActivityRow[] | Promise<SalesActivityRow[]>,
+): Promise<Anomaly[]> {
   const prev = precedingPeriod(filter);
   const [current, previous] = await Promise.all([
-    salesActivity(filter),
+    currentRows ?? salesActivity(filter),
     salesActivity({ ...filter, from: prev.from, to: prev.to }),
   ]);
 

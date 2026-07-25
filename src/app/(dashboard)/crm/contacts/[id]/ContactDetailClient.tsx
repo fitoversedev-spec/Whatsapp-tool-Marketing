@@ -35,6 +35,7 @@ type ContactNoteRow = { id: string; title: string | null; body: string; createdA
 type ReminderRow = {
   id: string; message: string; dueAt: string; completedAt: string | null; completionNote: string | null;
   location: string | null; meetingUrl: string | null; priority: string | null; activityTypeName: string | null;
+  notes: string | null;
 };
 type AttachmentRow = { id: string; fileName: string; fileUrl: string; fileSize: number; mimeType: string; createdAt: string; uploadedByName: string };
 
@@ -385,9 +386,9 @@ export default function ContactDetailClient({
       .filter((r) => r.activityTypeName && typeNames.has(r.activityTypeName))
       .map((r) => ({
         id: r.id,
-        kind: "scheduled" as const,
+        kind: "scheduled" as const, // detail below prefers the completion note once done, else the scheduling notes/venue
         title: r.message,
-        detail: r.completedAt ? r.completionNote : r.location ?? r.meetingUrl,
+        detail: r.completedAt ? r.completionNote : r.notes || r.location || r.meetingUrl,
         timestamp: r.dueAt,
         completed: !!r.completedAt,
       }));
@@ -421,7 +422,7 @@ export default function ContactDetailClient({
   const closedItems: ClosedItem[] = [
     ...reminders
       .filter((r) => r.completedAt)
-      .map((r) => ({ id: r.id, kind: "reminder" as const, typeLabel: r.activityTypeName ?? "Reminder", subject: r.message, detail: r.completionNote, timestamp: r.completedAt as string })),
+      .map((r) => ({ id: r.id, kind: "reminder" as const, typeLabel: r.activityTypeName ?? "Reminder", subject: r.message, detail: r.completionNote || r.notes, timestamp: r.completedAt as string })),
     ...activities.map((a) => ({ id: a.id, kind: "activity" as const, typeLabel: a.typeName, subject: a.subject, detail: a.notes, timestamp: a.occurredAt })),
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   const closedGroups = new Map<string, ClosedItem[]>();
@@ -513,6 +514,7 @@ export default function ContactDetailClient({
             <div className={`text-xs mt-0.5 ${isOverdue ? "text-red-600 font-medium" : "text-slate-500"}`}>
               {isOverdue ? "Overdue · " : "Due "}{fmtDateTime(r.dueAt)}
             </div>
+            {r.notes && <div className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">{r.notes}</div>}
           </div>
           {completingReminderId !== r.id && (
             <button
@@ -1430,6 +1432,7 @@ function ScheduleReminderModal({
     return d.toISOString().slice(0, 10);
   });
   const [time, setTime] = useState("10:00");
+  const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
   function findType(name: string) {
@@ -1452,6 +1455,7 @@ function ScheduleReminderModal({
         message: title.trim(),
         dueAt: dueAt.toISOString(),
         activityTypeId: activityTypeId ?? undefined,
+        notes: notes.trim() || undefined,
         location: mode === "meeting" && venueType === "physical" ? location.trim() || undefined : undefined,
         meetingUrl: mode === "meeting" && venueType === "online" ? meetingUrl.trim() || undefined : undefined,
       }),
@@ -1497,6 +1501,10 @@ function ScheduleReminderModal({
               <label className="text-xs font-medium text-slate-600">Time</label>
               <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
             </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600">Notes</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Optional context / agenda" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           </div>
         </div>
         <div className="flex gap-2 mt-4">
@@ -1567,6 +1575,7 @@ function TaskModal({
     return d.toISOString().slice(0, 10);
   });
   const [priority, setPriority] = useState<"HIGH" | "MEDIUM" | "LOW">("MEDIUM");
+  const [notes, setNotes] = useState("");
   const [reminderOn, setReminderOn] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -1583,6 +1592,7 @@ function TaskModal({
         message: subject.trim(),
         dueAt: new Date(`${date}T09:00:00`).toISOString(),
         priority,
+        notes: notes.trim() || undefined,
         channels: reminderOn ? ["whatsapp", "in_app"] : ["in_app"],
         activityTypeId: taskTypeId ?? undefined,
       }),
@@ -1614,6 +1624,10 @@ function TaskModal({
                 <option value="LOW">Low</option>
               </select>
             </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600">Notes</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Optional context / agenda" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={reminderOn} onChange={(e) => setReminderOn(e.target.checked)} />

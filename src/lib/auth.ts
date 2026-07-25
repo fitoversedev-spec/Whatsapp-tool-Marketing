@@ -1,8 +1,13 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getSession } from "./session";
 import { prisma } from "./prisma";
 
-export async function getCurrentUser() {
+// React-cache the user lookup so it runs ONCE per request even though the root
+// layout, the CRM layout, and the page each call requireUser()/getCurrentUser()
+// in their own render layer. Without this, a single /crm/* full load fires the
+// identical user.findUnique 2-3× (separate serial round-trips to Neon).
+export const getCurrentUser = cache(async () => {
   const session = await getSession();
   if (!session.userId) return null;
   const user = await prisma.user.findUnique({ where: { id: session.userId } });
@@ -12,7 +17,7 @@ export async function getCurrentUser() {
   if (!user.isActive) return null;
   if (user.approvalStatus !== "approved") return null;
   return user;
-}
+});
 
 export async function requireUser() {
   const user = await getCurrentUser();

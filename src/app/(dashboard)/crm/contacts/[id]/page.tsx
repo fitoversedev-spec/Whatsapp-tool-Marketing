@@ -20,9 +20,22 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
   if (!contact || contact.deletedAt) notFound();
   if (!isAdmin(user.role) && contact.account.ownerUserId && contact.account.ownerUserId !== user.id) notFound();
 
-  const timeline = await getUnifiedTimeline({ accountContactId: contact.id });
-
-  const [deals, activities, products, activityTypes, funnelStages, lossReasons, customerProfiles] = await Promise.all([
+  // Wave A: everything that depends only on contact.id (already known). These
+  // were previously 4 separate serial round-trips (timeline, the 7-query batch,
+  // contactNotes, attachments); folded into one parallel batch.
+  const [
+    timeline,
+    deals,
+    activities,
+    products,
+    activityTypes,
+    funnelStages,
+    lossReasons,
+    customerProfiles,
+    contactNotes,
+    attachments,
+  ] = await Promise.all([
+    getUnifiedTimeline({ accountContactId: contact.id }),
     prisma.deal.findMany({
       where: { primaryContactId: contact.id, deletedAt: null },
       orderBy: { updatedAt: "desc" },
@@ -47,19 +60,27 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     }),
     prisma.lossReason.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
     prisma.customerProfile.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
+    prisma.accountContactNote.findMany({
+      where: { accountContactId: contact.id },
+      orderBy: { createdAt: "desc" },
+      include: { author: { select: { name: true } } },
+    }),
+    prisma.accountContactAttachment.findMany({
+      where: { accountContactId: contact.id },
+      orderBy: { createdAt: "desc" },
+      include: { uploadedBy: { select: { name: true } } },
+    }),
   ]);
 
-  const contactNotes = await prisma.accountContactNote.findMany({
-    where: { accountContactId: contact.id },
-    orderBy: { createdAt: "desc" },
-    include: { author: { select: { name: true } } },
-  });
-
+  // Wave B: everything that depends on the contact's dealIds.
   // Quotations/court designs/product interest all hang off this contact's
   // deals (same as the Deals section above) — none of these 3 models link
   // to AccountContact directly. Deferred in Phase 1 pending exactly this.
+  // Reminders either hang off a deal OR are anchored directly to the contact
+  // (Zoho-style: task/meeting/call needs no deal); the OR still resolves
+  // correctly when dealIds is empty.
   const dealIds = deals.map((d) => d.id);
-  const [quotations, courtImages, productInterests] = await Promise.all([
+  const [quotations, courtImages, productInterests, reminders] = await Promise.all([
     prisma.quotation.findMany({
       where: { dealId: { in: dealIds } },
       orderBy: { createdAt: "desc" },
@@ -79,22 +100,12 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
         sport: { select: { name: true } },
       },
     }),
+    prisma.reminder.findMany({
+      where: { OR: [{ dealId: { in: dealIds } }, { accountContactId: contact.id }] },
+      orderBy: [{ completedAt: { sort: "asc", nulls: "first" } }, { dueAt: "asc" }],
+      include: { activityType: { select: { name: true } } },
+    }),
   ]);
-
-  // A reminder for this contact either hangs off one of their deals OR is
-  // anchored directly to the contact (Zoho-style: task/meeting/call needs no
-  // deal). The OR still resolves correctly when dealIds is empty.
-  const reminders = await prisma.reminder.findMany({
-    where: { OR: [{ dealId: { in: dealIds } }, { accountContactId: contact.id }] },
-    orderBy: [{ completedAt: { sort: "asc", nulls: "first" } }, { dueAt: "asc" }],
-    include: { activityType: { select: { name: true } } },
-  });
-
-  const attachments = await prisma.accountContactAttachment.findMany({
-    where: { accountContactId: contact.id },
-    orderBy: { createdAt: "desc" },
-    include: { uploadedBy: { select: { name: true } } },
-  });
 
   return (
     <ContactDetailClient
@@ -151,7 +162,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       reminders={reminders.map((r) => ({
         id: r.id, message: r.message, dueAt: r.dueAt.toISOString(), completedAt: r.completedAt?.toISOString() ?? null,
         completionNote: r.completionNote, location: r.location, meetingUrl: r.meetingUrl,
-        priority: r.priority, activityTypeName: r.activityType?.name ?? null,
+        priority: r.priority, activityTypeName: r.activityType?.name ?? null, notes: r.notes,
       }))}
       attachments={attachments.map((a) => ({
         id: a.id, fileName: a.fileName, fileUrl: a.fileUrl, fileSize: a.fileSize, mimeType: a.mimeType,

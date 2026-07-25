@@ -21,6 +21,67 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
   const [q, setQ] = useState("");
   const [convertingId, setConvertingId] = useState<string | null>(null);
 
+  // Quick-add lead modal state.
+  const [showAdd, setShowAdd] = useState(false);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [location, setLocation] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [dupWarn, setDupWarn] = useState(false);
+
+  function resetAdd() {
+    setName("");
+    setPhone("");
+    setLocation("");
+    setDupWarn(false);
+    setSaving(false);
+  }
+
+  // Creates the lead AND its contact in one call: POST /api/account-contacts
+  // auto-creates a lightweight Account from the person's name (so the Leads
+  // "Company" column shows their name, matching existing behaviour), stamps
+  // the contact as a promoted LEAD (asLead), and writes location → account.city.
+  async function submitLead(confirmDuplicate: boolean) {
+    if (!name.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/account-contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          accountName: name.trim(),
+          phone: phone.trim() || undefined,
+          siteCity: location.trim() || undefined,
+          asLead: true,
+          ...(confirmDuplicate ? { confirmDuplicate: true } : {}),
+        }),
+      });
+      if (res.status === 409) {
+        // A similar lead/company may already exist — surface it, let them confirm.
+        setDupWarn(true);
+        return;
+      }
+      if (!res.ok) {
+        toast.error("Could not create lead");
+        return;
+      }
+      toast.success(`Lead "${name.trim()}" added`);
+      setShowAdd(false);
+      resetAdd();
+      router.refresh();
+    } catch {
+      // Network/transient failure — surface it instead of leaving the button
+      // stuck on "Adding..." with Cancel disabled (the finally re-enables both).
+      toast.error("Network error — please try again");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const visible = leads.filter(
     (l) =>
       !q.trim() ||
@@ -57,6 +118,17 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
         large
         title="Leads"
         description={`${leads.length} promoted lead${leads.length === 1 ? "" : "s"} — contacts being actively worked toward a deal`}
+        action={
+          <button
+            onClick={() => {
+              resetAdd();
+              setShowAdd(true);
+            }}
+            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-3.5 py-2 rounded-lg text-sm"
+          >
+            + Add Lead
+          </button>
+        }
       />
 
       <div className="mb-3 flex items-center gap-3 flex-wrap">
@@ -121,6 +193,71 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
           </tbody>
         </table>
       </div>
+
+      {showAdd && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !saving && setShowAdd(false)}
+        >
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-900">Add Lead</h2>
+              <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600 text-lg leading-none" aria-label="Close">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Name <span className="text-red-500">*</span></label>
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); setDupWarn(false); }}
+                  placeholder="e.g. Ravi Kumar"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. 9876543210"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Location</label>
+                <input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="e.g. Salem"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            {dupWarn && (
+              <div className="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                A similar lead or company may already exist. Click &ldquo;Add anyway&rdquo; to create it regardless.
+              </div>
+            )}
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowAdd(false)}
+                disabled={saving}
+                className="px-3.5 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => submitLead(dupWarn)}
+                disabled={saving || !name.trim()}
+                className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-3.5 py-2 rounded-lg text-sm disabled:opacity-50"
+              >
+                {saving ? "Adding..." : dupWarn ? "Add anyway" : "Add lead"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

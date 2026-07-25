@@ -8,7 +8,7 @@ import type { Role } from "@/lib/rbac";
 import { resolveAnalyticsScope } from "./scope";
 import type { AnalyticsFilter } from "./types";
 import { MIN_SAMPLE_SIZE } from "./types";
-import { salesActivity } from "./salesActivity";
+import { salesActivity, type SalesActivityRow } from "./salesActivity";
 import { companyBenchmarks, type Benchmarks } from "./benchmarks";
 import { getTargetProgress, type TargetProgress, type TargetScope } from "./targets";
 import { repQuadrant } from "./quadrants";
@@ -69,8 +69,15 @@ async function createdDealCount(filter: AnalyticsFilter, period: { start: Date; 
 // repQuadrant(filter) only ever computes that one rep's row, never every
 // rep's. Extracting the caller's own point from result.points is a belt +
 // braces check, not the actual scoping mechanism.
-async function selfRepQuadrantPoint(filter: AnalyticsFilter, userId: string): Promise<RepQuadrantSelf | null> {
-  const result = await repQuadrant(filter);
+async function selfRepQuadrantPoint(
+  filter: AnalyticsFilter,
+  userId: string,
+  opts?: { rows?: SalesActivityRow[]; yBenchmark?: number },
+): Promise<RepQuadrantSelf | null> {
+  // opts lets getKpiBoard hand over the salesActivity rows + company benchmark
+  // it already fetched, so this becomes a pure in-memory reshape (no extra
+  // queries) instead of re-running salesActivity + companyBenchmarks.
+  const result = await repQuadrant(filter, opts);
   const own = result.points.find((p) => p.id === userId);
   return own ? { x: own.x, y: own.y, n: own.n, xBenchmark: result.xBenchmark, yBenchmark: result.yBenchmark } : null;
 }
@@ -79,6 +86,14 @@ export async function getKpiBoard(
   user: { id: string; role: Role },
   filter: AnalyticsFilter,
   period: { start: Date; end: Date },
+  // A composing caller (generateInsights) that has already kicked off the
+  // scoped salesActivity + company benchmark for this exact (user, filter) can
+  // hand them over — as values or in-flight promises — so this doesn't re-run
+  // them. Both are byte-identical to what this function would fetch itself.
+  precomputed?: {
+    activityRows?: SalesActivityRow[] | Promise<SalesActivityRow[]>;
+    benchmarks?: Benchmarks | Promise<Benchmarks>;
+  },
 ): Promise<KpiBoard> {
   const scope = resolveAnalyticsScope(user);
   // Same merge rule as /api/crm/analytics/performance/route.ts: a
@@ -95,20 +110,31 @@ export async function getKpiBoard(
     ownerIds && ownerIds.length === 1 ? { scopeType: "USER", scopeId: ownerIds[0] } : { scopeType: "COMPANY", scopeId: null };
   const targetPeriod = { type: inferPeriodType(period.start, period.end), start: period.start, end: period.end };
 
-  const [activityRows, benchmarks, targetProgress, openDeals, dealsCreated, repQuadrantSelf] = await Promise.all([
-    salesActivity(scopedFilter),
+  const [activityRows, benchmarks, targetProgress, openDeals, dealsCreated] = await Promise.all([
+    precomputed?.activityRows ?? salesActivity(scopedFilter),
     // Always company-wide/crm regardless of the caller's own scope —
     // companyBenchmarks() forces that itself — so a rep's Overview can show
     // "how do I compare" against the same baseline an admin would see.
-    companyBenchmarks(filter),
+    precomputed?.benchmarks ?? companyBenchmarks(filter),
     getTargetProgress(targetScope, targetPeriod, scopedFilter),
     openDealCount(scopedFilter),
     createdDealCount(scopedFilter, period),
-    // Admin already gets the full comparative Rep quadrant under Quadrants &
-    // Territory — this single-point embed is a non-admin-only concept, so it
-    // isn't even computed for scope.companyWide (admin) callers.
-    scope.companyWide ? (Promise.resolve(null) as Promise<RepQuadrantSelf | null>) : selfRepQuadrantPoint(scopedFilter, user.id),
   ]);
+
+  // Admin already gets the full comparative Rep quadrant under Quadrants &
+  // Territory — this single-point embed is a non-admin-only concept, so it
+  // isn't computed for scope.companyWide (admin) callers. For a non-admin,
+  // scopedFilter.ownerIds is [user.id], so salesActivity(scopedFilter) — i.e.
+  // activityRows — is exactly the rows repQuadrant would fetch, and the
+  // company yBenchmark equals benchmarks.trailingWinRate (both company-wide,
+  // same window). Handing both over makes this a pure in-memory reshape with
+  // zero extra queries (previously it re-ran salesActivity + companyBenchmarks).
+  const repQuadrantSelf: RepQuadrantSelf | null = scope.companyWide
+    ? null
+    : await selfRepQuadrantPoint(scopedFilter, user.id, {
+        rows: activityRows,
+        yBenchmark: benchmarks.trailingWinRate ?? 0.5,
+      });
 
   let wonRevenue = 0;
   let totalWon = 0;

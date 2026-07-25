@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdmin, type Role } from "@/lib/rbac";
 import { resolveAnalyticsScope } from "@/lib/analytics/scope";
-import { leadSourceQuadrant, productQuadrant, repQuadrant, regionQuadrant } from "@/lib/analytics/quadrants";
+import { leadSourceQuadrant, productQuadrant, repQuadrant, regionQuadrant, companyYBenchmark } from "@/lib/analytics/quadrants";
 import { territoryBubbles } from "@/lib/analytics/territory";
 
 export const runtime = "nodejs";
@@ -41,11 +41,16 @@ export async function GET(req: NextRequest) {
 
   const filter = { from, to, ownerIds: scope.companyWide ? undefined : scope.ownerIds, dealChannel: "crm" as const };
 
+  // All four quadrants draw the same company win-rate reference line off the
+  // same filter — compute it ONCE here and pass it in, instead of each quadrant
+  // fn independently re-running companyBenchmarks → salesActivity (7 queries ×4).
+  const yBenchmark = await companyYBenchmark(filter);
+
   const [leadSource, product, rep, region, territory] = await Promise.all([
-    leadSourceQuadrant(filter),
-    productQuadrant(filter),
-    repQuadrant(filter),
-    regionQuadrant(filter),
+    leadSourceQuadrant(filter, yBenchmark),
+    productQuadrant(filter, yBenchmark),
+    repQuadrant(filter, { yBenchmark }),
+    regionQuadrant(filter, yBenchmark),
     territoryBubbles(filter),
   ]);
 

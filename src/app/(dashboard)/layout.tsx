@@ -29,43 +29,44 @@ async function checkTokenValid(): Promise<boolean> {
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-
-  // Pending approval count — only fetch for admin so we don't waste queries
-  let pendingCount = 0;
-  let tokenExpired = false;
-  if (user.role === "admin") {
-    pendingCount = await prisma.user.count({
-      where: { approvalStatus: "pending", deletedAt: null },
-    });
-    // Only admins see token expiry warning (non-blocking)
-    tokenExpired = !(await checkTokenValid());
-  }
+  const isAdminUser = user.role === "admin";
 
   // Unread conversation count — scoped to user's visible conversations.
   // Admin sees all; sales sees own + unassigned (matches inbox filter).
   const unreadWhere =
-    user.role === "admin"
+    isAdminUser
       ? { unreadCount: { gt: 0 } }
       : {
           unreadCount: { gt: 0 },
           OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }],
         };
-  const unreadAgg = await prisma.conversation.aggregate({
-    where: unreadWhere,
-    _sum: { unreadCount: true },
-  });
-  const unreadCount = unreadAgg._sum.unreadCount ?? 0;
 
-  // Today's reminder count — overdue + due before end-of-IST-day, excluding
-  // completed. Using IST end-of-day matches the /reminders page filter and
-  // prevents off-by-a-day badges on Vercel (UTC server).
-  const reminderCount = await prisma.reminder.count({
-    where: {
-      ownerUserId: user.id,
-      completedAt: null,
-      dueAt: { lte: endOfDayIST(new Date()) },
-    },
-  });
+  // These are all independent — run them in one parallel batch instead of
+  // stacking serial round-trips to the Neon pooler. Previously the admin-only
+  // pending count and the Meta token check (a graph.facebook.com call, up to
+  // 2s) ran serially BEFORE the two counts, so that latency was added to first
+  // paint on every dashboard load; now the token check overlaps the DB reads.
+  const [pendingCount, tokenValid, unreadAgg, reminderCount] = await Promise.all([
+    isAdminUser
+      ? prisma.user.count({ where: { approvalStatus: "pending", deletedAt: null } })
+      : Promise.resolve(0),
+    // Only admins see the token-expiry warning (non-blocking banner)
+    isAdminUser ? checkTokenValid() : Promise.resolve(true),
+    prisma.conversation.aggregate({ where: unreadWhere, _sum: { unreadCount: true } }),
+    // Today's reminder count — overdue + due before end-of-IST-day, excluding
+    // completed. IST end-of-day matches the /reminders page filter and prevents
+    // off-by-a-day badges on Vercel (UTC server).
+    prisma.reminder.count({
+      where: {
+        ownerUserId: user.id,
+        completedAt: null,
+        dueAt: { lte: endOfDayIST(new Date()) },
+      },
+    }),
+  ]);
+
+  const tokenExpired = !tokenValid;
+  const unreadCount = unreadAgg._sum.unreadCount ?? 0;
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50">

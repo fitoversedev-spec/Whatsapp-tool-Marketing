@@ -8,7 +8,10 @@ import DealDetailClient from "./DealDetailClient";
 export default async function DealDetailPage({ params }: { params: { id: string } }) {
   const user = await requireUser();
 
-  const [deal, activityTypes, offices, cityTiers, leadSources, customerProfiles, users] = await Promise.all([
+  // The unified Activity+Reminder timeline only needs the deal id (== params.id,
+  // known before any query), so it rides in this first parallel batch instead of
+  // running as a separate serial wave later. On a 404 the wasted query is harmless.
+  const [deal, activityTypes, offices, cityTiers, leadSources, customerProfiles, users, timeline] = await Promise.all([
     prisma.deal.findUnique({
       where: { id: params.id },
       include: {
@@ -36,6 +39,7 @@ export default async function DealDetailPage({ params }: { params: { id: string 
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    getUnifiedTimeline({ dealId: params.id }),
   ]);
 
   if (!deal || deal.deletedAt) notFound();
@@ -66,10 +70,6 @@ export default async function DealDetailPage({ params }: { params: { id: string 
     prisma.courtImage.findMany({ where: { dealId: { in: contactDealIds } }, select: { id: true, number: true, status: true, imageUrl: true, image2dUrl: true, sentAt: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
     prisma.dealLineItem.findMany({ where: { dealId: { in: contactDealIds }, OR: [{ isEnquiryOnly: true }, { productId: { not: null } }] }, select: { label: true, product: { select: { name: true } } } }),
   ]);
-
-  // Unified Activity+Reminder feed — previously two separate, un-merged
-  // sections (and Reminders weren't shown here at all until this phase).
-  const timeline = await getUnifiedTimeline({ dealId: deal.id });
 
   return (
     <DealDetailClient

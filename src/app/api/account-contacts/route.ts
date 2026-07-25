@@ -34,6 +34,9 @@ const createSchema = z
     confirmDuplicate: z.boolean().optional(),
     // Presence of this field is what triggers auto-creating a Deal.
     dealStageId: z.string().uuid().optional(),
+    // When true, the created contact is stamped as a promoted LEAD so it shows
+    // up in the CRM Leads list immediately (used by the Leads-page quick-add).
+    asLead: z.boolean().optional(),
   })
   .refine((d) => !!d.accountId !== !!d.accountName, {
     message: "Provide exactly one of accountId or accountName",
@@ -106,6 +109,8 @@ export async function POST(req: NextRequest) {
         notes: data.notes ?? null,
         fields: JSON.stringify(data.fields ?? {}),
         isPrimary: data.isPrimary ?? false,
+        // Stamp as a promoted lead when asked, so it lands in the Leads list.
+        ...(data.asLead ? { pipelineStage: "LEAD", promotedToLeadAt: new Date() } : {}),
       },
     });
 

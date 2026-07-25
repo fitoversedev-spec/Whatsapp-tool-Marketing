@@ -9,11 +9,15 @@
 // admin entry UI is a TODO, see docs/DATA_GAPS.md). Those columns render
 // "—" per source rather than being hidden, per the spec's explicit instruction.
 import { prisma } from "@/lib/prisma";
-import type { AnalyticsFilter } from "./types";
+import type { AnalyticsFilter, SegmentRepRow } from "./types";
 import { MIN_SAMPLE_SIZE } from "./types";
+import { segmentRepRows } from "./geography";
 
 export type SourceRow = {
   sourceName: string;
+  // The lead source id this row rolls up (null for the "(unspecified)" bucket) —
+  // carried so the per-source rep breakdown can drill to a filtered deal list.
+  leadSourceId: string | null;
   leads: number;
   qualified: number;
   // Total deals attributed to this source (Deal.leadSourceId). Distinct from
@@ -29,6 +33,8 @@ export type SourceRow = {
   costPerLead: number | null;
   cac: number | null;
   roas: number | null;
+  // Which reps created this source's deals, ranked — deals-created + win% each.
+  reps: SegmentRepRow[];
 };
 
 export type SourceCityCell = { sourceName: string; city: string; enquiries: number };
@@ -57,6 +63,8 @@ export async function sourceAnalytics(filter: AnalyticsFilter): Promise<{
         siteCity: true,
         outcome: true,
         wonValue: true,
+        ownerUserId: true,
+        owner: { select: { name: true } },
         quotations: { select: { id: true }, where: { status: "sent" } },
       },
     }),
@@ -92,8 +100,13 @@ export async function sourceAnalytics(filter: AnalyticsFilter): Promise<{
 
   const dealMap = new Map<string, { deals: number; quoted: number; won: number; wonValue: number }>();
   const cityMap = new Map<string, Map<string, number>>();
+  // source name -> its leadSourceId (null for "(unspecified)"), for drill links.
+  const sourceIdByName = new Map<string, string | null>();
+  // source name -> ownerId -> { name, deals, won } for the per-source rep breakdown.
+  const sourceRepMap = new Map<string, Map<string, { name: string; deals: number; won: number }>>();
   for (const d of deals) {
     const name = nameFor(d.leadSourceId);
+    sourceIdByName.set(name, d.leadSourceId);
     const e = dealMap.get(name) ?? { deals: 0, quoted: 0, won: 0, wonValue: 0 };
     e.deals += 1;
     if (d.quotations.length > 0) e.quoted += 1;
@@ -102,6 +115,15 @@ export async function sourceAnalytics(filter: AnalyticsFilter): Promise<{
       e.wonValue += d.wonValue ? Number(d.wonValue) : 0;
     }
     dealMap.set(name, e);
+
+    if (d.ownerUserId) {
+      const repMap = sourceRepMap.get(name) ?? new Map<string, { name: string; deals: number; won: number }>();
+      const rEntry = repMap.get(d.ownerUserId) ?? { name: d.owner?.name ?? "(unassigned)", deals: 0, won: 0 };
+      rEntry.deals += 1;
+      if (d.outcome === "WON") rEntry.won += 1;
+      repMap.set(d.ownerUserId, rEntry);
+      sourceRepMap.set(name, repMap);
+    }
 
     const city = d.siteCity?.trim() || "(unspecified)";
     const bySource = cityMap.get(name) ?? new Map<string, number>();
@@ -143,6 +165,7 @@ export async function sourceAnalytics(filter: AnalyticsFilter): Promise<{
       const spend = adSpendMap.get(sourceName) ?? null;
       return {
         sourceName,
+        leadSourceId: sourceIdByName.get(sourceName) ?? null,
         leads: l.leads,
         qualified: l.qualified,
         deals: d.deals,
@@ -155,6 +178,7 @@ export async function sourceAnalytics(filter: AnalyticsFilter): Promise<{
         costPerLead: spend != null && l.leads > 0 ? spend / l.leads : null,
         cac: spend != null && d.won > 0 ? spend / d.won : null,
         roas: spend != null && spend > 0 ? d.wonValue / spend : null,
+        reps: segmentRepRows(sourceRepMap.get(sourceName) ?? new Map()),
       };
     })
     .sort((a, b) => b.leads - a.leads);

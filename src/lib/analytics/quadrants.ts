@@ -7,7 +7,7 @@ import type { AnalyticsFilter } from "./types";
 import { MIN_SAMPLE_SIZE } from "./types";
 import { resolveCity } from "./geography";
 import { companyBenchmarks } from "./benchmarks";
-import { salesActivity } from "./salesActivity";
+import { salesActivity, type SalesActivityRow } from "./salesActivity";
 import { isFlooringLine } from "./products";
 
 export type QuadrantPoint = {
@@ -45,13 +45,30 @@ async function yBenchmarkFor(filter: AnalyticsFilter): Promise<number> {
   return bench.trailingWinRate ?? 0.5;
 }
 
+// Public entry so a route composing several quadrants can compute the shared
+// company yBenchmark once (one companyBenchmarks/salesActivity run) and pass it
+// into each quadrant function instead of each recomputing it.
+export function companyYBenchmark(filter: AnalyticsFilter): Promise<number> {
+  return yBenchmarkFor(filter);
+}
+
+// All four quadrant functions derive the SAME company yBenchmark from the same
+// filter (companyBenchmarks forces company-wide/crm internally regardless of the
+// filter's ownerIds), so a caller composing several of them can compute it ONCE
+// and pass it in via yBenchmarkOverride to avoid re-running the underlying
+// salesActivity (7 queries) per function. When omitted, each function computes
+// its own — identical result, just extra round-trips.
+function resolveYBenchmark(filter: AnalyticsFilter, override?: number): Promise<number> {
+  return override !== undefined ? Promise.resolve(override) : yBenchmarkFor(filter);
+}
+
 function finalize(points: QuadrantPoint[], yBenchmark: number, xLabel: string, yLabel: string, xBenchmarkOverride?: number): QuadrantResult {
   const xBenchmark = xBenchmarkOverride ?? median(points.map((p) => p.x));
   const lowConfidenceIds = points.filter((p) => p.n < MIN_SAMPLE_SIZE).map((p) => p.id);
   return { points, xBenchmark, yBenchmark, xLabel, yLabel, lowConfidenceIds };
 }
 
-export async function leadSourceQuadrant(filter: AnalyticsFilter): Promise<QuadrantResult> {
+export async function leadSourceQuadrant(filter: AnalyticsFilter, yBenchmarkOverride?: number): Promise<QuadrantResult> {
   const ownerWhere = filter.ownerIds?.length ? { ownerUserId: { in: filter.ownerIds } } : {};
   const dealChannelWhere = filter.dealChannel ? { dealChannel: filter.dealChannel } : {};
 
@@ -65,7 +82,7 @@ export async function leadSourceQuadrant(filter: AnalyticsFilter): Promise<Quadr
       where: { deletedAt: null, outcome: { in: ["WON", "LOST"] }, closedAt: { gte: filter.from, lte: filter.to }, ...ownerWhere, ...dealChannelWhere },
       select: { leadSourceId: true, outcome: true },
     }),
-    yBenchmarkFor(filter),
+    resolveYBenchmark(filter, yBenchmarkOverride),
   ]);
 
   const nameById = new Map(sourceTaxonomy.map((s) => [s.id, s.name]));
@@ -108,7 +125,7 @@ export async function leadSourceQuadrant(filter: AnalyticsFilter): Promise<Quadr
   return finalize(points, yBenchmark, "Enquiry volume", "Win rate");
 }
 
-export async function productQuadrant(filter: AnalyticsFilter): Promise<QuadrantResult> {
+export async function productQuadrant(filter: AnalyticsFilter, yBenchmarkOverride?: number): Promise<QuadrantResult> {
   const ownerWhere = filter.ownerIds?.length ? { ownerUserId: { in: filter.ownerIds } } : {};
   const dealChannelWhere = filter.dealChannel ? { dealChannel: filter.dealChannel } : {};
 
@@ -139,7 +156,7 @@ export async function productQuadrant(filter: AnalyticsFilter): Promise<Quadrant
       },
       select: { label: true, product: { select: { name: true } }, quotationId: true, quotation: { select: { isPrimary: true } }, deal: { select: { id: true, outcome: true } } },
     }),
-    yBenchmarkFor(filter),
+    resolveYBenchmark(filter, yBenchmarkOverride),
   ]);
 
   const nameOf = (li: { label: string | null; product: { name: string } | null }) => li.product?.name ?? li.label ?? "(unspecified)";
@@ -193,8 +210,17 @@ export async function productQuadrant(filter: AnalyticsFilter): Promise<Quadrant
   return finalize(points, yBenchmark, "Enquiry growth vs prior period (%)", "Win rate", 0);
 }
 
-export async function repQuadrant(filter: AnalyticsFilter): Promise<QuadrantResult> {
-  const [rows, yBenchmark] = await Promise.all([salesActivity(filter), yBenchmarkFor(filter)]);
+export async function repQuadrant(
+  filter: AnalyticsFilter,
+  opts?: { rows?: SalesActivityRow[]; yBenchmark?: number },
+): Promise<QuadrantResult> {
+  // Callers that already hold this filter's salesActivity rows and/or the
+  // company yBenchmark (e.g. getKpiBoard) can pass them in to skip re-fetching —
+  // the rows here are byte-identical to salesActivity(filter).
+  const [rows, yBenchmark] = await Promise.all([
+    opts?.rows ?? salesActivity(filter),
+    resolveYBenchmark(filter, opts?.yBenchmark),
+  ]);
 
   const points: QuadrantPoint[] = rows.map((r) => ({
     id: r.ownerId,
@@ -209,7 +235,7 @@ export async function repQuadrant(filter: AnalyticsFilter): Promise<QuadrantResu
   return finalize(points, yBenchmark, "Activity score (deals created + site visits + samples sent)", "Win rate");
 }
 
-export async function regionQuadrant(filter: AnalyticsFilter): Promise<QuadrantResult> {
+export async function regionQuadrant(filter: AnalyticsFilter, yBenchmarkOverride?: number): Promise<QuadrantResult> {
   const ownerWhere = filter.ownerIds?.length ? { ownerUserId: { in: filter.ownerIds } } : {};
   const dealChannelWhere = filter.dealChannel ? { dealChannel: filter.dealChannel } : {};
 
@@ -222,7 +248,7 @@ export async function regionQuadrant(filter: AnalyticsFilter): Promise<QuadrantR
       where: { deletedAt: null, outcome: { in: ["WON", "LOST"] }, closedAt: { gte: filter.from, lte: filter.to }, ...ownerWhere, ...dealChannelWhere },
       select: { siteCity: true, account: { select: { city: true } }, outcome: true },
     }),
-    yBenchmarkFor(filter),
+    resolveYBenchmark(filter, yBenchmarkOverride),
   ]);
 
   const enquiryMap = new Map<string, number>();

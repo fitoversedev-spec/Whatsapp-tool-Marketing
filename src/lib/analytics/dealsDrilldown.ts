@@ -17,9 +17,16 @@ export type DealsDrilldownFilter = {
   ownerIds?: string[];
   productId?: string;
   sportId?: string;
+  // Filter by a product's display name/label (what the Products analytics groups
+  // on — most line items have no productId, only a rate-sheet label). "none"/
+  // absent = no filter. Used by the per-product rep-breakdown drill.
+  productLabel?: string;
   city?: string;
   customerProfileId?: string;
   stageId?: string;
+  // Lead source (platform) filter. "none" → deals with no lead source (the
+  // "(unspecified)" bucket); any other value is a LeadSource id.
+  leadSourceId?: string;
   outcome?: "WON" | "LOST" | "DROPPED" | null;
   from?: Date;
   to?: Date;
@@ -41,6 +48,15 @@ export async function getDealsDrilldown(filter: DealsDrilldownFilter): Promise<R
         ...(filter.sportId ? { sportId: filter.sportId } : {}),
       },
     };
+  } else if (filter.productLabel) {
+    // Match the Products analytics grouping (product.name ?? label). An exact
+    // match on that label naturally only hits the intended (flooring) product.
+    where.lineItems = {
+      some: { OR: [{ label: filter.productLabel }, { product: { name: filter.productLabel } }] },
+    };
+  }
+  if (filter.leadSourceId !== undefined) {
+    where.leadSourceId = filter.leadSourceId === "none" ? null : filter.leadSourceId;
   }
   if (filter.customerProfileId) where.account = { customerProfileId: filter.customerProfileId };
   if (filter.outcome !== undefined) where.outcome = filter.outcome;

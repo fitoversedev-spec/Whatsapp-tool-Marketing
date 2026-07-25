@@ -20,14 +20,16 @@ type SalesActivityRow = {
   wonValue: number; winRate: number | null; avgCycleDays: number | null;
 };
 type FunnelStageRow = { stageId: string; stageName: string; stageType: string; stageColorHex: string | null; count: number; value: number };
-type SourceRow = { sourceName: string; leads: number; qualified: number; deals: number; quoted: number; won: number; wonValue: number; leadToWonRate: number | null };
-type ProductConversionRow = { productName: string; enquiries: number; quoted: number; won: number; conversionRate: number | null; flagged: boolean };
+// Per-segment rep breakdown row (mirrors src/lib/analytics/types.ts SegmentRepRow).
+type SegmentRep = { ownerId: string; ownerName: string; deals: number; won: number; winRate: number | null };
+type SourceRow = { sourceName: string; leadSourceId: string | null; leads: number; qualified: number; deals: number; quoted: number; won: number; wonValue: number; leadToWonRate: number | null; reps: SegmentRep[] };
+type ProductConversionRow = { productName: string; enquiries: number; quoted: number; won: number; conversionRate: number | null; flagged: boolean; reps: SegmentRep[] };
 type ProductCityCell = { productName: string; city: string; wonValue: number; enquiries: number };
 type ProductMovementRow = { month: string; productName: string; enquiries: number; quoted: number; quotedValue: number; won: number; wonValue: number };
 export type StageVelocityRow = { stageId: string; stageName: string; sortOrder: number; medianDays: number | null; p90Days: number | null; n: number };
 type CityRow = {
   city: string; enquiries: number; quotations: number; won: number; wonValue: number;
-  winRate: number | null; avgDealSize: number | null; avgCycleDays: number | null;
+  winRate: number | null; avgDealSize: number | null; avgCycleDays: number | null; reps: SegmentRep[];
 };
 
 type AnalyticsResponse = {
@@ -244,6 +246,81 @@ function dealsHref(params: Record<string, string | undefined>): string {
   for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v);
   const q = qs.toString();
   return q ? `/crm/analytics/deals?${q}` : "/crm/analytics/deals";
+}
+
+// Per-segment rep breakdown (admin-only) shared by Geography / Products /
+// Platform tabs: each segment (city/product/source) expands to a ranked list
+// of every rep who created deals there — deals, won, win% — and each rep name
+// links to that rep's deals within that segment. The top rep shows inline in
+// the collapsed header so the "who's driving this" answer is visible at a glance.
+type RepSegment = { key: string; label: string; reps: SegmentRep[]; drillFor: (ownerId: string) => string };
+
+function RepBreakdown({ title, description, segments }: { title: string; description?: string; segments: RepSegment[] }) {
+  const shown = segments.filter((s) => s.reps.length > 0);
+  const [open, setOpen] = useState<string | null>(shown[0]?.key ?? null);
+  if (shown.length === 0) return null;
+  return (
+    <AnalyticsCard title={title} description={description}>
+      <div className="divide-y divide-slate-100">
+        {shown.map((s) => {
+          const isOpen = open === s.key;
+          const topRep = s.reps[0];
+          // Header total = sum of the rep rows actually shown, so it always
+          // reconciles with the expanded list (only owned deals are attributed).
+          const repTotal = s.reps.reduce((n, r) => n + r.deals, 0);
+          return (
+            <div key={s.key}>
+              <button
+                onClick={() => setOpen(isOpen ? null : s.key)}
+                className="w-full flex items-center justify-between gap-3 py-2.5 text-left"
+              >
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className={`text-slate-400 text-xs transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
+                  <span className="font-medium text-slate-800 truncate">{s.label}</span>
+                  <span className="text-xs text-slate-400 whitespace-nowrap">
+                    {repTotal} deal{repTotal === 1 ? "" : "s"} · {s.reps.length} rep{s.reps.length === 1 ? "" : "s"}
+                  </span>
+                </span>
+                {topRep && (
+                  <span className="text-xs text-slate-500 whitespace-nowrap shrink-0">
+                    Top: {topRep.ownerName} ({topRep.deals}, {fmtPct(topRep.winRate)})
+                  </span>
+                )}
+              </button>
+              {isOpen && (
+                <div className="pb-3 pl-6 overflow-x-auto">
+                  <table className="w-full text-sm min-w-[360px]">
+                    <thead>
+                      <tr className="text-left text-slate-500 text-xs">
+                        <th className="py-1 font-medium">Rep</th>
+                        <th className="py-1 font-medium text-right">Deals</th>
+                        <th className="py-1 font-medium text-right">Won</th>
+                        <th className="py-1 font-medium text-right">Win %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {s.reps.map((r) => (
+                        <tr key={r.ownerId} className="border-t border-slate-50">
+                          <td className="py-1.5">
+                            <Link href={s.drillFor(r.ownerId)} className="text-wa-dark hover:underline">
+                              {r.ownerName}
+                            </Link>
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">{r.deals}</td>
+                          <td className="py-1.5 text-right tabular-nums">{r.won}</td>
+                          <td className="py-1.5 text-right tabular-nums">{fmtPct(r.winRate)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </AnalyticsCard>
+  );
 }
 
 export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean; role: Role }) {
@@ -1324,6 +1401,17 @@ function ProductsTab({
           </div>
         )}
       </AnalyticsCard>
+
+      <RepBreakdown
+        title="Reps by product"
+        description="Who drove each product's deals — ranked by deals, with win %. Click a rep to see their deals for that product."
+        segments={sorted.map((p) => ({
+          key: p.productName,
+          label: p.productName,
+          reps: p.reps,
+          drillFor: (ownerId) => dealsHref({ productLabel: p.productName, reps: ownerId, from: range.from, to: range.to }),
+        }))}
+      />
     </div>
   );
 }
@@ -1341,6 +1429,7 @@ function PlatformsTab({ rows, range }: { rows: SourceRow[]; range: DateRange }) 
   const totalSourceDeals = dealDonutRows.reduce((acc, r) => acc + r.deals, 0);
 
   return (
+    <div className="space-y-4">
     <AnalyticsCard
       title="Performance by platform / lead source"
       action={top ? `${top.sourceName} drives the most won value this period — double down there` : undefined}
@@ -1371,6 +1460,18 @@ function PlatformsTab({ rows, range }: { rows: SourceRow[]; range: DateRange }) 
         </>
       )}
     </AnalyticsCard>
+
+      <RepBreakdown
+        title="Reps by platform / source"
+        description="Who created each source's deals — ranked by deals, with win %. Click a rep to see their deals from that source."
+        segments={sorted.map((s) => ({
+          key: s.sourceName,
+          label: s.sourceName,
+          reps: s.reps,
+          drillFor: (ownerId) => dealsHref({ leadSourceId: s.leadSourceId ?? "none", reps: ownerId, from: range.from, to: range.to }),
+        }))}
+      />
+    </div>
   );
 }
 
@@ -1447,6 +1548,17 @@ function GeographyTab({ rows, range }: { rows: CityRow[]; range: DateRange }) {
           <DataTable headers={headers} rows={dataRows} />
         </AnalyticsCard>
       )}
+
+      <RepBreakdown
+        title="Reps by city"
+        description="Who created each city's deals — ranked by deals, with win %. Click a rep to see their deals in that city."
+        segments={sorted.map((c) => ({
+          key: c.city,
+          label: c.city,
+          reps: c.reps,
+          drillFor: (ownerId) => dealsHref({ city: c.city, reps: ownerId, from: range.from, to: range.to }),
+        }))}
+      />
     </div>
   );
 }
@@ -1465,6 +1577,30 @@ function ComparatorsTab({
   range: DateRange;
 }) {
   const [dimension, setDimension] = useState<Dimension>("region");
+
+  // Head-to-head two-rep picker. Defaults to the top two reps by won revenue
+  // until the user picks; no effect needed since the fallback is derived.
+  const [repAId, setRepAId] = useState<string>("");
+  const [repBId, setRepBId] = useState<string>("");
+  const repsByRevenue = [...repRows].sort((a, b) => b.wonRevenue - a.wonRevenue);
+  const effA = repAId || repsByRevenue[0]?.ownerId || "";
+  // Guarantee B ≠ A: if the user hasn't picked a distinct B, fall back to the
+  // first rep that isn't A — a head-to-head against yourself is meaningless.
+  const effB = repBId && repBId !== effA ? repBId : repsByRevenue.find((r) => r.ownerId !== effA)?.ownerId ?? "";
+  const repA = repRows.find((r) => r.ownerId === effA) ?? null;
+  const repB = repRows.find((r) => r.ownerId === effB) ?? null;
+  const h2hMetrics = [
+    { label: "Win rate", a: fmtPct(repA?.winRate.rate ?? null), b: fmtPct(repB?.winRate.rate ?? null), highlight: true },
+    { label: "Deals closed", a: String(repA?.winRate.n ?? 0), b: String(repB?.winRate.n ?? 0), highlight: false },
+    { label: "Won revenue", a: fmtInr(repA?.wonRevenue ?? 0), b: fmtInr(repB?.wonRevenue ?? 0), highlight: false },
+    { label: "Avg cycle", a: fmtDays(repA?.avgCycleDays.days ?? null), b: fmtDays(repB?.avgCycleDays.days ?? null), highlight: false },
+    {
+      label: "Avg project value",
+      a: repA?.avgProjectValue != null ? fmtInr(repA.avgProjectValue) : "—",
+      b: repB?.avgProjectValue != null ? fmtInr(repB.avgProjectValue) : "—",
+      highlight: false,
+    },
+  ];
   const dimRows = [...dimensions[dimension]].sort((a, b) => b.enquiries - a.enquiries);
   const dimHeaders = ["Label", "Enquiries", "Won", "Won value", "Win rate"];
   const dimDataRows = dimRows.map((r) => [r.label, r.enquiries, r.won, fmtInr(r.wonValue), fmtPct(r.winRate)]);
@@ -1495,6 +1631,60 @@ function ComparatorsTab({
 
   return (
     <div className="space-y-4">
+      <AnalyticsCard
+        title="Head-to-head: two reps"
+        description="Pick any two reps to compare their win % and key metrics side by side"
+      >
+        {repRows.length < 2 ? (
+          <p className="text-sm text-slate-400">Need at least two reps with activity to compare.</p>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <select
+                value={effA}
+                onChange={(e) => setRepAId(e.target.value)}
+                className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-medium"
+              >
+                {repRows.map((r) => (
+                  <option key={r.ownerId} value={r.ownerId}>{r.ownerName}</option>
+                ))}
+              </select>
+              <span className="text-slate-400 text-sm">vs</span>
+              <select
+                value={effB}
+                onChange={(e) => setRepBId(e.target.value)}
+                className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-medium"
+              >
+                {repRows.filter((r) => r.ownerId !== effA).map((r) => (
+                  <option key={r.ownerId} value={r.ownerId}>{r.ownerName}</option>
+                ))}
+              </select>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[360px]">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="text-left py-2 font-medium text-slate-400"></th>
+                    <th className="text-right py-2 font-semibold text-slate-800">{repA?.ownerName ?? "—"}</th>
+                    <th className="text-right py-2 font-semibold text-slate-800">{repB?.ownerName ?? "—"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {h2hMetrics.map((m) => (
+                    <tr key={m.label} className={`border-b border-slate-100 last:border-0 ${m.highlight ? "bg-wa-green/5" : ""}`}>
+                      <td className={`py-2 ${m.highlight ? "font-semibold text-slate-800" : "text-slate-600"}`}>{m.label}</td>
+                      <td className={`py-2 text-right tabular-nums ${m.highlight ? "font-bold text-wa-dark text-base" : "text-slate-800"}`}>{m.a}</td>
+                      <td className={`py-2 text-right tabular-nums ${m.highlight ? "font-bold text-wa-dark text-base" : "text-slate-800"}`}>{m.b}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">Win rate = won ÷ closed deals; shown as “—” below {MIN_SAMPLE_SIZE} closed deals.</p>
+          </>
+        )}
+      </AnalyticsCard>
+
       <AnalyticsCard
         title="Rep comparison"
         description="Won revenue, win rate, cycle time and average project value, side by side"

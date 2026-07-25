@@ -13,9 +13,11 @@ import DealsDrilldownClient from "./DealsDrilldownClient";
 type SearchParams = {
   productId?: string;
   sportId?: string;
+  productLabel?: string;
   city?: string;
   customerProfileId?: string;
   stageId?: string;
+  leadSourceId?: string;
   outcome?: string;
   from?: string;
   to?: string;
@@ -58,9 +60,11 @@ export default async function DealsDrilldownPage({ searchParams }: { searchParam
     ownerIds: isAdmin ? (selectedReps.length ? selectedReps : undefined) : scope.ownerIds,
     productId: searchParams.productId,
     sportId: searchParams.sportId,
+    productLabel: searchParams.productLabel,
     city: searchParams.city,
     customerProfileId: searchParams.customerProfileId,
     stageId: searchParams.stageId,
+    leadSourceId: searchParams.leadSourceId,
     outcome: parseOutcome(searchParams.outcome),
     from: searchParams.from ? new Date(searchParams.from + "T00:00:00") : undefined,
     to: searchParams.to ? new Date(searchParams.to + "T23:59:59") : undefined,

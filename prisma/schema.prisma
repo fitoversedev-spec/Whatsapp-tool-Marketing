@@ -369,6 +369,11 @@ model Reminder {
   // "what actually happened", surfaced in the unified timeline in place of
   // the original location/meetingUrl once set. See docs/DECISIONS.md.
   completionNote String?   @map("completion_note")
+  // Free-text context entered when SCHEDULING a task/meeting/call (agenda,
+  // background) — distinct from completionNote (filled at completion) and from
+  // message (the one-line subject). Optional; null for reminders created
+  // before this field existed or without a note.
+  notes          String?
   // Task priority — set only for CRM "Task" reminders; null for every other
   // reminder kind (scheduled call/meeting follow-ups).
   priority       String?   @map("priority") // "HIGH" | "MEDIUM" | "LOW", null for non-task reminders
@@ -1185,6 +1190,10 @@ model Account {
 
   @@index([city, customerProfileId])
   @@index([importBatchId])
+  // Every rep CRM list (Contacts/Leads/Companies) scopes accounts by owner;
+  // deletedAt companions the filter on the list pages. Without this it's a
+  // seq scan of accounts on every rep's list render at scale.
+  @@index([ownerUserId, deletedAt])
   @@map("accounts")
 }
 
@@ -1229,6 +1238,13 @@ model AccountContact {
 
   @@index([accountId])
   @@index([importBatchId])
+  // Contacts list: WHERE deletedAt IS NULL ORDER BY createdAt DESC (take 200/300).
+  // Without this it seq-scans all contacts then in-memory sorts at scale.
+  @@index([deletedAt, createdAt])
+  // Leads-window analytics (salesActivity) + bulk-promote both filter
+  // pipelineStage="LEAD" over a promotedToLeadAt range. Leads are a small
+  // subset, so pipelineStage-first makes this a tight seek instead of a scan.
+  @@index([pipelineStage, promotedToLeadAt])
   @@map("account_contacts")
 }
 
@@ -1414,6 +1430,10 @@ model Deal {
   @@index([conversationId])
   @@index([importBatchId])
   @@index([deletedAt, dealChannel])
+  // Contact-detail and deal-detail pages both look up deals by primaryContactId
+  // (WHERE primaryContactId = ? AND deletedAt IS NULL). No index led with it, so
+  // it was a seq scan of deals on every such page open; grows with deal volume.
+  @@index([primaryContactId])
   @@map("deals")
 }
 
@@ -1525,6 +1545,10 @@ model Activity {
   @@index([leadId, occurredAt])
   @@index([accountId, occurredAt])
   @@index([accountContactId, occurredAt])
+  // salesActivity groups site-visit / sample-dispatch activities by owner over
+  // an occurredAt range with no ownerUserId predicate (company-wide/admin), so
+  // no existing owner-led index seeks it — this gives a real type+date seek.
+  @@index([activityTypeId, occurredAt])
   @@map("activities")
 }
 

@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { setFaviconBadge } from "@/lib/favicon";
 import ThemeToggle from "./ThemeToggle";
 import AllToolsPanel from "./AllToolsPanel";
+import SectionBadge from "./SectionBadge";
 import type { Role } from "@/lib/rbac";
 
 type Props = {
@@ -160,6 +161,7 @@ export default function Sidebar({
         </button>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-slate-900 truncate">{currentLabel}</div>
+          <div className="mt-0.5"><SectionBadge /></div>
         </div>
         <div className="w-8 h-8 rounded-lg bg-wa-green text-white flex items-center justify-center font-bold text-sm">
           W
@@ -227,6 +229,20 @@ export default function Sidebar({
               {collapsed ? <polyline points="9 18 15 12 9 6" /> : <polyline points="15 18 9 12 15 6" />}
             </svg>
           </button>
+        </div>
+
+        {/* Tool-wide context badge — "CRM" vs "WhatsApp Marketing" for the
+            current page. Lives in the always-present sidebar chrome so it never
+            disturbs page content (some pages are full-height, e.g. Inbox). */}
+        <div className="px-3 pt-3">
+          <div className={collapsed ? "lg:hidden" : ""}>
+            <SectionBadge />
+          </div>
+          {collapsed && (
+            <div className="hidden lg:flex lg:justify-center">
+              <SectionBadge compact />
+            </div>
+          )}
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">

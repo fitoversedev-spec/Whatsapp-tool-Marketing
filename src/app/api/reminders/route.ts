@@ -26,6 +26,8 @@ const createSchema = z.object({
   // Set only by the "Task" activity flow — a Task is a Reminder with a
   // priority; plain scheduled reminders leave it null.
   priority: z.enum(["HIGH", "MEDIUM", "LOW"]).optional(),
+  // Free-text context entered when scheduling (agenda/background). Optional.
+  notes: z.string().max(2000).optional(),
 });
 
 const listFilterSchema = z.enum(["overdue", "today", "week", "later", "completed", "all"]);
@@ -146,6 +148,7 @@ export async function POST(req: NextRequest) {
       meetingUrl: parsed.data.meetingUrl ?? null,
       activityTypeId: parsed.data.activityTypeId ?? null,
       priority: parsed.data.priority ?? null,
+      notes: parsed.data.notes ?? null,
     },
     include: {
       conversation: { select: { contactPhone: true, contactName: true } },

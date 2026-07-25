@@ -3,8 +3,9 @@
 // in" picker (enquiry-only, quotationId null) both populate — see §7.2's
 // enquiry-vs-sale distinction this whole file exists to answer.
 import { prisma } from "@/lib/prisma";
-import type { AnalyticsFilter } from "./types";
+import type { AnalyticsFilter, SegmentRepRow } from "./types";
 import { MIN_SAMPLE_SIZE } from "./types";
+import { segmentRepRows } from "./geography";
 
 // Same fallback as geography.ts's resolveCity — Deal.siteCity is rarely set
 // directly, but its Account.city almost always is (captured when the
@@ -58,6 +59,8 @@ export type ProductConversionRow = {
   won: number;
   conversionRate: number | null; // won / quoted, null if quoted < MIN_SAMPLE_SIZE
   flagged: boolean;
+  // Which reps drove this product's deals, ranked — deals + win% each.
+  reps: SegmentRepRow[];
 };
 
 export type ProductAnalytics = {
@@ -110,6 +113,8 @@ export async function productAnalytics(filter: AnalyticsFilter): Promise<Product
           outcome: true,
           closedAt: true,
           siteCity: true,
+          ownerUserId: true,
+          owner: { select: { name: true } },
           account: { select: { city: true, customerProfile: { select: { name: true } } } },
         },
       },
@@ -124,6 +129,16 @@ export async function productAnalytics(filter: AnalyticsFilter): Promise<Product
   const segmentMap = new Map<string, Set<string>>();
   // --- Conversion: quoted vs won per product, all-time within filter ---
   const conversionMap = new Map<string, { enquiries: Set<string>; quoted: number; won: number }>();
+  // product -> ownerId -> { name, dealIds (enquired OR won), wonIds } for the
+  // per-product rep breakdown. wonIds ⊆ dealIds by construction, so win% ≤ 100%.
+  const productRepMap = new Map<string, Map<string, { name: string; dealIds: Set<string>; wonIds: Set<string> }>>();
+  const repEntry = (productName: string, ownerId: string, ownerName: string) => {
+    const repMap = productRepMap.get(productName) ?? new Map<string, { name: string; dealIds: Set<string>; wonIds: Set<string> }>();
+    const e = repMap.get(ownerId) ?? { name: ownerName, dealIds: new Set<string>(), wonIds: new Set<string>() };
+    repMap.set(ownerId, e);
+    productRepMap.set(productName, repMap);
+    return e;
+  };
   const years = new Set<number>();
 
   for (const li of lineItems) {
@@ -159,6 +174,10 @@ export async function productAnalytics(filter: AnalyticsFilter): Promise<Product
       const cv = conversionMap.get(productName) ?? { enquiries: new Set(), quoted: 0, won: 0 };
       cv.enquiries.add(li.deal.id);
       conversionMap.set(productName, cv);
+
+      if (li.deal.ownerUserId) {
+        repEntry(productName, li.deal.ownerUserId, li.deal.owner?.name ?? "(unassigned)").dealIds.add(li.deal.id);
+      }
     }
 
     // Quoted signal: this line item's quotation was actually sent.
@@ -191,6 +210,12 @@ export async function productAnalytics(filter: AnalyticsFilter): Promise<Product
       const cv = conversionMap.get(productName) ?? { enquiries: new Set(), quoted: 0, won: 0 };
       cv.won += 1;
       conversionMap.set(productName, cv);
+
+      if (li.deal.ownerUserId) {
+        const e = repEntry(productName, li.deal.ownerUserId, li.deal.owner?.name ?? "(unassigned)");
+        e.wonIds.add(li.deal.id);
+        e.dealIds.add(li.deal.id); // ensure won ⊆ deals even if enquiry fell outside the window
+      }
     }
   }
 
@@ -222,6 +247,14 @@ export async function productAnalytics(filter: AnalyticsFilter): Promise<Product
   const conversion: ProductConversionRow[] = [...conversionMap.entries()]
     .map(([productName, v]) => {
       const conversionRate = v.quoted >= MIN_SAMPLE_SIZE ? v.won / v.quoted : null;
+      const reps = segmentRepRows(
+        new Map(
+          [...(productRepMap.get(productName) ?? new Map()).entries()].map(([ownerId, e]) => [
+            ownerId,
+            { name: e.name, deals: e.dealIds.size, won: e.wonIds.size },
+          ]),
+        ),
+      );
       return {
         productName,
         enquiries: v.enquiries.size,
@@ -229,6 +262,7 @@ export async function productAnalytics(filter: AnalyticsFilter): Promise<Product
         won: v.won,
         conversionRate,
         flagged: conversionRate != null && conversionRate < LOW_CONVERSION_THRESHOLD && v.enquiries.size >= MIN_SAMPLE_SIZE,
+        reps,
       };
     })
     .sort((a, b) => b.enquiries - a.enquiries);

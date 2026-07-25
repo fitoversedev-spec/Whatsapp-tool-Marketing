@@ -25,3 +25,15 @@ export type AnalyticsFilter = {
 // n < this is suppressed as "insufficient data" per spec §8.2 — a couple of
 // stalled deals shouldn't be presented as a trustworthy median/average.
 export const MIN_SAMPLE_SIZE = 5;
+
+// Per-segment rep breakdown row (Geography / Products / Platform tabs): who
+// created how many deals in one city/product/source and their win% there.
+// winRate is won/deals within THAT segment — shown raw (not MIN_SAMPLE-gated)
+// because n (deals) is displayed alongside it, so a "1/1 = 100%" reads honestly.
+export type SegmentRepRow = {
+  ownerId: string;
+  ownerName: string;
+  deals: number;
+  won: number;
+  winRate: number | null; // won / deals, null when deals === 0
+};

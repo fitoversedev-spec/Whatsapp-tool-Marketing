@@ -11,11 +11,26 @@
 // this fallback nearly everything landed in "(unspecified)" (explicit user
 // report — see resolveCity below).
 import { prisma } from "@/lib/prisma";
-import type { AnalyticsFilter } from "./types";
+import type { AnalyticsFilter, SegmentRepRow } from "./types";
 import { MIN_SAMPLE_SIZE } from "./types";
 
 export function resolveCity(d: { siteCity: string | null; account: { city: string | null } }): string {
   return d.siteCity?.trim() || d.account.city?.trim() || "(unspecified)";
+}
+
+// Shared: turn a per-owner tally into a ranked SegmentRepRow[] (most deals
+// first). Used by geography/products/sources to build their per-segment rep
+// breakdowns identically. Owners with no name resolve to "(unassigned)".
+export function segmentRepRows(m: Map<string, { name: string; deals: number; won: number }>): SegmentRepRow[] {
+  return [...m.entries()]
+    .map(([ownerId, v]) => ({
+      ownerId,
+      ownerName: v.name,
+      deals: v.deals,
+      won: v.won,
+      winRate: v.deals > 0 ? v.won / v.deals : null,
+    }))
+    .sort((a, b) => b.deals - a.deals || b.won - a.won);
 }
 
 export type CityRow = {
@@ -27,6 +42,8 @@ export type CityRow = {
   winRate: number | null;
   avgDealSize: number | null;
   avgCycleDays: number | null; // null if fewer than MIN_SAMPLE_SIZE closed deals
+  // Which reps created this city's deals, ranked — deals-created + win% each.
+  reps: SegmentRepRow[];
 };
 
 export type TierRow = {
@@ -47,6 +64,8 @@ export async function geography(filter: AnalyticsFilter): Promise<{ cities: City
       siteCityTier: { select: { name: true } },
       outcome: true,
       wonValue: true,
+      ownerUserId: true,
+      owner: { select: { name: true } },
       quotations: { select: { id: true }, where: { status: "sent" } },
     },
   });
@@ -62,6 +81,8 @@ export async function geography(filter: AnalyticsFilter): Promise<{ cities: City
   const cityMap = new Map<string, { enquiries: number; quotations: number; won: number; wonValue: number }>();
   const tierMap = new Map<string, { enquiries: number; won: number; wonValue: number }>();
   const cycleMap = new Map<string, { sum: number; n: number }>();
+  // city -> ownerId -> { name, deals, won } for the per-city rep breakdown.
+  const cityRepMap = new Map<string, Map<string, { name: string; deals: number; won: number }>>();
 
   for (const d of deals) {
     const city = resolveCity(d);
@@ -73,6 +94,16 @@ export async function geography(filter: AnalyticsFilter): Promise<{ cities: City
       cEntry.wonValue += d.wonValue ? Number(d.wonValue) : 0;
     }
     cityMap.set(city, cEntry);
+
+    // Attribute to the deal's owner (unowned deals can't be credited to a rep).
+    if (d.ownerUserId) {
+      const repMap = cityRepMap.get(city) ?? new Map<string, { name: string; deals: number; won: number }>();
+      const rEntry = repMap.get(d.ownerUserId) ?? { name: d.owner?.name ?? "(unassigned)", deals: 0, won: 0 };
+      rEntry.deals += 1;
+      if (d.outcome === "WON") rEntry.won += 1;
+      repMap.set(d.ownerUserId, rEntry);
+      cityRepMap.set(city, repMap);
+    }
 
     const tier = d.siteCityTier?.name ?? "Unclassified";
     const tEntry = tierMap.get(tier) ?? { enquiries: 0, won: 0, wonValue: 0 };
@@ -105,6 +136,7 @@ export async function geography(filter: AnalyticsFilter): Promise<{ cities: City
         winRate: v.enquiries > 0 ? v.won / v.enquiries : null,
         avgDealSize: v.won > 0 ? v.wonValue / v.won : null,
         avgCycleDays: cycle && cycle.n >= MIN_SAMPLE_SIZE ? cycle.sum / cycle.n : null,
+        reps: segmentRepRows(cityRepMap.get(city) ?? new Map()),
       };
     })
     .sort((a, b) => b.enquiries - a.enquiries);

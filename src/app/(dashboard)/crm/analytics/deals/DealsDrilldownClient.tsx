@@ -41,6 +41,11 @@ type RepSummary = {
   ownerName: string;
   dealCount: number;
   totalValue: number;
+  // Win rate over the deals in this view: won / (won + lost). winRate is null
+  // when the rep has no closed deals here (shown as "—").
+  won: number;
+  closed: number;
+  winRate: number | null;
   stages: { stageName: string; count: number }[];
 };
 
@@ -215,11 +220,16 @@ export default function DealsDrilldownClient({
         const own = deals.filter((d) => d.ownerId === id);
         const stageMap = new Map<string, number>();
         for (const d of own) stageMap.set(d.stageName, (stageMap.get(d.stageName) ?? 0) + 1);
+        const won = own.filter((d) => d.outcome === "WON").length;
+        const closed = own.filter((d) => d.outcome === "WON" || d.outcome === "LOST").length;
         return {
           ownerId: id,
           ownerName: own[0]?.ownerName ?? users.find((u) => u.id === id)?.name ?? "Unknown rep",
           dealCount: own.length,
           totalValue: own.reduce((sum, d) => sum + d.dealValue, 0),
+          won,
+          closed,
+          winRate: closed > 0 ? won / closed : null,
           stages: Array.from(stageMap.entries())
             .map(([stageName, count]) => ({ stageName, count }))
             .sort((a, b) => b.count - a.count),
@@ -324,7 +334,7 @@ export default function DealsDrilldownClient({
             <div key={s.ownerId} className="space-y-3">
               <div className="bg-white rounded-xl border border-slate-300 p-4 space-y-3">
                 <div className="text-base font-semibold text-wa-dark">{s.ownerName}</div>
-                <div className="flex items-baseline gap-6">
+                <div className="flex items-baseline flex-wrap gap-x-6 gap-y-2">
                   <div>
                     <div className="text-2xl font-bold text-slate-900">{s.dealCount}</div>
                     <div className="text-xs text-slate-500">deals created</div>
@@ -332,6 +342,10 @@ export default function DealsDrilldownClient({
                   <div>
                     <div className="text-2xl font-bold text-slate-900">{fmtInr(s.totalValue)}</div>
                     <div className="text-xs text-slate-500">total deal value</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-slate-900">{s.winRate != null ? `${Math.round(s.winRate * 100)}%` : "—"}</div>
+                    <div className="text-xs text-slate-500">win rate{s.closed > 0 ? ` · ${s.won}/${s.closed}` : ""}</div>
                   </div>
                 </div>
                 <div>

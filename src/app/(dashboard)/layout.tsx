@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/Sidebar";
 import CronTick from "@/components/CronTick";
+import FloatingChatLauncher from "@/components/chat/FloatingChatLauncher";
 import axios from "axios";
 import { getMetaAccessToken } from "@/lib/token-manager";
 import { endOfDayIST } from "@/lib/time";
@@ -46,7 +47,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // pending count and the Meta token check (a graph.facebook.com call, up to
   // 2s) ran serially BEFORE the two counts, so that latency was added to first
   // paint on every dashboard load; now the token check overlaps the DB reads.
-  const [pendingCount, tokenValid, unreadAgg, reminderCount] = await Promise.all([
+  const [pendingCount, tokenValid, unreadAgg, reminderCount, chatAgg, chatMentions] = await Promise.all([
     isAdminUser
       ? prisma.user.count({ where: { approvalStatus: "pending", deletedAt: null } })
       : Promise.resolve(0),
@@ -63,10 +64,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
         dueAt: { lte: endOfDayIST(new Date()) },
       },
     }),
+    // Team-chat unread + unseen mentions, to seed the floating launcher badge
+    // on first paint (it then self-polls /api/unread/count like the sidebar).
+    prisma.chatParticipant.aggregate({ where: { userId: user.id }, _sum: { unreadCount: true } }),
+    prisma.chatMention.count({ where: { mentionedUserId: user.id, seenAt: null } }),
   ]);
 
   const tokenExpired = !tokenValid;
   const unreadCount = unreadAgg._sum.unreadCount ?? 0;
+  const chatUnread = chatAgg._sum.unreadCount ?? 0;
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50">
@@ -83,6 +89,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       />
       <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
       <CronTick />
+      <FloatingChatLauncher initialUnread={chatUnread} initialMentions={chatMentions} />
     </div>
   );
 }

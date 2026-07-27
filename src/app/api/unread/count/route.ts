@@ -20,7 +20,7 @@ export async function GET() {
           OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }],
         };
 
-  const [unreadAgg, reminderCount] = await Promise.all([
+  const [unreadAgg, reminderCount, chatAgg, chatMentions, chatRequests] = await Promise.all([
     prisma.conversation.aggregate({
       where: unreadWhere,
       _sum: { unreadCount: true },
@@ -32,10 +32,29 @@ export async function GET() {
         dueAt: { lte: endOfDayIST(new Date()) },
       },
     }),
+    // Team-chat unread — sum of this user's own per-thread unread counters
+    // (same denormalized pattern as Conversation.unreadCount above).
+    prisma.chatParticipant.aggregate({
+      where: { userId: user.id },
+      _sum: { unreadCount: true },
+    }),
+    // Unseen @mentions of this user, for the launcher's mention badge.
+    prisma.chatMention.count({ where: { mentionedUserId: user.id, seenAt: null } }),
+    // Pending handoff asks needing this user's attention: requests addressed to
+    // them, plus (for admin) takeovers accepted and awaiting approval.
+    prisma.handoffRequest.count({
+      where:
+        user.role === "admin"
+          ? { OR: [{ toUserId: user.id, status: "REQUESTED" }, { kind: "TAKEOVER", status: "ACCEPTED" }] }
+          : { toUserId: user.id, status: "REQUESTED" },
+    }),
   ]);
 
   return NextResponse.json({
     unread: unreadAgg._sum.unreadCount ?? 0,
     reminders: reminderCount,
+    chatUnread: chatAgg._sum.unreadCount ?? 0,
+    chatMentions,
+    chatRequests,
   });
 }

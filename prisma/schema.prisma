@@ -71,6 +71,16 @@ model User {
   auditLogs            AuditLog[]
   targetsSet           Target[]
   decisionsLogged      DecisionLog[]
+  chatThreadsCreated   ChatThread[]      @relation("ChatThreadCreator")
+  chatMessages         ChatMessage[]     @relation("ChatMessageAuthor")
+  chatParticipations   ChatParticipant[] @relation("ChatParticipantUser")
+  chatAttachments      ChatAttachment[]  @relation("ChatAttachmentUploader")
+  chatMentions         ChatMention[]     @relation("ChatMentionUser")
+  handoffsFrom         HandoffRequest[]  @relation("HandoffFrom")
+  handoffsTo           HandoffRequest[]  @relation("HandoffTo")
+  handoffsApproved     HandoffRequest[]  @relation("HandoffApprover")
+  coverageGrants       CoverageGrant[]   @relation("CoverageUser")
+  availability         UserAvailability[] @relation("AvailabilityUser")
 
   @@map("users")
 }
@@ -1235,6 +1245,10 @@ model AccountContact {
   // The WhatsApp marketing Contact this was linked from, if any — the
   // other side of Contact.accountContactId.
   marketingContact Contact?
+  // Internal team-chat thread anchored to this contact (one per contact).
+  chatThread ChatThread?
+  handoffRequests HandoffRequest[] @relation("HandoffContact")
+  coverageGrants  CoverageGrant[]  @relation("CoverageContact")
 
   @@index([accountId])
   @@index([importBatchId])
@@ -1410,6 +1424,10 @@ model Deal {
   activities     Activity[]
   reminders      Reminder[]
   importBatch    ImportBatch?     @relation("DealImports", fields: [importBatchId], references: [id], onDelete: SetNull)
+  // Internal team-chat thread anchored to this deal (one per deal).
+  chatThread     ChatThread?
+  handoffRequests HandoffRequest[] @relation("HandoffDeal")
+  coverageGrants  CoverageGrant[]  @relation("CoverageDeal")
 
   @@index([ownerUserId, currentStageId])
   @@index([siteCity, createdAt])
@@ -1575,4 +1593,212 @@ model ImportBatch {
 
   @@index([importedByUserId, createdAt])
   @@map("import_batches")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TEAM CHAT (internal) — admins + sales reps talking to each other about a
+// customer/deal record. NOT customer-facing WhatsApp (that's Conversation/
+// Message). Visibility = Option B: a non-admin sees a thread only if they own
+// the anchored record OR hold a ChatParticipant row (TAGGED now, COVERING in
+// Phase 2). Admin access is computed via isAdmin(), never stored — same
+// chokepoint discipline as resolveAnalyticsScope (src/lib/analytics/scope.ts).
+// ─────────────────────────────────────────────────────────────────────────
+
+// One thread per anchored record — a customer (accountContactId) OR a deal
+// (dealId), never both. "Exactly one anchor" is enforced at the write layer
+// via Zod (cf. Target.scopeId). @unique on each nullable FK gives one-thread-
+// per-record without a DB CHECK (Postgres treats NULLs as distinct, so many
+// deal-threads with null account_contact_id coexist).
+model ChatThread {
+  id               String    @id @default(uuid())
+  // "record" (anchored to a customer/deal) | "team" (one shared channel) | "dm"
+  // (1:1 between two users). Team & DM threads leave both anchor FKs null.
+  kind             String    @default("record")
+  // Uniqueness key for non-record threads: "team" (singleton) or
+  // "dm:<sortedUserIdA>:<sortedUserIdB>" (one thread per pair). Null for record
+  // threads (those are unique via accountContactId/dealId instead).
+  channelKey       String?   @unique @map("channel_key")
+  accountContactId String?   @unique @map("account_contact_id")
+  dealId           String?   @unique @map("deal_id")
+  createdByUserId  String    @map("created_by_user_id")
+  // Bumped on every new message so the inbox sorts by recency (cf.
+  // Conversation.lastInboundAt) without aggregating messages.
+  lastMessageAt    DateTime? @map("last_message_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  accountContact AccountContact?   @relation(fields: [accountContactId], references: [id], onDelete: Cascade)
+  deal           Deal?             @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  createdBy      User              @relation("ChatThreadCreator", fields: [createdByUserId], references: [id])
+  messages       ChatMessage[]
+  participants   ChatParticipant[]
+
+  @@index([lastMessageAt])
+  @@map("chat_threads")
+}
+
+model ChatMessage {
+  id           String    @id @default(uuid())
+  threadId     String    @map("thread_id")
+  authorUserId String    @map("author_user_id")
+  // Body holds inline chip tokens @[refType:id:label] rendered by MessageBody.
+  // Nullable: an attachment-only message has no body (cf. Message.body).
+  body         String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  editedAt     DateTime? @map("edited_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  thread      ChatThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author      User             @relation("ChatMessageAuthor", fields: [authorUserId], references: [id])
+  attachments ChatAttachment[]
+  mentions    ChatMention[]
+
+  @@index([threadId, createdAt])
+  @@map("chat_messages")
+}
+
+// Who can see a thread (Option B) + per-user read cursor & unread counter.
+// role: "OWNER" (owns anchor) | "TAGGED" (@-mentioned in) | "COVERING" (Phase 2)
+// | "ADMIN" (lazy read-cursor row for a non-owner/non-tagged reader). Admin
+// VISIBILITY is computed via isAdmin(), not stored — this ADMIN row exists only
+// to hold lastReadAt/unreadCount once such a user opens the thread.
+model ChatParticipant {
+  id            String    @id @default(uuid())
+  threadId      String    @map("thread_id")
+  userId        String    @map("user_id")
+  role          String    @default("TAGGED")
+  lastReadAt    DateTime? @map("last_read_at")
+  // Denormalized, mirroring Conversation.unreadCount — incremented on post for
+  // non-authors, reset to 0 on mark-read. /api/unread/count sums this same way.
+  unreadCount   Int       @default(0) @map("unread_count")
+  addedByUserId String?   @map("added_by_user_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user   User       @relation("ChatParticipantUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, userId])
+  @@index([userId])
+  @@map("chat_participants")
+}
+
+// A file dropped into a message. Mirrors AccountContactAttachment field-for-
+// field so the same uploadToBlob/categorize/MAX_SIZE pipeline feeds it and
+// MediaPreview renders it. Uploaded to folder "chat" (NOT the /media library).
+model ChatAttachment {
+  id               String   @id @default(uuid())
+  messageId        String   @map("message_id")
+  uploadedByUserId String   @map("uploaded_by_user_id")
+  fileName         String   @map("file_name")
+  fileUrl          String   @map("file_url")
+  fileSize         Int      @map("file_size")
+  mimeType         String   @map("mime_type")
+  // categorize() output — image|video|audio|document|other (preview chooser).
+  category         String   @default("other")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  message    ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploadedBy User        @relation("ChatAttachmentUploader", fields: [uploadedByUserId], references: [id])
+
+  @@index([messageId])
+  @@map("chat_attachments")
+}
+
+// A @-tag inside a message. A PERSON mention sets mentionedUserId (fires the
+// unread badge, indexed FK). A RECORD chip sets refType+refId (deep-link, no
+// notification). Exactly one side is set — never both.
+model ChatMention {
+  id              String    @id @default(uuid())
+  messageId       String    @map("message_id")
+  mentionedUserId String?   @map("mentioned_user_id")
+  // "accountContact" | "lead" | "deal" | "quotation" | "courtImage"
+  refType         String?   @map("ref_type")
+  refId           String?   @map("ref_id")
+  seenAt          DateTime? @map("seen_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  message       ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  mentionedUser User?       @relation("ChatMentionUser", fields: [mentionedUserId], references: [id], onDelete: SetNull)
+
+  @@index([mentionedUserId, seenAt])
+  @@index([messageId])
+  @@index([refType, refId])
+  @@map("chat_mentions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TEAM CHAT — Phase 2: handoffs (coverage + takeover) + availability.
+// A COVERAGE handoff grants temporary access that auto-expires (CoverageGrant);
+// a TAKEOVER permanently moves ownership and needs admin approval.
+// ─────────────────────────────────────────────────────────────────────────
+
+// A request to cover (temporary) or take over (permanent) a customer/deal.
+// Lifecycle: REQUESTED → ACCEPTED/DECLINED; a TAKEOVER then needs APPROVED
+// (admin) to actually move ownership → COMPLETED; coverage COMPLETES on accept.
+// REVERTED = a coverage window ended; CANCELLED = the requester withdrew.
+model HandoffRequest {
+  id               String    @id @default(uuid())
+  kind             String    // "COVERAGE" | "TAKEOVER"
+  accountContactId String?   @map("account_contact_id")
+  dealId           String?   @map("deal_id")
+  fromUserId       String    @map("from_user_id")
+  toUserId         String    @map("to_user_id")
+  status           String    @default("REQUESTED")
+  note             String?
+  coverageStart    DateTime? @map("coverage_start")
+  coverageEnd      DateTime? @map("coverage_end")
+  approvedByUserId String?   @map("approved_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  accountContact AccountContact? @relation("HandoffContact", fields: [accountContactId], references: [id], onDelete: Cascade)
+  deal           Deal?           @relation("HandoffDeal", fields: [dealId], references: [id], onDelete: Cascade)
+  fromUser       User            @relation("HandoffFrom", fields: [fromUserId], references: [id])
+  toUser         User            @relation("HandoffTo", fields: [toUserId], references: [id])
+  approvedBy     User?           @relation("HandoffApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  coverageGrants CoverageGrant[]
+
+  @@index([toUserId, status])
+  @@index([fromUserId, status])
+  @@map("handoff_requests")
+}
+
+// The active temporary access from an accepted coverage. Auto-expiry is
+// automatic: a grant with expiresAt in the past (or revokedAt set) no longer
+// authorizes — see loadThreadAuthorized. A cron sweep tidies expired ones.
+model CoverageGrant {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  accountContactId String?   @map("account_contact_id")
+  dealId           String?   @map("deal_id")
+  handoffRequestId String?   @map("handoff_request_id")
+  startsAt         DateTime  @default(now()) @map("starts_at")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user           User            @relation("CoverageUser", fields: [userId], references: [id], onDelete: Cascade)
+  accountContact AccountContact? @relation("CoverageContact", fields: [accountContactId], references: [id], onDelete: Cascade)
+  deal           Deal?           @relation("CoverageDeal", fields: [dealId], references: [id], onDelete: Cascade)
+  handoffRequest HandoffRequest? @relation(fields: [handoffRequestId], references: [id], onDelete: SetNull)
+
+  @@index([userId, expiresAt])
+  @@index([accountContactId])
+  @@index([dealId])
+  @@map("coverage_grants")
+}
+
+// A rep's out-of-office window, so the team knows who's away (drives coverage).
+model UserAvailability {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  startsAt  DateTime @map("starts_at")
+  endsAt    DateTime @map("ends_at")
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation("AvailabilityUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, endsAt])
+  @@map("user_availability")
 }

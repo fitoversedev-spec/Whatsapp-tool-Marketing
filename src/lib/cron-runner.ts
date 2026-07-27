@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { runBroadcast } from "@/lib/sender";
 import { sendText } from "@/lib/whatsapp";
 import { runWeeklyDigest } from "@/lib/analytics/digestJob";
+import { postThreadNote } from "@/lib/chat/events";
 
 // The weekday the weekly digest fires on — Monday (getDay() 0=Sun..6=Sat).
 // A visible default, not a business-mandated day: Monday so the digest lands
@@ -154,10 +155,45 @@ export async function launchDueScheduledBroadcasts(): Promise<{ launched: number
   return { launched, failed };
 }
 
+// Ends coverage windows whose expiresAt has passed: revoke the grant, remove
+// the covering rep's COVERING participant row (access already stops the moment
+// the grant expires — see loadThreadAuthorized — this just tidies the inbox),
+// flip the handoff to REVERTED, and log an in-thread note. Per-item isolated.
+export async function revertExpiredCoverage(): Promise<{ reverted: number }> {
+  const now = new Date();
+  const expired = await prisma.coverageGrant.findMany({
+    where: { revokedAt: null, expiresAt: { lt: now } },
+    include: { user: { select: { name: true } } },
+  });
+  let reverted = 0;
+  for (const g of expired) {
+    try {
+      await prisma.coverageGrant.update({ where: { id: g.id }, data: { revokedAt: now } });
+      const anchorWhere = g.accountContactId ? { accountContactId: g.accountContactId } : { dealId: g.dealId };
+      const thread = await prisma.chatThread.findFirst({ where: anchorWhere, select: { id: true } });
+      if (thread) {
+        await prisma.chatParticipant.deleteMany({ where: { threadId: thread.id, userId: g.userId, role: "COVERING" } });
+        if (g.handoffRequestId) {
+          await prisma.handoffRequest.updateMany({ where: { id: g.handoffRequestId, status: "COMPLETED" }, data: { status: "REVERTED" } });
+        }
+        await postThreadNote(thread.id, g.userId, `⏰ ${g.user.name}'s coverage of this ${g.accountContactId ? "customer" : "deal"} has ended.`);
+      }
+      reverted++;
+    } catch (err) {
+      console.error("[cron] coverage revert failed", g.id, err);
+    }
+  }
+  return { reverted };
+}
+
 export async function sweepAll() {
-  const [reminders, broadcasts] = await Promise.all([
+  const [reminders, broadcasts, coverage] = await Promise.all([
     fireDueReminders(),
     launchDueScheduledBroadcasts(),
+    revertExpiredCoverage().catch((err) => {
+      console.error("[cron] coverage sweep threw", err);
+      return { reverted: 0 };
+    }),
   ]);
 
   // Day-of-week-gated weekly digest. Wrapped in its own try/catch — and
@@ -177,5 +213,5 @@ export async function sweepAll() {
     }
   }
 
-  return { reminders, broadcasts, digest, sweptAt: new Date().toISOString() };
+  return { reminders, broadcasts, coverage, digest, sweptAt: new Date().toISOString() };
 }

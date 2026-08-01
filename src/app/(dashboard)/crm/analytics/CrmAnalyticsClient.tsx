@@ -10,6 +10,8 @@ import { DataTable } from "@/components/analytics/DataTable";
 import { ExportButtons } from "@/components/analytics/ExportButtons";
 import { AnalyticsCard } from "@/components/analytics/AnalyticsCard";
 import { PeriodPicker } from "@/components/analytics/PeriodPicker";
+import UsageTab from "@/components/analytics/UsageTab";
+import InvoicesTab, { type InvoiceAnalyticsData } from "@/components/analytics/InvoicesTab";
 import { allTimePeriod, type Period } from "@/lib/analytics/periodPresets";
 import { MIN_SAMPLE_SIZE } from "@/lib/analytics/types";
 import type { Role } from "@/lib/rbac";
@@ -166,12 +168,18 @@ const INSIGHTS_TABS = ["seasonality", "referralPartners", "requirementFingerprin
 // the "digest" GROUP key below (Tab and Group are separate unions, so there's
 // no type collision — the different names just keep the two readable).
 const DIGEST_TABS = ["insightFeed", "digestView", "decisionLog"] as const;
+// Rep Usage group (admin-only) — active tool-time tracking.
+const USAGE_TABS = ["team", "heatmap"] as const;
+// Invoices group (admin-only) — invoiced/collected/receivables.
+const INVOICES_TABS = ["summary"] as const;
 type PerformanceTab = (typeof PERFORMANCE_TABS)[number];
 type PatternsTab = (typeof PATTERNS_TABS)[number];
 type QuadrantsTab = (typeof QUADRANTS_TABS)[number];
 type InsightsTab = (typeof INSIGHTS_TABS)[number];
 type DigestGroupTab = (typeof DIGEST_TABS)[number];
-type Tab = PerformanceTab | PatternsTab | QuadrantsTab | InsightsTab | DigestGroupTab;
+type UsageGroupTab = (typeof USAGE_TABS)[number];
+type InvoicesGroupTab = (typeof INVOICES_TABS)[number];
+type Tab = PerformanceTab | PatternsTab | QuadrantsTab | InsightsTab | DigestGroupTab | UsageGroupTab | InvoicesGroupTab;
 const TAB_LABELS: Record<Tab, string> = {
   overview: "Overview",
   individual: "Individual performance",
@@ -192,6 +200,9 @@ const TAB_LABELS: Record<Tab, string> = {
   insightFeed: "Insight Feed",
   digestView: "Digest",
   decisionLog: "Decision Log",
+  team: "Team",
+  heatmap: "Active-hours heatmap",
+  summary: "Summary",
 };
 
 // Two-level nav (Phase 2, extended Phase 3, extended Phase 4): "Comparisons &
@@ -202,14 +213,27 @@ const TAB_LABELS: Record<Tab, string> = {
 // Note: "insights" here is Phase 4's INDUSTRY-Insights group; "digest" is
 // Phase 5's INSIGHT-FEED group ("Insights & Digest") — two different keys on
 // purpose, so they never collide in visibleGroups/GROUP_LABELS.
-type Group = "performance" | "patterns" | "quadrants" | "insights" | "digest";
+type Group = "performance" | "patterns" | "quadrants" | "insights" | "digest" | "usage" | "invoices";
 const GROUP_LABELS: Record<Group, string> = {
   performance: "Performance",
   patterns: "Comparisons & Patterns",
   quadrants: "Quadrants & Territory",
   insights: "Industry Insights",
   digest: "Insights & Digest",
+  usage: "Rep Usage",
+  invoices: "Invoices",
 };
+// Response shape of /api/crm/analytics/usage (admin-only). Row types are
+// redefined here, matching how every other group's rows are duplicated
+// client-side rather than imported from src/lib/analytics/*.
+type UsageOverviewRow = {
+  userId: string; userName: string; role: string; online: boolean; lastSeenAt: string | null;
+  activeSecondsToday: number; activeSecondsWeek: number; activeSecondsRange: number;
+  activeDays: number; avgSecondsPerActiveDay: number | null; sessionCount: number;
+  firstInToday: string | null; lastActiveToday: string | null;
+};
+type UsageHeatCell = { weekday: number; hour: number; activeSeconds: number };
+type UsageResponse = { overview: UsageOverviewRow[]; heatmap: UsageHeatCell[] };
 
 type TargetProgress = {
   targetRevenue: number | null;
@@ -325,7 +349,7 @@ function RepBreakdown({ title, description, segments }: { title: string; descrip
 
 export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean; role: Role }) {
   const visibleGroups: Group[] = isAdmin
-    ? ["performance", "patterns", "quadrants", "insights", "digest"]
+    ? ["performance", "patterns", "quadrants", "insights", "digest", "usage", "invoices"]
     : ["performance"];
 
   // Blank by default → the fetches send ?from=&to=, and each analytics route
@@ -343,6 +367,10 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightFeedData, setInsightFeedData] = useState<InsightFeedResponse | null>(null);
   const [insightFeedLoading, setInsightFeedLoading] = useState(false);
+  const [usageData, setUsageData] = useState<UsageResponse | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [invoicesData, setInvoicesData] = useState<InvoiceAnalyticsData | null>(null);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -402,6 +430,28 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
       .finally(() => setInsightFeedLoading(false));
   }, [range, group, isAdmin]);
 
+  // Same lazy-fetch-only-once-opened pattern as the admin groups above — a
+  // non-admin can never reach this branch ("usage" never appears in
+  // visibleGroups for them), and /api/crm/analytics/usage 403s them regardless.
+  useEffect(() => {
+    if (!isAdmin || group !== "usage") return;
+    setUsageLoading(true);
+    fetch(`/api/crm/analytics/usage?from=${range.from}&to=${range.to}`)
+      .then((r) => r.json())
+      .then((d) => setUsageData(d))
+      .finally(() => setUsageLoading(false));
+  }, [range, group, isAdmin]);
+
+  // Invoices group — same lazy-load-once-opened, admin-only pattern.
+  useEffect(() => {
+    if (!isAdmin || group !== "invoices") return;
+    setInvoicesLoading(true);
+    fetch(`/api/crm/analytics/invoices?from=${range.from}&to=${range.to}`)
+      .then((r) => r.json())
+      .then((d) => setInvoicesData(d))
+      .finally(() => setInvoicesLoading(false));
+  }, [range, group, isAdmin]);
+
   function selectGroup(g: Group) {
     setGroup(g);
     setTab(
@@ -413,7 +463,11 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
             ? "fourQuadrants"
             : g === "insights"
               ? "seasonality"
-              : "insightFeed",
+              : g === "digest"
+                ? "insightFeed"
+                : g === "usage"
+                  ? "team"
+                  : "summary",
     );
   }
 
@@ -459,7 +513,11 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
                 ? QUADRANTS_TABS
                 : group === "insights"
                   ? INSIGHTS_TABS
-                  : DIGEST_TABS
+                  : group === "digest"
+                    ? DIGEST_TABS
+                    : group === "usage"
+                      ? USAGE_TABS
+                      : INVOICES_TABS
           ).map((t) => (
             <button
               key={t}
@@ -501,6 +559,23 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
           {tab === "geography" && <GeographyTab rows={data.geography.cities} range={range} />}
           {tab === "platforms" && <PlatformsTab rows={data.sources.sources} range={range} />}
         </>
+      ))}
+
+      {group === "usage" && (usageLoading || !usageData ? (
+        <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
+      ) : (
+        <UsageTab
+          view={tab === "heatmap" ? "heatmap" : "team"}
+          overview={usageData.overview}
+          heatmap={usageData.heatmap}
+          range={range}
+        />
+      ))}
+
+      {group === "invoices" && (invoicesLoading || !invoicesData ? (
+        <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
+      ) : (
+        <InvoicesTab data={invoicesData} />
       ))}
 
       {group === "patterns" && (patternsLoading || !patternsData ? (

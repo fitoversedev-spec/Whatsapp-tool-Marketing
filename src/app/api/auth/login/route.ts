@@ -58,5 +58,14 @@ export async function POST(req: NextRequest) {
   session.role = user.role as Role;
   await session.save();
 
+  // Usage tracking: close any dangling open session at its real last-seen time,
+  // then open a fresh one (this login = punch-in). Never block sign-in on it.
+  try {
+    await prisma.$executeRaw`UPDATE user_sessions SET ended_at = last_seen_at WHERE user_id = ${user.id} AND ended_at IS NULL`;
+    await prisma.userSession.create({ data: { userId: user.id } });
+  } catch {
+    /* usage tracking must never block login */
+  }
+
   return NextResponse.json({ ok: true, user: { email: user.email, name: user.name, role: user.role as Role } });
 }

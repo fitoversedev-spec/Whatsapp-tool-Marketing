@@ -24,6 +24,14 @@ export function fmtPct(n: number | null): string {
 export function fmtDays(n: number | null): string {
   return n == null ? "—" : n < 1 ? `${Math.round(n * 24)}h` : `${n.toFixed(1)}d`;
 }
+// A duration in seconds → compact "3h 42m" / "18m" / "0m" (used by Rep Usage).
+export function fmtDuration(seconds: number | null): string {
+  if (seconds == null) return "—";
+  const total = Math.max(0, Math.round(seconds / 60));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
 
 // Shared horizontal bar chart for every magnitude-by-category comparison
 // across analytics (stage velocity, pipeline by stage, best-selling

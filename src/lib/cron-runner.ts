@@ -186,13 +186,49 @@ export async function revertExpiredCoverage(): Promise<{ reverted: number }> {
   return { reverted };
 }
 
+// Closes usage sessions that went stale (no heartbeat for >10 min) — reps
+// rarely click logout, so this is the real punch-out for most sessions:
+// ended_at = the last time we actually saw them. Active-time totals and the
+// live "online now" indicator don't depend on this (they read last_seen_at /
+// usage_hourly directly) — this only tidies dangling open sessions.
+export async function closeStaleSessions(): Promise<{ closed: number }> {
+  const cutoff = new Date(Date.now() - 10 * 60 * 1000);
+  const closed = await prisma.$executeRaw`
+    UPDATE user_sessions SET ended_at = last_seen_at
+    WHERE ended_at IS NULL AND last_seen_at < ${cutoff}
+  `;
+  return { closed: Number(closed) || 0 };
+}
+
+// Flips unpaid, not-yet-paid invoices to "overdue" once their due date has
+// passed. Only touches "issued"/"sent" invoices (never paid/partially_paid/
+// cancelled), and only those still owing (amount_paid < grand_total). Payment
+// routes recompute status live; this is the time-based transition nothing else
+// triggers.
+export async function markOverdueInvoices(): Promise<{ overdue: number }> {
+  const now = new Date();
+  const overdue = await prisma.$executeRaw`
+    UPDATE invoices SET status = 'overdue'
+    WHERE status IN ('issued', 'sent') AND due_date < ${now} AND amount_paid < grand_total
+  `;
+  return { overdue: Number(overdue) || 0 };
+}
+
 export async function sweepAll() {
-  const [reminders, broadcasts, coverage] = await Promise.all([
+  const [reminders, broadcasts, coverage, staleSessions, overdueInvoices] = await Promise.all([
     fireDueReminders(),
     launchDueScheduledBroadcasts(),
     revertExpiredCoverage().catch((err) => {
       console.error("[cron] coverage sweep threw", err);
       return { reverted: 0 };
+    }),
+    closeStaleSessions().catch((err) => {
+      console.error("[cron] stale-session sweep threw", err);
+      return { closed: 0 };
+    }),
+    markOverdueInvoices().catch((err) => {
+      console.error("[cron] overdue-invoice sweep threw", err);
+      return { overdue: 0 };
     }),
   ]);
 
@@ -213,5 +249,5 @@ export async function sweepAll() {
     }
   }
 
-  return { reminders, broadcasts, coverage, digest, sweptAt: new Date().toISOString() };
+  return { reminders, broadcasts, coverage, staleSessions, overdueInvoices, digest, sweptAt: new Date().toISOString() };
 }

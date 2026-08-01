@@ -5,12 +5,19 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { endOfDayIST } from "@/lib/time";
+import { recordHeartbeat } from "@/lib/usage/heartbeat";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  // Active-time heartbeat — this visibility-gated 15s poll doubles as the "rep
+  // is on the tool right now" signal. Kick it off in parallel with the count
+  // queries below (awaited before returning so it runs on serverless), and
+  // never let it affect the response.
+  const heartbeat = recordHeartbeat(user.id);
 
   const unreadWhere =
     user.role === "admin"
@@ -49,6 +56,8 @@ export async function GET() {
           : { toUserId: user.id, status: "REQUESTED" },
     }),
   ]);
+
+  await heartbeat.catch(() => {});
 
   return NextResponse.json({
     unread: unreadAgg._sum.unreadCount ?? 0,

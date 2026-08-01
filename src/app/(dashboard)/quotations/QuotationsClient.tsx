@@ -177,6 +177,23 @@ export default function QuotationsClient({
     }
   }
 
+  // Customer confirmed → turn the quote into an invoice. Marks the quote
+  // accepted and the deal WON server-side, then opens the new invoice.
+  async function convertToInvoice(q: Quotation) {
+    if (!confirm(`Convert ${q.number} into an invoice? This marks the quote accepted and the deal as WON.`)) return;
+    const res = await fetch(`/api/quotations/${q.id}/convert-to-invoice`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.invoice) {
+      toast.success(`Invoice ${data.invoice.number} created`);
+      router.push(`/invoices/${data.invoice.id}`);
+    } else if (res.status === 409 && data.invoice) {
+      toast.error("An invoice already exists for this quote");
+      router.push(`/invoices/${data.invoice.id}`);
+    } else {
+      toast.error(data.error ?? "Could not convert to invoice");
+    }
+  }
+
   async function remove(q: Quotation) {
     if (!confirm(`Delete quotation ${q.number}? This cannot be undone.`)) return;
     const res = await fetch(`/api/quotations/${q.id}`, { method: "DELETE" });
@@ -448,6 +465,14 @@ export default function QuotationsClient({
                               className="text-xs text-emerald-700 hover:underline"
                             >
                               Mark accepted
+                            </button>
+                          )}
+                          {(q.status === "sent" || q.status === "accepted") && (
+                            <button
+                              onClick={() => convertToInvoice(q)}
+                              className="text-xs text-wa-dark hover:underline font-medium"
+                            >
+                              Convert to invoice
                             </button>
                           )}
                           {isAdmin && (

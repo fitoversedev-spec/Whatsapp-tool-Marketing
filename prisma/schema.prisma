@@ -81,8 +81,54 @@ model User {
   handoffsApproved     HandoffRequest[]  @relation("HandoffApprover")
   coverageGrants       CoverageGrant[]   @relation("CoverageUser")
   availability         UserAvailability[] @relation("AvailabilityUser")
+  sessions             UserSession[]     @relation("UserSessionUser")
+  usageHourly          UsageHourly[]     @relation("UsageHourlyUser")
+  invoicesCreated         Invoice[]        @relation("InvoiceCreator")
+  invoicePaymentsRecorded InvoicePayment[] @relation("InvoicePaymentRecorder")
 
   @@map("users")
+}
+
+// One row per login "session" for a rep — powers the admin Usage analytics
+// (punch-in/out, who's-online-now, session list). `activeSeconds` is the real
+// time-in-tool, accumulated from the sidebar/launcher 15s heartbeat (see
+// src/lib/usage/heartbeat.ts): each ping adds the capped gap since lastSeenAt,
+// so idle time (tab hidden) is excluded. Most reps never click logout, so a
+// session is closed either by an explicit logout OR by the cron once lastSeenAt
+// goes stale (>10 min) — see closeStaleSessions() in cron-runner.ts.
+model UserSession {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  startedAt     DateTime  @default(now()) @map("started_at")
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at")
+  endedAt       DateTime? @map("ended_at")
+  activeSeconds Int       @default(0) @map("active_seconds")
+
+  user User @relation("UserSessionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Resolving the open session for a heartbeat filters on (userId, endedAt IS
+  // NULL); the lastSeenAt index serves the "online now" and stale-close scans.
+  @@index([userId, endedAt])
+  @@index([lastSeenAt])
+  @@map("user_sessions")
+}
+
+// Per-rep, per-IST-hour bucket of active seconds — the aggregate source for the
+// Usage tab's daily/weekly totals (sum over a range) and the weekday×hour
+// heatmap (group by IST weekday/hour). Upsert-incremented on each heartbeat by
+// the same delta added to the session, so the two stay consistent. `hourStartAt`
+// is the current instant truncated to the start of its IST hour.
+model UsageHourly {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  hourStartAt   DateTime @map("hour_start_at")
+  activeSeconds Int      @default(0) @map("active_seconds")
+
+  user User @relation("UsageHourlyUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hourStartAt])
+  @@index([userId, hourStartAt])
+  @@map("usage_hourly")
 }
 
 // Fitoverse's real offices (Salem/Chennai/Bangalore) — seeded, not user-created.
@@ -613,6 +659,7 @@ model Quotation {
   createdBy    User           @relation(fields: [createdByUserId], references: [id])
   deal         Deal?          @relation(fields: [dealId], references: [id], onDelete: SetNull)
   dealLineItems DealLineItem[]
+  invoice      Invoice?
 
   @@index([status])
   @@index([conversationId])
@@ -620,6 +667,75 @@ model Quotation {
   @@index([createdAt])
   @@index([dealId, version])
   @@map("quotations")
+}
+
+// A confirmed quote turned into a customer invoice — a frozen financial
+// snapshot (line items + totals copied at issue, never mutated by later quote
+// edits). One per quote (quotationId is unique). `number` is the customer-facing
+// name "<CustomerName>.inv (<Sport>)", with a "(2)" suffix keeping it unique when
+// a customer has more than one for the same sport. Payment status is derived from
+// InvoicePayment rows (recomputeInvoiceStatus in src/lib/invoice/status.ts);
+// markOverdueInvoices() in cron-runner.ts flips unpaid past-due invoices to
+// "overdue".
+model Invoice {
+  id              String    @id @default(uuid())
+  number          String    @unique
+  quotationId     String    @unique @map("quotation_id")
+  dealId          String?   @map("deal_id")
+  customerName    String    @map("customer_name")
+  contactPhone    String?   @map("contact_phone")
+  billingAddress  String?   @map("billing_address")
+  sport           String    @default("football")
+  // JSON snapshot copied from the quote at issue — same shape as Quotation.lineItems.
+  lineItems       String    @map("line_items")
+  subtotal        Decimal   @db.Decimal(12, 2)
+  gstAmount       Decimal   @map("gst_amount") @db.Decimal(12, 2)
+  grandTotal      Decimal   @map("grand_total") @db.Decimal(12, 2)
+  gstMode         String    @default("SPLIT") @map("gst_mode")
+  amountPaid      Decimal   @default(0) @map("amount_paid") @db.Decimal(12, 2)
+  // "issued" | "sent" | "partially_paid" | "paid" | "overdue" | "cancelled"
+  status          String    @default("issued")
+  invoiceDate     DateTime  @map("invoice_date")
+  dueDate         DateTime  @map("due_date")
+  sentAt          DateTime? @map("sent_at")
+  paidAt          DateTime? @map("paid_at")
+  notes           String?
+  pdfUrl          String?   @map("pdf_url")
+  createdByUserId String    @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  quotation Quotation        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  deal      Deal?            @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  createdBy User             @relation("InvoiceCreator", fields: [createdByUserId], references: [id])
+  payments  InvoicePayment[]
+
+  @@index([status])
+  @@index([dealId])
+  @@index([createdByUserId])
+  @@index([createdAt])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+// A single payment received against an invoice. The sum of these is denormalized
+// onto Invoice.amountPaid and drives the invoice's payment status.
+model InvoicePayment {
+  id               String   @id @default(uuid())
+  invoiceId        String   @map("invoice_id")
+  amount           Decimal  @db.Decimal(12, 2)
+  paidAt           DateTime @map("paid_at")
+  method           String? // cash | upi | bank | cheque | other
+  reference        String?
+  note             String?
+  recordedByUserId String   @map("recorded_by_user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation("InvoicePaymentRecorder", fields: [recordedByUserId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_payments")
 }
 
 // Centralized media library. Every file upload goes through here so we can
@@ -1420,6 +1536,7 @@ model Deal {
   stageHistory   DealStageHistory[]
   lineItems      DealLineItem[]
   quotations     Quotation[]
+  invoices       Invoice[]
   courtImages    CourtImage[]
   activities     Activity[]
   reminders      Reminder[]

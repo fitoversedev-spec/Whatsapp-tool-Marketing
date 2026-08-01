@@ -52,6 +52,12 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         description: "Generate and track customer quotes",
       },
       {
+        href: "/invoices",
+        label: "Invoices",
+        icon: "🧾",
+        description: "Convert confirmed quotes to invoices; track payments",
+      },
+      {
         href: "/court-images",
         label: "Court Designer",
         icon: "🎨",

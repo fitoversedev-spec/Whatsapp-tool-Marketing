@@ -130,6 +130,7 @@ export default function Sidebar({
     { href: "/templates", label: "Templates" },
     { href: "/tags", label: "Tags" },
     { href: "/quotations", label: "Quotations" },
+    { href: "/invoices", label: "Invoices" },
     { href: "/court-images", label: "Court Designer" },
     { href: "/products", label: "Products" },
     { href: "/portfolio", label: "Portfolio" },

@@ -46,18 +46,6 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         description: "Manage WhatsApp message templates",
       },
       {
-        href: "/quotations",
-        label: "Quotations",
-        icon: "📄",
-        description: "Generate and track customer quotes",
-      },
-      {
-        href: "/invoices",
-        label: "Invoices",
-        icon: "🧾",
-        description: "Convert confirmed quotes to invoices; track payments",
-      },
-      {
         href: "/court-images",
         label: "Court Designer",
         icon: "🎨",
@@ -135,6 +123,18 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         description: "Every sales opportunity, across every channel",
       },
       {
+        href: "/quotations",
+        label: "Quotations",
+        icon: "📄",
+        description: "Generate and track customer quotes",
+      },
+      {
+        href: "/invoices",
+        label: "Invoices",
+        icon: "🧾",
+        description: "Convert confirmed quotes to invoices; track payments",
+      },
+      {
         href: "/crm/activities",
         label: "Activities",
         icon: "🗒️",
@@ -142,9 +142,9 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
       },
       {
         href: "/crm/companies",
-        label: "Customer types",
+        label: "Customer segments",
         icon: "🏢",
-        description: "Contacts grouped by customer type, business type, lead source, or city",
+        description: "Contacts grouped by customer segment, business type, lead source, or city",
       },
       {
         href: "/crm/import",
@@ -295,7 +295,7 @@ export default function AllToolsPanel({
           <button
             onClick={onClose}
             aria-label="Close all tools"
-            className="p-1.5 rounded-md hover:bg-slate-100"
+            className="p-1.5 rounded-lg hover:bg-slate-100"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -326,7 +326,7 @@ export default function AllToolsPanel({
                         key={item.href}
                         href={item.href}
                         onClick={onClose}
-                        className={`relative flex items-start gap-3 p-3 rounded-lg border transition ${
+                        className={`relative flex items-start gap-3 p-3 rounded-xl border transition ${
                           active
                             ? "border-wa-green bg-wa-green/5 text-wa-dark"
                             : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-700"

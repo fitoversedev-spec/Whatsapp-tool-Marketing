@@ -94,7 +94,7 @@ export default function ChatPanel({
   const actionable = requests.filter((r) => r.canRespond || r.canApprove);
 
   return (
-    <div className="fixed z-50 flex flex-col bg-white shadow-2xl border border-slate-200 right-4 bottom-4 w-[380px] h-[560px] rounded-xl max-sm:inset-0 max-sm:w-full max-sm:h-full max-sm:rounded-none">
+    <div className="fixed z-50 flex flex-col bg-white shadow-2xl border border-slate-200 right-4 bottom-4 w-[380px] h-[560px] rounded-2xl max-sm:inset-0 max-sm:w-full max-sm:h-full max-sm:rounded-none">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 shrink-0">
         {view === "thread" ? (
@@ -129,14 +129,14 @@ export default function ChatPanel({
                   <div className="flex gap-2 mt-1.5">
                     {r.canRespond && (
                       <>
-                        <button disabled={busyId === r.id} onClick={() => handoffAction(r.id, "accept")} className="text-xs font-medium bg-wa-green text-white rounded px-2.5 py-1 disabled:opacity-50">Accept</button>
-                        <button disabled={busyId === r.id} onClick={() => handoffAction(r.id, "decline")} className="text-xs font-medium border border-slate-300 rounded px-2.5 py-1 disabled:opacity-50">Decline</button>
+                        <button disabled={busyId === r.id} onClick={() => handoffAction(r.id, "accept")} className="text-xs font-semibold bg-wa-green text-white rounded-lg px-2.5 py-1 hover:bg-wa-green/90 disabled:opacity-50">Accept</button>
+                        <button disabled={busyId === r.id} onClick={() => handoffAction(r.id, "decline")} className="text-xs font-semibold border border-slate-300 bg-white text-slate-700 rounded-lg px-2.5 py-1 hover:bg-slate-50 disabled:opacity-50">Decline</button>
                       </>
                     )}
                     {r.canApprove && (
                       <>
-                        <button disabled={busyId === r.id} onClick={() => handoffAction(r.id, "approve")} className="text-xs font-medium bg-wa-green text-white rounded px-2.5 py-1 disabled:opacity-50">Approve</button>
-                        <button disabled={busyId === r.id} onClick={() => handoffAction(r.id, "decline")} className="text-xs font-medium border border-slate-300 rounded px-2.5 py-1 disabled:opacity-50">Reject</button>
+                        <button disabled={busyId === r.id} onClick={() => handoffAction(r.id, "approve")} className="text-xs font-semibold bg-wa-green text-white rounded-lg px-2.5 py-1 hover:bg-wa-green/90 disabled:opacity-50">Approve</button>
+                        <button disabled={busyId === r.id} onClick={() => handoffAction(r.id, "decline")} className="text-xs font-semibold border border-slate-300 bg-white text-slate-700 rounded-lg px-2.5 py-1 hover:bg-slate-50 disabled:opacity-50">Reject</button>
                       </>
                     )}
                   </div>

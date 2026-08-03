@@ -114,7 +114,7 @@ export default function ContactTimelineClient({
           conversation && (
             <Link
               href={`/inbox?conversation=${conversation.id}`}
-              className="inline-block px-3 py-1.5 text-sm bg-wa-green text-white rounded-md hover:bg-wa-dark"
+              className="inline-block px-3 py-1.5 text-sm bg-wa-green text-white rounded-lg hover:bg-wa-dark"
             >
               Open chat →
             </Link>
@@ -302,7 +302,7 @@ function EventCard({ event }: { event: Event }) {
 function dotColor(e: Event): string {
   switch (e.kind) {
     case "message":
-      return e.direction === "inbound" ? "#94a3b8" : "#25D366";
+      return e.direction === "inbound" ? "#94a3b8" : "#159341";
     case "note":
       return "#f59e0b";
     case "reminder":

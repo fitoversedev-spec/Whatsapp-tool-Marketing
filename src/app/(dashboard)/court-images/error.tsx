@@ -58,14 +58,14 @@ export default function CourtImagesError({
               // Full reload so a stale bundle is discarded.
               if (typeof window !== "undefined") window.location.reload();
             }}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm"
+            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
           >
             Reload page
           </button>
           <button
             type="button"
             onClick={reset}
-            className="text-slate-700 border border-slate-300 hover:border-slate-400 font-medium px-4 py-2 rounded-lg text-sm"
+            className="bg-white text-slate-700 border border-slate-300 hover:border-slate-400 font-semibold px-4 py-2 rounded-xl text-sm"
           >
             Try again
           </button>

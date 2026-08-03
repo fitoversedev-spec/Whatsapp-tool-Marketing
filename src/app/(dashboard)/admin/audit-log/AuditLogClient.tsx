@@ -105,7 +105,7 @@ export default function AuditLogClient() {
                         </td>
                         <td className="px-4 py-3 text-slate-700">{r.actorName ?? <span className="text-slate-400">system</span>}</td>
                         <td className="px-4 py-3">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${ACTION_COLORS[r.action] ?? "bg-slate-100 text-slate-600"}`}>
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${ACTION_COLORS[r.action] ?? "bg-slate-100 text-slate-600"}`}>
                             {r.action}
                           </span>
                         </td>

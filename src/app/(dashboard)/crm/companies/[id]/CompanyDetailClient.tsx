@@ -319,13 +319,13 @@ function EditCompanyModal({
         <h2 className="font-semibold text-slate-900 mb-4">Edit company</h2>
         <form onSubmit={submit} className="space-y-3">
           <div><label className="text-xs font-medium text-slate-600">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">City</label>
-            <input value={city} onChange={(e) => setCity(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input value={city} onChange={(e) => setCity(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">Business type</label>
-            <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
               <option value="">Unspecified</option>
               <option value="B2B">B2B</option>
               <option value="B2C">B2C</option>
@@ -333,28 +333,28 @@ function EditCompanyModal({
             </select>
           </div>
           <div><label className="text-xs font-medium text-slate-600">Segment</label>
-            <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
               <option value="">Unspecified</option>
               {customerProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div><label className="text-xs font-medium text-slate-600">GSTIN</label>
-            <input value={gstin} onChange={(e) => setGstin(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input value={gstin} onChange={(e) => setGstin(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
           </div>
           {isAdmin && (
             <div><label className="text-xs font-medium text-slate-600">Owner</label>
-              <select value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+              <select value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
                 <option value="">Unassigned</option>
                 {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
           )}
           <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
+            <button type="button" onClick={onClose} className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50">
               {saving ? "Saving..." : "Save"}
             </button>
           </div>
@@ -406,16 +406,16 @@ function NewContactModal({ accountId, onClose, onCreated }: { accountId: string;
         <h2 className="font-semibold text-slate-900 mb-4">New contact</h2>
         <form onSubmit={submit} className="space-y-3">
           <div><label className="text-xs font-medium text-slate-600">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">Phone</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">Email</label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">Designation</label>
-            <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
           </div>
           {duplicate && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
@@ -428,8 +428,8 @@ function NewContactModal({ accountId, onClose, onCreated }: { accountId: string;
             </div>
           )}
           <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
-            <button type="submit" disabled={submitting} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
+            <button type="button" onClick={onClose} className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
+            <button type="submit" disabled={submitting} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50">
               {submitting ? "Adding..." : "Add"}
             </button>
           </div>

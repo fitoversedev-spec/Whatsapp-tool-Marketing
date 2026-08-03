@@ -210,7 +210,7 @@ function ProductSection({
         <button
           type="button"
           onClick={() => setAdding((a) => !a)}
-          className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-medium px-4 py-2 rounded-lg"
+          className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-semibold px-4 py-2 rounded-xl"
         >
           {adding ? "Cancel" : `+ Add ${kindLabel.toLowerCase()}`}
         </button>
@@ -792,7 +792,7 @@ function ProductForm({
         <button
           type="submit"
           disabled={busy}
-          className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-medium px-5 py-2 rounded-lg disabled:opacity-50"
+          className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-semibold px-5 py-2 rounded-xl disabled:opacity-50"
         >
           {busy ? "Saving…" : editing ? "Save changes" : "Save product"}
         </button>

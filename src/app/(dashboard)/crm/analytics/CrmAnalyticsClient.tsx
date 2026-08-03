@@ -522,8 +522,8 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
-                tab === t ? "border-wa-green text-wa-dark" : "border-transparent text-slate-500 hover:text-slate-800"
+              className={`px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap ${
+                tab === t ? "border-wa-green text-wa-dark font-semibold" : "border-transparent text-slate-500 font-medium hover:text-slate-800"
               }`}
             >
               {TAB_LABELS[t]}

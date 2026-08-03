@@ -33,7 +33,7 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
       <select
         value={type}
         onChange={(e) => changeType(e.target.value as PeriodType)}
-        className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+        className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
       >
         <option value="ALL">All time</option>
         <option value="MONTH">Month</option>
@@ -49,7 +49,7 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
             const [y, m] = e.target.value.split("-").map(Number);
             if (y && m) onChange(monthPeriod(y, m - 1));
           }}
-          className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+          className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
         />
       )}
 
@@ -61,7 +61,7 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
               <select
                 value={quarter}
                 onChange={(e) => onChange(quarterPeriod(fyStartYear, Number(e.target.value) as 1 | 2 | 3 | 4))}
-                className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+                className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
               >
                 <option value={1}>Q1 (Apr-Jun)</option>
                 <option value={2}>Q2 (Jul-Sep)</option>
@@ -75,7 +75,7 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
                   const y = Number(e.target.value);
                   if (Number.isFinite(y)) onChange(quarterPeriod(y, quarter));
                 }}
-                className="w-24 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+                className="w-24 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
               />
             </>
           );
@@ -89,7 +89,7 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
             const y = Number(e.target.value);
             if (Number.isFinite(y)) onChange(fyPeriod(y));
           }}
-          className="w-24 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+          className="w-24 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
         />
       )}
 

@@ -152,7 +152,7 @@ export default function MediaLightbox({ url, mimeType, fileName, onClose }: Prop
               <a
                 href={url}
                 download={fileName}
-                className="inline-block px-4 py-2 bg-wa-green text-white rounded-md text-sm font-medium hover:bg-wa-dark"
+                className="inline-block px-4 py-2 bg-wa-green text-white rounded-xl text-sm font-semibold hover:bg-wa-green/90"
               >
                 Download to view
               </a>

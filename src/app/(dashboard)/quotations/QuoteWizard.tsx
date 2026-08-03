@@ -746,7 +746,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Customer type</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Customer segment</label>
                   <select
                     value={customerProfileId}
                     onChange={(e) => setCustomerProfileId(e.target.value)}
@@ -850,7 +850,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                           Math.round(toFeet(parseFloat(e.target.value) || 0, unit))
                         )
                       }
-                      className="w-20 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                      className="w-20 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                     />
                     <span className="text-sm text-slate-500">{unit}</span>
                   </div>
@@ -866,7 +866,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                           Math.round(toFeet(parseFloat(e.target.value) || 0, unit))
                         )
                       }
-                      className="w-20 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                      className="w-20 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                     />
                     <span className="text-sm text-slate-500">{unit}</span>
                   </div>
@@ -935,7 +935,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                     type="date"
                     value={quoteDate}
                     onChange={(e) => setQuoteDate(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                   />
                 </div>
                 <div>
@@ -948,7 +948,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                     max={365}
                     value={validityDays}
                     onChange={(e) => setValidityDays(parseInt(e.target.value) || 30)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                   />
                 </div>
               </div>

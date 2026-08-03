@@ -183,7 +183,7 @@ export default function Sidebar({
         className={`
           fixed lg:sticky inset-y-0 left-0 top-0 z-50 lg:z-auto
           w-64 h-screen lg:h-screen shrink-0
-          bg-white border-r border-slate-200 flex flex-col
+          app-sidebar border-r flex flex-col
           transform transition-[width,transform] duration-200 ease-out
           ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
           ${collapsed ? "lg:w-[68px]" : "lg:w-60"}
@@ -195,14 +195,22 @@ export default function Sidebar({
             ${collapsed ? "lg:p-3 lg:justify-center p-5 justify-between" : "p-5 justify-between"}
           `}
         >
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-wa-green text-white flex items-center justify-center font-bold shrink-0">
-              W
-            </div>
-            <div className={collapsed ? "lg:hidden" : ""}>
-              <div className="font-semibold text-slate-900 leading-tight">WhatsApp</div>
-              <div className="text-xs text-slate-500">Marketing Tool</div>
-            </div>
+          <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/quotation-assets/image1.png"
+              alt="Fitoverse"
+              className={collapsed ? "lg:hidden h-8 w-auto" : "h-8 w-auto"}
+            />
+            {collapsed && (
+              // Collapsed rail: clip the lockup to just the infinity mark.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src="/quotation-assets/image1.png"
+                alt="Fitoverse"
+                className="hidden lg:block h-8 w-auto max-w-[40px] object-contain object-left"
+              />
+            )}
           </div>
           {/* Mobile close button */}
           <button
@@ -266,8 +274,8 @@ export default function Sidebar({
                   collapsed ? "lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5" : "px-3 py-2.5"
                 } ${
                   active
-                    ? "bg-wa-green/10 text-wa-dark"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100"
+                    ? "bg-wa-green text-white shadow-md shadow-wa-green/30"
+                    : "text-slate-700 hover:bg-white/60 hover:text-slate-900 active:bg-white/80"
                 }`}
               >
                 <span className="text-base shrink-0 relative">

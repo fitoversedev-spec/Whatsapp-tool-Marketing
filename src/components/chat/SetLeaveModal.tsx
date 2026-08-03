@@ -46,25 +46,25 @@ export default function SetLeaveModal({ onClose, onDone }: { onClose: () => void
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" onClick={() => !saving && onClose()}>
-      <div className="bg-white rounded-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-semibold text-slate-900 mb-3">Set your leave</h2>
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="text-xs font-medium text-slate-600">From</label>
-            <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600">To</label>
-            <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30" />
           </div>
         </div>
         <div className="mb-3">
           <label className="text-xs font-medium text-slate-600">Note (optional)</label>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Back Monday" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Back Monday" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30" />
         </div>
         <div className="flex gap-2">
-          <button onClick={onClose} disabled={saving} className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-50">Cancel</button>
-          <button onClick={submit} disabled={saving} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
+          <button onClick={onClose} disabled={saving} className="flex-1 border border-slate-300 bg-white rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+          <button onClick={submit} disabled={saving} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50">
             {saving ? "Saving…" : "Set leave"}
           </button>
         </div>

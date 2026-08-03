@@ -232,7 +232,7 @@ export default function SearchClient({ initialQuery }: { initialQuery: string })
               >
                 <div className="text-sm font-medium text-slate-900 flex items-center gap-2">
                   <Highlight text={t.name} query={results.query} />
-                  <span className="text-[10px] uppercase tracking-wide bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] uppercase tracking-wide bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
                     {t.status}
                   </span>
                 </div>

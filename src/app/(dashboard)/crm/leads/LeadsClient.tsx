@@ -124,7 +124,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
               resetAdd();
               setShowAdd(true);
             }}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-3.5 py-2 rounded-lg text-sm"
+            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-3.5 py-2 rounded-xl text-sm"
           >
             + Add Lead
           </button>
@@ -136,19 +136,19 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by name or company..."
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs"
+          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
         />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-600 border-b border-slate-200">
-              <th className="px-4 py-2.5 font-semibold">Name</th>
-              <th className="px-4 py-2.5 font-semibold">Company</th>
-              <th className="px-4 py-2.5 font-semibold">Phone</th>
-              <th className="px-4 py-2.5 font-semibold">Status</th>
-              <th className="px-4 py-2.5 font-semibold text-right"><span className="sr-only">Actions</span></th>
+            <tr className="text-left border-b border-slate-200">
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Name</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Company</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Phone</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Status</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 text-right"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -212,7 +212,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                   value={name}
                   onChange={(e) => { setName(e.target.value); setDupWarn(false); }}
                   placeholder="e.g. Ravi Kumar"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                 />
               </div>
               <div>
@@ -221,7 +221,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="e.g. 9876543210"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                 />
               </div>
               <div>
@@ -230,7 +230,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="e.g. Salem"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                 />
               </div>
             </div>
@@ -250,7 +250,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
               <button
                 onClick={() => submitLead(dupWarn)}
                 disabled={saving || !name.trim()}
-                className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-3.5 py-2 rounded-lg text-sm disabled:opacity-50"
+                className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-3.5 py-2 rounded-xl text-sm disabled:opacity-50"
               >
                 {saving ? "Adding..." : dupWarn ? "Add anyway" : "Add lead"}
               </button>

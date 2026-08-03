@@ -1131,8 +1131,8 @@ function BroadcastComposer({
             :global(.input) { font-size: 14px; }
           }
           :global(.input:focus) {
-            border-color: #25d366;
-            box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.2);
+            border-color: #159341;
+            box-shadow: 0 0 0 3px rgba(21, 147, 65, 0.2);
           }
           :global(.input:disabled) {
             background: #f8fafc;

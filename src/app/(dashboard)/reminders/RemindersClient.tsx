@@ -76,7 +76,7 @@ export default function RemindersClient({
             </p>
             <Link
               href="/inbox"
-              className="inline-block mt-4 px-4 py-2 text-sm bg-wa-green text-white rounded-md hover:bg-wa-dark"
+              className="inline-block mt-4 px-4 py-2 text-sm font-semibold bg-wa-green text-white rounded-xl hover:bg-wa-green/90"
             >
               Go to Inbox
             </Link>

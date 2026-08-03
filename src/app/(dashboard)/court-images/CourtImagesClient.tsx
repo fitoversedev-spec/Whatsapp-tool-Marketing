@@ -27,8 +27,8 @@ type CourtImageRow = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-slate-100 text-slate-700",
-  sent: "bg-emerald-100 text-emerald-800",
+  draft: "bg-slate-100 text-slate-600",
+  sent: "bg-green-100 text-green-700",
 };
 
 export default function CourtImagesClient({
@@ -191,7 +191,7 @@ export default function CourtImagesClient({
         action={
           <button
             onClick={openNew}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm"
+            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
           >
             + New design
           </button>
@@ -204,12 +204,12 @@ export default function CourtImagesClient({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by customer, number, phone…"
-            className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+            className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-slate-300 rounded-md bg-white"
+            className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
           >
             <option value="all">All status</option>
             <option value="draft">Drafts</option>
@@ -258,7 +258,7 @@ export default function CourtImagesClient({
             {rows.length === 0 && (
               <button
                 onClick={openNew}
-                className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm"
+                className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
               >
                 + Build your first design
               </button>
@@ -304,8 +304,8 @@ export default function CourtImagesClient({
                   <div className="flex items-center justify-between">
                     <div className="text-[10px] font-mono text-slate-500">{r.number}</div>
                     <span
-                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${
-                        STATUS_COLORS[r.status] ?? "bg-slate-100 text-slate-700"
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
+                        STATUS_COLORS[r.status] ?? "bg-slate-100 text-slate-600"
                       }`}
                     >
                       {r.status}

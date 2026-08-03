@@ -394,7 +394,7 @@ export default function PortfolioProjectModal({
             type="button"
             onClick={submit}
             disabled={submitting}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-5 py-2 rounded-lg text-sm disabled:opacity-50"
+            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-5 py-2 rounded-xl text-sm disabled:opacity-50"
           >
             {submitting ? "Saving…" : editing ? "Save changes" : "Add project"}
           </button>
@@ -416,4 +416,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputClass =
-  "w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30";
+  "w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green";

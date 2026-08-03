@@ -31,11 +31,11 @@ type Quotation = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-slate-100 text-slate-700",
-  sent: "bg-blue-100 text-blue-800",
-  viewed: "bg-purple-100 text-purple-800",
-  accepted: "bg-emerald-100 text-emerald-800",
-  expired: "bg-red-100 text-red-800",
+  draft: "bg-slate-100 text-slate-600",
+  sent: "bg-blue-100 text-blue-700",
+  viewed: "bg-purple-100 text-purple-700",
+  accepted: "bg-green-100 text-green-700",
+  expired: "bg-red-100 text-red-700",
 };
 
 export default function QuotationsClient({
@@ -256,7 +256,7 @@ export default function QuotationsClient({
             )}
             <button
               onClick={() => setShowWizard(true)}
-              className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm"
+              className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
             >
               + New quotation
             </button>
@@ -272,12 +272,12 @@ export default function QuotationsClient({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by number, customer, phone…"
-            className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+            className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-slate-300 rounded-md bg-white"
+            className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
           >
             <option value="all">All statuses</option>
             <option value="draft">Draft</option>
@@ -290,7 +290,7 @@ export default function QuotationsClient({
             <select
               value={ownerFilter}
               onChange={(e) => setOwnerFilter(e.target.value)}
-              className="px-3 py-2 text-sm border border-slate-300 rounded-md bg-white"
+              className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
             >
               <option value="all">All sales people</option>
               {salesUsers.map((u) => (
@@ -305,14 +305,14 @@ export default function QuotationsClient({
             value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
             placeholder="From"
-            className="px-3 py-2 text-sm border border-slate-300 rounded-md"
+            className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
           />
           <input
             type="date"
             value={toDate}
             onChange={(e) => setToDate(e.target.value)}
             placeholder="To"
-            className="px-3 py-2 text-sm border border-slate-300 rounded-md"
+            className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
           />
         </div>
 
@@ -349,7 +349,7 @@ export default function QuotationsClient({
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     {isAdmin && (
                       <th className="px-4 py-3 text-left w-8">
@@ -424,8 +424,8 @@ export default function QuotationsClient({
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
-                            STATUS_COLORS[q.status] ?? "bg-slate-100"
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+                            STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-600"
                           }`}
                         >
                           {q.status}

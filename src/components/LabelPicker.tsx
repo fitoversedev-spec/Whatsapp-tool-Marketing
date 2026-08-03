@@ -121,14 +121,14 @@ export default function LabelPicker({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-lg z-30 max-h-72 overflow-hidden flex flex-col">
+        <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-lg z-30 max-h-72 overflow-hidden flex flex-col">
           <div className="p-2 border-b border-slate-100">
             <input
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search or create…"
-              className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+              className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
             />
           </div>
           <div className="flex-1 overflow-y-auto py-1">

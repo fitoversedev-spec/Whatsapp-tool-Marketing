@@ -26,7 +26,7 @@ const UNCLASSIFIED = "Unclassified";
 
 type Dimension = "customerType" | "businessType" | "leadSource" | "city";
 const DIMENSIONS: { key: Dimension; label: string }[] = [
-  { key: "customerType", label: "Customer type" },
+  { key: "customerType", label: "Customer segment" },
   { key: "businessType", label: "Business type" },
   { key: "leadSource", label: "Lead source" },
   { key: "city", label: "City" },
@@ -87,10 +87,10 @@ export default function CompaniesClient({
   });
 
   // The table's classification column tracks whichever dimension is
-  // currently selected — it used to always read "Customer type" no matter
+  // currently selected — it used to always read "Customer segment" no matter
   // which tab you were on, so browsing by Business type or Lead source
   // showed a column that didn't match what you'd just filtered by.
-  const classificationLabel = dimension === "businessType" ? "Business type" : dimension === "leadSource" ? "Lead source" : "Customer type";
+  const classificationLabel = dimension === "businessType" ? "Business type" : dimension === "leadSource" ? "Lead source" : "Customer segment";
   function classificationValue(c: Company): string {
     if (dimension === "businessType") return c.businessType ?? "—";
     if (dimension === "leadSource") return c.leadSourceNames.length ? c.leadSourceNames.join(", ") : "—";
@@ -101,12 +101,12 @@ export default function CompaniesClient({
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <PageHeader
         large
-        title="Customer types"
+        title="Customer segments"
         description={`${companies.length} ${isAdmin ? "" : "of yours "}on record — grouped by who they are, not a flat company list`}
         action={
           <button
             onClick={() => setShowNew(true)}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm"
+            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
           >
             + New Organization
           </button>
@@ -158,7 +158,7 @@ export default function CompaniesClient({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by name..."
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs"
+          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
         />
         <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
         {dateRange && (
@@ -171,13 +171,13 @@ export default function CompaniesClient({
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-600 border-b border-slate-200">
-              <th className="px-4 py-2.5 font-semibold">Name</th>
-              <th className="px-4 py-2.5 font-semibold">City</th>
-              <th className="px-4 py-2.5 font-semibold">{classificationLabel}</th>
-              <th className="px-4 py-2.5 font-semibold">Owner</th>
-              <th className="px-4 py-2.5 font-semibold text-right">Contacts</th>
-              <th className="px-4 py-2.5 font-semibold text-right">Deals</th>
+            <tr className="text-left border-b border-slate-200">
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Name</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">City</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">{classificationLabel}</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Owner</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 text-right">Contacts</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 text-right">Deals</th>
             </tr>
           </thead>
           <tbody>
@@ -276,7 +276,7 @@ function NewCompanyModal({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
               required
             />
           </div>
@@ -285,7 +285,7 @@ function NewCompanyModal({
             <input
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
             />
           </div>
           <div>
@@ -293,7 +293,7 @@ function NewCompanyModal({
             <select
               value={customerProfileId}
               onChange={(e) => setCustomerProfileId(e.target.value)}
-              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
             >
               <option value="">Unspecified</option>
               {customerProfiles.map((p) => (
@@ -328,14 +328,14 @@ function NewCompanyModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium text-slate-700"
+              className="flex-1 border border-slate-300 bg-white rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
+              className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50"
             >
               {submitting ? "Creating..." : "Create"}
             </button>

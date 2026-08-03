@@ -357,7 +357,7 @@ export default function ConnectionClient({
                     {new Date(tokenStatus.expiresAtIso).toLocaleString()}
                   </span>{" "}
                   <span
-                    className={`ml-1 inline-block px-1.5 py-0.5 text-[10px] rounded font-semibold uppercase tracking-wide ${
+                    className={`ml-1 inline-block px-1.5 py-0.5 text-[10px] rounded-full font-semibold uppercase tracking-wide ${
                       (tokenStatus.daysUntilExpiry ?? 0) > 7
                         ? "bg-green-100 text-green-700"
                         : (tokenStatus.daysUntilExpiry ?? 0) > 0

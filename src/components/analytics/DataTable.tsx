@@ -8,8 +8,8 @@ export function DataTable({ headers, rows }: { headers: string[]; rows: (string 
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-slate-600 border-b border-slate-200">
-            {headers.map((h) => <th key={h} className="px-2 py-2 font-semibold whitespace-nowrap">{h}</th>)}
+          <tr className="text-left border-b border-slate-200">
+            {headers.map((h) => <th key={h} className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>)}
           </tr>
         </thead>
         <tbody>

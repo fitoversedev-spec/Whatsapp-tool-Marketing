@@ -70,7 +70,7 @@ export default function UsageTab({
 
   if (view === "heatmap") {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="text-sm font-semibold text-slate-800 mb-1">When the team is active</div>
         <div className="text-xs text-slate-400 mb-3">Total active tool-time by weekday and hour (IST), across the selected range.</div>
         <UsageHeatmap cells={heatmap} />
@@ -90,20 +90,20 @@ export default function UsageTab({
         Active tool-time — measured from a 15s heartbeat while the app tab is open. This reflects presence in the tool, not productivity.
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-slate-50 text-slate-500 text-xs">
-              <th className="text-left font-medium px-3 py-2">Rep</th>
-              <th className="text-left font-medium px-3 py-2">Status</th>
-              <th className="text-right font-medium px-3 py-2">Today</th>
-              <th className="text-right font-medium px-3 py-2">This week</th>
-              <th className="text-right font-medium px-3 py-2">In range</th>
-              <th className="text-right font-medium px-3 py-2">Avg / day</th>
-              <th className="text-right font-medium px-3 py-2">Active days</th>
-              <th className="text-right font-medium px-3 py-2">Sessions</th>
-              <th className="text-left font-medium px-3 py-2">First in</th>
-              <th className="text-left font-medium px-3 py-2">Last active</th>
+            <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+              <th className="text-left font-semibold px-3 py-2">Rep</th>
+              <th className="text-left font-semibold px-3 py-2">Status</th>
+              <th className="text-right font-semibold px-3 py-2">Today</th>
+              <th className="text-right font-semibold px-3 py-2">This week</th>
+              <th className="text-right font-semibold px-3 py-2">In range</th>
+              <th className="text-right font-semibold px-3 py-2">Avg / day</th>
+              <th className="text-right font-semibold px-3 py-2">Active days</th>
+              <th className="text-right font-semibold px-3 py-2">Sessions</th>
+              <th className="text-left font-semibold px-3 py-2">First in</th>
+              <th className="text-left font-semibold px-3 py-2">Last active</th>
             </tr>
           </thead>
           <tbody>
@@ -146,7 +146,7 @@ export default function UsageTab({
       </div>
 
       {selected && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="font-semibold text-slate-800">{selected.userName} — usage detail</div>
             <button onClick={() => setSelected(null)} className="text-xs text-slate-400 hover:text-slate-700">close ✕</button>
@@ -161,13 +161,13 @@ export default function UsageTab({
               </div>
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2">Sessions</div>
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-500 text-xs">
-                        <th className="text-left font-medium px-3 py-2">Started</th>
-                        <th className="text-left font-medium px-3 py-2">Ended</th>
-                        <th className="text-right font-medium px-3 py-2">Active time</th>
+                      <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                        <th className="text-left font-semibold px-3 py-2">Started</th>
+                        <th className="text-left font-semibold px-3 py-2">Ended</th>
+                        <th className="text-right font-semibold px-3 py-2">Active time</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -131,7 +131,7 @@ export default function DealsClient({
         action={
           <button
             onClick={() => setShowNew(true)}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm"
+            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
           >
             + New Deal
           </button>
@@ -142,7 +142,7 @@ export default function DealsClient({
         <select
           value={channelFilter}
           onChange={(e) => setChannelFilter(e.target.value as typeof channelFilter)}
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
+          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
         >
           <option value="all">All deals</option>
           <option value="whatsapp">WhatsApp deals</option>
@@ -152,7 +152,7 @@ export default function DealsClient({
           <select
             value={ownerFilter}
             onChange={(e) => setOwnerFilter(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
           >
             <option value="all">All owners</option>
             {users.map((u) => (
@@ -171,13 +171,13 @@ export default function DealsClient({
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-600 border-b border-slate-200">
-              <th className="px-4 py-2.5 font-semibold">Deal</th>
-              <th className="px-4 py-2.5 font-semibold">Account</th>
-              <th className="px-4 py-2.5 font-semibold">Channel</th>
-              <th className="px-4 py-2.5 font-semibold">Stage</th>
-              <th className="px-4 py-2.5 font-semibold">Owner</th>
-              <th className="px-4 py-2.5 font-semibold text-right">Value</th>
+            <tr className="text-left border-b border-slate-200">
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Deal</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Account</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Channel</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Stage</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Owner</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 text-right">Value</th>
             </tr>
           </thead>
           <tbody>
@@ -536,7 +536,7 @@ function NewDealModal({
         {accountMode === "new" && (
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer type</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer segment</label>
               <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="modal-input">
                 <option value="">—</option>
                 {customerProfiles.map((c) => (

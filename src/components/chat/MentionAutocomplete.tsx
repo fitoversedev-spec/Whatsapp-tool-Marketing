@@ -63,7 +63,7 @@ export default function MentionAutocomplete({
   const hasAny = groups && GROUPS.some(([k]) => (groups[k]?.length ?? 0) > 0);
 
   return (
-    <div className="absolute bottom-full left-0 right-0 mb-1 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg z-20 text-sm">
+    <div className="absolute bottom-full left-0 right-0 mb-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg z-20 text-sm">
       {loading && !groups && <div className="px-3 py-2 text-xs text-slate-400">Searching…</div>}
       {groups && !hasAny && <div className="px-3 py-2 text-xs text-slate-400">No matches</div>}
       {groups &&

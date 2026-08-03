@@ -36,7 +36,7 @@ export default function DateRangePicker({ value, onApply }: { value: DateRange; 
         value={from}
         max={to}
         onChange={(e) => setFrom(e.target.value)}
-        className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+        className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
         aria-label="Start date"
       />
       <span className="text-slate-400 text-sm">to</span>
@@ -45,7 +45,7 @@ export default function DateRangePicker({ value, onApply }: { value: DateRange; 
         value={to}
         min={from}
         onChange={(e) => setTo(e.target.value)}
-        className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+        className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
         aria-label="End date"
       />
       <button

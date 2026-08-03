@@ -98,7 +98,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
-      <Link href="/invoices" className="text-xs text-slate-400 hover:text-slate-700">← All invoices</Link>
+      <Link href="/invoices" className="inline-block mb-2 text-xs text-slate-400 hover:text-slate-700">← All invoices</Link>
       <PageHeader
         large
         title={inv.number}
@@ -129,15 +129,15 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
       </div>
 
       {/* Line items */}
-      <div className="mt-6 overflow-x-auto rounded-lg border border-slate-200">
+      <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-slate-50 text-slate-500 text-xs">
-              <th className="text-left font-medium px-3 py-2">Particulars</th>
-              <th className="text-right font-medium px-3 py-2">Qty</th>
-              <th className="text-right font-medium px-3 py-2">Rate</th>
-              <th className="text-right font-medium px-3 py-2">GST%</th>
-              <th className="text-right font-medium px-3 py-2">Amount</th>
+            <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+              <th className="text-left font-medium px-3 py-2.5">Particulars</th>
+              <th className="text-right font-medium px-3 py-2.5">Qty</th>
+              <th className="text-right font-medium px-3 py-2.5">Rate</th>
+              <th className="text-right font-medium px-3 py-2.5">GST%</th>
+              <th className="text-right font-medium px-3 py-2.5">Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -163,22 +163,22 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
       <div className="mt-6">
         <div className="text-sm font-semibold text-slate-800 mb-2">Payments — {inr(inv.amountPaid)} of {inr(inv.grandTotal)} collected</div>
         {!cancelled && balance > 0 && (
-          <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 mb-3">
+          <div className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
             <label className="text-xs text-slate-500">Amount
-              <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={String(Math.round(balance))} className="block mt-1 w-32 border border-slate-300 rounded px-2 py-1.5 text-sm" />
+              <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={String(Math.round(balance))} className="block mt-1 w-32 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
             </label>
             <label className="text-xs text-slate-500">Method
-              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className="block mt-1 border border-slate-300 rounded px-2 py-1.5 text-sm">
+              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className="block mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
                 <option value="upi">UPI</option><option value="bank">Bank</option><option value="cash">Cash</option><option value="cheque">Cheque</option><option value="other">Other</option>
               </select>
             </label>
             <label className="text-xs text-slate-500">Reference
-              <input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="txn / UTR (optional)" className="block mt-1 w-40 border border-slate-300 rounded px-2 py-1.5 text-sm" />
+              <input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="txn / UTR (optional)" className="block mt-1 w-40 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
             </label>
-            <button onClick={recordPayment} disabled={busy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50">Record payment</button>
+            <button onClick={recordPayment} disabled={busy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">Record payment</button>
           </div>
         )}
-        <div className="rounded-lg border border-slate-200 divide-y divide-slate-100">
+        <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
           {inv.payments.length === 0 ? (
             <div className="px-3 py-4 text-sm text-slate-400 text-center">No payments recorded yet.</div>
           ) : (
@@ -204,7 +204,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
 function Info({ label, value, tone }: { label: string; value: string; tone?: "good" | "warn" }) {
   const color = tone === "warn" ? "text-amber-600" : tone === "good" ? "text-wa-dark" : "text-slate-900";
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
       <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
       <div className={`text-sm font-semibold mt-0.5 tabular-nums ${color}`}>{value}</div>
     </div>

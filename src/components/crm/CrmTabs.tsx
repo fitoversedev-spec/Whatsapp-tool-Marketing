@@ -9,7 +9,7 @@ const TABS = [
   { href: "/crm/leads", label: "Leads" },
   { href: "/deals", label: "Deals" },
   { href: "/crm/activities", label: "Activities" },
-  { href: "/crm/companies", label: "Customer types" },
+  { href: "/crm/companies", label: "Customer segments" },
   { href: "/crm/import", label: "Import" },
   // No longer admin-only — every approved role gets a self-scoped view
   // (see requireAnalyticsAccess() in src/lib/auth.ts / resolveAnalyticsScope()

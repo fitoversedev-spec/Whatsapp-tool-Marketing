@@ -94,7 +94,7 @@ export default function ChatThreadView({
             const tags = categorizeChips(m.body);
             return (
               <div key={m.id} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] rounded-lg px-3 py-1.5 ${m.mine ? "bg-wa-green/15" : "bg-white border border-slate-200"}`}>
+                <div className={`max-w-[80%] rounded-xl px-3 py-1.5 ${m.mine ? "bg-wa-green/15" : "bg-white border border-slate-200 shadow-sm"}`}>
                   {!m.mine && <div className="text-[11px] font-semibold text-wa-dark mb-0.5">{m.authorName}</div>}
                   {m.body && (
                     <div className="text-sm text-slate-800">

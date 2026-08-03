@@ -134,7 +134,7 @@ export default function PortfolioClient({
                 setEditing(null);
                 setShowModal(true);
               }}
-              className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm"
+              className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
             >
               + Add project
             </button>
@@ -150,12 +150,12 @@ export default function PortfolioClient({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search customer, location, tags…"
-            className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+            className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
           />
           <select
             value={sportFilter}
             onChange={(e) => setSportFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-slate-300 rounded-md bg-white capitalize"
+            className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white capitalize focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
           >
             <option value="all">All sports</option>
             {SPORT_OPTIONS.map((s) => (
@@ -192,7 +192,7 @@ export default function PortfolioClient({
                   setEditing(null);
                   setShowModal(true);
                 }}
-                className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm"
+                className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
               >
                 + Add your first project
               </button>

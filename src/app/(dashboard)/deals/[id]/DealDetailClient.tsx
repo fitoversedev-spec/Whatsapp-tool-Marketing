@@ -322,7 +322,7 @@ export default function DealDetailClient({
               <span className="text-slate-800">{deal.leadSourceName ?? "—"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-600">Customer type</span>
+              <span className="text-slate-600">Customer segment</span>
               <span className="text-slate-800">{deal.customerProfileName ?? "—"}</span>
             </div>
             <div className="flex justify-between">
@@ -629,7 +629,7 @@ function EditDealDetailsModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer type</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer segment</label>
               <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="modal-input">
                 <option value="">—</option>
                 {customerProfiles.map((c) => (

@@ -232,7 +232,7 @@ export async function commitRow(
     });
     const composedNotes =
       [
-        fields.customerProfileName && !customerProfile ? `Customer type (unmatched): ${fields.customerProfileName.trim()}` : "",
+        fields.customerProfileName && !customerProfile ? `Customer segment (unmatched): ${fields.customerProfileName.trim()}` : "",
         fields.leadSourceName ? `Lead source: ${fields.leadSourceName.trim()}` : "",
         fields.sourceDetail ? `Source detail: ${fields.sourceDetail.trim()}` : "",
         fields.notes?.trim() || "",

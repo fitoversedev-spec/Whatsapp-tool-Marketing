@@ -159,7 +159,7 @@ export default function ImportWizardClient() {
             ))}
           </div>
           <div className="flex items-center gap-3">
-            <label className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm cursor-pointer">
+            <label className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm cursor-pointer">
               Choose file
               <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="hidden" />
             </label>
@@ -201,7 +201,7 @@ export default function ImportWizardClient() {
                 <select
                   value={columnMap[f.key] ?? ""}
                   onChange={(e) => setColumnMap((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                  className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
+                  className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                 >
                   <option value="">Not mapped</option>
                   {headers.map((h, i) => <option key={i} value={h}>{h || `Column ${i + 1}`}</option>)}
@@ -212,8 +212,8 @@ export default function ImportWizardClient() {
           </div>
 
           <div className="flex gap-2">
-            <button onClick={reset} className="border border-slate-300 rounded-lg px-4 py-2 text-sm font-medium text-slate-700">Start over</button>
-            <button onClick={runPreview} disabled={loading} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">
+            <button onClick={reset} className="border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-medium text-slate-700">Start over</button>
+            <button onClick={runPreview} disabled={loading} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50">
               {loading ? "Validating..." : "Preview"}
             </button>
           </div>
@@ -271,11 +271,11 @@ export default function ImportWizardClient() {
           </div>
 
           <div className="flex gap-2">
-            <button onClick={() => setStep("mapping")} className="border border-slate-300 rounded-lg px-4 py-2 text-sm font-medium text-slate-700">Back</button>
+            <button onClick={() => setStep("mapping")} className="border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-medium text-slate-700">Back</button>
             <button
               onClick={runCommit}
               disabled={loading || preview.validCount + preview.duplicateCount === 0}
-              className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+              className="bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
             >
               {loading ? "Importing..." : `Import ${preview.validCount + (duplicateAction !== "skip" ? preview.duplicateCount : 0)} rows`}
             </button>
@@ -297,7 +297,7 @@ export default function ImportWizardClient() {
             </div>
           )}
           <div className="flex gap-2">
-            <button onClick={reset} className="border border-slate-300 rounded-lg px-4 py-2 text-sm font-medium text-slate-700">Import another file</button>
+            <button onClick={reset} className="border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-medium text-slate-700">Import another file</button>
             {result.successCount > 0 && (
               <button onClick={undoImport} className="text-sm text-red-600 hover:underline px-4 py-2">
                 Undo this import

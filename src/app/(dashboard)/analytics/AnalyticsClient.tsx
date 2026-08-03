@@ -377,7 +377,7 @@ export default function AnalyticsClient({
                       <td className="px-3 py-3 text-slate-700">{b.templateName}</td>
                       <td className="px-3 py-3">
                         <span
-                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
+                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
                             STATUS_COLORS[b.status] ?? "bg-slate-100"
                           }`}
                         >

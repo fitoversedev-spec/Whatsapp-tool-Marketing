@@ -10,7 +10,9 @@ import { usePathname } from "next/navigation";
 // Colours: CRM keeps the Fitoverse brand green (#159341); WhatsApp Marketing
 // uses the WhatsApp palette (dark-teal text + bright-green dot) so the two are
 // distinguishable at a glance, not just by their label text.
-const CRM_PREFIXES = ["/crm", "/deals", "/pipeline"];
+// Quotations + Invoices are CRM sales documents (a quote → invoice flow tied to
+// a CRM deal), so they belong to the CRM context, not WhatsApp Marketing.
+const CRM_PREFIXES = ["/crm", "/deals", "/pipeline", "/quotations", "/invoices"];
 
 function resolveSection(pathname: string) {
   const isCrm = CRM_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));

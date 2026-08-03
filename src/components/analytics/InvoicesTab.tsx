@@ -32,7 +32,7 @@ export type InvoiceAnalyticsData = { kpis: Kpis; reps: RepRow[]; monthly: Monthl
 function Kpi({ label, value, tone }: { label: string; value: string; tone?: "good" | "warn" | "bad" }) {
   const color = tone === "bad" ? "text-red-600" : tone === "warn" ? "text-amber-600" : tone === "good" ? "text-wa-dark" : "text-slate-900";
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
       <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
       <div className={`text-xl font-bold tabular-nums mt-0.5 ${color}`}>{value}</div>
     </div>
@@ -58,17 +58,17 @@ export default function InvoicesTab({ data }: { data: InvoiceAnalyticsData }) {
       {/* Per-rep table */}
       <div>
         <div className="text-sm font-semibold text-slate-800 mb-2">By sales rep</div>
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 text-xs">
-                <th className="text-left font-medium px-3 py-2">Rep</th>
-                <th className="text-right font-medium px-3 py-2">Invoices</th>
-                <th className="text-right font-medium px-3 py-2">Invoiced</th>
-                <th className="text-right font-medium px-3 py-2">Collected</th>
-                <th className="text-right font-medium px-3 py-2">Outstanding</th>
-                <th className="text-right font-medium px-3 py-2">Overdue</th>
-                <th className="text-right font-medium px-3 py-2">Collection</th>
+              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                <th className="text-left font-semibold px-3 py-2">Rep</th>
+                <th className="text-right font-semibold px-3 py-2">Invoices</th>
+                <th className="text-right font-semibold px-3 py-2">Invoiced</th>
+                <th className="text-right font-semibold px-3 py-2">Collected</th>
+                <th className="text-right font-semibold px-3 py-2">Outstanding</th>
+                <th className="text-right font-semibold px-3 py-2">Overdue</th>
+                <th className="text-right font-semibold px-3 py-2">Collection</th>
               </tr>
             </thead>
             <tbody>
@@ -98,7 +98,7 @@ export default function InvoicesTab({ data }: { data: InvoiceAnalyticsData }) {
         <div>
           <div className="text-sm font-semibold text-slate-800 mb-2">Invoiced vs cash received by month</div>
           <div className="text-[11px] text-slate-400 mb-2">Invoiced = value billed (by invoice date). Received = payments collected (by payment date).</div>
-          <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
             {data.monthly.map((m) => (
               <div key={m.month} className="flex items-center gap-3 text-xs">
                 <div className="w-16 shrink-0 text-slate-500 tabular-nums">{m.month}</div>

@@ -239,7 +239,7 @@ export default function AccountContactsClient({
         action={
           <button
             onClick={() => setShowNew(true)}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm"
+            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
           >
             + New Contact
           </button>
@@ -252,7 +252,7 @@ export default function AccountContactsClient({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search by name or company..."
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs"
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
           />
           <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
           {dateRange && (
@@ -264,7 +264,7 @@ export default function AccountContactsClient({
             <select
               value={repFilter}
               onChange={(e) => applyRepFilter(e.target.value)}
-              className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+              className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
             >
               <option value="">All reps</option>
               {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -272,19 +272,19 @@ export default function AccountContactsClient({
           )}
           {knownFieldKeys.length > 0 && (
             <>
-              <select value={filterField} onChange={(e) => setFilterField(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
+              <select value={filterField} onChange={(e) => setFilterField(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
                 <option value="">Filter by custom field...</option>
                 {knownFieldKeys.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
               {filterField && (
                 <>
-                  <select value={filterCondition} onChange={(e) => setFilterCondition(e.target.value as typeof filterCondition)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
+                  <select value={filterCondition} onChange={(e) => setFilterCondition(e.target.value as typeof filterCondition)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
                     <option value="contains">contains</option>
                     <option value="equals">equals</option>
                     <option value="not_empty">is set</option>
                   </select>
                   {filterCondition !== "not_empty" && (
-                    <input value={filterValue} onChange={(e) => setFilterValue(e.target.value)} placeholder="Value" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-32" />
+                    <input value={filterValue} onChange={(e) => setFilterValue(e.target.value)} placeholder="Value" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-32 focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
                   )}
                 </>
               )}
@@ -344,17 +344,17 @@ export default function AccountContactsClient({
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-600 border-b border-slate-200">
-              <th className="px-4 py-2.5 font-semibold w-8">
+            <tr className="text-left border-b border-slate-200">
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 w-8">
                 <SelectAllCheckbox ids={visible.map((c) => c.id)} selected={selected} onChange={setSelected} />
               </th>
-              <th className="px-4 py-2.5 font-semibold">Name</th>
-              <th className="px-4 py-2.5 font-semibold">Company</th>
-              <th className="px-4 py-2.5 font-semibold">Designation</th>
-              <th className="px-4 py-2.5 font-semibold">Phone</th>
-              <th className="px-4 py-2.5 font-semibold">Email</th>
-              {isAdmin && <th className="px-4 py-2.5 font-semibold">Owner</th>}
-              <th className="px-4 py-2.5 font-semibold w-8"><span className="sr-only">Actions</span></th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Name</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Company</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Designation</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Phone</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Email</th>
+              {isAdmin && <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Owner</th>}
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 w-8"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -475,7 +475,7 @@ function NewContactModal({
   // businessType itself stays a strict B2B/B2C/B2G enum (other code groups
   // Accounts by it — a free-text value would fragment that bucketing), so
   // "Other" here is a UI-only sentinel: send no businessType at all and
-  // fold the free text into notes, same as Customer type's own "Other".
+  // fold the free text into notes, same as Customer segment's own "Other".
   const isBusinessTypeOther = businessType === "Other";
   const [businessTypeOther, setBusinessTypeOther] = useState("");
 
@@ -515,7 +515,7 @@ function NewContactModal({
         fields,
         notes: [
           sourceDetail.trim() ? `Source detail: ${sourceDetail.trim()}` : "",
-          isCustomerTypeOther && customerTypeOther.trim() ? `Customer type detail: ${customerTypeOther.trim()}` : "",
+          isCustomerTypeOther && customerTypeOther.trim() ? `Customer segment detail: ${customerTypeOther.trim()}` : "",
           isBusinessTypeOther && businessTypeOther.trim() ? `Business type detail: ${businessTypeOther.trim()}` : "",
           notes.trim(),
         ].filter(Boolean).join("\n\n") || undefined,
@@ -556,22 +556,22 @@ function NewContactModal({
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Contact details</h3>
                 <div><label className="text-xs font-medium text-slate-600">Name</label>
-                  <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="text-xs font-medium text-slate-600">Phone</label>
-                    <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                    <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
                   </div>
                   <div><label className="text-xs font-medium text-slate-600">Email</label>
-                    <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                    <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
                   </div>
                 </div>
                 <div><label className="text-xs font-medium text-slate-600">Designation</label>
-                  <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                  <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
                     {DESIGNATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                   {designation === "Other" && (
-                    <input value={designationOther} onChange={(e) => setDesignationOther(e.target.value)} placeholder="Enter designation" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                    <input value={designationOther} onChange={(e) => setDesignationOther(e.target.value)} placeholder="Enter designation" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
                   )}
                 </div>
               </div>
@@ -579,7 +579,7 @@ function NewContactModal({
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Location &amp; organization</h3>
                 <div><label className="text-xs font-medium text-slate-600">Location</label>
-                  <input value={siteCity} onChange={(e) => setSiteCity(e.target.value)} placeholder="City / site location" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  <input value={siteCity} onChange={(e) => setSiteCity(e.target.value)} placeholder="City / site location" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
                 </div>
                 {!showOrgPicker ? (
                   <button type="button" onClick={() => setShowOrgPicker(true)} className="text-xs font-medium text-wa-dark hover:underline">
@@ -602,11 +602,11 @@ function NewContactModal({
                       </button>
                     </div>
                     {companyMode === "existing" ? (
-                      <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                      <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
                         {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                       </select>
                     ) : (
-                      <input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Organization name" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                      <input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Organization name" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
                     )}
                   </div>
                 )}
@@ -615,17 +615,17 @@ function NewContactModal({
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Classification</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-xs font-medium text-slate-600">Customer type</label>
-                    <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                  <div><label className="text-xs font-medium text-slate-600">Customer segment</label>
+                    <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
                       <option value="">Unspecified</option>
                       {customerProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                     {isCustomerTypeOther && (
-                      <input value={customerTypeOther} onChange={(e) => setCustomerTypeOther(e.target.value)} placeholder="Describe the customer type" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                      <input value={customerTypeOther} onChange={(e) => setCustomerTypeOther(e.target.value)} placeholder="Describe the customer segment" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
                     )}
                   </div>
                   <div><label className="text-xs font-medium text-slate-600">Business type</label>
-                    <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                    <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
                       <option value="">Unspecified</option>
                       <option value="B2B">B2B</option>
                       <option value="B2C">B2C</option>
@@ -633,7 +633,7 @@ function NewContactModal({
                       <option value="Other">Other</option>
                     </select>
                     {isBusinessTypeOther && (
-                      <input value={businessTypeOther} onChange={(e) => setBusinessTypeOther(e.target.value)} placeholder="Describe the business type" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                      <input value={businessTypeOther} onChange={(e) => setBusinessTypeOther(e.target.value)} placeholder="Describe the business type" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
                     )}
                   </div>
                 </div>
@@ -642,14 +642,14 @@ function NewContactModal({
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Lead source &amp; pipeline</h3>
                 <div><label className="text-xs font-medium text-slate-600">Lead source</label>
-                  <select value={leadSourceId} onChange={(e) => setLeadSourceId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                  <select value={leadSourceId} onChange={(e) => setLeadSourceId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
                     <option value="">Unspecified</option>
                     {leadSources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
-                  <input value={sourceDetail} onChange={(e) => setSourceDetail(e.target.value)} placeholder="Campaign / referrer name (optional)" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  <input value={sourceDetail} onChange={(e) => setSourceDetail(e.target.value)} placeholder="Campaign / referrer name (optional)" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
                 </div>
                 <div><label className="text-xs font-medium text-slate-600">Lead stage</label>
-                  <select value={dealStageId} onChange={(e) => setDealStageId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                  <select value={dealStageId} onChange={(e) => setDealStageId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
                     <option value="">Don't create a deal yet</option>
                     {funnelStages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
@@ -662,7 +662,7 @@ function NewContactModal({
               <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Notes</h3>
               <div className="max-w-2xl">
                 <label className="text-xs font-medium text-slate-600">What does this lead want?</label>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="e.g. Wants a football turf, ~10,000 sqft, budget around 8L" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="e.g. Wants a football turf, ~10,000 sqft, budget around 8L" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
               </div>
             </div>
 
@@ -675,7 +675,7 @@ function NewContactModal({
                     <input
                       value={fields[k] ?? ""}
                       onChange={(e) => setFields((prev) => ({ ...prev, [k]: e.target.value }))}
-                      className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                      className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                     />
                     <button type="button" onClick={() => removeField(k)} aria-label={`Remove ${k}`} className="text-slate-400 hover:text-red-600 text-xs shrink-0 px-1">
                       ✕
@@ -687,7 +687,7 @@ function NewContactModal({
                     value={newFieldKey}
                     onChange={(e) => setNewFieldKey(e.target.value)}
                     placeholder="New field name (e.g. Sports requested)"
-                    className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                    className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
                   />
                   <button type="button" onClick={addField} className="px-2.5 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 rounded-lg font-medium text-slate-700 shrink-0">
                     + Field
@@ -711,8 +711,8 @@ function NewContactModal({
 
         <div className="shrink-0 border-t border-slate-200 px-4 sm:px-6 py-3">
           <div className="max-w-6xl mx-auto flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700">Cancel</button>
-            <button type="submit" disabled={submitting} className="px-5 py-2 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg text-sm font-medium disabled:opacity-50">
+            <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl text-sm font-medium text-slate-700">Cancel</button>
+            <button type="submit" disabled={submitting} className="px-5 py-2 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl text-sm font-semibold disabled:opacity-50">
               {submitting ? "Creating..." : "Create"}
             </button>
           </div>

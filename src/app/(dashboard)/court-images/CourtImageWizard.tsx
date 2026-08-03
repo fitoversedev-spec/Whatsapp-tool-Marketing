@@ -3327,7 +3327,7 @@ function Step1(props: {
           </select>
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 mb-1">Customer type</h3>
+          <h3 className="text-sm font-semibold text-slate-900 mb-1">Customer segment</h3>
           <select
             value={customerProfileId}
             onChange={(e) => setCustomerProfileId(e.target.value)}

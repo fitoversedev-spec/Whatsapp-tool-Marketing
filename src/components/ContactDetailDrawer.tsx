@@ -245,7 +245,7 @@ export default function ContactDetailDrawer({
               <button
                 onClick={onClose}
                 aria-label="Close drawer"
-                className="p-1.5 rounded-md hover:bg-slate-100 shrink-0"
+                className="p-1.5 rounded-lg hover:bg-slate-100 shrink-0"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" />
@@ -258,13 +258,13 @@ export default function ContactDetailDrawer({
             <div className="px-5 py-3 border-b border-slate-200 flex gap-2 bg-slate-50">
               <Link
                 href={`/inbox?conversation=${profile.conversation.id}`}
-                className="flex-1 px-3 py-2 text-sm font-medium bg-wa-green hover:bg-wa-green/90 text-white text-center rounded-md transition"
+                className="flex-1 px-3 py-2 text-sm font-semibold bg-wa-green hover:bg-wa-green/90 text-white text-center rounded-xl transition"
               >
                 ↗ Open Chat
               </Link>
               <Link
                 href={`/quotations?conversationId=${profile.conversation.id}&contactPhone=${profile.contact.phone}&customerName=${encodeURIComponent(profile.contact.name ?? "")}`}
-                className="flex-1 px-3 py-2 text-sm font-medium bg-white border border-slate-300 hover:border-slate-400 text-slate-700 text-center rounded-md transition"
+                className="flex-1 px-3 py-2 text-sm font-semibold bg-white border border-slate-300 hover:border-slate-400 text-slate-700 text-center rounded-xl transition"
               >
                 📄 New Quote
               </Link>
@@ -338,19 +338,19 @@ export default function ContactDetailDrawer({
                 }
               >
                 {showNewNote && (
-                  <div className="mb-2 space-y-2 bg-amber-50 border border-amber-200 rounded-md p-2">
+                  <div className="mb-2 space-y-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
                     <textarea
                       value={noteDraft}
                       onChange={(e) => setNoteDraft(e.target.value)}
                       placeholder="Add a note about this customer…"
                       rows={3}
                       autoFocus
-                      className="w-full px-2 py-1.5 text-sm border border-amber-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500/30 bg-white resize-none"
+                      className="w-full px-3 py-1.5 text-sm border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 bg-white resize-none"
                     />
                     <button
                       onClick={addNote}
                       disabled={!noteDraft.trim() || savingNote}
-                      className="px-3 py-1.5 text-xs font-medium bg-wa-green text-white rounded disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs font-semibold bg-wa-green text-white rounded-lg disabled:opacity-50"
                     >
                       {savingNote ? "Saving…" : "Save note"}
                     </button>
@@ -363,7 +363,7 @@ export default function ContactDetailDrawer({
                     {profile.notes.map((n) => (
                       <li
                         key={n.id}
-                        className={`rounded-md border p-2.5 ${
+                        className={`rounded-lg border p-2.5 ${
                           n.pinned
                             ? "border-amber-300 bg-amber-50"
                             : "border-slate-200 bg-white"
@@ -403,7 +403,7 @@ export default function ContactDetailDrawer({
                     {profile.quotations.map((q) => (
                       <li
                         key={q.id}
-                        className="border border-slate-200 rounded-md p-2.5 bg-white"
+                        className="border border-slate-200 rounded-lg p-2.5 bg-white"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
@@ -412,8 +412,8 @@ export default function ContactDetailDrawer({
                                 {q.number}
                               </span>
                               <span
-                                className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
-                                  QUOTE_STATUS_COLORS[q.status] ?? "bg-slate-100"
+                                className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+                                  QUOTE_STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-700"
                                 }`}
                               >
                                 {q.status}
@@ -457,12 +457,12 @@ export default function ContactDetailDrawer({
                       return (
                         <li
                           key={r.id}
-                          className={`border rounded-md p-2.5 ${
+                          className={`border rounded-lg p-2.5 ${
                             r.completedAt
                               ? "border-slate-200 bg-slate-50 opacity-60"
                               : overdue
                                 ? "border-red-200 bg-red-50"
-                                : "border-orange-200 bg-orange-50"
+                                : "border-amber-200 bg-amber-50"
                           }`}
                         >
                           <div

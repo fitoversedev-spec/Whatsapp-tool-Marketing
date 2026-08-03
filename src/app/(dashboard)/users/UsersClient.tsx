@@ -197,7 +197,7 @@ export default function UsersClient({
                         <td className="px-4 py-3">
                           {u.deletedAt ? (
                             <div className="space-y-1">
-                              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-200 text-slate-600">
+                              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-slate-200 text-slate-600">
                                 DELETED
                               </span>
                               <div className="text-[10px] text-slate-500">
@@ -207,14 +207,14 @@ export default function UsersClient({
                           ) : (
                             <div className="space-y-1">
                               <span
-                                className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                                className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
                                   STATUS_BADGES[u.approvalStatus]
                                 }`}
                               >
                                 {u.approvalStatus}
                               </span>
                               {u.approvalStatus === "approved" && !u.isActive && (
-                                <span className="ml-1 inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 text-slate-600">
+                                <span className="ml-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-600">
                                   INACTIVE
                                 </span>
                               )}
@@ -310,7 +310,7 @@ const ROLE_BADGE_CLASSES: Record<Role, string> = {
 function RoleBadge({ role }: { role: Role }) {
   return (
     <span
-      className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${ROLE_BADGE_CLASSES[role]}`}
+      className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${ROLE_BADGE_CLASSES[role]}`}
     >
       {role}
     </span>
@@ -347,20 +347,20 @@ function UserCard({
         <div className="flex flex-col items-end gap-1 shrink-0">
           <RoleBadge role={user.role} />
           {user.deletedAt ? (
-            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-200 text-slate-600">
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-slate-200 text-slate-600">
               DELETED
             </span>
           ) : (
             <>
               <span
-                className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
                   STATUS_BADGES[user.approvalStatus]
                 }`}
               >
                 {user.approvalStatus}
               </span>
               {user.approvalStatus === "approved" && !user.isActive && (
-                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 text-slate-600">
+                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-600">
                   INACTIVE
                 </span>
               )}

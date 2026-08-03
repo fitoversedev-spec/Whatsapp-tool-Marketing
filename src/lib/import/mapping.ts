@@ -25,7 +25,7 @@ export const IMPORT_FIELDS: Record<ImportTarget, ImportFieldDef[]> = {
     { key: "email", label: "Email" },
     { key: "designation", label: "Designation" },
     { key: "siteCity", label: "Location" },
-    { key: "customerProfileName", label: "Customer type", hint: "Matched by exact name against the Customer Type taxonomy" },
+    { key: "customerProfileName", label: "Customer segment", hint: "Matched by exact name against the Customer Segment taxonomy" },
     { key: "businessType", label: "Business type (B2B/B2C/B2G)" },
     { key: "leadSourceName", label: "Lead source", hint: "Matched by exact name against the Lead Source taxonomy" },
     { key: "sourceDetail", label: "Lead source detail" },

@@ -126,7 +126,7 @@ export default function DuplicatesClient({ groups }: { groups: Group[] }) {
                         </div>
                       </div>
                       {isPrimary && (
-                        <span className="text-[10px] uppercase tracking-wide font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                        <span className="text-[10px] uppercase tracking-wide font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
                           Keep
                         </span>
                       )}

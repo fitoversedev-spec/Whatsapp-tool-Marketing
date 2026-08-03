@@ -159,7 +159,7 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search by subject, customer, phone, or deal code..."
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-sm"
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
             />
             <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
             {dateRange && (
@@ -172,15 +172,15 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
           <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-600 border-b border-slate-200">
-              <th className="px-4 py-2.5 font-semibold">Type</th>
-              <th className="px-4 py-2.5 font-semibold">Activity</th>
-              <th className="px-4 py-2.5 font-semibold">Customer</th>
-              <th className="px-4 py-2.5 font-semibold">Phone</th>
-              <th className="px-4 py-2.5 font-semibold whitespace-nowrap">When</th>
-              <th className="px-4 py-2.5 font-semibold">Owner</th>
-              <th className="px-4 py-2.5 font-semibold">Deal</th>
-              <th className="px-4 py-2.5 font-semibold">Status</th>
+            <tr className="text-left border-b border-slate-200">
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Type</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Activity</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Customer</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Phone</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 whitespace-nowrap">When</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Owner</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Deal</th>
+              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Status</th>
             </tr>
           </thead>
           <tbody>

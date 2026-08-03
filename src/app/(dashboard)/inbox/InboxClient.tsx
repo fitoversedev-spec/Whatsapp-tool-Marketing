@@ -503,7 +503,7 @@ export default function InboxClient({
                     setShowReminders(false);
                   }}
                   className={`px-2.5 py-1.5 text-xs rounded-md font-medium ${
-                    showNotes ? "bg-amber-100 text-amber-800" : "text-slate-600 hover:bg-slate-100"
+                    showNotes ? "bg-amber-100 text-amber-800" : "text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white"
                   }`}
                   title="Notes"
                 >
@@ -515,7 +515,7 @@ export default function InboxClient({
                     setShowNotes(false);
                   }}
                   className={`px-2.5 py-1.5 text-xs rounded-md font-medium ${
-                    showReminders ? "bg-orange-100 text-orange-800" : "text-slate-600 hover:bg-slate-100"
+                    showReminders ? "bg-orange-100 text-orange-800" : "text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white"
                   }`}
                   title="Reminders"
                 >
@@ -525,7 +525,7 @@ export default function InboxClient({
                   onClick={moveToCrm}
                   disabled={movingToCrm}
                   className={`px-2.5 py-1.5 text-xs rounded-md font-medium disabled:opacity-50 ${
-                    current.accountContactId ? "text-wa-dark hover:bg-wa-green/10" : "text-slate-600 hover:bg-slate-100"
+                    current.accountContactId ? "text-wa-dark hover:bg-wa-green/10" : "text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white"
                   }`}
                   title={current.accountContactId ? "Open this contact in the CRM" : "Create/link a CRM contact for this conversation"}
                 >
@@ -536,21 +536,21 @@ export default function InboxClient({
                 </button>
                 <button
                   onClick={() => setShowQuote(true)}
-                  className="px-2.5 py-1.5 text-xs rounded-md font-medium text-slate-600 hover:bg-slate-100"
+                  className="px-2.5 py-1.5 text-xs rounded-md font-medium text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white"
                   title="Generate Quote"
                 >
                   📄<span className="hidden sm:inline ml-1">Quote</span>
                 </button>
                 <button
                   onClick={() => setShowCourtDesign(true)}
-                  className="px-2.5 py-1.5 text-xs rounded-md font-medium text-slate-600 hover:bg-slate-100"
+                  className="px-2.5 py-1.5 text-xs rounded-md font-medium text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white"
                   title="Design court layout"
                 >
                   🎨<span className="hidden sm:inline ml-1">Design</span>
                 </button>
                 <button
                   onClick={() => setShowCatalogue(true)}
-                  className="px-2.5 py-1.5 text-xs rounded-md font-medium text-slate-600 hover:bg-slate-100"
+                  className="px-2.5 py-1.5 text-xs rounded-md font-medium text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white"
                   title="Send sport catalogue + past projects"
                 >
                   📘<span className="hidden sm:inline ml-1">Catalogue</span>
@@ -559,7 +559,7 @@ export default function InboxClient({
                   <>
                     <button
                       onClick={() => setShowReassign((v) => !v)}
-                      className="px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-md font-medium"
+                      className="px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white rounded-md font-medium"
                       title="Reassign conversation"
                     >
                       Reassign
@@ -601,7 +601,7 @@ export default function InboxClient({
                       isClosed ? "Conversation reopened" : "Conversation closed"
                     )
                   }
-                  className="px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-md font-medium"
+                  className="px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white rounded-md font-medium"
                 >
                   {isClosed ? "Reopen" : "Close"}
                 </button>

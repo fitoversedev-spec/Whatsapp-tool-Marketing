@@ -113,7 +113,7 @@ export default function HandoffModal({
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" onClick={() => !saving && onClose()}>
-      <div className="bg-white rounded-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
         {/* Step 1 — pick the record */}
         {!record ? (
           <>
@@ -123,7 +123,7 @@ export default function HandoffModal({
               onChange={(e) => setRq(e.target.value)}
               autoFocus
               placeholder="Search a customer or deal…"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30"
             />
             <div className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200">
               {records.length === 0 ? (
@@ -158,8 +158,8 @@ export default function HandoffModal({
                 <button
                   key={k}
                   onClick={() => setKind(k)}
-                  className={`flex-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border ${
-                    kind === k ? "bg-wa-green/10 border-wa-green text-wa-dark" : "border-slate-200 text-slate-500"
+                  className={`flex-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border ${
+                    kind === k ? "bg-wa-green/10 border-wa-green text-wa-dark" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                   }`}
                 >
                   {k === "COVERAGE" ? "Cover (temporary)" : "Take over (permanent)"}
@@ -175,7 +175,7 @@ export default function HandoffModal({
               </div>
             ) : (
               <div className="mt-1 mb-2">
-                <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus placeholder="Search teammates…" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus placeholder="Search teammates…" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30" />
                 {people.length > 0 && (
                   <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-slate-200">
                     {people.map((p) => (
@@ -191,13 +191,13 @@ export default function HandoffModal({
             {kind === "COVERAGE" && (
               <div className="mb-2">
                 <label className="text-xs font-medium text-slate-600">Cover until</label>
-                <input type="date" value={coverageEnd} min={inDays(0)} onChange={(e) => setCoverageEnd(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                <input type="date" value={coverageEnd} min={inDays(0)} onChange={(e) => setCoverageEnd(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30" />
               </div>
             )}
 
             <div className="mb-3">
               <label className="text-xs font-medium text-slate-600">Note (optional)</label>
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Context for your teammate…" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Context for your teammate…" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30" />
             </div>
 
             {kind === "TAKEOVER" && (
@@ -207,8 +207,8 @@ export default function HandoffModal({
             )}
 
             <div className="flex gap-2">
-              <button onClick={onClose} disabled={saving} className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-50">Cancel</button>
-              <button onClick={submit} disabled={saving || !to} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50">
+              <button onClick={onClose} disabled={saving} className="flex-1 border border-slate-300 bg-white rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+              <button onClick={submit} disabled={saving || !to} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50">
                 {saving ? "Sending…" : "Send request"}
               </button>
             </div>

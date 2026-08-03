@@ -76,7 +76,7 @@ export default function InvoicesClient() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search customer / number / phone…"
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-64"
+          className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
         />
         <div className="flex gap-1">
           {STATUSES.map((s) => (
@@ -91,17 +91,17 @@ export default function InvoicesClient() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-slate-50 text-slate-500 text-xs">
-              <th className="text-left font-medium px-3 py-2">Invoice</th>
-              <th className="text-left font-medium px-3 py-2">Customer</th>
-              <th className="text-right font-medium px-3 py-2">Total</th>
-              <th className="text-right font-medium px-3 py-2">Paid</th>
-              <th className="text-left font-medium px-3 py-2">Status</th>
-              <th className="text-left font-medium px-3 py-2">Due</th>
-              <th className="text-left font-medium px-3 py-2">Rep</th>
+            <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+              <th className="text-left font-medium px-3 py-2.5">Invoice</th>
+              <th className="text-left font-medium px-3 py-2.5">Customer</th>
+              <th className="text-right font-medium px-3 py-2.5">Total</th>
+              <th className="text-right font-medium px-3 py-2.5">Paid</th>
+              <th className="text-left font-medium px-3 py-2.5">Status</th>
+              <th className="text-left font-medium px-3 py-2.5">Due</th>
+              <th className="text-left font-medium px-3 py-2.5">Rep</th>
             </tr>
           </thead>
           <tbody>
@@ -112,19 +112,19 @@ export default function InvoicesClient() {
             ) : (
               rows.map((inv) => (
                 <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2.5">
                     <Link href={`/invoices/${inv.id}`} className="font-medium text-wa-dark hover:underline">{inv.number}</Link>
                   </td>
-                  <td className="px-3 py-2 text-slate-700">{inv.customerName}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{inr(inv.grandTotal)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{inr(inv.amountPaid)}</td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${STATUS_STYLE[inv.status] ?? "bg-slate-100 text-slate-600"}`}>
+                  <td className="px-3 py-2.5 text-slate-700">{inv.customerName}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{inr(inv.grandTotal)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{inr(inv.amountPaid)}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium ${STATUS_STYLE[inv.status] ?? "bg-slate-100 text-slate-600"}`}>
                       {STATUS_LABEL[inv.status] ?? inv.status}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-slate-500">{dateShort(inv.dueDate)}</td>
-                  <td className="px-3 py-2 text-slate-500">{inv.createdByName}</td>
+                  <td className="px-3 py-2.5 text-slate-500">{dateShort(inv.dueDate)}</td>
+                  <td className="px-3 py-2.5 text-slate-500">{inv.createdByName}</td>
                 </tr>
               ))
             )}

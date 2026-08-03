@@ -78,19 +78,19 @@ export default function RepDealsClient({
 
       <StageVelocityCard rows={stageVelocity} />
 
-      <div className="bg-white rounded-xl border border-slate-300 overflow-x-auto">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-600 border-b-2 border-slate-300">
-              <th className="px-4 py-3 font-semibold">Customer</th>
-              <th className="px-4 py-3 font-semibold">Quote / design / product</th>
-              <th className="px-4 py-3 font-semibold">Stage</th>
-              <th className="px-4 py-3 font-semibold">Notes / upcoming</th>
+            <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
+              <th className="px-4 py-3 font-medium">Customer</th>
+              <th className="px-4 py-3 font-medium">Quote / design / product</th>
+              <th className="px-4 py-3 font-medium">Stage</th>
+              <th className="px-4 py-3 font-medium">Notes / upcoming</th>
             </tr>
           </thead>
           <tbody>
             {deals.map((d) => (
-              <tr key={d.dealId} className="border-b border-slate-200 last:border-0 align-top hover:bg-slate-50">
+              <tr key={d.dealId} className="border-b border-slate-100 last:border-0 align-top hover:bg-slate-50">
                 <td className="px-4 py-4">
                   <Link href={`/deals/${d.dealId}`} className="text-base font-semibold text-wa-dark hover:underline">
                     {d.customerName}

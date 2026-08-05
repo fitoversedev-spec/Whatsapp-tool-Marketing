@@ -12,6 +12,7 @@ import { AnalyticsCard } from "@/components/analytics/AnalyticsCard";
 import { PeriodPicker } from "@/components/analytics/PeriodPicker";
 import UsageTab from "@/components/analytics/UsageTab";
 import InvoicesTab, { type InvoiceAnalyticsData } from "@/components/analytics/InvoicesTab";
+import AiReportTab from "@/components/analytics/AiReportTab";
 import { allTimePeriod, type Period } from "@/lib/analytics/periodPresets";
 import { MIN_SAMPLE_SIZE } from "@/lib/analytics/types";
 import type { Role } from "@/lib/rbac";
@@ -213,7 +214,7 @@ const TAB_LABELS: Record<Tab, string> = {
 // Note: "insights" here is Phase 4's INDUSTRY-Insights group; "digest" is
 // Phase 5's INSIGHT-FEED group ("Insights & Digest") — two different keys on
 // purpose, so they never collide in visibleGroups/GROUP_LABELS.
-type Group = "performance" | "patterns" | "quadrants" | "insights" | "digest" | "usage" | "invoices";
+type Group = "performance" | "patterns" | "quadrants" | "insights" | "digest" | "usage" | "invoices" | "askai";
 const GROUP_LABELS: Record<Group, string> = {
   performance: "Performance",
   patterns: "Comparisons & Patterns",
@@ -222,6 +223,7 @@ const GROUP_LABELS: Record<Group, string> = {
   digest: "Insights & Digest",
   usage: "Rep Usage",
   invoices: "Invoices",
+  askai: "Ask AI",
 };
 // Response shape of /api/crm/analytics/usage (admin-only). Row types are
 // redefined here, matching how every other group's rows are duplicated
@@ -349,7 +351,7 @@ function RepBreakdown({ title, description, segments }: { title: string; descrip
 
 export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean; role: Role }) {
   const visibleGroups: Group[] = isAdmin
-    ? ["performance", "patterns", "quadrants", "insights", "digest", "usage", "invoices"]
+    ? ["performance", "patterns", "quadrants", "insights", "digest", "usage", "invoices", "askai"]
     : ["performance"];
 
   // Blank by default → the fetches send ?from=&to=, and each analytics route
@@ -503,7 +505,9 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
       {/* Tab bar is admin-only. A non-admin (sales) user gets a single personal
           dashboard with no tabs and none of the team/products/geography/platform
           views — just their own Overview + Individual activity, rendered below. */}
-      {isAdmin && (
+      {/* Ask AI (askai) has no sub-tabs — everything lives inside AiReportTab —
+          so the tab bar is skipped for it entirely. */}
+      {isAdmin && group !== "askai" && (
         <div className="flex gap-1 border-b border-slate-200 mb-4 mt-4 overflow-x-auto">
           {(group === "performance"
             ? PERFORMANCE_TABS
@@ -577,6 +581,10 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
       ) : (
         <InvoicesTab data={invoicesData} />
       ))}
+
+      {/* Ask AI group (admin-only) — self-contained panel; all logic (fetch,
+          loading, PDF export, error states) lives inside AiReportTab. */}
+      {group === "askai" && <AiReportTab />}
 
       {group === "patterns" && (patternsLoading || !patternsData ? (
         <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>

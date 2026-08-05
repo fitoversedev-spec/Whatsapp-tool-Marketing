@@ -186,6 +186,13 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         adminOnly: true,
       },
       {
+        href: "/admin/ai-usage",
+        label: "AI usage",
+        icon: "✨",
+        description: "Who's using AI, request counts, and estimated spend",
+        adminOnly: true,
+      },
+      {
         href: "/admin/taxonomies",
         label: "Taxonomies",
         icon: "🏷️",

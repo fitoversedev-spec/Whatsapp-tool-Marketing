@@ -307,6 +307,14 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const [footer, setFooter] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // AI drafting assist. Fills the editable form below — a human still reviews
+  // and submits. Nothing here is sent to any customer.
+  const [brief, setBrief] = useState("");
+  const [sport, setSport] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [drafted, setDrafted] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
   // Header state
   const [headerFormat, setHeaderFormat] = useState<HeaderFormat>("NONE");
   const [headerText, setHeaderText] = useState("");
@@ -353,6 +361,69 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     setHeaderText("");
     setHeaderMediaUrl(null);
     setHeaderFilename(null);
+  }
+
+  // Ask the AI to draft a template from the brief, then populate the editable
+  // fields below. `opts.tone` and `opts.hint` power the "Shorter" / "More
+  // formal" refine buttons — both re-call the same endpoint. The draft header
+  // is TEXT-or-null in v1, so we only touch the text header.
+  async function runDraft(opts?: {
+    tone?: "professional" | "friendly" | "urgent";
+    hint?: string;
+  }) {
+    if (drafting) return;
+    if (!brief.trim()) {
+      setAiError("Enter a short brief first.");
+      return;
+    }
+    setDrafting(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/templates/draft-with-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brief: opts?.hint ? `${brief.trim()}\n\n${opts.hint}` : brief.trim(),
+          ...(sport.trim() ? { sport: sport.trim() } : {}),
+          ...(opts?.tone ? { tone: opts.tone } : {}),
+        }),
+      });
+      if (!res.ok) {
+        if (res.status === 402) setAiError("AI credit has run out — top up your Anthropic balance.");
+        else if (res.status === 429) setAiError("Daily limit reached.");
+        else if (res.status === 503) setAiError("AI not configured yet.");
+        else setAiError("Couldn't draft right now. Try again.");
+        return;
+      }
+      const data = await res.json().catch(() => null);
+      const draft = data?.draft;
+      if (!draft) {
+        setAiError("Couldn't draft right now. Try again.");
+        return;
+      }
+      if (typeof draft.name === "string") setName(draft.name);
+      if (typeof draft.language === "string") setLanguage(draft.language);
+      if (
+        draft.category === "MARKETING" ||
+        draft.category === "UTILITY" ||
+        draft.category === "AUTHENTICATION"
+      ) {
+        setCategory(draft.category);
+      }
+      if (typeof draft.body === "string") setBody(draft.body);
+      setFooter(typeof draft.footer === "string" ? draft.footer : "");
+      if (draft.header?.format === "TEXT" && typeof draft.header.text === "string") {
+        onHeaderFormatChange("TEXT");
+        setHeaderText(draft.header.text);
+      } else {
+        onHeaderFormatChange("NONE");
+      }
+      setDrafted(true);
+    } catch {
+      setAiError("Couldn't draft right now. Try again.");
+    } finally {
+      setDrafting(false);
+    }
   }
 
   async function submit(e: FormEvent) {
@@ -408,6 +479,64 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           </p>
         </div>
         <div className="p-5 sm:p-6 space-y-4">
+          {/* Draft with AI — fills the editable fields below. Internal assist
+              only; a human reviews and submits to Meta. */}
+          <div className="rounded-xl border border-wa-green/30 bg-wa-green/5 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-slate-900">Draft with AI</div>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-wa-green bg-wa-green/10 px-2 py-0.5 rounded-md">
+                Assist
+              </span>
+            </div>
+            <textarea
+              value={brief}
+              onChange={(e) => setBrief(e.target.value)}
+              className="input min-h-[72px] text-sm"
+              placeholder="Monsoon offer: 10% off football turf, valid this month"
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:items-stretch">
+              <input
+                value={sport}
+                onChange={(e) => setSport(e.target.value)}
+                className="input"
+                placeholder="Sport (optional) — e.g. football, cricket"
+              />
+              <button
+                type="button"
+                onClick={() => runDraft()}
+                disabled={drafting}
+                className="bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-4 py-2.5 rounded-lg whitespace-nowrap"
+              >
+                {drafting ? "Drafting…" : "✨ Draft with AI"}
+              </button>
+            </div>
+            {drafted && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-slate-500">Refine:</span>
+                <button
+                  type="button"
+                  onClick={() => runDraft({ hint: "Make it shorter and more concise." })}
+                  disabled={drafting}
+                  className="text-xs px-2.5 py-1 rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-700 font-medium"
+                >
+                  Shorter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runDraft({ tone: "professional" })}
+                  disabled={drafting}
+                  className="text-xs px-2.5 py-1 rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-700 font-medium"
+                >
+                  More formal
+                </button>
+              </div>
+            )}
+            {aiError && <div className="text-xs text-red-600">{aiError}</div>}
+            <p className="text-[11px] text-slate-500">
+              Fills the form below — review and edit before saving.
+            </p>
+          </div>
+
           <Field label="Name (lowercase, snake_case)" required>
             <input
               value={name}

@@ -141,6 +141,7 @@ export default function Sidebar({
     { href: "/users", label: "Users" },
     { href: "/admin/taxonomies", label: "Taxonomies" },
     { href: "/admin/audit-log", label: "Audit log" },
+    { href: "/admin/ai-usage", label: "AI usage" },
   ];
   const currentLabel =
     ALL_PAGES.find((n) => pathname.startsWith(n.href))?.label ?? "WhatsApp Tool";

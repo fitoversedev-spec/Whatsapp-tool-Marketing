@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/Sidebar";
 import CronTick from "@/components/CronTick";
 import FloatingChatLauncher from "@/components/chat/FloatingChatLauncher";
+import AskAiLauncher from "@/components/AskAiLauncher";
 import axios from "axios";
 import { getMetaAccessToken } from "@/lib/token-manager";
 import { endOfDayIST } from "@/lib/time";
@@ -90,6 +91,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
       <CronTick />
       <FloatingChatLauncher initialUnread={chatUnread} initialMentions={chatMentions} />
+      <AskAiLauncher />
     </div>
   );
 }

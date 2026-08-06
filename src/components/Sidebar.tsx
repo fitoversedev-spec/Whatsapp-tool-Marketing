@@ -136,6 +136,7 @@ export default function Sidebar({
     { href: "/portfolio", label: "Portfolio" },
     { href: "/analytics", label: "Broadcast Analytics" },
     { href: "/media", label: "Media library" },
+    { href: "/ad-campaigns", label: "Ad Campaigns" },
     { href: "/settings/quotation-rates", label: "Quotation rates" },
     { href: "/connection", label: "Connection" },
     { href: "/users", label: "Users" },

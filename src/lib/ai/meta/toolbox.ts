@@ -10,6 +10,8 @@
 import { prisma } from "@/lib/prisma";
 import type { AiTool } from "@/lib/ai/tools";
 import { startOfDayIST, endOfDayIST } from "@/lib/time";
+import { normalizeLabel } from "@/lib/meta-ads/fieldMap";
+import { repeatLeads } from "@/lib/meta-ads/leadAnalytics";
 
 // ── Period handling ─────────────────────────────────────────────────────────
 // Rolling windows are the natural unit for ad reporting (in-flight days keep
@@ -331,6 +333,104 @@ export function buildMetaAdsToolbox(defaultPeriod: PeriodInput = "last_30_days")
           byCampaign: toRows(byCampaign, "campaign"),
           byForm: toRows(byForm, "form"),
           byDay: [...byDay.entries()].map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)),
+        };
+      },
+    },
+    {
+      name: "by_city",
+      description:
+        "Captured lead-form submissions broken down by the CITY the lead entered on the form, most leads first. Blank/unknown city is bucketed as 'Unknown'. Use for 'which cities are our leads coming from', 'where should we focus outreach', or any location question about the leads.",
+      input_schema: schema(),
+      handler: async (input) => {
+        const c = await ctx(input ?? {});
+        if ("error" in c) return c;
+        const leads = await prisma.metaLead.findMany({
+          where: {
+            OR: [
+              { createdAtMeta: { gte: c.from, lte: c.to } },
+              { createdAtMeta: null, createdAt: { gte: c.from, lte: c.to } },
+            ],
+            // MetaLead.campaignId is the RAW Meta id (join to MetaCampaign.metaId).
+            ...(c.campaignMetaIds ? { campaignId: { in: c.campaignMetaIds } } : {}),
+          },
+          select: { city: true },
+        });
+        const byCity = new Map<string, number>();
+        for (const l of leads) {
+          const city = normalizeLabel(l.city) ?? "Unknown";
+          byCity.set(city, (byCity.get(city) ?? 0) + 1);
+        }
+        return {
+          window: describeWindow(c.from, c.to),
+          total: leads.length,
+          byCity: [...byCity.entries()]
+            .map(([city, count]) => ({ city, count }))
+            .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city)),
+        };
+      },
+    },
+    {
+      name: "by_sport",
+      description:
+        "Captured leads broken down by the SPORT / interest the lead selected on the form: an overall demand ranking (which sport is asked for most) plus a city-by-sport cross-tab (what each city most wants). Blank values bucket as 'Unknown'. Use for 'which sport is most in demand' or 'what does each city want'.",
+      input_schema: schema(),
+      handler: async (input) => {
+        const c = await ctx(input ?? {});
+        if ("error" in c) return c;
+        const leads = await prisma.metaLead.findMany({
+          where: {
+            OR: [
+              { createdAtMeta: { gte: c.from, lte: c.to } },
+              { createdAtMeta: null, createdAt: { gte: c.from, lte: c.to } },
+            ],
+            // MetaLead.campaignId is the RAW Meta id (join to MetaCampaign.metaId).
+            ...(c.campaignMetaIds ? { campaignId: { in: c.campaignMetaIds } } : {}),
+          },
+          select: { city: true, sport: true },
+        });
+        const bySport = new Map<string, number>();
+        const cityMap = new Map<string, Map<string, number>>();
+        for (const l of leads) {
+          const city = normalizeLabel(l.city) ?? "Unknown";
+          const sport = normalizeLabel(l.sport) ?? "Unknown";
+          bySport.set(sport, (bySport.get(sport) ?? 0) + 1);
+          const inner = cityMap.get(city) ?? new Map<string, number>();
+          inner.set(sport, (inner.get(sport) ?? 0) + 1);
+          cityMap.set(city, inner);
+        }
+        return {
+          window: describeWindow(c.from, c.to),
+          total: leads.length,
+          bySport: [...bySport.entries()]
+            .map(([sport, count]) => ({ sport, count }))
+            .sort((a, b) => b.count - a.count || a.sport.localeCompare(b.sport)),
+          byCityAndSport: [...cityMap.entries()]
+            .flatMap(([city, inner]) => [...inner.entries()].map(([sport, count]) => ({ city, sport, count })))
+            .sort((a, b) => a.city.localeCompare(b.city) || b.count - a.count || a.sport.localeCompare(b.sport)),
+        };
+      },
+    },
+    {
+      name: "repeat_leads",
+      description:
+        "People who submitted lead forms across MORE THAN ONE distinct ad campaign in the window (deduped by phone, else email) — the 'same person keeps coming back' signal. Each row: the person, how many distinct campaigns they appear in, the campaign submissions, and first/last submit time. Use for 'who are our repeat leads' or 'which people engaged multiple times'.",
+      // Period-only schema: repeat_leads is inherently cross-campaign, so it must
+      // NOT advertise a campaignName filter — a non-matching name would make ctx()
+      // return a false "no campaign found" error and the model would wrongly report
+      // "not enough data" even though repeat leads exist.
+      input_schema: { type: "object", properties: { ...PERIOD_PROPS }, required: [] },
+      handler: async (input) => {
+        const c = await ctx(input ?? {});
+        if ("error" in c) return c;
+        // "Repeat" means the same person across >1 DISTINCT campaign, so a
+        // single-campaign filter would be self-defeating — this deliberately
+        // reads every campaign in the window (leadAnalytics.repeatLeads does the
+        // dedupe + distinct-campaign JS reduce and returns serialized rows).
+        const rows = await repeatLeads({ from: c.from, to: c.to });
+        return {
+          window: describeWindow(c.from, c.to),
+          total: rows.length,
+          repeatSubmitters: rows,
         };
       },
     },

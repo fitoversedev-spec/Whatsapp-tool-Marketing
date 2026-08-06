@@ -9,6 +9,8 @@
 import { prisma } from "@/lib/prisma";
 import { fetchLead } from "./client";
 import type { MetaLeadFieldDatum, MetaLeadRaw } from "./client";
+import { extractCity, extractSport } from "./fieldMap";
+import { normalizePhone } from "@/lib/phone";
 
 // The shape of a `leadgen` webhook change value (ids only — no field answers).
 type LeadgenValue = {
@@ -53,6 +55,9 @@ export async function upsertMetaLead(
     ([first, last].filter(Boolean).join(" ").trim() || null);
   const phone = pickField(fieldData, ["phone_number", "phone"]);
   const email = pickField(fieldData, ["email"]);
+  const city = extractCity(fieldData);
+  const sport = extractSport(fieldData);
+  const normalizedPhone = phone ? normalizePhone(phone) : null;
   const createdAtMeta = lead.created_time ? new Date(lead.created_time) : null;
 
   const data = {
@@ -64,6 +69,9 @@ export async function upsertMetaLead(
     fullName,
     phone,
     email,
+    city,
+    sport,
+    normalizedPhone,
     fieldData: JSON.stringify(fieldData),
     rawPayload: JSON.stringify(hints.rawPayload ?? lead),
     createdAtMeta,

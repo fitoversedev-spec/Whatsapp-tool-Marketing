@@ -1997,14 +1997,19 @@ model MetaLead {
   fullName      String?   @map("full_name")
   phone         String?
   email         String?
+  city          String?   // extracted from field_data (form's city question) for lead analytics
+  sport         String?   // extracted from field_data (form's sport question) for lead analytics
   fieldData     String    @map("field_data") // JSON string of all form answers (Setting-style: stringify, value is String)
   rawPayload    String?   @map("raw_payload")
   createdAtMeta DateTime? @map("created_at_meta")
-  leadId        String?   @map("lead_id") // nullable mirror into Lead (later phase); plain field, no relation yet
+  leadId           String?  @map("lead_id") // legacy mirror into the (deprecated) Lead model; prefer accountContactId
+  accountContactId String?  @map("account_contact_id") // CRM link: AccountContact(pipelineStage=LEAD) id set on move-to-CRM
+  normalizedPhone  String?  @map("normalized_phone") // E.164 dedupe key for repeat-lead detection
   createdAt     DateTime  @default(now()) @map("created_at")
 
   @@index([pageId])
   @@index([campaignId])
   @@index([createdAtMeta])
+  @@index([normalizedPhone])
   @@map("meta_leads")
 }

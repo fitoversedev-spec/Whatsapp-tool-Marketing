@@ -87,6 +87,13 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         description: "Meta ad performance, lead-gen leads & AI summaries",
         adminOnly: true,
       },
+      {
+        href: "/ad-campaigns/lead-analytics",
+        label: "Lead Analytics",
+        icon: "📈",
+        description: "Leads by city, sport demand, repeat submitters + AI",
+        adminOnly: true,
+      },
     ],
   },
   {

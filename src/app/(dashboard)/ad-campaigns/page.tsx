@@ -1,5 +1,10 @@
 import { requireAdmin } from "@/lib/auth";
-import { getAdCampaignOverview, getMetaLeads } from "@/lib/meta-ads/queries";
+import {
+  getAdCampaignOverview,
+  getMetaLeads,
+  getCampaignList,
+  getAssignableReps,
+} from "@/lib/meta-ads/queries";
 import AdCampaignsClient from "./AdCampaignsClient";
 
 // Admin-only (the All Tools entry is adminOnly) — requireAdmin redirects a
@@ -32,15 +37,21 @@ export default async function AdCampaignsPage({
     return Number.isNaN(d.getTime()) ? new Date() : d;
   })();
 
-  const [overview, leads] = await Promise.all([
+  // getCampaignList() is a lifetime roster (NOT windowed) and getAssignableReps()
+  // is static, so both are fetched alongside the windowed overview/leads.
+  const [overview, leads, campaigns, reps] = await Promise.all([
     getAdCampaignOverview({ from, to }),
     getMetaLeads({ from, to }),
+    getCampaignList(),
+    getAssignableReps(),
   ]);
 
   return (
     <AdCampaignsClient
       overview={overview}
       leads={leads}
+      campaigns={campaigns}
+      reps={reps}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}
     />
   );

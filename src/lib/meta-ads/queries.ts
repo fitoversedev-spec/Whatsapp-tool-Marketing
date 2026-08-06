@@ -151,47 +151,278 @@ export type MetaLeadRow = {
   email: string | null;
   formName: string | null;
   campaignName: string | null;
+  city: string | null; // extracted at ingest from the form's city question
+  sport: string | null; // extracted at ingest from the form's sport question
   fieldData: string; // raw JSON string of all form answers — client parses defensively
-  inCrm: boolean; // MetaLead.leadId != null (mirrored into a CRM Lead in a later phase)
+  inCrm: boolean; // MetaLead.accountContactId != null (linked to a CRM AccountContact on move-to-CRM)
   capturedAt: string; // ISO — createdAtMeta (Meta's submit time) when present, else the ingest time
 };
 
-// MetaLead list over [from, to]. Filters on the lead's Meta submit time
-// (createdAtMeta) when present, falling back to the ingest time (createdAt)
-// for any lead that arrived without a Meta timestamp, so no captured lead is
-// silently dropped from the window.
-export async function getMetaLeads({ from, to }: { from: Date; to: Date }): Promise<MetaLeadRow[]> {
-  const leads = await prisma.metaLead.findMany({
-    where: {
-      OR: [
-        { createdAtMeta: { gte: from, lte: to } },
-        { createdAtMeta: null, createdAt: { gte: from, lte: to } },
-      ],
-    },
-    orderBy: [{ createdAtMeta: "desc" }, { createdAt: "desc" }],
-    select: {
-      id: true,
-      fullName: true,
-      phone: true,
-      email: true,
-      formName: true,
-      campaignName: true,
-      fieldData: true,
-      leadId: true,
-      createdAtMeta: true,
-      createdAt: true,
-    },
-  });
+// Columns selected for a MetaLeadRow, shared by every lead-list query so the
+// serialization stays identical (Decimal/Date never leak; inCrm derives from
+// accountContactId — the live CRM link — not the deprecated leadId mirror).
+const META_LEAD_SELECT = {
+  id: true,
+  fullName: true,
+  phone: true,
+  email: true,
+  formName: true,
+  campaignName: true,
+  city: true,
+  sport: true,
+  fieldData: true,
+  accountContactId: true,
+  createdAtMeta: true,
+  createdAt: true,
+} as const;
 
-  return leads.map((l) => ({
+type MetaLeadSelected = {
+  id: string;
+  fullName: string | null;
+  phone: string | null;
+  email: string | null;
+  formName: string | null;
+  campaignName: string | null;
+  city: string | null;
+  sport: string | null;
+  fieldData: string;
+  accountContactId: string | null;
+  createdAtMeta: Date | null;
+  createdAt: Date;
+};
+
+function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
+  return {
     id: l.id,
     fullName: l.fullName,
     phone: l.phone,
     email: l.email,
     formName: l.formName,
     campaignName: l.campaignName,
+    city: l.city,
+    sport: l.sport,
     fieldData: l.fieldData,
-    inCrm: l.leadId != null,
+    inCrm: l.accountContactId != null,
     capturedAt: (l.createdAtMeta ?? l.createdAt).toISOString(),
-  }));
+  };
+}
+
+// A lead falls in [from, to] by its Meta submit time (createdAtMeta) when
+// present, else its ingest time (createdAt) — so a lead that arrived without a
+// Meta timestamp is still windowed rather than silently dropped.
+function leadWindowWhere({ from, to }: { from: Date; to: Date }) {
+  return {
+    OR: [
+      { createdAtMeta: { gte: from, lte: to } },
+      { createdAtMeta: null, createdAt: { gte: from, lte: to } },
+    ],
+  };
+}
+
+// MetaLead list over [from, to].
+export async function getMetaLeads({ from, to }: { from: Date; to: Date }): Promise<MetaLeadRow[]> {
+  const leads = await prisma.metaLead.findMany({
+    where: leadWindowWhere({ from, to }),
+    orderBy: [{ createdAtMeta: "desc" }, { createdAt: "desc" }],
+    select: META_LEAD_SELECT,
+  });
+
+  return leads.map(toMetaLeadRow);
+}
+
+// ---------------------------------------------------------------------------
+// Campaign-centric reads (the "Campaigns" drill-down list + detail).
+// ---------------------------------------------------------------------------
+
+// One row of the all-campaigns list. Rolls up every AdInsight day the campaign
+// has (NOT windowed — this is the lifetime view so a paused / no-spend campaign
+// still appears). Two lead numbers, deliberately separate:
+//   • insightLeads  — the Insights KPI (AdInsight.leads), Meta's own count.
+//   • capturedLeads — count(MetaLead) rows we actually ingested for this
+//                     campaign (joined on the RAW Meta id, MetaLead.campaignId
+//                     = MetaCampaign.metaId).
+export type CampaignListRow = {
+  metaId: string; // raw Meta campaign id
+  name: string;
+  status: string | null;
+  objective: string | null;
+  spend: number; // rupees
+  impressions: number;
+  clicks: number;
+  insightLeads: number; // AdInsight.leads KPI
+  capturedLeads: number; // count(MetaLead where campaignId = metaId)
+  cpl: number | null; // rupees per insight lead
+  ctr: number | null; // FRACTION 0..1
+};
+
+const isActiveStatus = (s: string | null | undefined) => (s ?? "").toUpperCase() === "ACTIVE";
+
+// ALL campaigns (active, paused, archived, zero-spend) — never gated on the
+// existence of AdInsight rows. Sorted active-first, then by spend desc.
+export async function getCampaignList(): Promise<CampaignListRow[]> {
+  const [campaigns, leads] = await Promise.all([
+    prisma.metaCampaign.findMany({
+      select: {
+        metaId: true,
+        name: true,
+        status: true,
+        objective: true,
+        insights: { select: { spend: true, impressions: true, clicks: true, leads: true } },
+      },
+    }),
+    // Captured-lead counts joined on the RAW Meta id — tallied in JS (never groupBy).
+    prisma.metaLead.findMany({ where: { campaignId: { not: null } }, select: { campaignId: true } }),
+  ]);
+
+  const capturedByMetaId = new Map<string, number>();
+  for (const l of leads) {
+    if (!l.campaignId) continue;
+    capturedByMetaId.set(l.campaignId, (capturedByMetaId.get(l.campaignId) ?? 0) + 1);
+  }
+
+  return campaigns
+    .map((c) => {
+      let spend = 0;
+      let impressions = 0;
+      let clicks = 0;
+      let insightLeads = 0;
+      for (const i of c.insights) {
+        spend += Number(i.spend);
+        impressions += i.impressions;
+        clicks += i.clicks;
+        insightLeads += i.leads;
+      }
+      return {
+        metaId: c.metaId,
+        name: c.name,
+        status: c.status,
+        objective: c.objective,
+        spend: Math.round(spend),
+        impressions,
+        clicks,
+        insightLeads,
+        capturedLeads: capturedByMetaId.get(c.metaId) ?? 0,
+        cpl: insightLeads > 0 ? spend / insightLeads : null,
+        ctr: impressions > 0 ? clicks / impressions : null,
+      };
+    })
+    .sort((a, b) => {
+      const aa = isActiveStatus(a.status) ? 0 : 1;
+      const bb = isActiveStatus(b.status) ? 0 : 1;
+      return aa - bb || b.spend - a.spend;
+    });
+}
+
+// A single point on a campaign's per-day trend line.
+export type CampaignDayPoint = {
+  date: string; // YYYY-MM-DD (date-only semantics of AdInsight.date)
+  spend: number; // rupees
+  impressions: number;
+  clicks: number;
+  leads: number; // Insights KPI for the day
+};
+
+export type CampaignDetail = {
+  metaId: string;
+  name: string;
+  status: string | null;
+  objective: string | null;
+  spend: number; // rupees
+  impressions: number;
+  reach: number; // summed per-day (upper-bound approximation of unique reach)
+  clicks: number;
+  insightLeads: number; // AdInsight.leads KPI over the window
+  capturedLeads: number; // count(MetaLead where campaignId = metaId) over the window
+  cpl: number | null; // rupees per insight lead
+  ctr: number | null; // FRACTION 0..1
+  series: CampaignDayPoint[]; // per-day, ascending by date
+};
+
+// One campaign by its RAW Meta id, with its AdInsight rollup + per-day trend
+// over an optional window. Returns null if no such campaign exists.
+export async function getCampaignById(
+  metaId: string,
+  range?: { from: Date; to: Date }
+): Promise<CampaignDetail | null> {
+  const campaign = await prisma.metaCampaign.findUnique({
+    where: { metaId },
+    select: { metaId: true, name: true, status: true, objective: true },
+  });
+  if (!campaign) return null;
+
+  const [insights, capturedLeads] = await Promise.all([
+    prisma.adInsight.findMany({
+      where: {
+        campaign: { metaId },
+        ...(range ? { date: { gte: range.from, lte: range.to } } : {}),
+      },
+      orderBy: { date: "asc" },
+      select: { date: true, spend: true, impressions: true, reach: true, clicks: true, leads: true },
+    }),
+    prisma.metaLead.count({
+      where: { campaignId: metaId, ...(range ? leadWindowWhere(range) : {}) },
+    }),
+  ]);
+
+  let spend = 0;
+  let impressions = 0;
+  let reach = 0;
+  let clicks = 0;
+  let insightLeads = 0;
+  const series: CampaignDayPoint[] = insights.map((i) => {
+    const daySpend = Number(i.spend);
+    spend += daySpend;
+    impressions += i.impressions;
+    reach += i.reach;
+    clicks += i.clicks;
+    insightLeads += i.leads;
+    return {
+      date: i.date.toISOString().slice(0, 10),
+      spend: Math.round(daySpend),
+      impressions: i.impressions,
+      clicks: i.clicks,
+      leads: i.leads,
+    };
+  });
+
+  return {
+    metaId: campaign.metaId,
+    name: campaign.name,
+    status: campaign.status,
+    objective: campaign.objective,
+    spend: Math.round(spend),
+    impressions,
+    reach,
+    clicks,
+    insightLeads,
+    capturedLeads,
+    cpl: insightLeads > 0 ? spend / insightLeads : null,
+    ctr: impressions > 0 ? clicks / impressions : null,
+    series,
+  };
+}
+
+// The captured MetaLeads for one campaign (RAW Meta id join), newest first,
+// optionally windowed. Same MetaLeadRow shape as getMetaLeads.
+export async function getLeadsForCampaign(
+  metaId: string,
+  range?: { from: Date; to: Date }
+): Promise<MetaLeadRow[]> {
+  const leads = await prisma.metaLead.findMany({
+    where: { campaignId: metaId, ...(range ? leadWindowWhere(range) : {}) },
+    orderBy: [{ createdAtMeta: "desc" }, { createdAt: "desc" }],
+    select: META_LEAD_SELECT,
+  });
+  return leads.map(toMetaLeadRow);
+}
+
+// Active/approved users for the move-to-CRM owner picker. Same active/approved/
+// not-deleted where-clause every user-listing query in the app uses (mirrors
+// src/app/api/users/assignable/route.ts).
+export async function getAssignableReps(): Promise<{ id: string; name: string }[]> {
+  return prisma.user.findMany({
+    where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+    orderBy: [{ role: "asc" }, { name: "asc" }],
+    select: { id: true, name: true },
+  });
 }

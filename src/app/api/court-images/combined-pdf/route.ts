@@ -35,7 +35,6 @@ import {
   type QuoteLineItem,
 } from "@/lib/quotation/calculator";
 import { renderQuotationPdf } from "@/lib/quotation/pdf";
-import { getSportCatalogueBytes, mergeCatalogueIntoQuote } from "@/lib/quotation/attach-catalogue";
 import { inferSection } from "@/lib/quotation/sections";
 import { extractHtmlTables } from "@/lib/products/format";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
@@ -366,13 +365,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[combined-pdf] render failed", err);
     return NextResponse.json({ error: "render_failed" }, { status: 500 });
-  }
-
-  // Optional — append the primary sport's catalogue as extra pages, same
-  // page-merge the standalone quotation PDF uses.
-  if (body.includeCatalogue && sports[0]) {
-    const catalogueBytes = await getSportCatalogueBytes(sports[0]);
-    pdfBytes = await mergeCatalogueIntoQuote(pdfBytes, catalogueBytes);
   }
 
   const uploaded = await uploadToBlob({

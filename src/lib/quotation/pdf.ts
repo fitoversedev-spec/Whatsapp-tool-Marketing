@@ -1620,6 +1620,12 @@ function numberedListHeight(ctx: Ctx, lines: string[]): number {
   return lines.reduce((h, line) => h + wordWrap(ctx.font, line, 10.5, CONTENT_W - 28).length * 14 + 2, 0);
 }
 
+// Total height a drawBullets() list will consume — mirrors its own wrapping so
+// a heading can be reserved TOGETHER with its bullets (no orphaned subheading).
+function bulletsHeight(ctx: Ctx, lines: string[]): number {
+  return lines.reduce((h, line) => h + wordWrap(ctx.font, line, 10.5, CONTENT_W - 18).length * 14 + 2, 0);
+}
+
 function drawNumbered(ctx: Ctx, lines: string[]) {
   // Wrap everything up front and reserve the WHOLE list's height in one
   // ensureSpace call — otherwise each item is paginated independently, so a
@@ -1665,27 +1671,36 @@ function drawPaymentTerms(ctx: Ctx, sport: string) {
 
 // ── Phase F: full-page "The Fitoverse Advantage" ──
 function drawAdvantagePage(ctx: Ctx) {
-  // Keep the heading + intro together — move the whole section to a fresh page
-  // only if there isn't enough room for a meaningful start here.
-  ensureSpace(ctx, 150);
-  space(ctx, 6);
-  safeDraw(ctx.page, "The Fitoverse Advantage", { x: MARGIN, y: yFromTop(ctx.y + 22), size: 22, font: ctx.bold, color: COL.text });
-  ctx.y += 30;
-  ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y) }, end: { x: MARGIN + 64, y: yFromTop(ctx.y) }, color: COL.accent, thickness: 2.5 });
-  space(ctx, 16);
   const paras = [
     "Fitoverse Sports Infra is synonymous with world-class sports construction. We bridge the gap between natural playability and modern engineering, offering surfaces that replicate the best qualities of natural fields while significantly reducing maintenance costs and eliminating game cancellations due to weather or uneven terrain.",
     "We pride ourselves on being a single-source provider. When you partner with Fitoverse, you engage a team capable of handling the entire project lifecycle - from planning, design, and subfloor construction to professional lighting and precision installation.",
     "Our commitment to quality is validated by our adherence to the rigorous standards set by global governing bodies, including FIFA, World Rugby, FIH, ITF, and FIBA.",
   ];
+  const cardW = (CONTENT_W - 16) / 2;
+  const cardH = 74;
+  const statH = 66;
+  // Reserve the WHOLE section up front so it moves to a fresh page as one
+  // unit. Nothing inside must split — a lone stat band orphaning onto a
+  // near-empty page is exactly the "one line on page 6" bug we're fixing.
+  // We want only continuous information in the quotation, never a stub page.
+  const paraLH = 10 * 1.35;
+  let parasH = 0;
+  for (const p of paras) {
+    parasH += wordWrap(ctx.font, p, 10, CONTENT_W).length * paraLH + 8;
+  }
+  const sectionH = 6 + 30 + 16 + parasH + 14 + cardH + 18 + statH;
+  ensureSpace(ctx, sectionH);
+
+  space(ctx, 6);
+  safeDraw(ctx.page, "The Fitoverse Advantage", { x: MARGIN, y: yFromTop(ctx.y + 22), size: 22, font: ctx.bold, color: COL.text });
+  ctx.y += 30;
+  ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y) }, end: { x: MARGIN + 64, y: yFromTop(ctx.y) }, color: COL.accent, thickness: 2.5 });
+  space(ctx, 16);
   for (const p of paras) {
     drawText(ctx, p, { x: MARGIN, size: 10, maxWidth: CONTENT_W, color: COL.textSoft });
     space(ctx, 8);
   }
   space(ctx, 14);
-  const cardW = (CONTENT_W - 16) / 2;
-  const cardH = 74;
-  ensureSpace(ctx, cardH + 20);
   const top = ctx.y;
   drawRect(ctx, MARGIN, top, cardW, cardH, { fill: COL.light, border: COL.border });
   drawCentered(ctx, "PROUD MEMBERS OF", MARGIN, cardW, top + 16, 10, ctx.bold, COL.text);
@@ -1696,8 +1711,6 @@ function drawAdvantagePage(ctx: Ctx) {
   drawCentered(ctx, "FIFA Quality   ·   FIFA Quality Pro", c2, cardW, top + 42, 13, ctx.bold, COL.green);
   ctx.y = top + cardH;
   space(ctx, 18);
-  const statH = 66;
-  ensureSpace(ctx, statH);
   drawRect(ctx, MARGIN, ctx.y, CONTENT_W, statH, { fill: COL.greenSoft });
   const statTop = ctx.y;
   const halfW = CONTENT_W / 2;
@@ -1896,12 +1909,17 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   ensureSpace(ctx, 34 + numberedListHeight(ctx, notesLines));
   drawSectionTitle(ctx, "Notes");
   drawNumbered(ctx, notesLines);
-  drawSubheading(ctx, "Client Work Scope");
-  drawBullets(ctx, [
+  const clientScope = [
     "Site to be ready, clean and levelled before commencement.",
     "Power, water, unloading, shifting and storage support at site.",
     "Food and stay for the installation team.",
-  ]);
+  ];
+  // Keep the "Client Work Scope" heading together with its bullets — a heading
+  // must never sit alone at a page bottom with its list on the next page
+  // (6 + 19 = drawSubheading's own space(6) + height).
+  ensureSpace(ctx, 6 + 19 + bulletsHeight(ctx, clientScope));
+  drawSubheading(ctx, "Client Work Scope");
+  drawBullets(ctx, clientScope);
   // Keep the whole Payment Terms block together (title + milestone lines +
   // the RTGS note + the bank-details box) so it never splits across a page.
   ensureSpace(ctx, 220);
@@ -1913,6 +1931,9 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   drawBankBlock(ctx);
 
   if (data.notes && data.notes.trim()) {
+    // Reserve the heading + its first two lines so it can't orphan at a
+    // page bottom with the note text starting on the next page.
+    ensureSpace(ctx, 6 + 19 + 10 * 1.35 * 2);
     drawSubheading(ctx, "Additional Notes");
     drawText(ctx, data.notes.trim(), { x: MARGIN, size: 10, maxWidth: CONTENT_W });
   }

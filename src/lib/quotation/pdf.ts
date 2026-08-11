@@ -1660,6 +1660,9 @@ function drawPaymentTerms(ctx: Ctx, sport: string) {
 
 // ── Phase F: full-page "The Fitoverse Advantage" ──
 function drawAdvantagePage(ctx: Ctx) {
+  // Keep the heading + intro together — move the whole section to a fresh page
+  // only if there isn't enough room for a meaningful start here.
+  ensureSpace(ctx, 150);
   space(ctx, 6);
   safeDraw(ctx.page, "The Fitoverse Advantage", { x: MARGIN, y: yFromTop(ctx.y + 22), size: 22, font: ctx.bold, color: COL.text });
   ctx.y += 30;
@@ -1957,9 +1960,10 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
     color: COL.muted,
   });
 
-  // ── The Fitoverse Advantage (full page) ──
-  drawFooter(ctx);
-  newPage(ctx);
+  // ── The Fitoverse Advantage — flows right after the signatures/contacts to
+  //    fill the page rather than forcing a near-empty gap before it. Its own
+  //    title-orphan guard (below) moves it to a fresh page only if it won't fit. ──
+  space(ctx, 14);
   drawAdvantagePage(ctx);
 
   // ── Final page: "Our Portfolio" (real photo + portfolio link) and

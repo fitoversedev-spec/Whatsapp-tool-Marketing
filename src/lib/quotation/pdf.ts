@@ -1060,7 +1060,12 @@ function drawBullets(ctx: Ctx, lines: string[]) {
 }
 
 function drawTerm(ctx: Ctx, title: string, body: string) {
-  ensureSpace(ctx, 18);
+  // Keep the whole clause (title + wrapped body) together — reserve its full
+  // height so a numbered point never splits across a page break, leaving an
+  // orphan line (e.g. point 6's tail) at the top of the next page.
+  const titleH = 10 * 1.35;
+  const bodyH = wordWrap(ctx.font, body, 9.5, CONTENT_W).length * (9.5 * 1.35);
+  ensureSpace(ctx, titleH + bodyH + 5);
   drawText(ctx, title, { x: MARGIN, size: 10, bold: true });
   drawText(ctx, body, { x: MARGIN, size: 9.5, maxWidth: CONTENT_W, color: COL.text });
   space(ctx, 5);

@@ -1700,31 +1700,31 @@ function drawAdvantagePage(ctx: Ctx) {
   ctx.y += statH;
 }
 
-// ── Phase F.5: full-page project showcase (real photo + drive link) —
-//    only rendered when a photo exists for the sport. ──
-function drawShowcasePage(
+// ── Phase F.5: "Our Portfolio" section (real photo + portfolio link).
+//    Drawn on the SAME page as "Connect With Us" (see render entry). Only
+//    drawn when a photo exists for the sport. Compact so both fit one page. ──
+function drawShowcaseSection(
   ctx: Ctx,
   photo: PDFImage,
   driveLink: string | null,
 ) {
-  space(ctx, 24);
-  drawCentered(ctx, "Our Portfolio", MARGIN, CONTENT_W, ctx.y, 22, ctx.bold, COL.text);
-  ctx.y += 30;
+  space(ctx, 8);
+  drawCentered(ctx, "Our Portfolio", MARGIN, CONTENT_W, ctx.y, 18, ctx.bold, COL.text);
+  ctx.y += 24;
   ctx.page.drawLine({
     start: { x: (PAGE_W - 64) / 2, y: yFromTop(ctx.y) },
     end: { x: (PAGE_W + 64) / 2, y: yFromTop(ctx.y) },
     color: COL.accent,
     thickness: 2.5,
   });
-  space(ctx, 30);
+  space(ctx, 16);
 
-  const maxW = 440;
-  const maxH = 300;
+  const maxW = 380;
+  const maxH = 200;
   const scale = Math.min(maxW / photo.width, maxH / photo.height, 1);
   const w = photo.width * scale;
   const h = photo.height * scale;
   const px = (PAGE_W - w) / 2;
-  ensureSpace(ctx, h + 8);
   ctx.page.drawImage(photo, { x: px, y: yFromTop(ctx.y + h), width: w, height: h });
   ctx.page.drawRectangle({
     x: px,
@@ -1735,31 +1735,28 @@ function drawShowcasePage(
     borderWidth: 1,
   });
   ctx.y += h;
-  space(ctx, 26);
+  space(ctx, 12);
 
-  if (driveLink) {
-    const label = "View more photos & videos of this project";
-    const size = 11.5;
-    const linkW = safeWidth(ctx.font, label, size);
-    ensureSpace(ctx, size * 1.4);
-    drawLink(ctx, label, driveLink, { x: (PAGE_W - linkW) / 2, size });
-    ctx.y += size * 1.4;
-  }
+  // Always show a portfolio link. A per-project drive link (from the
+  // project_drive_link_<sport> setting) wins; otherwise link to the website.
+  const link = driveLink || "https://fitoverse.com/";
+  const label = driveLink
+    ? "View more photos & videos of this project"
+    : "View our full project portfolio";
+  const size = 11.5;
+  const linkW = safeWidth(ctx.font, label, size);
+  drawLink(ctx, label, link, { x: (PAGE_W - linkW) / 2, size });
+  ctx.y += size * 1.4;
+  space(ctx, 18);
 }
 
-// ── Phase G: full-page "Connect With Us" (final page) ──
+// ── Phase G: "Connect With Us" — shares the final page with Our Portfolio ──
 function drawConnectPage(ctx: Ctx) {
-  space(ctx, 34);
-  if (ctx.logo) {
-    const f = ctx.logo.scaleToFit(240, 74);
-    ctx.page.drawImage(ctx.logo, { x: (PAGE_W - f.width) / 2, y: yFromTop(ctx.y + f.height), width: f.width, height: f.height });
-    ctx.y += f.height;
-  }
-  space(ctx, 26);
-  drawCentered(ctx, "Connect With Us", MARGIN, CONTENT_W, ctx.y, 22, ctx.bold, COL.text);
-  ctx.y += 30;
+  space(ctx, 10);
+  drawCentered(ctx, "Connect With Us", MARGIN, CONTENT_W, ctx.y, 18, ctx.bold, COL.text);
+  ctx.y += 26;
   drawCentered(ctx, "Reach out for a site visit, a detailed quote, or a walkthrough of our work.", MARGIN, CONTENT_W, ctx.y, 10, ctx.font, COL.muted);
-  ctx.y += 34;
+  ctx.y += 28;
   const rows: Array<[string, string, string | null]> = [
     ["Phone", "+91 63815 02055   ·   +91 93638 63382", null],
     ["Website", "fitoverse.com", "https://fitoverse.com/"],
@@ -1897,6 +1894,9 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
     "Power, water, unloading, shifting and storage support at site.",
     "Food and stay for the installation team.",
   ]);
+  // Keep the whole Payment Terms block together (title + milestone lines +
+  // the RTGS note + the bank-details box) so it never splits across a page.
+  ensureSpace(ctx, 220);
   drawSectionTitle(ctx, "Payment Terms");
   drawPaymentTerms(ctx, data.sport);
   space(ctx, 4);
@@ -1943,6 +1943,9 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   ];
   for (const t of TERMS) drawTerm(ctx, t.title, t.body);
 
+  // Keep the signatures + Project Contact Points together so the contact
+  // line never orphans onto a near-empty page.
+  ensureSpace(ctx, 160);
   drawSignatures(ctx, data.customerName);
   space(ctx, 12);
   drawLine(ctx, MARGIN, PAGE_W - MARGIN);
@@ -1959,23 +1962,20 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   newPage(ctx);
   drawAdvantagePage(ctx);
 
-  // ── Project showcase (full page) — only when a real photo exists for
-  //    this sport; a configured drive link with no photo is a no-op. ──
+  // ── Final page: "Our Portfolio" (real photo + portfolio link) and
+  //    "Connect With Us", combined on ONE page. The portfolio photo only
+  //    shows for sports that have one; Connect always renders below it. ──
+  drawFooter(ctx);
+  newPage(ctx);
   const showcaseBytes = SHOWCASE_PHOTO_BYTES[data.sport];
   if (showcaseBytes) {
     try {
       const showcaseImage = await doc.embedJpg(showcaseBytes);
-      drawFooter(ctx);
-      newPage(ctx);
-      drawShowcasePage(ctx, showcaseImage, data.driveLink ?? null);
+      drawShowcaseSection(ctx, showcaseImage, data.driveLink ?? null);
     } catch (e) {
       console.error("[quotation pdf] showcase photo embed failed", e);
     }
   }
-
-  // ── Connect With Us (final page) ──
-  drawFooter(ctx);
-  newPage(ctx);
   drawConnectPage(ctx);
 
   drawFooter(ctx);

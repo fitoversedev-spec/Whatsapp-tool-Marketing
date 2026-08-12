@@ -57,6 +57,14 @@ const ALIASES: Record<string, string> = {
   "acrylic blue": "#2C5DA5",
   "acrylic green": "#3E7D47",
   "turf green": "#3E8A47",
+  // Fitoverse brand tokens — surfaced everywhere so a name lookup resolves
+  // the exact brand hex ("fitoverse green" → #159341, etc.).
+  "fitoverse green": "#159341",
+  "fitoverse blue": "#73CAF0",
+  "fitoverse red": "#C81124",
+  "brand green": "#159341",
+  "brand blue": "#73CAF0",
+  "brand red": "#C81124",
 };
 
 // The subset of CSS Level-4 named colours we support directly. Kept
@@ -157,4 +165,82 @@ export function knownColorNames(): string[] {
   return Array.from(
     new Set([...Object.keys(ALIASES), ...Object.keys(CSS_NAMES)]),
   ).sort();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  P5-01 — Fitoverse brand palette (the seed for every colour picker)
+// ─────────────────────────────────────────────────────────────────────
+
+// The three Fitoverse brand tokens, offered first in every picker so a
+// non-designer produces an on-brand design by default. Kept here (the
+// shared colour lib) so the wizard AND the element inspector seed from ONE
+// list instead of hard-coding brand hexes in each picker.
+export const FITOVERSE_BRAND_COLORS: { name: string; hex: string }[] = [
+  { name: "Fitoverse Green", hex: "#159341" },
+  { name: "Fitoverse Blue", hex: "#73CAF0" },
+  { name: "Fitoverse Red", hex: "#C81124" },
+];
+
+// Prepend the brand tokens to a picker's own preset list without
+// duplicating a colour a preset already carries (case-insensitive on hex).
+export function withBrandColors(
+  presets: { name: string; hex: string }[],
+): { name: string; hex: string }[] {
+  const seen = new Set(presets.map((p) => p.hex.toLowerCase()));
+  const brand = FITOVERSE_BRAND_COLORS.filter(
+    (b) => !seen.has(b.hex.toLowerCase()),
+  );
+  return [...brand, ...presets];
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  P5-03 — Contrast / legibility guardrail
+// ─────────────────────────────────────────────────────────────────────
+
+// Parse #rgb / #rrggbb (and bare 3/6-hex) into an [r,g,b] 0..255 tuple.
+// Returns null for rgba()/hsl()/names so the caller can skip the check
+// gracefully rather than throwing.
+function hexToRgbTuple(hex: string): [number, number, number] | null {
+  const m = hex.trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3)
+    h = h
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  const n = parseInt(h, 16);
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+}
+
+// WCAG relative luminance (0 = black, 1 = white) for a hex colour.
+export function relativeLuminance(hex: string): number | null {
+  const rgb = hexToRgbTuple(hex);
+  if (!rgb) return null;
+  const lin = rgb.map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.2126 * lin[2];
+}
+
+// WCAG contrast ratio (1 = identical, 21 = black-on-white) between two
+// hex colours. Returns null when either colour can't be parsed as hex.
+export function contrastRatio(a: string, b: string): number | null {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  if (la === null || lb === null) return null;
+  const hi = Math.max(la, lb);
+  const lo = Math.min(la, lb);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+// True when the two colours are too close to tell apart at a glance —
+// used to warn when a court's LINE colour barely reads against its
+// SURFACE colour. Default threshold 1.6:1 is well below the WCAG 3:1
+// "graphical object" floor, so it only fires on genuinely muddy pairs.
+export function colorsTooClose(a: string, b: string, minRatio = 1.6): boolean {
+  const r = contrastRatio(a, b);
+  if (r === null) return false; // can't judge (rgba/name) → don't nag
+  return r < minRatio;
 }

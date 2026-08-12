@@ -20,6 +20,7 @@ import {
 } from "pdf-lib";
 import fs from "fs";
 import path from "path";
+import fontkit from "@pdf-lib/fontkit";
 import { htmlToPlainText, extractHtmlTables } from "@/lib/products/format";
 import type { ProductDTO } from "@/lib/products/store";
 import type { DesignAreas } from "./schema";
@@ -36,9 +37,36 @@ try {
   LOGO_BYTES = null;
 }
 
+// Brand font (Manrope) — embedded via fontkit so the combined PDF matches the
+// app's typography and can render the ₹ sign. Loaded once at module load; a
+// missing/unreadable TTF degrades to Helvetica (and the ₹→"Rs" fallback below)
+// rather than failing the render.
+let MANROPE_REGULAR: Buffer | null = null;
+let MANROPE_BOLD: Buffer | null = null;
+try {
+  MANROPE_REGULAR = fs.readFileSync(path.join(process.cwd(), "public", "fonts", "Manrope-Regular.ttf"));
+  MANROPE_BOLD = fs.readFileSync(path.join(process.cwd(), "public", "fonts", "Manrope-Bold.ttf"));
+} catch {
+  MANROPE_REGULAR = null;
+  MANROPE_BOLD = null;
+}
+
+// Set per-render once the embedded font is known. Manrope has the ₹ glyph; the
+// Helvetica fallback does not, so money strings + sanitize() fall back to "Rs "
+// when this is false. Benign across concurrent renders (same value each time).
+let FONT_HAS_RUPEE = false;
+function rupee(): string {
+  return FONT_HAS_RUPEE ? "₹" : "Rs ";
+}
+
 const MARGIN = 40;
 const [PAGE_W, PAGE_H] = PageSizes.A4;
 const CONTENT_W = PAGE_W - MARGIN * 2;
+// P2-04: LANDSCAPE A4 (width/height swapped) — used for the 2D plan and the 3D
+// still so those big renders fill the sheet. Text pages stay portrait.
+const LAND_W = PAGE_H;
+const LAND_H = PAGE_W;
+const LAND_CONTENT_W = LAND_W - MARGIN * 2;
 // Reserved top-of-page band for the logo, so content never overlaps it.
 const LOGO_BAND = 44;
 
@@ -103,8 +131,7 @@ export type CombinedPdfInput = {
 
 function sanitize(s: string): string {
   // WinAnsi (pdf-lib standard fonts) can't encode every unicode char.
-  return s
-    .replace(/[₹]/g, "Rs ")
+  return (FONT_HAS_RUPEE ? s : s.replace(/[₹]/g, "Rs "))
     .replace(/[•·]/g, "-")
     .replace(/[""]/g, '"')
     .replace(/['']/g, "'")
@@ -116,7 +143,7 @@ function sanitize(s: string): string {
     // (0x80-0x9F) — as well as anything above Latin-1. A single stray NUL or
     // Windows-1252 mojibake byte from the MVPv2 import used to make drawText
     // throw and produce NO PDF at all; this laundering prevents that.
-    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
+    .replace(/[^\x20-\x7E\xA0-\xFF₹]/g, "");
 }
 
 async function tryEmbed(
@@ -156,6 +183,41 @@ function newPage(ctx: Ctx) {
   // Start below the reserved logo band so page content never sits under the
   // top-left logo drawn on every page.
   ctx.y = PAGE_H - MARGIN - LOGO_BAND;
+}
+
+// P2-04: add a landscape sheet + start the cursor below the logo band. The
+// footer post-pass uses each page's own height, so the shared logo/footer
+// still land correctly on these wider pages.
+function newLandscapePage(ctx: Ctx) {
+  ctx.page = ctx.doc.addPage([LAND_W, LAND_H]);
+  ctx.y = LAND_H - MARGIN - LOGO_BAND;
+}
+
+// Section band sized to the landscape content width (sectionTitle uses the
+// portrait CONTENT_W, which would leave a short band on a wide page).
+function landscapeTitle(ctx: Ctx, title: string) {
+  ctx.page.drawRectangle({
+    x: MARGIN,
+    y: ctx.y - 18,
+    width: LAND_CONTENT_W,
+    height: 20,
+    color: COL.band,
+  });
+  ctx.page.drawRectangle({
+    x: MARGIN,
+    y: ctx.y - 18,
+    width: 4,
+    height: 20,
+    color: COL.green,
+  });
+  ctx.page.drawText(sanitize(title), {
+    x: MARGIN + 12,
+    y: ctx.y - 14,
+    size: 11,
+    font: ctx.bold,
+    color: COL.green,
+  });
+  ctx.y -= 26;
 }
 
 function ensure(ctx: Ctx, needed: number) {
@@ -249,8 +311,18 @@ export async function renderCombinedPdf(
   input: CombinedPdfInput,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  doc.registerFontkit(fontkit);
+  let font: PDFFont;
+  let bold: PDFFont;
+  if (MANROPE_REGULAR && MANROPE_BOLD) {
+    font = await doc.embedFont(MANROPE_REGULAR, { subset: true });
+    bold = await doc.embedFont(MANROPE_BOLD, { subset: true });
+    FONT_HAS_RUPEE = true;
+  } else {
+    font = await doc.embedFont(StandardFonts.Helvetica);
+    bold = await doc.embedFont(StandardFonts.HelveticaBold);
+    FONT_HAS_RUPEE = false;
+  }
   const ctx: Ctx = {
     doc,
     page: doc.addPage([PAGE_W, PAGE_H]),
@@ -259,41 +331,32 @@ export async function renderCombinedPdf(
     bold,
   };
 
-  // ── Cover / header ── The Fitoverse logo is drawn top-left on EVERY page in
-  //    the post-pass below, so the cover just carries the proposal title.
-  ctx.page.drawText("Court Design Proposal", {
-    x: MARGIN,
-    y: ctx.y - 20,
-    size: 18,
-    font: bold,
-    color: COL.green,
-  });
-  ctx.y -= 34;
-  text(ctx, `Customer: ${input.customerName || "-"}`, { size: 11, bold: true });
-  text(ctx, `Sport: ${input.sports.map((s) => cap(s)).join(", ") || "-"}`, {
-    color: COL.soft,
-  });
-  text(ctx, `Plot: ${input.plotLabel}`, { color: COL.soft });
-  if (input.baseWork) text(ctx, `Base work: ${cap(input.baseWork)}`, { color: COL.soft });
-  if (input.flooringName) text(ctx, `Flooring: ${input.flooringName}`, { color: COL.soft });
+  // ── Designed cover (P6-04) — brand masthead + metadata card + hero render +
+  //    a contents list. The Fitoverse logo is drawn top-left on EVERY page by
+  //    the post-pass below, so the masthead sits just under the logo band.
+  await drawCover(ctx, input);
 
-  // ── 2D court plan — on the COVER page, right under the customer details and
-  //    as large as the remaining space + page width allow (customer request). ──
+  // ── 2D court plan — on its own LANDSCAPE sheet (P2-04) so the plan fills the
+  //    page as large as possible. ──
   const twoD = input.designImages[0];
   if (twoD) {
-    ctx.y -= 8;
-    sectionTitle(ctx, "2D court plan");
-    await drawImageFit(ctx, twoD.bytes, ctx.y - MARGIN, { wide: true });
+    newLandscapePage(ctx);
+    landscapeTitle(ctx, "2D court plan");
+    await drawImageFit(ctx, twoD.bytes, ctx.y - MARGIN, {
+      boxX: 18,
+      boxW: LAND_W - 36,
+    });
   }
 
-  // ── Dimensions — a dedicated, easy-to-read table (kept OFF the 2D diagram) ──
+  // ── Dimensions — a dedicated, easy-to-read table (kept OFF the 2D diagram),
+  //    followed by a keyed surface→product legend (P6-04). ──
   if (input.dimensions) {
-    drawDimensionsTable(ctx, input.dimensions);
+    drawDimensionsTable(ctx, input.dimensions, input);
   }
 
-  // ── 3D drone view — ONE static still on its own page (not every angle) ──
+  // ── 3D drone view — ONE static still on its own LANDSCAPE sheet (P2-04) ──
   if (input.angleImages && input.angleImages.length > 0) {
-    newPage(ctx);
+    newLandscapePage(ctx);
     await drawSingle3DView(ctx, input.angleImages[0]);
   }
 
@@ -406,13 +469,30 @@ export async function renderCombinedPdf(
   const pages = doc.getPages();
   pages.forEach((pg, i) => {
     if (mergedTdsPages.has(pg)) return;
+    // Use the page's OWN height so the top-left logo lands correctly on both
+    // portrait and the new P2-04 landscape sheets.
+    const pgH = pg.getHeight();
+    const pgW = pg.getWidth();
     if (logoImage) {
       const dims = logoImage.scaleToFit(150, 34);
       pg.drawImage(logoImage, {
         x: MARGIN,
-        y: PAGE_H - 16 - dims.height,
+        y: pgH - 16 - dims.height,
         width: dims.width,
         height: dims.height,
+      });
+    }
+    // P6-04 — running header on content pages (skip the cover, i === 0): a
+    // right-aligned proposal/customer line + a hairline rule under the band.
+    if (i > 0) {
+      const hdr = sanitize(`Court Design Proposal  -  ${input.customerName || "Fitoverse"}`);
+      const hw = font.widthOfTextAtSize(hdr, 8);
+      pg.drawText(hdr, { x: pgW - MARGIN - hw, y: pgH - 30, size: 8, font, color: COL.faint });
+      pg.drawLine({
+        start: { x: MARGIN, y: pgH - 36 },
+        end: { x: pgW - MARGIN, y: pgH - 36 },
+        thickness: 0.5,
+        color: COL.line,
       });
     }
     pg.drawText(
@@ -466,6 +546,137 @@ function drawLink(ctx: Ctx, url: string, x: number, size: number): number {
   return textW;
 }
 
+// P6-04 — designed cover page. Brand-green masthead band, a metadata card, a
+// framed hero render (the 2D plan, falling back to a 3D still) and a contents
+// list, so the proposal opens like a considered document rather than a bare
+// title. Draws onto the already-created first page.
+async function drawCover(ctx: Ctx, input: CombinedPdfInput) {
+  const page = ctx.page;
+  // Masthead band (green) below the logo band, with a thin blue accent rule.
+  const bandTop = PAGE_H - LOGO_BAND - 6;
+  const bandH = 92;
+  page.drawRectangle({ x: 0, y: bandTop - bandH, width: PAGE_W, height: bandH, color: COL.green });
+  page.drawRectangle({ x: 0, y: bandTop - bandH - 3, width: PAGE_W, height: 3, color: COL.blue });
+  page.drawText("COURT DESIGN PROPOSAL", {
+    x: MARGIN,
+    y: bandTop - 40,
+    size: 22,
+    font: ctx.bold,
+    color: rgb(1, 1, 1),
+  });
+  page.drawText(sanitize(input.customerName || "Prepared for you"), {
+    x: MARGIN,
+    y: bandTop - 62,
+    size: 13,
+    font: ctx.font,
+    color: rgb(0.92, 0.97, 0.93),
+  });
+  const dateStr = new Date().toLocaleDateString("en-IN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  page.drawText(sanitize(`Prepared by Fitoverse  -  ${dateStr}`), {
+    x: MARGIN,
+    y: bandTop - 80,
+    size: 9.5,
+    font: ctx.font,
+    color: rgb(0.85, 0.94, 0.87),
+  });
+  ctx.y = bandTop - bandH - 22;
+
+  // Metadata card.
+  const rows: Array<[string, string]> = [
+    ["Customer", input.customerName || "-"],
+    ["Sport", input.sports.map((s) => cap(s)).join(", ") || "-"],
+    ["Plot", input.plotLabel],
+  ];
+  if (input.baseWork) rows.push(["Base work", cap(input.baseWork)]);
+  if (input.flooringName) rows.push(["Flooring", input.flooringName]);
+  const cardH = rows.length * 18 + 16;
+  page.drawRectangle({
+    x: MARGIN,
+    y: ctx.y - cardH,
+    width: CONTENT_W,
+    height: cardH,
+    color: COL.band,
+    borderColor: COL.line,
+    borderWidth: 1,
+  });
+  let ry = ctx.y - 20;
+  for (const [k, v] of rows) {
+    page.drawText(sanitize(k), { x: MARGIN + 12, y: ry, size: 9.5, font: ctx.bold, color: COL.soft });
+    page.drawText(sanitize(v).slice(0, 70), {
+      x: MARGIN + 120,
+      y: ry,
+      size: 9.5,
+      font: ctx.font,
+      color: COL.ink,
+    });
+    ry -= 18;
+  }
+  ctx.y -= cardH + 18;
+
+  // Framed hero render — the 2D plan (fallback: first 3D still).
+  const hero = input.designImages[0]?.bytes ?? input.angleImages?.[0];
+  if (hero) {
+    const img = await tryEmbed(ctx.doc, hero);
+    if (img) {
+      const boxW = CONTENT_W;
+      const availH = Math.max(120, ctx.y - MARGIN - 150); // leave room for contents
+      const scale = Math.min(boxW / img.width, availH / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      const ix = MARGIN + (boxW - w) / 2;
+      page.drawRectangle({
+        x: ix - 4,
+        y: ctx.y - h - 4,
+        width: w + 8,
+        height: h + 8,
+        borderColor: COL.line,
+        borderWidth: 1,
+      });
+      page.drawImage(img, { x: ix, y: ctx.y - h, width: w, height: h });
+      ctx.y -= h + 20;
+    }
+  }
+
+  drawContents(ctx, input);
+}
+
+// Lightweight contents list (single-pass generator, so no page numbers) — lists
+// the sections this proposal will contain, in order.
+function drawContents(ctx: Ctx, input: CombinedPdfInput) {
+  const items: string[] = ["2D court plan"];
+  if (input.dimensions) items.push("Dimensions & surface legend");
+  if (input.angleImages && input.angleImages.length > 0) items.push("3D drone view");
+  if (input.products.length > 0 || input.equipment.length > 0)
+    items.push("Flooring, materials & equipment");
+  if ((input.tdsPdfs && input.tdsPdfs.length > 0) || input.tds.length > 0)
+    items.push("Technical data sheets");
+  if (input.quotePdf || input.quote) items.push("Quotation");
+  items.push("Connect with Fitoverse");
+  ctx.page.drawText("In this proposal", {
+    x: MARGIN,
+    y: ctx.y - 12,
+    size: 10.5,
+    font: ctx.bold,
+    color: COL.green,
+  });
+  let cy = ctx.y - 28;
+  for (const it of items) {
+    ctx.page.drawText(sanitize(`-  ${it}`), {
+      x: MARGIN + 8,
+      y: cy,
+      size: 9.5,
+      font: ctx.font,
+      color: COL.soft,
+    });
+    cy -= 14;
+  }
+  ctx.y = cy;
+}
+
 function drawConnectWithFitoverse(ctx: Ctx) {
   newPage(ctx);
   sectionTitle(ctx, "Connect with Fitoverse");
@@ -506,7 +717,7 @@ function drawConnectWithFitoverse(ctx: Ctx) {
 // Dedicated Dimensions page — a big, clear two-column table (Area | Size) with
 // imperial + metric on separate lines. Kept off the 2D diagram so the diagram
 // stays clean.
-function drawDimensionsTable(ctx: Ctx, areas: DesignAreas) {
+function drawDimensionsTable(ctx: Ctx, areas: DesignAreas, input?: CombinedPdfInput) {
   newPage(ctx);
   sectionTitle(ctx, "Dimensions");
   gap(ctx, 10);
@@ -673,25 +884,66 @@ function drawDimensionsTable(ctx: Ctx, areas: DesignAreas) {
     });
     ctx.y -= rowH;
   }
+
+  // P6-04 — keyed surface → product legend: a swatch per material so the plan's
+  // colours read back to the quoted product.
+  if (input) {
+    gap(ctx, 16);
+    ensure(ctx, 70);
+    ctx.page.drawText("Surface legend", {
+      x: MARGIN,
+      y: ctx.y - 12,
+      size: 11,
+      font: ctx.bold,
+      color: COL.green,
+    });
+    ctx.y -= 24;
+    const legend: Array<[ReturnType<typeof rgb>, string, string]> = [
+      [COL.green, "Playing surface", input.flooringName ?? "As specified"],
+    ];
+    if (input.baseWork) legend.push([COL.soft, "Base work", cap(input.baseWork)]);
+    legend.push([COL.faint, "Non-playing run-off", "Surround / walkway"]);
+    for (const [swatch, k, v] of legend) {
+      ensure(ctx, 20);
+      ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - 12, width: 18, height: 12, color: swatch });
+      ctx.page.drawText(sanitize(`${k}:`), {
+        x: MARGIN + 26,
+        y: ctx.y - 11,
+        size: 9.5,
+        font: ctx.bold,
+        color: COL.ink,
+      });
+      ctx.page.drawText(sanitize(v).slice(0, 60), {
+        x: MARGIN + 150,
+        y: ctx.y - 11,
+        size: 9.5,
+        font: ctx.font,
+        color: COL.soft,
+      });
+      ctx.y -= 20;
+    }
+  }
 }
 
-// One large 3D drone still on its own page — sales asked for a single hero 3D
-// image, not the multi-angle grid.
+// One large 3D drone still on its own LANDSCAPE sheet (P2-04) — sales asked for
+// a single hero 3D image, not the multi-angle grid. Assumes a landscape page is
+// already the current page.
 async function drawSingle3DView(ctx: Ctx, image: Uint8Array) {
-  sectionTitle(ctx, "3D drone view");
+  landscapeTitle(ctx, "3D drone view");
   gap(ctx, 4);
   const img = await tryEmbed(ctx.doc, image);
   if (!img) {
     text(ctx, "(3D preview unavailable.)", { color: COL.faint, size: 9 });
     return;
   }
-  const availW = CONTENT_W;
-  const availH = ctx.y - MARGIN - 44;
+  const boxX = 18;
+  const availW = LAND_W - 36;
+  const availH = ctx.y - MARGIN - 10;
   const scale = Math.min(availW / img.width, availH / img.height);
   const w = img.width * scale;
   const h = img.height * scale;
   ctx.page.drawImage(img, {
-    x: MARGIN + (availW - w) / 2,
+    x: boxX + (availW - w) / 2,
     y: ctx.y - h - 6,
     width: w,
     height: h,
@@ -699,9 +951,15 @@ async function drawSingle3DView(ctx: Ctx, image: Uint8Array) {
   ctx.y -= h + 16;
 }
 
-// Draw one image centred, scaled to the content width and a max height —
-// used for the full-page 2D plan and the 3D video poster.
-async function drawImageFit(ctx: Ctx, bytes: Uint8Array, maxH: number, opts: { wide?: boolean } = {}) {
+// Draw one image centred, scaled to a box width and a max height — used for
+// the full-page 2D plan and the 3D video poster. `boxX`/`boxW` override the
+// column (P2-04 passes the landscape box); `wide` widens within a portrait page.
+async function drawImageFit(
+  ctx: Ctx,
+  bytes: Uint8Array,
+  maxH: number,
+  opts: { wide?: boolean; boxX?: number; boxW?: number } = {},
+) {
   const embedded = await tryEmbed(ctx.doc, bytes);
   if (!embedded) {
     text(ctx, "(image could not be embedded)", { color: COL.faint, size: 9 });
@@ -709,8 +967,8 @@ async function drawImageFit(ctx: Ctx, bytes: Uint8Array, maxH: number, opts: { w
   }
   // The 2D plan uses a wider box (closer to the page edges) so it renders as
   // large as possible; other images stay within the normal content column.
-  const boxX = opts.wide ? 18 : MARGIN;
-  const boxW = opts.wide ? PAGE_W - 36 : CONTENT_W;
+  const boxX = opts.boxX ?? (opts.wide ? 18 : MARGIN);
+  const boxW = opts.boxW ?? (opts.wide ? PAGE_W - 36 : CONTENT_W);
   const availH = Math.max(120, Math.min(maxH, ctx.y - MARGIN - 20));
   const scale = Math.min(boxW / embedded.width, availH / embedded.height);
   const w = embedded.width * scale;
@@ -725,7 +983,10 @@ async function drawImageFit(ctx: Ctx, bytes: Uint8Array, maxH: number, opts: { w
 }
 
 async function drawProduct(ctx: Ctx, p: ProductDTO) {
-  ensure(ctx, 70);
+  // P6-04 — larger product image cards. Reserve enough height for the ~132px
+  // hero card so a product never straddles a page break onto a bare thumbnail.
+  const box = 132;
+  ensure(ctx, box + 24);
   const startY = ctx.y;
   let textX = MARGIN;
   // Thumbnail on the left if embeddable.
@@ -734,20 +995,27 @@ async function drawProduct(ctx: Ctx, p: ProductDTO) {
     if (bytes) {
       const img = await tryEmbed(ctx.doc, bytes);
       if (img) {
-        // Fit within a 56x56 box preserving aspect ratio, then centre —
-        // catalogue hero photos are almost never square, so forcing them
-        // to 56x56 visibly stretched/squished the flooring thumbnails.
-        const box = 56;
+        // Fit within the box preserving aspect ratio, centred, on a faint
+        // framed card so the (never-square) catalogue photos read cleanly.
         const scale = Math.min(box / img.width, box / img.height);
         const iw = img.width * scale;
         const ih = img.height * scale;
+        ctx.page.drawRectangle({
+          x: MARGIN,
+          y: startY - box,
+          width: box,
+          height: box,
+          color: rgb(0.97, 0.98, 0.99),
+          borderColor: COL.line,
+          borderWidth: 0.75,
+        });
         ctx.page.drawImage(img, {
           x: MARGIN + (box - iw) / 2,
           y: startY - box + (box - ih) / 2,
           width: iw,
           height: ih,
         });
-        textX = MARGIN + box + 10;
+        textX = MARGIN + box + 14;
       }
     }
   }
@@ -762,7 +1030,7 @@ async function drawProduct(ctx: Ctx, p: ProductDTO) {
   let ly = startY - 26;
   if (p.priceInr != null) {
     ctx.page.drawText(
-      sanitize(`Rs ${p.priceInr.toLocaleString("en-IN")}${p.unit ? ` / ${p.unit}` : ""}`),
+      sanitize(`${rupee()}${p.priceInr.toLocaleString("en-IN")}${p.unit ? ` / ${p.unit}` : ""}`),
       { x: textX, y: ly, size: 9, font: ctx.font, color: COL.soft },
     );
     ly -= 12;
@@ -779,7 +1047,8 @@ async function drawProduct(ctx: Ctx, p: ProductDTO) {
       ly -= 11;
     }
   }
-  ctx.y = Math.min(ly, startY - 62) - 6;
+  // Clear the taller image card (when present) so specs never overlap it.
+  ctx.y = Math.min(ly, startY - (textX > MARGIN ? box + 4 : 62)) - 6;
 
   // Prefer the structured specs JSON if it has real values; otherwise
   // render every table parsed out of the description HTML, each titled.
@@ -977,7 +1246,7 @@ function drawQuote(ctx: Ctx, q: CombinedQuote) {
         : "-";
     rcell(areaStr, x2);
     rcell(it.rate != null ? it.rate.toLocaleString("en-IN") : "-", x3);
-    rcell(`Rs ${it.total.toLocaleString("en-IN")}`, xEnd, true);
+    rcell(`${rupee()}${it.total.toLocaleString("en-IN")}`, xEnd, true);
 
     // Grid: row bottom border + column separators.
     ctx.page.drawLine({
@@ -1007,7 +1276,7 @@ function drawTotalLine(ctx: Ctx, label: string, val: number, strong = false) {
   ensure(ctx, 14);
   const f = strong ? ctx.bold : ctx.font;
   ctx.page.drawText(sanitize(label), { x: PAGE_W - MARGIN - 200, y: ctx.y - 10, size: 9.5, font: f, color: COL.ink });
-  const v = `Rs ${val.toLocaleString("en-IN")}`;
+  const v = `${rupee()}${val.toLocaleString("en-IN")}`;
   ctx.page.drawText(v, {
     x: PAGE_W - MARGIN - f.widthOfTextAtSize(v, 9.5),
     y: ctx.y - 10,

@@ -28,7 +28,12 @@ import {
   HIGHLIGHT_PRESETS,
   type HighlightSectionPreset,
 } from "@/lib/court-image/schema";
-import { resolveColorName, knownColorNames } from "@/lib/court-image/color-names";
+import {
+  resolveColorName,
+  knownColorNames,
+  FITOVERSE_BRAND_COLORS,
+  colorsTooClose,
+} from "@/lib/court-image/color-names";
 
 type Props = {
   element: Element;
@@ -36,6 +41,9 @@ type Props = {
   onDelete: () => void;
   onDuplicate: () => void;
   onMoveZ: (direction: -1 | 1) => void;
+  // P1-10: center the selected element on the plot (needs plot dims, which
+  // live in the wizard) — axis "h" = along length, "v" = along width.
+  onAlign?: (axis: "h" | "v" | "both") => void;
   // Called when sales clicks a "Highlight section" preset in the
   // inspector. Only reachable from court-element panels
   // (basketball / pickleball / tennis / badminton / volleyball).
@@ -48,6 +56,7 @@ export default function ElementInspector({
   onDelete,
   onDuplicate,
   onMoveZ,
+  onAlign,
   onAddHighlightFromPreset,
 }: Props) {
   return (
@@ -115,6 +124,28 @@ export default function ElementInspector({
             onChange={(v) => onUpdate({ rotation: v })}
             step={5}
           />
+        </div>
+        {/* P1-10: center-on-plot + rotation-snap chips for the selected element. */}
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {onAlign && (
+            <>
+              <button type="button" onClick={() => onAlign("h")} className="px-2 py-1 text-[11px] rounded border border-slate-200 text-slate-600 hover:bg-slate-100" title="Center on the plot horizontally">Center H</button>
+              <button type="button" onClick={() => onAlign("v")} className="px-2 py-1 text-[11px] rounded border border-slate-200 text-slate-600 hover:bg-slate-100" title="Center on the plot vertically">Center V</button>
+              <button type="button" onClick={() => onAlign("both")} className="px-2 py-1 text-[11px] rounded border border-slate-200 text-slate-600 hover:bg-slate-100" title="Center on the plot">Center</button>
+              <span className="mx-1 h-3.5 w-px bg-slate-200" />
+            </>
+          )}
+          {[0, 45, 90, 180].map((deg) => (
+            <button
+              key={deg}
+              type="button"
+              onClick={() => onUpdate({ rotation: deg })}
+              className="px-1.5 py-1 text-[11px] rounded border border-slate-200 text-slate-600 hover:bg-slate-100"
+              title={`Rotate to ${deg}°`}
+            >
+              {deg}°
+            </button>
+          ))}
         </div>
         <div className="flex items-center justify-between text-[11px] text-slate-600">
           <label className="flex items-center gap-1.5">
@@ -245,6 +276,10 @@ function FootballFields({
           value={element.lineColor ?? "#ffffff"}
           onChange={(v) => onUpdate({ lineColor: v })}
         />
+        <ContrastWarning
+          surface={element.grassColor ?? "#2f8c3e"}
+          line={element.lineColor ?? "#ffffff"}
+        />
       </Section>
     </>
   );
@@ -307,6 +342,10 @@ function CricketFields({
           value={element.markingColor ?? "#fff5e6"}
           onChange={(v) => onUpdate({ markingColor: v })}
         />
+        <ContrastWarning
+          surface={element.pitchColor ?? "#b1683a"}
+          line={element.markingColor ?? "#fff5e6"}
+        />
       </Section>
     </>
   );
@@ -354,6 +393,10 @@ function BasketballFields({
           value={element.lineColor ?? "#fff5e6"}
           onChange={(v) => onUpdate({ lineColor: v })}
         />
+        <ContrastWarning
+          surface={element.surfaceColor ?? "#c97a4b"}
+          line={element.lineColor ?? "#fff5e6"}
+        />
       </Section>
     </>
   );
@@ -393,6 +436,10 @@ function PickleballFields({
           value={element.lineColor ?? "#ffffff"}
           onChange={(v) => onUpdate({ lineColor: v })}
         />
+        <ContrastWarning
+          surface={element.surfaceColor ?? "#3e7fb7"}
+          line={element.lineColor ?? "#ffffff"}
+        />
       </Section>
     </>
   );
@@ -428,6 +475,10 @@ function GenericCourtFields({
         label="Lines"
         value={element.lineColor ?? "#ffffff"}
         onChange={(v) => onUpdate({ lineColor: v })}
+      />
+      <ContrastWarning
+        surface={element.surfaceColor ?? "#5a8a6c"}
+        line={element.lineColor ?? "#ffffff"}
       />
     </Section>
   );
@@ -697,6 +748,10 @@ function NumberInput({
   );
 }
 
+// P5-01: unified, brand-aware colour picker. Every per-element colour field
+// in the inspector routes through this one component, and it always surfaces
+// the Fitoverse brand tokens (green/blue/red) as one-tap swatches so a design
+// stays on-brand without hunting for a hex.
 function ColorInput({
   label,
   value,
@@ -710,21 +765,64 @@ function ColorInput({
   // pass through the original value otherwise so users can keep alpha.
   const hexValue = toHexish(value);
   return (
-    <div className="flex items-center gap-2">
-      <input
-        type="color"
-        value={hexValue}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-9 h-9 rounded border border-slate-300 cursor-pointer p-0.5"
-      />
-      <div className="flex-1">
-        <Label>{label}</Label>
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
         <input
-          value={value}
+          type="color"
+          value={hexValue}
           onChange={(e) => onChange(e.target.value)}
-          className={inputClass + " text-xs font-mono"}
+          className="w-9 h-9 rounded border border-slate-300 cursor-pointer p-0.5"
         />
+        <div className="flex-1">
+          <Label>{label}</Label>
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className={inputClass + " text-xs font-mono"}
+          />
+        </div>
       </div>
+      <div className="flex items-center gap-1 pl-11">
+        {FITOVERSE_BRAND_COLORS.map((b) => {
+          const active = hexValue.toLowerCase() === b.hex.toLowerCase();
+          return (
+            <button
+              key={b.hex}
+              type="button"
+              title={b.name}
+              onClick={() => onChange(b.hex)}
+              className={`w-5 h-5 rounded-full border transition ${
+                active
+                  ? "border-wa-green ring-2 ring-wa-green/40"
+                  : "border-slate-300 hover:border-slate-500"
+              }`}
+              style={{ backgroundColor: b.hex }}
+            />
+          );
+        })}
+        <span className="text-[9.5px] text-slate-400 ml-1">Brand</span>
+      </div>
+    </div>
+  );
+}
+
+// P5-03: line-vs-surface legibility warning shown on a court panel when the
+// two colours are too close to tell apart at a glance.
+function ContrastWarning({
+  surface,
+  line,
+}: {
+  surface: string;
+  line: string;
+}) {
+  if (!colorsTooClose(surface, line)) return null;
+  return (
+    <div className="flex items-start gap-1.5 text-[10.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 leading-snug">
+      <span aria-hidden>⚠</span>
+      <span>
+        Line colour is very close to the surface — markings may be hard to
+        read. Pick a lighter or darker line.
+      </span>
     </div>
   );
 }
@@ -773,6 +871,20 @@ function labelFor(el: Element): string {
       return "Basketball hoop";
     case "highlight-zone":
       return "Highlight zone";
+    case "floodlight":
+      return "Floodlight";
+    case "seating":
+      return "Seating";
+    case "scoreboard":
+      return "Scoreboard";
+    case "sight-screen":
+      return "Sight-screen";
+    case "corner-flag":
+      return "Corner flag";
+    case "gate":
+      return "Gate";
+    case "center-logo":
+      return "Centre logo";
   }
 }
 

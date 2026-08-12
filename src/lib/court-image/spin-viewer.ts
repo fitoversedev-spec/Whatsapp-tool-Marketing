@@ -36,23 +36,25 @@ export function renderSpinViewerHtml(input: {
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>${title} — Fitoverse 3D</title>
 <style>
+  /* P2-03: sky-blue backdrop (matches the 3D scene's sky so the letterbox
+     around the render blends in) + Fitoverse green brand accent (#159341). */
   * { margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
-  html,body { height:100%; background:#0b1220; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
+  html,body { height:100%; background:#8fb8de; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
   #stage { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; touch-action:none; cursor:grab; }
   #stage.grabbing { cursor:grabbing; }
   canvas { max-width:100%; max-height:100%; display:block; }
   .bar { position:fixed; left:0; right:0; padding:12px 16px; color:#fff; pointer-events:none; z-index:2; }
-  .top { top:0; background:linear-gradient(#0b1220e6,#0b122000); }
-  .brand { font-weight:700; font-size:16px; color:#25d366; letter-spacing:.2px; }
+  .top { top:0; background:linear-gradient(#0b1220cc,#0b122000); }
+  .brand { font-weight:700; font-size:16px; color:#159341; letter-spacing:.2px; }
   .ttl { font-size:13px; opacity:.92; margin-top:2px; }
   .sub { font-size:11px; opacity:.6; margin-top:1px; }
   .hint { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); z-index:3;
-    background:#ffffff14; border:1px solid #ffffff2e; color:#fff; font-size:12.5px;
+    background:#0b122033; border:1px solid #ffffff4d; color:#fff; font-size:12.5px;
     padding:8px 16px; border-radius:999px; backdrop-filter:blur(6px);
     transition:opacity .5s; display:flex; gap:8px; align-items:center; }
   .hint.gone { opacity:0; }
-  .dot { width:6px; height:6px; border-radius:50%; background:#25d366; }
-  .load { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:#8aa; font-size:13px; z-index:5; background:#0b1220; }
+  .dot { width:6px; height:6px; border-radius:50%; background:#159341; }
+  .load { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:#0f2a44; font-size:13px; z-index:5; background:#8fb8de; }
 </style>
 </head>
 <body>

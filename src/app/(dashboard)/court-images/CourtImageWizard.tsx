@@ -19,6 +19,8 @@ import DesignAttachments, {
 import {
   resolveColorName,
   knownColorNames,
+  withBrandColors,
+  colorsTooClose,
 } from "@/lib/court-image/color-names";
 import type { CourtCanvasHandle } from "@/components/court-image/CourtCanvas";
 import type { CourtCanvas3DHandle, CourtView } from "@/components/court-image/CourtCanvas3D";
@@ -40,10 +42,17 @@ import {
   newGoalPost,
   newHighlightZone,
   newRunOffHighlightZone,
+  applyColorScheme,
+  applyTemplateExtras,
+  COLOR_SCHEMES,
+  STARTER_TEMPLATES,
+  FINISH_MATERIAL,
   SPORT_LABEL,
   type CourtLayout,
   type Element,
   type Sport,
+  type SurfaceFinish,
+  type StarterTemplate,
 } from "@/lib/court-image/schema";
 import { presetsForSports, type CourtPreset } from "@/lib/court-image/sport-standards";
 import {
@@ -309,7 +318,9 @@ function buildQuotePayload(
 // Ready-made playing-surface colours for the dedicated "Court colour"
 // picker. Sales can still type any custom hex. Applies to every sport that
 // has a coloured hard court (i.e. all except football & cricket turf).
-const COURT_COLORS: { name: string; hex: string }[] = [
+// P5-01: brand tokens (#159341 / #73CAF0 / #C81124) are prepended via
+// withBrandColors so every court-colour picker leads with the on-brand swatches.
+const COURT_COLORS: { name: string; hex: string }[] = withBrandColors([
   { name: "Sport Blue", hex: "#1E60A8" },
   { name: "Sky Blue", hex: "#3E7FB7" },
   { name: "Teal", hex: "#1E8A8A" },
@@ -320,7 +331,7 @@ const COURT_COLORS: { name: string; hex: string }[] = [
   { name: "Sand", hex: "#C97A4B" },
   { name: "Purple", hex: "#6C3FA4" },
   { name: "Slate Grey", hex: "#556070" },
-];
+]);
 
 // Collapsible sidebar section — a titled header (with a chevron) that
 // expands/collapses its body. Used to categorise the Design panel so it
@@ -345,6 +356,154 @@ function ShapeThumb({ kind }: { kind: TurfShapeKind }) {
     <svg viewBox={`-1 -1 ${w + 2} ${h + 2}`} width={w} height={h} aria-hidden>
       <path d={d} fill="#3f7a34" stroke="#2c5824" strokeWidth={1.5} />
     </svg>
+  );
+}
+
+// P5-02: a small visual preview of a surface finish, derived from the shared
+// FINISH_MATERIAL registry so the swatch always matches what the canvas paints
+// (PPE grid, sheen acrylic, striped turf, speckled PVC). Mirrors the ShapeThumb
+// pattern above so the two pickers read consistently.
+function MaterialSwatch({ finish }: { finish: SurfaceFinish }) {
+  const mat = FINISH_MATERIAL[finish];
+  const base =
+    mat.solidColor ??
+    (finish === "ppe_tile_red" ? "#b93430" : finish === "plain" ? "#9c845b" : "#64748b");
+  const w = 100;
+  const h = 40;
+  const uid = `ms-${finish}`;
+
+  // Artificial grass — alternating light/dark mow stripes.
+  if (finish === "turf_40mm" || finish === "turf_50mm") {
+    const light = mat.stripeColors?.light ?? "#42a854";
+    const dark = mat.stripeColors?.dark ?? "#20602a";
+    const n = 7;
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-10 block" aria-hidden>
+        {Array.from({ length: n }).map((_, i) => (
+          <rect
+            key={i}
+            x={(w / n) * i}
+            y={0}
+            width={w / n + 0.5}
+            height={h}
+            fill={i % 2 === 0 ? light : dark}
+          />
+        ))}
+      </svg>
+    );
+  }
+
+  // Interlocking PPE tile — red base with a 30 cm grid.
+  if (finish === "ppe_tile_red") {
+    const cols = 7;
+    const rows = 3;
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-10 block" aria-hidden>
+        <rect x={0} y={0} width={w} height={h} fill={base} />
+        {Array.from({ length: cols - 1 }).map((_, i) => (
+          <line
+            key={`v${i}`}
+            x1={(w / cols) * (i + 1)}
+            y1={0}
+            x2={(w / cols) * (i + 1)}
+            y2={h}
+            stroke="rgba(0,0,0,0.28)"
+            strokeWidth={1}
+          />
+        ))}
+        {Array.from({ length: rows - 1 }).map((_, i) => (
+          <line
+            key={`h${i}`}
+            x1={0}
+            y1={(h / rows) * (i + 1)}
+            x2={w}
+            y2={(h / rows) * (i + 1)}
+            stroke="rgba(0,0,0,0.28)"
+            strokeWidth={1}
+          />
+        ))}
+      </svg>
+    );
+  }
+
+  // PVC sports floor — solid with subtle speckle.
+  if (finish === "pvc_sports") {
+    const dots = [
+      [12, 10], [30, 26], [48, 8], [66, 22], [82, 14], [22, 30], [58, 32], [90, 30], [40, 18], [74, 6],
+    ];
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-10 block" aria-hidden>
+        <rect x={0} y={0} width={w} height={h} fill={base} />
+        {dots.map(([cxp, cyp], i) => (
+          <circle
+            key={i}
+            cx={cxp}
+            cy={cyp}
+            r={1.6}
+            fill={i % 2 === 0 ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.22)"}
+          />
+        ))}
+      </svg>
+    );
+  }
+
+  // Acrylic hard-court — solid coat with a diagonal sheen band.
+  if (finish === "acrylic_blue" || finish === "acrylic_green") {
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-10 block" aria-hidden>
+        <defs>
+          <linearGradient id={uid} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.35)" />
+            <stop offset="45%" stopColor="rgba(255,255,255,0)" />
+          </linearGradient>
+        </defs>
+        <rect x={0} y={0} width={w} height={h} fill={base} />
+        <rect x={0} y={0} width={w} height={h} fill={`url(#${uid})`} />
+      </svg>
+    );
+  }
+
+  // Plain earth / fallback — flat colour.
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-10 block" aria-hidden>
+      <rect x={0} y={0} width={w} height={h} fill={base} />
+    </svg>
+  );
+}
+
+// A selectable surface tile: material preview + label, used by both the
+// Step-1 "Surface appearance" grid and the Step-2 "Flooring options" picker.
+function SurfaceSwatchButton({
+  finish,
+  label,
+  active,
+  onClick,
+}: {
+  finish: SurfaceFinish;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      className={`rounded-lg border-2 overflow-hidden text-left transition ${
+        active
+          ? "border-wa-green ring-2 ring-wa-green/30"
+          : "border-slate-200 hover:border-slate-400"
+      }`}
+    >
+      <MaterialSwatch finish={finish} />
+      <div
+        className={`px-2 py-1 text-[11px] font-medium leading-tight ${
+          active ? "text-wa-dark bg-wa-green/10" : "text-slate-700 bg-white"
+        }`}
+      >
+        {label}
+      </div>
+    </button>
   );
 }
 
@@ -594,16 +753,16 @@ function ColorPickerSection({
 
 // Cricket pitch presets — Blue + Red lead (per V1), plus the classic clay /
 // green / sand options.
-const CRICKET_PITCH_COLORS = [
+const CRICKET_PITCH_COLORS = withBrandColors([
   { name: "Blue", hex: "#1E60A8" },
   { name: "Red", hex: "#B83227" },
   { name: "Green", hex: "#2F7D52" },
   { name: "Clay", hex: "#B1683A" },
   { name: "Sand", hex: "#C4A66A" },
-];
+]);
 
 // Palettes for the factor colour pickers.
-const MARKING_COLORS = [
+const MARKING_COLORS = withBrandColors([
   { name: "White", hex: "#FFFFFF" },
   { name: "Yellow", hex: "#EAB308" },
   { name: "Red", hex: "#DC2626" },
@@ -614,7 +773,7 @@ const MARKING_COLORS = [
   { name: "Sky", hex: "#0EA5E9" },
   { name: "Purple", hex: "#7C3AED" },
   { name: "Sand", hex: "#C4A66A" },
-];
+]);
 
 // Line-marking colour control. Single court → one picker (global lineColor).
 // Multiple courts → one compact picker PER court, labelled by sport, so each
@@ -776,6 +935,108 @@ function CourtColourSection({
   );
 }
 
+// P5-01: one-click colour schemes. Applies a coordinated (surface + line +
+// run-off) palette to the WHOLE design in one tap, led by the Fitoverse brand
+// tokens (green/blue/red). Recolours every court element + the plot style via
+// applyColorScheme so a non-designer lands on a legible, on-brand look.
+function ColorSchemeSection({
+  onApply,
+}: {
+  onApply: (schemeId: string) => void;
+}) {
+  return (
+    <CollapsibleSection
+      title="Colour scheme"
+      hint="One tap recolours the whole design to a coordinated, on-brand palette. Fine-tune individual colours below afterwards."
+      defaultOpen
+    >
+      <div className="grid grid-cols-1 gap-1.5">
+        {COLOR_SCHEMES.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => onApply(s.id)}
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition text-left"
+            title={`Apply ${s.name}`}
+          >
+            <span className="flex gap-0.5 shrink-0">
+              <span
+                className="w-4 h-4 rounded-sm border border-slate-300"
+                style={{ backgroundColor: s.surface }}
+              />
+              <span
+                className="w-4 h-4 rounded-sm border border-slate-300"
+                style={{ backgroundColor: s.line }}
+              />
+              <span
+                className="w-4 h-4 rounded-sm border border-slate-300"
+                style={{ backgroundColor: s.runOff }}
+              />
+            </span>
+            <span className="text-[11.5px] font-medium text-slate-700">
+              {s.name}
+            </span>
+          </button>
+        ))}
+      </div>
+    </CollapsibleSection>
+  );
+}
+
+// P5-03: legibility guardrail. Scans every court's line-vs-surface colour pair
+// and warns when any is too close to read at a glance (WCAG contrast floor).
+// Only fires on hex pairs — rgba()/name colours are skipped, not flagged.
+function DesignContrastWarning({ layout }: { layout: CourtLayout }) {
+  const styleLine = layout.style.lineColor;
+  const surfaceOverride = layout.style.surfaceColorOverride;
+  const muddy: string[] = [];
+  for (const el of layout.elements) {
+    let surface: string | undefined;
+    let line: string | undefined;
+    let label = "Court";
+    if (el.type === "football-field") {
+      surface = el.grassColor ?? layout.style.grassColor;
+      line = el.lineColor ?? styleLine;
+      label = SPORT_LABEL.football;
+    } else if (el.type === "cricket-pitch") {
+      surface = el.pitchColor ?? layout.style.cricketPitchColor;
+      line = el.markingColor ?? styleLine;
+      label = "Cricket pitch";
+    } else if (
+      el.type === "basketball-court" ||
+      el.type === "pickleball-court" ||
+      el.type === "generic-court"
+    ) {
+      surface =
+        (el as { surfaceColor?: string }).surfaceColor ?? surfaceOverride;
+      line = (el as { lineColor?: string }).lineColor ?? styleLine;
+      label =
+        el.type === "basketball-court"
+          ? SPORT_LABEL.basketball
+          : el.type === "pickleball-court"
+            ? SPORT_LABEL.pickleball
+            : "sport" in el
+              ? SPORT_LABEL[el.sport as Sport] ?? "Court"
+              : "Court";
+    } else {
+      continue;
+    }
+    if (surface && line && colorsTooClose(surface, line)) {
+      if (!muddy.includes(label)) muddy.push(label);
+    }
+  }
+  if (muddy.length === 0) return null;
+  return (
+    <div className="flex items-start gap-1.5 text-[10.5px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2 leading-snug">
+      <span aria-hidden>⚠</span>
+      <span>
+        Low line/surface contrast on {muddy.join(", ")} — markings may be hard
+        to read. Pick a lighter or darker line colour below.
+      </span>
+    </div>
+  );
+}
+
 // Sports the wizard can lay out. "multisport" is a base surface; others
 // are stacked or substituted depending on combinations.
 const SPORTS: Sport[] = [
@@ -838,6 +1099,13 @@ export default function CourtImageWizard({
     id: string;
     name: string;
   } | null>(null);
+  // P5-04: which starter template (if any) the user picked in Step 1. Drives
+  // the extra equipment + colour scheme layered on at the Step 1 → Step 2
+  // hand-off (applyTemplateExtras). Cleared when the user diverges (manually
+  // toggles a sport or surface).
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
+    null,
+  );
 
   // Step 2 state
   const [layout, setLayout] = useState<CourtLayout | null>(null);
@@ -1027,17 +1295,100 @@ export default function CourtImageWizard({
     if (step !== 2) return;
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // P1-07: undo / redo.
+      if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) {
+        e.preventDefault();
+        redo();
+        return;
+      }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
         e.preventDefault();
         removeElement(selectedId);
       } else if (e.key === "Escape") {
         setSelectedId(null);
+      } else if (
+        selectedId &&
+        (e.key === "ArrowUp" ||
+          e.key === "ArrowDown" ||
+          e.key === "ArrowLeft" ||
+          e.key === "ArrowRight")
+      ) {
+        // P1-10: arrow-key nudge (1 ft, Shift = 10 ft).
+        e.preventDefault();
+        const d = e.shiftKey ? 10 : 1;
+        const dx = e.key === "ArrowLeft" ? -d : e.key === "ArrowRight" ? d : 0;
+        const dy = e.key === "ArrowUp" ? -d : e.key === "ArrowDown" ? d : 0;
+        nudgeElement(selectedId, dx, dy);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, selectedId]);
+
+  // ── P1-07: undo / redo history ──────────────────────────────────────
+  // Ring buffer of layout snapshots. We record the PREVIOUS layout whenever
+  // `layout` changes to a new object (any element op), and skip changes that
+  // came from an undo/redo restore — so every existing setLayout call site is
+  // left untouched.
+  const undoStackRef = useRef<CourtLayout[]>([]);
+  const redoStackRef = useRef<CourtLayout[]>([]);
+  const restoringRef = useRef(false);
+  const prevLayoutRef = useRef<CourtLayout | null>(null);
+  const [, forceHistoryRerender] = useState(0);
+
+  useEffect(() => {
+    if (restoringRef.current) {
+      restoringRef.current = false;
+      prevLayoutRef.current = layout;
+      return;
+    }
+    const prev = prevLayoutRef.current;
+    if (prev && layout && prev !== layout) {
+      undoStackRef.current.push(prev);
+      if (undoStackRef.current.length > 60) undoStackRef.current.shift();
+      redoStackRef.current = [];
+      forceHistoryRerender((t) => t + 1);
+    }
+    prevLayoutRef.current = layout;
+  }, [layout]);
+
+  function undo() {
+    const prev = undoStackRef.current.pop();
+    if (prev === undefined) return;
+    if (prevLayoutRef.current) redoStackRef.current.push(prevLayoutRef.current);
+    restoringRef.current = true;
+    setLayout(prev);
+    forceHistoryRerender((t) => t + 1);
+  }
+  function redo() {
+    const next = redoStackRef.current.pop();
+    if (next === undefined) return;
+    if (prevLayoutRef.current) undoStackRef.current.push(prevLayoutRef.current);
+    restoringRef.current = true;
+    setLayout(next);
+    forceHistoryRerender((t) => t + 1);
+  }
+
+  // P1-10: move the selected element by a whole-foot delta (arrow-key nudge).
+  function nudgeElement(id: string, dx: number, dy: number) {
+    setLayout((prev) =>
+      prev
+        ? {
+            ...prev,
+            elements: prev.elements.map((el) =>
+              el.id === id ? ({ ...el, x: el.x + dx, y: el.y + dy } as Element) : el,
+            ),
+          }
+        : prev,
+    );
+  }
 
   // ─────────────────────────────────────────────
   //  Step transitions
@@ -1112,7 +1463,15 @@ export default function CourtImageWizard({
           }
         : {}),
     };
-    setLayout(initial);
+    // P5-04: if a starter template was picked, layer on its extras (perimeter
+    // fence, dugouts, colour scheme) so the design opens as a finished, on-brand
+    // facility. Applied last so it composes on top of the built layout + surface.
+    let seeded = initial;
+    if (selectedTemplateId) {
+      const template = STARTER_TEMPLATES.find((t) => t.id === selectedTemplateId);
+      if (template) seeded = applyTemplateExtras(initial, template);
+    }
+    setLayout(seeded);
     setSelectedId(null);
     setStep(2);
   }
@@ -1930,6 +2289,8 @@ export default function CourtImageWizard({
               setBaseWork={setBaseWork}
               flooringProduct={flooringProduct}
               setFlooringProduct={setFlooringProduct}
+              selectedTemplateId={selectedTemplateId}
+              setSelectedTemplateId={setSelectedTemplateId}
             />
           )}
 
@@ -2215,6 +2576,20 @@ export default function CourtImageWizard({
                   </CollapsibleSection>
                 )}
 
+                {/* P5-01: one-click colour scheme — recolours the whole design
+                    to a coordinated, on-brand palette. */}
+                <ColorSchemeSection
+                  onApply={(schemeId) => {
+                    const scheme = COLOR_SCHEMES.find((s) => s.id === schemeId);
+                    if (scheme)
+                      setLayout((l) => (l ? applyColorScheme(l, scheme) : l));
+                  }}
+                />
+
+                {/* P5-03: warn if any court's line colour is too close to its
+                    surface to read. */}
+                <DesignContrastWarning layout={layout} />
+
                 {/* Court colour — one picker for a single court, or ONE PER
                     SPORT on a multi-sport plot (like line marking). Hidden for
                     pure turf sports (football / cricket), which use grass. */}
@@ -2425,27 +2800,23 @@ export default function CourtImageWizard({
                   hint="Pick the flooring / surface finish. The grid overlay auto-shows for PP tile only."
                 >
                   <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    {/* Step-2 finishes come from the SAME surface↔sport matrix
-                        as Step 1 (surfaceOptionsForSports / SPORT_SURFACES), so
-                        the two pickers can never disagree. */}
+                  {/* P5-02: visual material swatch tiles. Step-2 finishes come
+                      from the SAME surface↔sport matrix as Step 1
+                      (surfaceOptionsForSports / SPORT_SURFACES) so the two
+                      pickers can never disagree. */}
+                  <div className="grid grid-cols-2 gap-2">
                     {surfaceOptionsForSports(layout.sports as Sport[]).map((opt) => (
-                      <button
+                      <SurfaceSwatchButton
                         key={opt.id}
-                        type="button"
+                        finish={opt.id}
+                        label={opt.label}
+                        active={layout.style.surface === opt.id}
                         onClick={() =>
                           setLayout((l) =>
                             l ? { ...l, style: { ...l.style, surface: opt.id } } : l
                           )
                         }
-                        className={`px-3 py-1.5 text-xs rounded-md border transition ${
-                          layout.style.surface === opt.id
-                            ? "bg-wa-green text-white border-wa-green"
-                            : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
+                      />
                     ))}
                   </div>
                   {isTiledSurface(layout.style.surface) && (
@@ -2741,6 +3112,15 @@ export default function CourtImageWizard({
                       onDelete={() => removeElement(selectedElement.id)}
                       onDuplicate={() => duplicateElement(selectedElement.id)}
                       onMoveZ={(d) => moveZ(selectedElement.id, d)}
+                      onAlign={(axis) => {
+                        if (!layout) return;
+                        const patch: Partial<Element> = {};
+                        if (axis === "h" || axis === "both")
+                          patch.x = layout.plot.lengthFt / 2;
+                        if (axis === "v" || axis === "both")
+                          patch.y = layout.plot.widthFt / 2;
+                        updateElement(selectedElement.id, patch);
+                      }}
                     />
                   </div>
                 )}
@@ -2769,6 +3149,26 @@ export default function CourtImageWizard({
                   canvasHeight={canvasSize.height}
                   showGrid={isTiledSurface(layout.style.surface)}
                 />
+                <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={undo}
+                    disabled={undoStackRef.current.length === 0}
+                    className="bg-white/90 backdrop-blur rounded-md px-2 py-1 text-[11px] text-slate-700 shadow-sm hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Undo (Ctrl+Z)"
+                  >
+                    ↶ Undo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={redo}
+                    disabled={redoStackRef.current.length === 0}
+                    className="bg-white/90 backdrop-blur rounded-md px-2 py-1 text-[11px] text-slate-700 shadow-sm hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Redo (Ctrl+Shift+Z)"
+                  >
+                    ↷ Redo
+                  </button>
+                </div>
                 <div className="absolute top-3 left-3 bg-white/90 backdrop-blur rounded-md px-2.5 py-1 text-[11px] text-slate-700 shadow-sm">
                   <div>
                     Plot {layout.plot.lengthFt} × {layout.plot.widthFt} ft
@@ -2785,7 +3185,8 @@ export default function CourtImageWizard({
                         "generic-court",
                       ].includes(e.type),
                     );
-                    if (!primary || !("width" in primary)) return null;
+                    if (!primary || !("width" in primary) || !("height" in primary))
+                      return null;
                     return (
                       <div className="text-slate-500">
                         Playing {Math.round(primary.width)} ×{" "}
@@ -2851,6 +3252,24 @@ export default function CourtImageWizard({
                   (await h.captureSpinFrames({ frames: 6, onProgress })) ?? null
                 );
               }}
+              onCaptureSpin={async (onProgress) => {
+                // P2-03: mount the 3D scene, then capture a full 36-frame
+                // (10°/step) high-quality spin for the self-contained
+                // drag-to-rotate HTML file sent over WhatsApp.
+                setPreviewMode("3d-image");
+                await new Promise((r) => setTimeout(r, 1400));
+                const h = canvas3dRef.current;
+                if (!h) return null;
+                return (
+                  (await h.captureSpinFrames({
+                    frames: 36,
+                    quality: 0.9,
+                    maxWidth: 1440,
+                    onProgress,
+                  })) ?? null
+                );
+              }}
+              conversationId={prefill?.conversationId ?? null}
               onUploadVideo={async () => {
                 if (!videoBlob) return null;
                 try {
@@ -3060,6 +3479,8 @@ function Step1(props: {
   setBaseWork: (v: "" | "concrete" | "asphalt") => void;
   flooringProduct: { id: string; name: string } | null;
   setFlooringProduct: (v: { id: string; name: string } | null) => void;
+  selectedTemplateId: string | null;
+  setSelectedTemplateId: (v: string | null) => void;
 }) {
   const { unit, setUnit } = useUserUnit();
   const {
@@ -3097,6 +3518,8 @@ function Step1(props: {
     setBaseWork,
     flooringProduct,
     setFlooringProduct,
+    selectedTemplateId,
+    setSelectedTemplateId,
   } = props;
 
   // One selected dimension preset PER sport, so a multi-sport design can use a
@@ -3144,6 +3567,8 @@ function Step1(props: {
   }, [primarySportForFlooring]);
 
   function toggleSport(sport: Sport) {
+    // Manually changing the sport diverges from any picked starter template.
+    setSelectedTemplateId(null);
     const next = selectedSports.includes(sport)
       ? selectedSports.filter((s) => s !== sport)
       : [...selectedSports, sport];
@@ -3234,8 +3659,78 @@ function Step1(props: {
     setLengthFt(Math.max(3, Math.round(l)));
   }
 
+  // P5-04: one click seeds every Step-1 field from a starter template (plot,
+  // sports, surface, sport config). The extra equipment + colour scheme are
+  // layered on at the Step 1 → Step 2 hand-off (applyTemplateExtras), keyed by
+  // selectedTemplateId. Sales fills the customer name, then hits "Design →".
+  function applyTemplate(t: StarterTemplate) {
+    setDesignMode("standard");
+    setSelectedSports(t.sports);
+    setLengthFt(t.plot.lengthFt);
+    setWidthFt(t.plot.widthFt);
+    setInitialSurface(t.surface);
+    if (t.footballASide) setFootballASide(t.footballASide);
+    if (typeof t.basketballHalfCourt === "boolean")
+      setBasketballHalfCourt(t.basketballHalfCourt);
+    if (t.cricketStripM) setCricketStripM(t.cricketStripM);
+    setSelectedTemplateId(t.id);
+  }
+
   return (
     <div className="p-6 sm:p-8 overflow-y-auto h-full max-w-3xl mx-auto space-y-6">
+      {/* P5-04: Starter-template gallery — pick a ready-made, on-brand facility
+          to seed the whole Step-1 form in one click. */}
+      <section>
+        <h3 className="text-sm font-semibold text-slate-900 mb-1">
+          Start from a template{" "}
+          <span className="text-xs font-normal text-slate-500">(optional)</span>
+        </h3>
+        <p className="text-[11px] text-slate-500 mb-3 leading-snug">
+          Seeds the plot, sports, surface and equipment for a finished layout.
+          You can tweak everything afterwards.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {STARTER_TEMPLATES.map((t) => {
+            const active = selectedTemplateId === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => applyTemplate(t)}
+                className={`text-left rounded-lg border-2 overflow-hidden transition ${
+                  active
+                    ? "border-wa-green ring-2 ring-wa-green/30"
+                    : "border-slate-200 hover:border-slate-400"
+                }`}
+              >
+                <MaterialSwatch finish={t.surface} />
+                <div className="px-2 py-1.5">
+                  <div
+                    className={`text-[11.5px] font-semibold leading-tight ${
+                      active ? "text-wa-dark" : "text-slate-800"
+                    }`}
+                  >
+                    {t.name}
+                  </div>
+                  <div className="text-[10px] text-slate-500 leading-snug mt-0.5">
+                    {t.blurb}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {selectedTemplateId && (
+          <button
+            type="button"
+            onClick={() => setSelectedTemplateId(null)}
+            className="mt-2 text-[10.5px] text-slate-500 hover:text-slate-700 underline"
+          >
+            Clear template
+          </button>
+        )}
+      </section>
+
       {/* Design mode — standard preset court, or free-form custom
           shape. Custom is a placeholder for now; the free-form editor
           will land in a later release. */}
@@ -3814,20 +4309,20 @@ function Step1(props: {
         <h3 className="text-sm font-semibold text-slate-900 mb-3">
           Surface appearance
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {/* P5-02: visual material swatch tiles (PPE grid / sheen acrylic /
+            striped turf / speckle PVC) instead of text-only buttons. */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {surfaceOptionsForSports(selectedSports).map((opt) => (
-            <button
+            <SurfaceSwatchButton
               key={opt.id}
-              type="button"
-              onClick={() => setInitialSurface(opt.id)}
-              className={`px-3 py-2 text-xs rounded-md border transition text-left ${
-                initialSurface === opt.id
-                  ? "bg-wa-green/10 border-wa-green text-wa-dark font-medium"
-                  : "bg-white border-slate-300 text-slate-700 hover:border-slate-400"
-              }`}
-            >
-              {opt.label}
-            </button>
+              finish={opt.id}
+              label={opt.label}
+              active={initialSurface === opt.id}
+              onClick={() => {
+                setInitialSurface(opt.id);
+                setSelectedTemplateId(null);
+              }}
+            />
           ))}
         </div>
         <div className="text-[11px] text-slate-500 mt-2">
@@ -4375,6 +4870,8 @@ function Step3({
   quoteNotes,
   quoteItems,
   onCaptureAngles,
+  onCaptureSpin,
+  conversationId,
   onUploadVideo,
   onEnsure3D,
   previewMode,
@@ -4409,6 +4906,11 @@ function Step3({
   onCaptureAngles: (
     onProgress?: (fraction: number) => void,
   ) => Promise<string[] | null>;
+  // P2-03: capture a high-quality 360° spin for the drag-to-rotate HTML file.
+  onCaptureSpin: (
+    onProgress?: (fraction: number) => void,
+  ) => Promise<string[] | null>;
+  conversationId: string | null;
   onUploadVideo: () => Promise<string | null>;
   onEnsure3D: () => Promise<string | null>;
   previewMode: "2d" | "3d-image" | "3d-video";
@@ -4627,6 +5129,8 @@ function Step3({
             pngDataUrl3D={pngDataUrl3D}
             onEnsure3D={onEnsure3D}
             onCaptureAngles={onCaptureAngles}
+            onCaptureSpin={onCaptureSpin}
+            conversationId={conversationId}
             onUploadVideo={onUploadVideo}
             onGenerateVideo={onGenerateVideo}
             generatingVideo={generatingVideo}
@@ -4804,6 +5308,8 @@ function CombinedPdfBlock({
   pngDataUrl3D,
   onEnsure3D,
   onCaptureAngles,
+  onCaptureSpin,
+  conversationId,
   onUploadVideo,
   onGenerateVideo,
   generatingVideo,
@@ -4826,6 +5332,11 @@ function CombinedPdfBlock({
   onCaptureAngles: (
     onProgress?: (fraction: number) => void,
   ) => Promise<string[] | null>;
+  // P2-03: capture a 36-frame 360° spin for the drag-to-rotate HTML file.
+  onCaptureSpin: (
+    onProgress?: (fraction: number) => void,
+  ) => Promise<string[] | null>;
+  conversationId: string | null;
   // Upload the generated 3D orbit video, returning its URL so the combined
   // PDF send can also fire the video as a follow-up WhatsApp message.
   onUploadVideo: () => Promise<string | null>;
@@ -4855,6 +5366,49 @@ function CombinedPdfBlock({
   >("");
   const [progress, setProgress] = useState(0);
   const [email, setEmail] = useState("");
+  // P2-03: separate busy/progress for the interactive drag-to-rotate 3D file.
+  const [spinBusy, setSpinBusy] = useState(false);
+  const [spinProgress, setSpinProgress] = useState(0);
+
+  // P2-03: capture a full 360° spin, build the self-contained drag-to-rotate
+  // HTML via /api/court-images/spin-file, and send it to the customer as a
+  // WhatsApp document (opens in any phone browser, rotates offline).
+  async function sendSpinFile() {
+    if (!contactPhone) {
+      toast.error("Add the customer's WhatsApp number first");
+      return;
+    }
+    setSpinBusy(true);
+    setSpinProgress(0);
+    try {
+      const frames = (await onCaptureSpin((f) => setSpinProgress(f))) ?? [];
+      if (frames.length < 2) throw new Error("Could not capture the 3D spin");
+      const r = await fetch("/api/court-images/spin-file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName,
+          plotLabel: `${layout.plot.lengthFt} × ${layout.plot.widthFt} ft`,
+          frames,
+          send: true,
+          contactPhone,
+          conversationId: conversationId ?? undefined,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "spin_failed");
+      toast.success(
+        j.sent
+          ? "Interactive 3D file sent on WhatsApp"
+          : "Built (send failed — check the number)",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setSpinBusy(false);
+      setSpinProgress(0);
+    }
+  }
 
   const att = layout.attachments ?? {
     productIds: [],
@@ -5091,11 +5645,32 @@ function CombinedPdfBlock({
       <button
         type="button"
         onClick={() => build("send")}
-        disabled={!!busy || !pngDataUrl2D || !contactPhone}
+        disabled={!!busy || spinBusy || !pngDataUrl2D || !contactPhone}
         className="w-full text-sm font-semibold bg-wa-green hover:bg-wa-green/90 text-white rounded-md px-3 py-2.5 disabled:opacity-50"
       >
         {busy === "send" ? "Sending…" : "📤 Send on WhatsApp"}
       </button>
+      {/* P2-03: interactive drag-to-rotate 3D file — captured live from the 3D
+          scene, built server-side, and sent as a WhatsApp document that spins
+          in any phone browser (offline, no hosting). */}
+      <button
+        type="button"
+        onClick={sendSpinFile}
+        disabled={!!busy || spinBusy || !contactPhone}
+        className="w-full text-xs font-medium border border-wa-green/40 text-wa-dark hover:bg-wa-green/10 rounded-md px-3 py-2 disabled:opacity-50"
+      >
+        {spinBusy
+          ? `Building 3D spin… ${Math.round(spinProgress * 100)}%`
+          : "🔄 Send interactive 3D (drag-to-rotate)"}
+      </button>
+      {spinBusy && (
+        <div className="h-1.5 bg-wa-green/15 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-wa-green transition-all"
+            style={{ width: `${spinProgress * 100}%` }}
+          />
+        </div>
+      )}
       {/* Email delivery — sends the PDF as an attachment. */}
       <div className="flex gap-2">
         <input
@@ -5333,6 +5908,20 @@ function shortLabel(el: Element): string {
       return "Hoop";
     case "highlight-zone":
       return "Highlight zone";
+    case "floodlight":
+      return "Floodlight";
+    case "seating":
+      return "Seating";
+    case "scoreboard":
+      return "Scoreboard";
+    case "sight-screen":
+      return "Sight-screen";
+    case "corner-flag":
+      return "Corner flag";
+    case "gate":
+      return "Gate";
+    case "center-logo":
+      return "Centre logo";
   }
 }
 

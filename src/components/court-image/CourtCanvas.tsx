@@ -43,11 +43,19 @@ import type {
   DugoutElement,
   BasketballHoopElement,
   HighlightZoneElement,
+  FloodlightElement,
+  SeatingElement,
+  ScoreboardElement,
+  SightScreenElement,
+  CornerFlagElement,
+  GateElement,
+  CenterLogoElement,
 } from "@/lib/court-image/schema";
 import {
   aSideProps,
   SURFACE_IMAGE_URL,
   SURFACE_SOLID_COLOR,
+  SURFACE_TILE_METERS,
   TURF_IMAGE_URLS,
   TURF_STRIPE_COLORS,
   TURF_ROLL_WIDTH_M,
@@ -71,6 +79,7 @@ import {
   type DesignAreas,
   type Sport,
 } from "@/lib/court-image/schema";
+import { buildLegend, LINE_BREAK_MM } from "@/lib/court-image/line-marking";
 
 export type CourtCanvasHandle = {
   // Exports the current canvas state to a PNG dataURL at the given pixel
@@ -125,6 +134,10 @@ export default function CourtCanvas({
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const shapeRefs = useRef<Record<string, Konva.Group>>({});
+  // P1-08: dedicated overlay layer for the temporary magenta alignment guides.
+  // Guides are drawn imperatively during a drag (no React re-render of every
+  // element per mouse-move) and cleared on drag end.
+  const guideLayerRef = useRef<Konva.Layer>(null);
 
   // Plot-to-canvas conversion. We compute a single scale so the plot fills
   // as much of the canvas as possible while preserving aspect ratio.
@@ -174,6 +187,82 @@ export default function CourtCanvas({
   }
   function fromCanvasY(canvasY: number): number {
     return layout.plot.widthFt - (canvasY - plotOriginY) / pxPerFt;
+  }
+
+  // P1-08: canvas-space snap anchors for the alignment guides — the plot's
+  // centre + four edges, plus every element's centre. `id` lets the dragged
+  // element exclude its own anchor so it never snaps to where it started.
+  // Kept in canvas px so the drag handler can compare against node.x()/y()
+  // directly without re-converting on every mouse-move.
+  const alignAnchors = useMemo(() => {
+    const lenFt = layout.plot.lengthFt;
+    const widFt = layout.plot.widthFt;
+    const xs: { id: string; v: number }[] = [
+      { id: "__plot", v: plotOriginX + (lenFt / 2) * pxPerFt },
+      { id: "__plot", v: plotOriginX },
+      { id: "__plot", v: plotOriginX + plotPxWidth },
+    ];
+    const ys: { id: string; v: number }[] = [
+      { id: "__plot", v: plotOriginY + (widFt / 2) * pxPerFt },
+      { id: "__plot", v: plotOriginY },
+      { id: "__plot", v: plotOriginY + plotPxHeight },
+    ];
+    for (const el of layout.elements) {
+      xs.push({ id: el.id, v: plotOriginX + el.x * pxPerFt });
+      ys.push({ id: el.id, v: plotOriginY + (widFt - el.y) * pxPerFt });
+    }
+    return { xs, ys };
+  }, [
+    layout.elements,
+    layout.plot.lengthFt,
+    layout.plot.widthFt,
+    plotOriginX,
+    plotOriginY,
+    plotPxWidth,
+    plotPxHeight,
+    pxPerFt,
+  ]);
+
+  // Draw / clear the magenta alignment guides on the overlay layer. Vertical
+  // guides span the plot height, horizontal guides span the plot width. Drawn
+  // imperatively (Konva nodes, not JSX) so a live drag doesn't re-render React.
+  function drawGuides(g: { x: number[]; y: number[] }) {
+    const layer = guideLayerRef.current;
+    if (!layer) return;
+    layer.destroyChildren();
+    const top = plotOriginY;
+    const bottom = plotOriginY + plotPxHeight;
+    const left = plotOriginX;
+    const right = plotOriginX + plotPxWidth;
+    for (const x of g.x) {
+      layer.add(
+        new Konva.Line({
+          points: [x, top, x, bottom],
+          stroke: "#ff2fd6",
+          strokeWidth: 1,
+          dash: [4, 4],
+          listening: false,
+        }),
+      );
+    }
+    for (const y of g.y) {
+      layer.add(
+        new Konva.Line({
+          points: [left, y, right, y],
+          stroke: "#ff2fd6",
+          strokeWidth: 1,
+          dash: [4, 4],
+          listening: false,
+        }),
+      );
+    }
+    layer.batchDraw();
+  }
+  function clearGuides() {
+    const layer = guideLayerRef.current;
+    if (!layer) return;
+    layer.destroyChildren();
+    layer.batchDraw();
   }
 
   // Track latest selectedId in a ref so the toDataURL closure can use it
@@ -267,6 +356,51 @@ export default function CourtCanvas({
     return map;
   }, [layout.elements]);
 
+  // P2-01: multi-sport line differentiation. Two dead systems from the
+  // line-marking spec are wired here:
+  //   (a) priority line-BREAKS at crossings — each overlaid court renders a
+  //       surface-coloured halo UNDER its own markings; because the concentric
+  //       stack draws the smaller/higher-priority courts last (on top), their
+  //       halo carves a clean gap into the lower-priority lines they cross
+  //       (LINE_BREAK_MM per side), so both sports' markings stay readable.
+  //   (b) an on-canvas colour LEGEND (buildLegend) mapping each sport to its
+  //       actual rendered line colour.
+  const overlayHalo = useMemo(() => {
+    if (new Set(layout.sports).size < 2) return undefined;
+    const s = layout.style;
+    const color =
+      s.surfaceColorOverride ??
+      TILE_SOLID_COLORS[s.surface] ??
+      SURFACE_SOLID_COLOR[s.surface] ??
+      "#2f6d3a";
+    // LINE_BREAK_MM (mm) → canvas px (304.8 mm per foot). At true scale a 22 mm
+    // break is sub-pixel on a plot-wide view, so floor it to a readable gap
+    // (the break exists for legibility at crossings, not literal survey width).
+    const breakPx = Math.max(2, (LINE_BREAK_MM * pxPerFt) / 304.8);
+    return { color, breakPx };
+  }, [layout.sports, layout.style, pxPerFt]);
+
+  // Colour legend for multi-sport plots. Order + labels come from
+  // buildLegend (line-marking priority); each colour is overridden with the
+  // court's ACTUAL rendered line colour so the swatches match the canvas
+  // (including any per-court override).
+  const legend = useMemo(() => {
+    const sportSet = new Set<Sport>();
+    const colorBySport = new Map<Sport, string>();
+    for (const el of layout.elements) {
+      const sp = sportOfElement(el);
+      if (!sp) continue;
+      sportSet.add(sp);
+      const lc = (el as { lineColor?: string }).lineColor;
+      if (lc && !colorBySport.has(sp)) colorBySport.set(sp, lc);
+    }
+    if (sportSet.size < 2) return [];
+    return buildLegend([...sportSet]).map((e) => ({
+      ...e,
+      color: colorBySport.get(e.sport) ?? e.color,
+    }));
+  }, [layout.elements]);
+
   return (
     <Stage
       ref={stageRef}
@@ -334,6 +468,16 @@ export default function CourtCanvas({
           borderColor={layout.style.borderColor}
           primarySport={layout.primarySport ?? layout.sports[0]}
         />
+        {/* P6-02: obstacle marker (kidney tree/pole the boundary curves
+            around). Drawn in the plot layer so it reads as part of the site. */}
+        {layout.plot.obstacle && (
+          <ObstacleMarker
+            x={toCanvasX(layout.plot.obstacle.x)}
+            y={toCanvasY(layout.plot.obstacle.y)}
+            radiusPx={Math.max(6, (layout.plot.obstacle.radiusFt ?? 3) * pxPerFt)}
+            kind={layout.plot.obstacle.kind ?? "tree"}
+          />
+        )}
       </Layer>
 
       {/* Element layer — sorted by z so cricket pitch sits above football.
@@ -371,10 +515,18 @@ export default function CourtCanvas({
             style={layout.style}
             isSelected={selectedId === el.id}
             readOnly={readOnly}
+            overlayHalo={
+              overlayHalo && HALO_COURT_TYPES.has(el.type)
+                ? overlayHalo
+                : undefined
+            }
             labelSide={courtLabelSides[el.id] ?? "left"}
             onSelect={() => onSelect(el.id)}
             onUpdate={(patch) => onUpdate(el.id, patch)}
             onSectionClick={onSectionClick}
+            alignAnchors={alignAnchors}
+            drawGuides={drawGuides}
+            clearGuides={clearGuides}
             registerRef={(node) => {
               if (node) shapeRefs.current[el.id] = node;
               else delete shapeRefs.current[el.id];
@@ -382,6 +534,10 @@ export default function CourtCanvas({
           />
         ))}
       </Layer>
+
+      {/* Alignment-guide overlay (P1-08) — populated imperatively during a
+          drag; empty otherwise. Above the elements so guides stay visible. */}
+      <Layer ref={guideLayerRef} listening={false} />
 
       {/* Tile grid overlay — drawn ABOVE the courts so the PP-tile grid stays
           visible even when a court is given an opaque colour (the bug was the
@@ -423,6 +579,19 @@ export default function CourtCanvas({
         </Layer>
       )}
 
+      {/* P2-01: multi-sport line-colour legend — bottom-left of the plot,
+          keyed to each sport's actual line colour so the customer can tell the
+          overlaid markings apart. Only shown when 2+ sports share the plot. */}
+      {legend.length > 0 && (
+        <Layer listening={false}>
+          <CourtLegend
+            entries={legend}
+            x={plotOriginX + 8}
+            bottom={plotOriginY + plotPxHeight - 8}
+          />
+        </Layer>
+      )}
+
       {/* Watermark layer — bottom-right corner, on top of every element so
           it's always visible in the export. */}
       {layout.style.watermarkUrl && (
@@ -442,7 +611,15 @@ export default function CourtCanvas({
           <Transformer
             ref={transformerRef}
             rotateEnabled={true}
-            keepRatio={false}
+            // P1-09: snap rotation to 45° increments (within 7°) so a court is
+            // never left at a scruffy 37°; and lock the aspect ratio for
+            // regulation court/field types so a corner-drag can't squash them
+            // off-true (run-off is derived, so the playing area must stay true).
+            rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+            rotationSnapTolerance={7}
+            keepRatio={ASPECT_LOCK_TYPES.has(
+              layout.elements.find((e) => e.id === selectedId)?.type ?? "",
+            )}
             boundBoxFunc={(oldBox, newBox) => {
               // Prevent collapsing an element to a truly degenerate box.
               // Previously used a 12x12 minimum which blocked rotation on
@@ -466,6 +643,46 @@ export default function CourtCanvas({
   );
 }
 
+// Regulation court/field types whose aspect ratio must stay true (run-off is
+// derived from the playing area) — the Transformer locks ratio for these (P1-09).
+const ASPECT_LOCK_TYPES = new Set<string>([
+  "football-field",
+  "cricket-pitch",
+  "basketball-court",
+  "pickleball-court",
+  "generic-court",
+]);
+
+// P2-01: map a court element to the sport whose lines it carries — used for the
+// multi-sport legend + crossing-break wiring. Mirrors buildInitialLayout's
+// sportForType (schema.ts).
+function sportOfElement(el: Element): Sport | null {
+  switch (el.type) {
+    case "basketball-court":
+      return "basketball";
+    case "football-field":
+      return "football";
+    case "pickleball-court":
+      return "pickleball";
+    case "cricket-pitch":
+      return "cricket";
+    case "generic-court":
+      return (el as GenericCourtElement).sport;
+    default:
+      return null;
+  }
+}
+
+// P2-01: the concentric-stack court shapes that render a crossing-break halo
+// under their markings. Football is excluded — it's the largest/lowest-priority
+// court (drawn first, at the bottom), so nothing sits beneath it to break; the
+// courts stacked ABOVE it supply the halos that break football's own lines.
+const HALO_COURT_TYPES = new Set<string>([
+  "basketball-court",
+  "pickleball-court",
+  "generic-court",
+]);
+
 // ─────────────────────────────────────────────────────────────────────
 //  Element renderer
 // ─────────────────────────────────────────────────────────────────────
@@ -487,8 +704,20 @@ type ElementShapeProps = {
     court: Element,
     preset: HighlightSectionPreset,
   ) => void;
+  // P1-08: canvas-space snap anchors + imperative guide draw/clear callbacks.
+  alignAnchors?: { xs: { id: string; v: number }[]; ys: { id: string; v: number }[] };
+  drawGuides?: (g: { x: number[]; y: number[] }) => void;
+  clearGuides?: () => void;
   registerRef: (node: Konva.Group | null) => void;
+  // P2-01: when set (multi-sport plots), overlaid courts render a
+  // surface-coloured halo under their markings so higher-priority courts break
+  // the lines they cross. `breakPx` = LINE_BREAK_MM converted to canvas px.
+  overlayHalo?: { color: string; breakPx: number };
 };
+
+// P1-08: how close (canvas px) a dragged element's centre must come to an
+// anchor before it snaps + shows a guide. ~6px feels magnetic without fighting.
+const ALIGN_SNAP_PX = 6;
 
 function ElementShape({
   element,
@@ -504,20 +733,82 @@ function ElementShape({
   readOnly,
   onSelect,
   onUpdate,
+  alignAnchors,
+  drawGuides,
+  clearGuides,
   registerRef,
+  overlayHalo,
 }: ElementShapeProps) {
   const groupRef = useRef<Konva.Group>(null);
+  // P2-01: halo pass props — a wider surface-coloured underlay of this court's
+  // strokes. `breakPx` is added to EACH side of every line (×2 on the width).
+  const strokeOverride = overlayHalo
+    ? { color: overlayHalo.color, extraPx: overlayHalo.breakPx * 2 }
+    : undefined;
 
   useEffect(() => {
     registerRef(groupRef.current);
     return () => registerRef(null);
   }, [registerRef]);
 
+  // P1-08: snap the live drag. Base is a 1 ft grid so elements land tidily;
+  // then, if the dragged centre comes within ALIGN_SNAP_PX of a plot centre /
+  // edge or another element's centre, it snaps to that anchor exactly and a
+  // magenta guide is drawn. Alignment wins over the grid because it's the
+  // stronger intent. Returns the final canvas position of the node.
+  function snapNodeToGuides(node: Konva.Node) {
+    const rawX = node.x();
+    const rawY = node.y();
+    // 1 ft grid baseline.
+    let cx = toCanvasX(Math.round(fromCanvasX(rawX)));
+    let cy = toCanvasY(Math.round(fromCanvasY(rawY)));
+    const guides: { x: number[]; y: number[] } = { x: [], y: [] };
+    if (alignAnchors) {
+      let bestX: number | null = null;
+      let bestXd = ALIGN_SNAP_PX;
+      for (const a of alignAnchors.xs) {
+        if (a.id === element.id) continue;
+        const d = Math.abs(a.v - rawX);
+        if (d <= bestXd) {
+          bestXd = d;
+          bestX = a.v;
+        }
+      }
+      let bestY: number | null = null;
+      let bestYd = ALIGN_SNAP_PX;
+      for (const a of alignAnchors.ys) {
+        if (a.id === element.id) continue;
+        const d = Math.abs(a.v - rawY);
+        if (d <= bestYd) {
+          bestYd = d;
+          bestY = a.v;
+        }
+      }
+      if (bestX !== null) {
+        cx = bestX;
+        guides.x.push(bestX);
+      }
+      if (bestY !== null) {
+        cy = bestY;
+        guides.y.push(bestY);
+      }
+    }
+    node.x(cx);
+    node.y(cy);
+    drawGuides?.(guides);
+    return { cx, cy };
+  }
+
+  function handleDragMove(e: Konva.KonvaEventObject<DragEvent>) {
+    snapNodeToGuides(e.target);
+  }
+
   function handleDragEnd(e: Konva.KonvaEventObject<DragEvent>) {
-    const node = e.target;
-    const plotX = fromCanvasX(node.x());
-    const plotY = fromCanvasY(node.y());
-    onUpdate({ x: plotX, y: plotY });
+    const { cx, cy } = snapNodeToGuides(e.target);
+    clearGuides?.();
+    // Commit exact feet: an integer when grid-snapped, or the aligned anchor's
+    // position (which may be a half-foot, e.g. an odd-length plot centre).
+    onUpdate({ x: fromCanvasX(cx), y: fromCanvasY(cy) });
   }
 
   // Transformer applies scaleX/scaleY to the group. We bake the scale into
@@ -548,6 +839,7 @@ function ElementShape({
     draggable: !readOnly && !element.locked,
     onClick: onSelect,
     onTap: onSelect,
+    onDragMove: handleDragMove,
     onDragEnd: handleDragEnd,
     onTransformEnd: handleTransformEnd,
     ref: groupRef,
@@ -570,6 +862,14 @@ function ElementShape({
     case "basketball-court":
       return (
         <Group {...commonGroupProps}>
+          {strokeOverride && (
+            <BasketballCourtShape
+              el={element}
+              pxPerFt={pxPerFt}
+              style={style}
+              strokeOverride={strokeOverride}
+            />
+          )}
           <BasketballCourtShape el={element} pxPerFt={pxPerFt} style={style} labelSide={labelSide} />
           {isSelected && onSectionClick && (
             <SectionClickOverlays
@@ -584,6 +884,14 @@ function ElementShape({
     case "pickleball-court":
       return (
         <Group {...commonGroupProps}>
+          {strokeOverride && (
+            <PickleballCourtShape
+              el={element}
+              pxPerFt={pxPerFt}
+              style={style}
+              strokeOverride={strokeOverride}
+            />
+          )}
           <PickleballCourtShape el={element} pxPerFt={pxPerFt} style={style} labelSide={labelSide} />
           {isSelected && onSectionClick && (
             <SectionClickOverlays
@@ -598,6 +906,14 @@ function ElementShape({
     case "generic-court":
       return (
         <Group {...commonGroupProps}>
+          {strokeOverride && (
+            <GenericCourtShape
+              el={element}
+              pxPerFt={pxPerFt}
+              style={style}
+              strokeOverride={strokeOverride}
+            />
+          )}
           <GenericCourtShape el={element} pxPerFt={pxPerFt} style={style} labelSide={labelSide} />
           {isSelected && onSectionClick && (
             <SectionClickOverlays
@@ -663,6 +979,48 @@ function ElementShape({
           <HighlightZoneShape el={element} pxPerFt={pxPerFt} />
         </Group>
       );
+    case "floodlight":
+      return (
+        <Group {...commonGroupProps}>
+          <FloodlightShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
+    case "seating":
+      return (
+        <Group {...commonGroupProps}>
+          <SeatingShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
+    case "scoreboard":
+      return (
+        <Group {...commonGroupProps}>
+          <ScoreboardShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
+    case "sight-screen":
+      return (
+        <Group {...commonGroupProps}>
+          <SightScreenShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
+    case "corner-flag":
+      return (
+        <Group {...commonGroupProps}>
+          <CornerFlagShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
+    case "gate":
+      return (
+        <Group {...commonGroupProps}>
+          <GateShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
+    case "center-logo":
+      return (
+        <Group {...commonGroupProps}>
+          <CenterLogoShape el={element} pxPerFt={pxPerFt} />
+        </Group>
+      );
   }
 }
 
@@ -686,6 +1044,30 @@ function applyScaleToDimensions(
     case "highlight-zone":
       (patch as Partial<typeof element>).width = element.width * scaleX;
       (patch as Partial<typeof element>).height = element.height * scaleY;
+      break;
+    case "seating":
+      (patch as Partial<SeatingElement>).width = element.width * scaleX;
+      (patch as Partial<SeatingElement>).depth = element.depth * scaleY;
+      break;
+    case "scoreboard":
+    case "sight-screen":
+    case "gate":
+      (patch as Partial<ScoreboardElement | SightScreenElement | GateElement>).widthFt =
+        element.widthFt * scaleX;
+      (patch as Partial<ScoreboardElement | SightScreenElement | GateElement>).heightFt =
+        element.heightFt * scaleY;
+      break;
+    case "center-logo":
+      (patch as Partial<CenterLogoElement>).diameterFt =
+        element.diameterFt * Math.max(scaleX, scaleY);
+      break;
+    case "floodlight":
+      (patch as Partial<FloodlightElement>).poleHeightFt =
+        element.poleHeightFt * Math.max(scaleX, scaleY);
+      break;
+    case "corner-flag":
+      (patch as Partial<CornerFlagElement>).heightFt =
+        (element.heightFt ?? 5) * Math.max(scaleX, scaleY);
       break;
     case "basketball-hoop":
       (patch as Partial<BasketballHoopElement>).backboardWidthFt =
@@ -805,6 +1187,74 @@ function courtDims(el: { width: number; height: number }): string {
   return `${Math.round(el.width)} × ${Math.round(el.height)} ft`;
 }
 
+// P2-01: on-canvas colour key for multi-sport plots. Anchored by its BOTTOM
+// so it grows upward from the plot's bottom-left corner and never collides
+// with the top court labels. Each row is a colour swatch + the sport name.
+function CourtLegend({
+  entries,
+  x,
+  bottom,
+}: {
+  entries: Array<{ sport: Sport; label: string; color: string }>;
+  x: number;
+  bottom: number;
+}) {
+  const rowH = 18;
+  const padX = 10;
+  const padY = 8;
+  const fs = 12;
+  const swatchW = 22;
+  const swatchH = 4;
+  const boxW =
+    padX * 2 +
+    swatchW +
+    8 +
+    Math.max(60, ...entries.map((e) => e.label.length * fs * 0.6));
+  const boxH = padY * 2 + entries.length * rowH;
+  const top = bottom - boxH;
+  return (
+    <Group listening={false}>
+      <Rect
+        x={x}
+        y={top}
+        width={boxW}
+        height={boxH}
+        fill="rgba(255,255,255,0.92)"
+        cornerRadius={5}
+        shadowColor="rgba(0,0,0,0.25)"
+        shadowBlur={6}
+        shadowOffsetY={2}
+      />
+      {entries.map((e, i) => {
+        const cy = top + padY + i * rowH + rowH / 2;
+        return (
+          <Group key={e.sport}>
+            {/* Colour swatch — a thick line, matching the on-court marking. */}
+            <Rect
+              x={x + padX}
+              y={cy - swatchH / 2}
+              width={swatchW}
+              height={swatchH}
+              cornerRadius={swatchH / 2}
+              fill={e.color}
+              stroke="#94a3b8"
+              strokeWidth={0.5}
+            />
+            <Text
+              x={x + padX + swatchW + 8}
+              y={cy - fs / 2}
+              text={e.label}
+              fontSize={fs}
+              fontStyle="600"
+              fill="#0f172a"
+            />
+          </Group>
+        );
+      })}
+    </Group>
+  );
+}
+
 function FootballFieldShapeBase({
   el,
   pxPerFt,
@@ -864,7 +1314,9 @@ function FootballFieldShapeBase({
               y={-h / 2}
               width={stripeW}
               height={h}
-              fill={i % 2 ? grassColor : darken(grassColor, 0.08)}
+              // P1-04: alternate ABOVE and BELOW the base green (was a one-sided
+              // 8% darken) so the mow bands read clearly instead of near-flat.
+              fill={i % 2 ? lighten(grassColor, 0.08) : darken(grassColor, 0.15)}
             />
           ))
         ) : (
@@ -1183,11 +1635,14 @@ function BasketballCourtShapeBase({
   pxPerFt,
   style,
   labelSide,
+  strokeOverride,
 }: {
   el: BasketballCourtElement;
   pxPerFt: number;
   style: CourtLayout["style"];
   labelSide?: "left" | "right";
+  // P2-01: halo pass — draw strokes only, in this colour, `extraPx` wider.
+  strokeOverride?: { color: string; extraPx: number };
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
@@ -1219,8 +1674,9 @@ function BasketballCourtShapeBase({
         : style.surface !== "plain"
           ? "transparent"
           : style.basketballSurfaceColor);
-  const line = el.lineColor ?? "#fff5e6";
-  const lineWidth = Math.max(1, Math.min(w, h) * 0.005);
+  const line = strokeOverride ? strokeOverride.color : el.lineColor ?? "#fff5e6";
+  const lineWidth =
+    Math.max(1, Math.min(w, h) * 0.005) + (strokeOverride?.extraPx ?? 0);
 
   // Ratios below are FIBA regulation — measured as fractions of the
   // 28 × 15 m playing area. Because the court element is now sized to
@@ -1253,10 +1709,12 @@ function BasketballCourtShapeBase({
 
   return (
     <>
-      <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
+      {!strokeOverride && (
+        <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
+      )}
       {/* V1 per-area highlight fill — jump-ball / centre circle, behind the
           markings so the lines stay legible. */}
-      {!el.halfCourt && style.basketballCircleColor && (
+      {!strokeOverride && !el.halfCourt && style.basketballCircleColor && (
         <Circle
           x={0}
           y={0}
@@ -1307,7 +1765,7 @@ function BasketballCourtShapeBase({
                 3-point line: the two corner straights (from the baseline) + the
                 arc. Tracing that closed polygon fills the corners behind the
                 hoop too (a plain pie sector left them uncovered). */}
-            {style.basketball3ptColor && (
+            {!strokeOverride && style.basketball3ptColor && (
               <Line
                 points={(() => {
                   const N = 24;
@@ -1332,7 +1790,7 @@ function BasketballCourtShapeBase({
                 opacity={0.55}
               />
             )}
-            {style.basketballKeyColor && (
+            {!strokeOverride && style.basketballKeyColor && (
               <Rect
                 x={dir < 0 ? baselineX : baselineX - keyW}
                 y={-keyH / 2}
@@ -1423,7 +1881,9 @@ function BasketballCourtShapeBase({
           </Group>
         );
       })}
-      <CourtNameLabel w={w} h={h} name="BASKETBALL" dims={courtDims(el)} side={labelSide} />
+      {!strokeOverride && (
+        <CourtNameLabel w={w} h={h} name="BASKETBALL" dims={courtDims(el)} side={labelSide} />
+      )}
     </>
   );
 }
@@ -1433,11 +1893,14 @@ function PickleballCourtShapeBase({
   pxPerFt,
   style,
   labelSide,
+  strokeOverride,
 }: {
   el: PickleballCourtElement;
   pxPerFt: number;
   style: CourtLayout["style"];
   labelSide?: "left" | "right";
+  // P2-01: halo pass — draw strokes only, in this colour, `extraPx` wider.
+  strokeOverride?: { color: string; extraPx: number };
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
@@ -1455,17 +1918,21 @@ function PickleballCourtShapeBase({
         : style.surface !== "plain"
           ? "transparent"
           : style.pickleballSurfaceColor);
-  const line = el.lineColor ?? "#ffffff";
-  const lineWidth = Math.max(1, Math.min(w, h) * 0.006);
+  const line = strokeOverride ? strokeOverride.color : el.lineColor ?? "#ffffff";
+  const lineWidth =
+    Math.max(1, Math.min(w, h) * 0.006) + (strokeOverride?.extraPx ?? 0);
   // Kitchen / non-volley zone — 7 ft from net on each side.
   const kitchenW = w * 0.16;
   return (
     <>
-      <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
+      {!strokeOverride && (
+        <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
+      )}
       {/* Kitchen / non-volley zone highlight — the central band around the
           net. Uses the chosen colour, else the per-sport preset. Translucent
           so the markings stay visible on top. */}
-      {style.kitchenColor !== "none" &&
+      {!strokeOverride &&
+        style.kitchenColor !== "none" &&
         (style.kitchenColor ?? KITCHEN_DEFAULT_COLOR.pickleball) && (
           <Rect
             x={-kitchenW}
@@ -1486,7 +1953,9 @@ function PickleballCourtShapeBase({
       {/* Service court divider (between baseline and kitchen) */}
       <Line points={[-w / 2, 0, -kitchenW, 0]} stroke={line} strokeWidth={lineWidth} />
       <Line points={[kitchenW, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
-      <CourtNameLabel w={w} h={h} name="PICKLEBALL" dims={courtDims(el)} side={labelSide} />
+      {!strokeOverride && (
+        <CourtNameLabel w={w} h={h} name="PICKLEBALL" dims={courtDims(el)} side={labelSide} />
+      )}
     </>
   );
 }
@@ -1496,11 +1965,14 @@ function GenericCourtShapeBase({
   pxPerFt,
   style,
   labelSide,
+  strokeOverride,
 }: {
   el: GenericCourtElement;
   pxPerFt: number;
   style: CourtLayout["style"];
   labelSide?: "left" | "right";
+  // P2-01: halo pass — draw strokes only, in this colour, `extraPx` wider.
+  strokeOverride?: { color: string; extraPx: number };
 }) {
   const w = el.width * pxPerFt;
   const h = el.height * pxPerFt;
@@ -1526,12 +1998,15 @@ function GenericCourtShapeBase({
         : style.surface !== "plain"
           ? "transparent"
           : defaultFill);
-  const line = el.lineColor ?? "#ffffff";
-  const lineWidth = Math.max(1, Math.min(w, h) * 0.005);
+  const line = strokeOverride ? strokeOverride.color : el.lineColor ?? "#ffffff";
+  const lineWidth =
+    Math.max(1, Math.min(w, h) * 0.005) + (strokeOverride?.extraPx ?? 0);
 
   return (
     <>
-      <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
+      {!strokeOverride && (
+        <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={fill} />
+      )}
       {/* V1: the kitchen / non-volley filled zone was removed for tennis /
           badminton / volleyball — only pickleball keeps a kitchen fill. The
           sport's service / attack LINES below still render, so volleyball now
@@ -1557,7 +2032,9 @@ function GenericCourtShapeBase({
             strokeWidth={lineWidth}
           />
         )}
-      <CourtNameLabel w={w} h={h} name={el.sport.toUpperCase()} dims={courtDims(el)} side={labelSide} />
+      {!strokeOverride && (
+        <CourtNameLabel w={w} h={h} name={el.sport.toUpperCase()} dims={courtDims(el)} side={labelSide} />
+      )}
     </>
   );
 }
@@ -1718,6 +2195,7 @@ function CustomLineShape({ el, pxPerFt }: { el: CustomLineElement; pxPerFt: numb
           points={[len / 2, 0, len / 2 - headSize, -headSize / 2, len / 2 - headSize, headSize / 2]}
           closed
           fill={color}
+          lineJoin="round"
         />
       )}
       {el.arrow === "both" && (
@@ -1725,6 +2203,7 @@ function CustomLineShape({ el, pxPerFt }: { el: CustomLineElement; pxPerFt: numb
           points={[-len / 2, 0, -len / 2 + headSize, -headSize / 2, -len / 2 + headSize, headSize / 2]}
           closed
           fill={color}
+          lineJoin="round"
         />
       )}
     </>
@@ -2134,6 +2613,244 @@ function BasketballHoopShape({
   );
 }
 
+// ── P6 facility elements — top-down 2D icons ─────────────────────────
+// Each draws around the element origin (0,0); the parent Group applies the
+// plot-space position + rotation. Kept icon-simple so they read at plot scale.
+
+// Floodlight mast — pole dot, head crossbar, and a soft beam cone pointing
+// along the mast's local +Y (which the parent rotation aims at the field).
+function FloodlightShape({ el, pxPerFt }: { el: FloodlightElement; pxPerFt: number }) {
+  const lamp = kelvinTo2DColor(el.colorTempK ?? 5000);
+  const reach = Math.max(6, (el.aimReachFt ?? 40) * pxPerFt);
+  const spread = reach * 0.45;
+  const barW = Math.max(10, (el.heads ?? 4) * 5);
+  const headW = barW / Math.max(1, el.heads ?? 4);
+  const heads: JSX.Element[] = [];
+  for (let i = 0; i < (el.heads ?? 4); i++) {
+    heads.push(
+      <Rect
+        key={i}
+        x={-barW / 2 + i * headW + 0.6}
+        y={-9}
+        width={headW - 1.2}
+        height={5}
+        fill={lamp}
+        cornerRadius={1}
+      />,
+    );
+  }
+  return (
+    <>
+      {/* Beam cone — pale wash toward +Y (canvas up = north at rotation 0). */}
+      <Line
+        points={[0, -4, -spread, -reach, spread, -reach]}
+        closed
+        fillLinearGradientStartPoint={{ x: 0, y: -4 }}
+        fillLinearGradientEndPoint={{ x: 0, y: -reach }}
+        fillLinearGradientColorStops={[0, "rgba(255,244,214,0.5)", 1, "rgba(255,244,214,0)"]}
+        listening={false}
+      />
+      {/* Pole base */}
+      <Circle x={0} y={0} radius={4} fill="#334155" />
+      {/* Crossbar */}
+      <Rect x={-barW / 2} y={-7} width={barW} height={3} fill="#1f2937" cornerRadius={1} />
+      {heads}
+    </>
+  );
+}
+
+// Spectator seating — a tiered stand drawn as nested rows getting shorter
+// toward the front (local +Y = toward the field).
+function SeatingShape({ el, pxPerFt }: { el: SeatingElement; pxPerFt: number }) {
+  const w = el.width * pxPerFt;
+  const d = el.depth * pxPerFt;
+  const rows = Math.max(2, Math.min(8, el.rows ?? 4));
+  const rowH = d / rows;
+  const base = el.color ?? "#3b82f6";
+  const strips: JSX.Element[] = [];
+  for (let i = 0; i < rows; i++) {
+    // Back rows (top, local -Y) darkest; front rows lighter — reads as tiers.
+    strips.push(
+      <Rect
+        key={i}
+        x={-w / 2}
+        y={-d / 2 + i * rowH}
+        width={w}
+        height={rowH - 1}
+        fill={shadeHexColor(base, 0.7 + (0.35 * i) / rows)}
+        stroke="rgba(15,23,42,0.35)"
+        strokeWidth={0.75}
+      />,
+    );
+  }
+  return <>{strips}</>;
+}
+
+// Scoreboard — dark panel on two posts with a faint "0:0" hint.
+function ScoreboardShape({ el, pxPerFt }: { el: ScoreboardElement; pxPerFt: number }) {
+  const w = el.widthFt * pxPerFt;
+  const h = Math.max(8, w * 0.55);
+  const frame = el.color ?? "#0f172a";
+  return (
+    <>
+      <Rect x={-w / 2 - 2} y={-h / 2 - 2} width={w + 4} height={h + 4} fill={frame} cornerRadius={2} />
+      <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill="#111827" cornerRadius={1.5} />
+      <Text
+        x={-w / 2}
+        y={-h / 2}
+        width={w}
+        height={h}
+        align="center"
+        verticalAlign="middle"
+        text="0 : 0"
+        fontSize={Math.max(6, h * 0.5)}
+        fill="#22d3ee"
+        fontStyle="bold"
+      />
+    </>
+  );
+}
+
+// Cricket sight-screen — a large pale board (top-down: a thin bright bar).
+function SightScreenShape({ el, pxPerFt }: { el: SightScreenElement; pxPerFt: number }) {
+  const w = el.widthFt * pxPerFt;
+  const depth = Math.max(5, w * 0.14);
+  const fill = el.color ?? "#f1f5f9";
+  return (
+    <Rect
+      x={-w / 2}
+      y={-depth / 2}
+      width={w}
+      height={depth}
+      fill={fill}
+      stroke="rgba(15,23,42,0.45)"
+      strokeWidth={1}
+      cornerRadius={1}
+    />
+  );
+}
+
+// Corner flag — small post dot + a triangular flag.
+function CornerFlagShape({ el, pxPerFt }: { el: CornerFlagElement; pxPerFt: number }) {
+  const s = Math.max(6, (el.heightFt ?? 5) * pxPerFt * 0.5);
+  const flag = el.color ?? "#ef4444";
+  return (
+    <>
+      <Circle x={0} y={0} radius={2.5} fill="#1f2937" />
+      <Line points={[0, 0, s * 0.9, -s * 0.35, 0, -s * 0.7]} closed fill={flag} />
+    </>
+  );
+}
+
+// Gate — two posts with a swing-leaf arc, opening toward local +Y.
+function GateShape({ el, pxPerFt }: { el: GateElement; pxPerFt: number }) {
+  const w = el.widthFt * pxPerFt;
+  const color = el.color ?? "#94a3b8";
+  return (
+    <>
+      <Circle x={-w / 2} y={0} radius={3} fill={color} />
+      <Circle x={w / 2} y={0} radius={3} fill={color} />
+      {/* Swing leaf from the left post */}
+      <Line points={[-w / 2, 0, -w / 2 + w * 0.7, -w * 0.5]} stroke={color} strokeWidth={2.5} lineCap="round" />
+      <Arc
+        x={-w / 2}
+        y={0}
+        innerRadius={w * 0.7}
+        outerRadius={w * 0.7}
+        angle={45}
+        rotation={-90}
+        stroke={color}
+        strokeWidth={1}
+        dash={[3, 3]}
+      />
+    </>
+  );
+}
+
+// Centre-court logo — a crest disc. Draws the logo image when it loads,
+// otherwise a coloured ring with optional initials.
+function CenterLogoShape({ el, pxPerFt }: { el: CenterLogoElement; pxPerFt: number }) {
+  const r = (el.diameterFt * pxPerFt) / 2;
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  useEffect(() => {
+    if (!el.imageUrl) {
+      setImg(null);
+      return;
+    }
+    const i = new window.Image();
+    i.crossOrigin = "anonymous";
+    i.onload = () => setImg(i);
+    i.src = el.imageUrl;
+    return () => {
+      i.onload = null;
+    };
+  }, [el.imageUrl]);
+  const ring = el.color ?? "#ffffff";
+  return (
+    <>
+      <Circle x={0} y={0} radius={r} stroke={ring} strokeWidth={Math.max(1.5, r * 0.06)} fill="rgba(255,255,255,0.06)" />
+      {img ? (
+        <KonvaImage
+          image={img}
+          x={-r * 0.8}
+          y={-r * 0.8}
+          width={r * 1.6}
+          height={r * 1.6}
+        />
+      ) : (
+        <Text
+          x={-r}
+          y={-r}
+          width={r * 2}
+          height={r * 2}
+          align="center"
+          verticalAlign="middle"
+          text={el.text ?? "LOGO"}
+          fontSize={Math.max(6, r * 0.4)}
+          fill={ring}
+          fontStyle="bold"
+        />
+      )}
+    </>
+  );
+}
+
+// Approximate colour-temperature → hex for the 2D floodlight lamp swatch.
+function kelvinTo2DColor(k: number): string {
+  if (k <= 3000) return "#ffd1a0";
+  if (k <= 4200) return "#ffe6c2";
+  if (k <= 5200) return "#fff4d6";
+  return "#eef4ff";
+}
+
+// P6-02: obstacle marker — a small tree (green canopy + brown trunk dot) or a
+// grey pole, drawn at a fixed canvas position (the parent Layer isn't rotated).
+function ObstacleMarker({
+  x,
+  y,
+  radiusPx,
+  kind,
+}: {
+  x: number;
+  y: number;
+  radiusPx: number;
+  kind: "tree" | "pole";
+}) {
+  if (kind === "pole") {
+    return (
+      <>
+        <Circle x={x} y={y} radius={radiusPx * 0.5} fill="#64748b" stroke="#334155" strokeWidth={1.5} />
+      </>
+    );
+  }
+  return (
+    <>
+      <Circle x={x} y={y} radius={radiusPx} fill="rgba(34,120,54,0.55)" stroke="#1f6d33" strokeWidth={1.5} />
+      <Circle x={x} y={y} radius={radiusPx * 0.28} fill="#7c4a25" />
+    </>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────
 //  Grid + helpers
 // ─────────────────────────────────────────────────────────────────────
@@ -2384,6 +3101,15 @@ function PlotDimensions({
   const labelColor = "#0f172a";
   const lineColor = "#0f172a";
   const lineWidth = 1.2;
+  // P1-05: proper CAD leaders — witness/extension lines off each plot edge and
+  // filled arrowheads on the dimension line (reusing the CustomLineShape
+  // triangle pattern) instead of plain end ticks. `snap` keeps the thin strokes
+  // on the half-pixel grid so they stay crisp.
+  const headLen = Math.max(6, tickLen);
+  const headHalf = headLen * 0.42;
+  const witnessGap = tickLen * 0.35; // small break between the plot edge + line
+  const witnessExt = tickLen * 0.5; // extension a touch past the dimension line
+  const snap = (v: number) => Math.round(v) + 0.5;
 
   // Top: horizontal dimension line above the plot.
   const topY = plotOriginY - offset;
@@ -2395,29 +3121,43 @@ function PlotDimensions({
   const leftX = plotOriginX - offset;
   const widthLabel = `${plotWidthFt} ft (${(plotWidthFt * 0.3048).toFixed(1)} m)`;
 
+  const rightX0 = plotOriginX + plotPxWidth;
+  const botY0 = plotOriginY + plotPxHeight;
   return (
     <>
-      {/* Top dimension — length */}
+      {/* Top dimension — length. Witness lines rise from the plot's top edge
+          past the dimension line; the dimension line carries a filled arrowhead
+          at each end pointing out to the witness lines. */}
       <Line
-        points={[plotOriginX, topY, plotOriginX + plotPxWidth, topY]}
+        points={[snap(plotOriginX), plotOriginY - witnessGap, snap(plotOriginX), topY - witnessExt]}
         stroke={lineColor}
-        strokeWidth={lineWidth}
-      />
-      {/* End ticks on the length line */}
-      <Line
-        points={[plotOriginX, topY - tickLen / 2, plotOriginX, topY + tickLen / 2]}
-        stroke={lineColor}
-        strokeWidth={lineWidth}
+        strokeWidth={1}
+        listening={false}
       />
       <Line
-        points={[
-          plotOriginX + plotPxWidth,
-          topY - tickLen / 2,
-          plotOriginX + plotPxWidth,
-          topY + tickLen / 2,
-        ]}
+        points={[snap(rightX0), plotOriginY - witnessGap, snap(rightX0), topY - witnessExt]}
+        stroke={lineColor}
+        strokeWidth={1}
+        listening={false}
+      />
+      <Line
+        points={[plotOriginX, snap(topY), rightX0, snap(topY)]}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        listening={false}
+      />
+      {/* Filled arrowheads pointing outward to each witness line */}
+      <Line
+        points={[plotOriginX, topY, plotOriginX + headLen, topY - headHalf, plotOriginX + headLen, topY + headHalf]}
+        closed
+        fill={lineColor}
+        listening={false}
+      />
+      <Line
+        points={[rightX0, topY, rightX0 - headLen, topY - headHalf, rightX0 - headLen, topY + headHalf]}
+        closed
+        fill={lineColor}
+        listening={false}
       />
       {/* Length text — dual-unit "80 ft (24.4 m)". Pill widened to fit
           both units without truncation. */}
@@ -2441,26 +3181,37 @@ function PlotDimensions({
         align="center"
       />
 
-      {/* Left dimension — width */}
+      {/* Left dimension — width. Witness lines run out from the plot's left
+          edge; the vertical dimension line has arrowheads pointing up/down. */}
       <Line
-        points={[leftX, plotOriginY, leftX, plotOriginY + plotPxHeight]}
+        points={[plotOriginX - witnessGap, snap(plotOriginY), leftX - witnessExt, snap(plotOriginY)]}
         stroke={lineColor}
-        strokeWidth={lineWidth}
+        strokeWidth={1}
+        listening={false}
       />
       <Line
-        points={[leftX - tickLen / 2, plotOriginY, leftX + tickLen / 2, plotOriginY]}
+        points={[plotOriginX - witnessGap, snap(botY0), leftX - witnessExt, snap(botY0)]}
         stroke={lineColor}
-        strokeWidth={lineWidth}
+        strokeWidth={1}
+        listening={false}
       />
       <Line
-        points={[
-          leftX - tickLen / 2,
-          plotOriginY + plotPxHeight,
-          leftX + tickLen / 2,
-          plotOriginY + plotPxHeight,
-        ]}
+        points={[snap(leftX), plotOriginY, snap(leftX), botY0]}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        listening={false}
+      />
+      <Line
+        points={[leftX, plotOriginY, leftX - headHalf, plotOriginY + headLen, leftX + headHalf, plotOriginY + headLen]}
+        closed
+        fill={lineColor}
+        listening={false}
+      />
+      <Line
+        points={[leftX, botY0, leftX - headHalf, botY0 - headLen, leftX + headHalf, botY0 - headLen]}
+        closed
+        fill={lineColor}
+        listening={false}
       />
       {/* Width text — rotated 90° so it reads along the vertical line.
           Pill widened for dual-unit "60 ft (18.3 m)". */}
@@ -2516,24 +3267,30 @@ function GridLines({
   const step = niceSteps.find((s) => s >= rawStep) ?? Math.ceil(rawStep / 10) * 10;
   const lines: JSX.Element[] = [];
   for (let ft = 0; ft <= plotLengthFt; ft += step) {
-    const x = plotOriginX + ft * pxPerFt;
+    // P1-05: snap 1px strokes to the half-pixel grid so hairlines render crisp
+    // (1px wide) instead of blurred across two device pixels.
+    const x = Math.round(plotOriginX + ft * pxPerFt) + 0.5;
     lines.push(
       <Line
         key={`v${ft}`}
         points={[x, plotOriginY, x, plotOriginY + plotPxHeight]}
         stroke="rgba(255,255,255,0.18)"
         strokeWidth={1}
+        listening={false}
+        perfectDrawEnabled={false}
       />
     );
   }
   for (let ft = 0; ft <= plotWidthFt; ft += step) {
-    const y = plotOriginY + ft * pxPerFt;
+    const y = Math.round(plotOriginY + ft * pxPerFt) + 0.5;
     lines.push(
       <Line
         key={`h${ft}`}
         points={[plotOriginX, y, plotOriginX + plotPxWidth, y]}
         stroke="rgba(255,255,255,0.18)"
         strokeWidth={1}
+        listening={false}
+        perfectDrawEnabled={false}
       />
     );
   }
@@ -2565,6 +3322,51 @@ function darken(hexOrRgb: string, amount: number): string {
   g = Math.max(0, Math.round(g * f));
   b = Math.max(0, Math.round(b * f));
   return `rgba(${r},${g},${b},${a})`;
+}
+
+// Mirror of `darken` in the other direction — brightens each channel by the
+// given fraction (0.08 = 8% lighter). Used so mow stripes alternate ABOVE and
+// BELOW the base green instead of the old one-sided darken, for a stronger
+// mowed-band read. Handles #rrggbb and rgb()/rgba() inputs like `darken`.
+function lighten(hexOrRgb: string, amount: number): string {
+  let r = 0,
+    g = 0,
+    b = 0,
+    a = 1;
+  if (hexOrRgb.startsWith("#")) {
+    const v = hexOrRgb.slice(1);
+    r = parseInt(v.slice(0, 2), 16);
+    g = parseInt(v.slice(2, 4), 16);
+    b = parseInt(v.slice(4, 6), 16);
+  } else {
+    const m = hexOrRgb.match(/rgba?\(([^)]+)\)/);
+    if (!m) return hexOrRgb;
+    const parts = m[1].split(",").map((p) => parseFloat(p.trim()));
+    [r, g, b] = parts as [number, number, number];
+    if (parts.length === 4) a = parts[3];
+  }
+  const f = 1 + amount;
+  r = Math.min(255, Math.round(r * f));
+  g = Math.min(255, Math.round(g * f));
+  b = Math.min(255, Math.round(b * f));
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// Konva fill props for a subtle top→bottom surface gradient (P1-03). Gives
+// flat acrylic / tile / plain courts a hint of depth instead of one solid
+// block. When the base isn't a #rrggbb hex, shadeHexColor returns it unchanged
+// so the gradient collapses to a flat fill of `base` (safe no-op). NOTE: we
+// deliberately omit `fill` — Konva's fillPriority defaults to "color", so a
+// present `fill` would override the gradient.
+function surfaceGradientProps(base: string, heightPx: number) {
+  return {
+    fillLinearGradientStartPoint: { x: 0, y: 0 },
+    fillLinearGradientEndPoint: { x: 0, y: heightPx },
+    fillLinearGradientColorStops: [0, base, 1, shadeHexColor(base, 0.92)] as (
+      | number
+      | string
+    )[],
+  };
 }
 
 // Plot footprint renderer. Behaviour by surface:
@@ -2654,12 +3456,41 @@ function PlotSurface({
   // Plot-frame stroke — hardcoded black (V1: border colour is no longer a
   // user-editable control; the borderColor prop is retained for back-compat).
   const borderStroke = "#111827";
+  // P1-03: soft drop shadow so the whole plot reads as lifted off the canvas
+  // (depth), scaled to the zoom so it stays subtle at any plot size. Applied
+  // only to the outermost plot-base shape — never the stripe/overlay rects —
+  // and never to the stroke (shadowForStrokeEnabled=false).
+  const plotShadow = {
+    shadowColor: "rgba(0,0,0,0.28)",
+    shadowBlur: Math.max(4, pxPerFt * 0.5),
+    shadowOffsetX: 0,
+    shadowOffsetY: Math.max(2, pxPerFt * 0.25),
+    shadowForStrokeEnabled: false,
+    perfectDrawEnabled: false,
+  };
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [productImg, setProductImg] = useState<HTMLImageElement | null>(null);
   const [turfLightImg, setTurfLightImg] = useState<HTMLImageElement | null>(null);
   const [turfDarkImg, setTurfDarkImg] = useState<HTMLImageElement | null>(null);
   const imageUrl = SURFACE_IMAGE_URL[surface];
   const turfUrls = TURF_IMAGE_URLS[surface];
+
+  // P2-02: Konva fillPattern props that tile a material photo across the plot
+  // at TRUE scale — one image spans SURFACE_TILE_METERS[surface] metres (a PPE
+  // tile is 30 cm, a turf/PVC texture ~1 m). Returns null (→ solid-fill
+  // fallback) until the photo has loaded, so the plot never renders blank.
+  function tilePatternProps(image: HTMLImageElement | null) {
+    const tileM = SURFACE_TILE_METERS[surface];
+    if (!image || !image.naturalWidth || !tileM) return null;
+    const scale = (tileM * 3.281 * pxPerFt) / image.naturalWidth;
+    return {
+      fillPatternImage: image,
+      fillPatternRepeat: "repeat" as const,
+      fillPatternScale: { x: scale, y: scale },
+      fillPatternX: 0,
+      fillPatternY: 0,
+    };
+  }
 
   useEffect(() => {
     if (!imageUrl) {
@@ -2733,6 +3564,7 @@ function PlotSurface({
           fill="#caa477"
           stroke={borderStroke}
           strokeWidth={1.5}
+          {...plotShadow}
         />
       );
     }
@@ -2742,9 +3574,10 @@ function PlotSurface({
         y={plotOriginY}
         width={plotPxWidth}
         height={plotPxHeight}
-        fill="#caa477"
+        {...surfaceGradientProps("#caa477", plotPxHeight)}
         stroke={borderStroke}
         strokeWidth={1.5}
+        {...plotShadow}
       />
     );
   }
@@ -2885,14 +3718,37 @@ function PlotSurface({
         const stripeFt = TURF_ROLL_WIDTH_M * FT_PER_M;
         const stripePx = stripeFt * pxPerFt;
         const count = Math.ceil(plotPxWidth / stripePx);
-        const cols = TURF_STRIPE_COLORS[surface] ?? { light: "#3fa050", dark: "#256c30" };
+        // P1-04: use the (strengthened) preset pair for the default turf so the
+        // approved look is preserved, but when a hex surface-colour override is
+        // set, derive the mow bands FROM that colour (previously the override
+        // was ignored and stripes stayed green) with a wide light/dark spread.
+        const hexOverride =
+          surfaceColorOverride && /^#?[0-9a-f]{6}$/i.test(surfaceColorOverride)
+            ? surfaceColorOverride
+            : null;
+        const cols = hexOverride
+          ? {
+              light: shadeHexColor(hexOverride, 1.14),
+              dark: shadeHexColor(hexOverride, 0.82),
+            }
+          : TURF_STRIPE_COLORS[surface] ?? { light: "#3fa050", dark: "#256c30" };
         return Array.from({ length: count }, (_, i) => ({
           x: plotOriginX + i * stripePx,
           width: Math.min(stripePx, plotOriginX + plotPxWidth - (plotOriginX + i * stripePx)),
+          isLight: i % 2 === 0,
           fill: i % 2 === 0 ? cols.light : cols.dark,
         }));
       })()
     : null;
+
+  // P2-02: real material-photo fills. The tiled/PVC plot base repeats its
+  // sample photo at true tile scale (solid colour is the load-fallback); turf
+  // stripes use the light photo on even bands and the dark photo on odd bands,
+  // giving a real mowed-grass look while preserving the light/dark mow
+  // direction. `null` → the caller keeps its solid fill.
+  const basePattern = tiled || pvc ? tilePatternProps(img) : null;
+  const stripeFill = (isLight: boolean, fallback: string) =>
+    tilePatternProps(isLight ? turfLightImg : turfDarkImg) ?? { fill: fallback };
 
   return (
     <>
@@ -2909,6 +3765,7 @@ function PlotSurface({
           fill={solidFill}
           stroke={borderStroke}
           strokeWidth={1.5}
+          {...plotShadow}
         />
       ) : turf && stripes && polygonFlat ? (
         // Turf on a polygon plot — draw the polygon fill first, then
@@ -2923,6 +3780,7 @@ function PlotSurface({
             fill={solidFill}
             stroke={borderStroke}
             strokeWidth={1.5}
+            {...plotShadow}
           />
           {stripes.map((s, i) => (
             <Rect
@@ -2957,6 +3815,7 @@ function PlotSurface({
             fill={solidFill}
             stroke={borderStroke}
             strokeWidth={1.5}
+            {...plotShadow}
           />
           {stripes.map((s, i) => (
             <Rect
@@ -2965,7 +3824,7 @@ function PlotSurface({
               y={plotOriginY}
               width={s.width}
               height={plotPxHeight}
-              fill={s.fill}
+              {...stripeFill(s.isLight, s.fill)}
               listening={false}
             />
           ))}
@@ -2985,9 +3844,10 @@ function PlotSurface({
           y={plotOriginY}
           width={plotPxWidth}
           height={plotPxHeight}
-          fill={solidFill}
+          {...(basePattern ?? surfaceGradientProps(solidFill, plotPxHeight))}
           stroke={borderStroke}
           strokeWidth={1.5}
+          {...plotShadow}
         />
       )}
 

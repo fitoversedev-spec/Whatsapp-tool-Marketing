@@ -10,6 +10,7 @@
 // gap = clear space between two adjacent courts.
 
 import type { Sport } from "./schema";
+import { SPORT_DIMS } from "./sport-dims";
 
 export type PackingPreset = {
   /** Playing length × width, feet. */
@@ -23,13 +24,19 @@ export type PackingPreset = {
 
 const M = 3.281;
 
+// P4-03: the playing length × width (pl/pw) now come from the canonical
+// SPORT_DIMS.*.capacity so there is ONE source for the capacity footprint. The
+// margins/gaps stay inline (they are packing-specific run-off presets, not a
+// court size). The capacity values in SPORT_DIMS are byte-identical to the old
+// literals here — see scripts/p4-capacity-regression proof — so predictCapacity
+// (→ courtCapacity → quotes) is unchanged.
 export const PACKING_PRESETS: Partial<Record<Sport, PackingPreset>> = {
-  badminton: { pl: 43.96, pw: 20.01, compMargin: 2.3 * M, compGap: 2.0 * M, recMargin: 1.0 * M, recGap: 1.2 * M },
-  pickleball: { pl: 44, pw: 20, compMargin: 3.05 * M, compGap: 2.4 * M, recMargin: 1.5 * M, recGap: 1.5 * M },
-  tennis: { pl: 78, pw: 36, compMargin: 6.4 * M, compGap: 4.3 * M, recMargin: 5.5 * M, recGap: 3.66 * M },
-  basketball: { pl: 91.86, pw: 49.21, compMargin: 2.0 * M, compGap: 2.0 * M, recMargin: 1.0 * M, recGap: 1.0 * M },
-  volleyball: { pl: 59.06, pw: 29.53, compMargin: 5.0 * M, compGap: 3.0 * M, recMargin: 3.0 * M, recGap: 3.0 * M },
-  football: { pl: 197, pw: 131, compMargin: 2.0 * M, compGap: 2.0 * M, recMargin: 1.5 * M, recGap: 1.5 * M },
+  badminton: { pl: SPORT_DIMS.badminton.capacity.l, pw: SPORT_DIMS.badminton.capacity.w, compMargin: 2.3 * M, compGap: 2.0 * M, recMargin: 1.0 * M, recGap: 1.2 * M },
+  pickleball: { pl: SPORT_DIMS.pickleball.capacity.l, pw: SPORT_DIMS.pickleball.capacity.w, compMargin: 3.05 * M, compGap: 2.4 * M, recMargin: 1.5 * M, recGap: 1.5 * M },
+  tennis: { pl: SPORT_DIMS.tennis.capacity.l, pw: SPORT_DIMS.tennis.capacity.w, compMargin: 6.4 * M, compGap: 4.3 * M, recMargin: 5.5 * M, recGap: 3.66 * M },
+  basketball: { pl: SPORT_DIMS.basketball.capacity.l, pw: SPORT_DIMS.basketball.capacity.w, compMargin: 2.0 * M, compGap: 2.0 * M, recMargin: 1.0 * M, recGap: 1.0 * M },
+  volleyball: { pl: SPORT_DIMS.volleyball.capacity.l, pw: SPORT_DIMS.volleyball.capacity.w, compMargin: 5.0 * M, compGap: 3.0 * M, recMargin: 3.0 * M, recGap: 3.0 * M },
+  football: { pl: SPORT_DIMS.football.capacity.l, pw: SPORT_DIMS.football.capacity.w, compMargin: 2.0 * M, compGap: 2.0 * M, recMargin: 1.5 * M, recGap: 1.5 * M },
 };
 
 // Courts fit along a wall-to-wall dimension D: n·c + (n−1)·gap + 2·margin ≤ D

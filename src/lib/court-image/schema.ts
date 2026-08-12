@@ -14,6 +14,7 @@
 
 import { polygonAreaSqFt } from "./turf-shapes";
 import { predictCapacity } from "./packing";
+import { SPORT_DIMS, FOOTBALL_PLAY_SIZES } from "./sport-dims";
 
 export type Sport =
   | "football"
@@ -46,6 +47,19 @@ export type Plot = {
   // box, going anticlockwise. lengthFt × widthFt still describes the
   // bounding rectangle so scaling + dimension labels keep working.
   polygon?: Array<{ x: number; y: number }>;
+  // P6-02 — optional obstacle the turf boundary curves around (e.g. the
+  // kidney-shape tree/pole). When set, both renderers draw a marker at this
+  // plot-space point so the customer sees what the layout avoids. Absent on
+  // every existing layout, so nothing already saved changes.
+  obstacle?: { x: number; y: number; radiusFt?: number; kind?: "tree" | "pole" };
+  // P6-03 — vertical profile. All optional; all default to today's flat
+  // render. surfaceThicknessMm = playing-surface build-up (turf pile / slab)
+  // shown as a real lip in 3D; baseElevationFt raises the whole court above
+  // grade; curb draws a raised kerb frame around the plot edge. 3D-only.
+  surfaceThicknessMm?: number;
+  baseElevationFt?: number;
+  curb?: boolean;
+  curbColor?: string;
 };
 
 // Preset plot shape helpers — produce a polygon relative to a given
@@ -220,6 +234,32 @@ export function buildPlotPolygon(
   return undefined;
 }
 
+// P4-01 — Optional physically-based material description for an element or the
+// plot surface. EVERY field is optional: when `material` is absent (all saved
+// layouts today) the renderers fall back to their existing flat-hex / stripe
+// behaviour, so nothing already saved changes. This is the shared substrate the
+// 3D pipeline (Phase 3) and the material registry (P4-02) map onto; renderer
+// adoption is incremental and never required for a layout to draw.
+//   baseColorHex — albedo when no map is set (overrides the flat fill).
+//   roughness/metalness/opacity/sheen/clearcoat/emissive — MeshStandard /
+//     MeshPhysical parameters (0..1 except emissive = hex).
+//   albedoMap/normalMap/roughnessMap/aoMap — texture URLs (served from /public).
+//   tiling — real-world repeat so a map reads at true scale.
+export type MaterialSpec = {
+  baseColorHex?: string;
+  roughness?: number;
+  metalness?: number;
+  opacity?: number;
+  sheen?: number;
+  clearcoat?: number;
+  emissive?: string;
+  albedoMap?: string;
+  normalMap?: string;
+  roughnessMap?: string;
+  aoMap?: string;
+  tiling?: { repeatMeters?: number; rotationDeg?: number };
+};
+
 // Discriminated union — `type` drives renderer behavior.
 // Common fields (x, y, rotation, locked) live on every element via the
 // CommonElementFields base type below.
@@ -236,6 +276,11 @@ type CommonElementFields = {
   // Stack order — higher renders on top. Defaults assigned by the layout
   // builder so cricket pitch ends up above football lines.
   z?: number;
+  // P4-01: optional per-element PBR material override. Absent on every saved
+  // layout; renderers ignore it unless present, so existing designs are
+  // byte-identical. Lets a future editor tune a single element's finish
+  // (e.g. a glossy acrylic key) without a new element type.
+  material?: MaterialSpec;
 };
 
 // Football field — outer rect, halfway line, center circle, two penalty
@@ -431,6 +476,83 @@ export type BasketballHoopElement = CommonElementFields & {
   rimColor?: string;
 };
 
+// ─────────────────────────────────────────────────────────────────────
+//  P6 — Facility depth: floodlights + site objects
+//  Every field below is OPTIONAL-friendly (sensible defaults in the
+//  factories + renderers) so a bare {type,x,y,rotation,id} still draws,
+//  and — critically — NO existing saved layout carries any of these types,
+//  so nothing already stored changes. New types render in BOTH 2D (icon)
+//  and 3D (geometry).
+// ─────────────────────────────────────────────────────────────────────
+
+// P6-01 — Floodlight mast. A stadium-style lighting pole with one or more
+// lamp heads on a crossbar. In 3D it becomes a mast + emissive lamp array +
+// a downward SpotLight, so with style.timeOfDay = "evening"/"night" the
+// customer previews a floodlit scene. In 2D it's a top-down icon: pole dot,
+// head bar, and a soft light cone pointing along the mast's aim.
+export type FloodlightElement = CommonElementFields & {
+  type: "floodlight";
+  poleHeightFt: number; // mast height
+  heads: number; // lamp heads on the crossbar
+  lumens?: number; // total output (informational, surfaced in callouts)
+  colorTempK?: number; // lamp colour temperature (2700 warm … 6500 cool)
+  // Distance (ft) the beam reaches forward (toward the mast's local +Y /
+  // "north" before rotation) as it lands on the surface. Seeded from the
+  // plot size in the factory; a renderer default covers an absent value.
+  aimReachFt?: number;
+};
+
+// P6-02 — Spectator seating / tiered bleacher. width runs along the front
+// of the stand; depth is how far back the tiers go; rows = number of steps.
+export type SeatingElement = CommonElementFields & {
+  type: "seating";
+  width: number; // along local x (seat rows run this way)
+  depth: number; // along local y (stand depth, back-to-front)
+  rows?: number; // tiered rows (default 4)
+  color?: string; // seat colour
+};
+
+// Scoreboard / display board raised on two posts.
+export type ScoreboardElement = CommonElementFields & {
+  type: "scoreboard";
+  widthFt: number;
+  heightFt: number; // panel top height above ground
+  color?: string; // frame colour
+};
+
+// Cricket sight-screen — the large pale board behind the bowler's arm.
+export type SightScreenElement = CommonElementFields & {
+  type: "sight-screen";
+  widthFt: number;
+  heightFt: number;
+  color?: string; // board colour (near-white default)
+};
+
+// Corner flag (football) — short pole with a small triangular flag.
+export type CornerFlagElement = CommonElementFields & {
+  type: "corner-flag";
+  heightFt?: number;
+  color?: string; // flag colour
+};
+
+// Pedestrian gate / entrance — two posts + a swing leaf.
+export type GateElement = CommonElementFields & {
+  type: "gate";
+  widthFt: number;
+  heightFt: number;
+  color?: string;
+};
+
+// Centre-court logo / crest — a flat decal disc laid on the playing surface.
+// imageUrl is the logo bitmap; when absent it falls back to a text/initial ring.
+export type CenterLogoElement = CommonElementFields & {
+  type: "center-logo";
+  diameterFt: number;
+  imageUrl?: string;
+  text?: string;
+  color?: string; // ring / text colour
+};
+
 export type Element =
   | FootballFieldElement
   | CricketPitchElement
@@ -445,7 +567,14 @@ export type Element =
   | FenceRectElement
   | DugoutElement
   | BasketballHoopElement
-  | HighlightZoneElement;
+  | HighlightZoneElement
+  | FloodlightElement
+  | SeatingElement
+  | ScoreboardElement
+  | SightScreenElement
+  | CornerFlagElement
+  | GateElement
+  | CenterLogoElement;
 
 // Surface finishes used inside the plot footprint.
 //   plain          — earth-coloured base (undecided material)
@@ -474,50 +603,133 @@ export const SURFACE_LABEL: Record<SurfaceFinish, string> = {
   pvc_sports: "PVC sports flooring",
 };
 
-// URL served by Next.js from /public for surfaces that render with a
-// photograph in the sample callout. Acrylic surfaces have no image
-// (solid colour). Drop /images/tiles/pvc-sports.jpg into public/ when
-// the PVC sample photo is provided and it'll show automatically.
-export const SURFACE_IMAGE_URL: Partial<Record<SurfaceFinish, string>> = {
-  ppe_tile_red: "/images/tiles/red-ppe-tile.jpg",
-  pvc_sports: "/images/tiles/pvc-sports.jpg",
+// P4-02 — FINISH_MATERIAL registry: ONE record per surface finish that carries
+// everything the 2D and 3D renderers need, replacing the four parallel maps
+// (SURFACE_IMAGE_URL / TURF_IMAGE_URLS / SURFACE_SOLID_COLOR / TURF_STRIPE_COLORS
+// / SURFACE_TILE_METERS) that had to be kept in sync by hand. Those maps are now
+// DERIVED from this registry (below) so every consumer keeps working unchanged
+// and the values stay byte-identical (verified by the P4 regression script).
+//
+// Fields split into two groups:
+//   * 2D / callout data — solidColor, imageUrl, turfImages, stripeColors,
+//     tileMeters — exactly the values the old maps held.
+//   * PBR params (roughness/metalness/clearcoat/sheen/pileHeightMm/
+//     stripeDirectionDeg/anisotropy/normalScale) — the physical description a
+//     MeshStandard/Physical material maps onto 1:1, and from which the 2D layer
+//     can derive its sheen/gradient. Renderer adoption of these is incremental
+//     (Phase 5/6); they are additive and read by nothing yet, so no render
+//     changes today.
+export type FinishMaterial = {
+  // 2D + sample-callout data (the historical parallel-map values).
+  solidColor?: string;
+  imageUrl?: string;
+  turfImages?: { light: string; dark: string };
+  stripeColors?: { light: string; dark: string };
+  tileMeters?: number;
+  // PBR description (MeshStandard/Physical). roughness/metalness are 0..1.
+  roughness: number;
+  metalness: number;
+  clearcoat?: number;
+  sheen?: number;
+  // Turf-only pile characterisation (informs 3D normal/height + 2D stripe).
+  pileHeightMm?: number;
+  stripeDirectionDeg?: number;
+  anisotropy?: number;
+  normalScale?: number;
 };
 
-// Turf finishes are laid as alternating light + dark rolls (mowed
-// stripe effect). Each finish has TWO photographs — one per shade —
-// shown together in the callout so the customer sees exactly which
-// two tones will be used.
-export const TURF_IMAGE_URLS: Partial<Record<SurfaceFinish, { light: string; dark: string }>> = {
+export const FINISH_MATERIAL: Record<SurfaceFinish, FinishMaterial> = {
+  // Plain earth — matte, no photo.
+  plain: { roughness: 0.95, metalness: 0 },
+  // Interlocking PPE tiles (30 cm) — photographed, semi-matte plastic.
+  ppe_tile_red: {
+    imageUrl: "/images/tiles/red-ppe-tile.jpg",
+    tileMeters: 0.3,
+    roughness: 0.7,
+    metalness: 0,
+  },
+  // Acrylic hard-court coating — low roughness + a hint of clearcoat sheen.
+  acrylic_blue: { solidColor: "#265a9a", roughness: 0.35, metalness: 0, clearcoat: 0.3 },
+  acrylic_green: { solidColor: "#2f6d3a", roughness: 0.35, metalness: 0, clearcoat: 0.3 },
+  // Artificial grass — light photo base + dark-photo stripe for mow direction;
+  // stripe tones (P1-04 spread) for the 2D plan; high roughness, tall pile.
   turf_40mm: {
-    light: "/images/tiles/40 mm light green.jpg",
-    dark: "/images/tiles/40 mm dark green.jpg",
+    solidColor: "#2f8c3e",
+    turfImages: {
+      light: "/images/tiles/40 mm light green.jpg",
+      dark: "/images/tiles/40 mm dark green.jpg",
+    },
+    stripeColors: { light: "#42a854", dark: "#20602a" },
+    tileMeters: 1.0,
+    roughness: 0.9,
+    metalness: 0,
+    pileHeightMm: 40,
+    stripeDirectionDeg: 0,
+    anisotropy: 8,
+    normalScale: 0.8,
   },
   turf_50mm: {
-    light: "/images/tiles/50mm light green.webp",
-    dark: "/images/tiles/50 mm dark green1.webp",
+    solidColor: "#2f8c3e",
+    turfImages: {
+      light: "/images/tiles/50mm light green.webp",
+      dark: "/images/tiles/50 mm dark green1.webp",
+    },
+    stripeColors: { light: "#42a854", dark: "#20602a" },
+    tileMeters: 1.0,
+    roughness: 0.9,
+    metalness: 0,
+    pileHeightMm: 50,
+    stripeDirectionDeg: 0,
+    anisotropy: 8,
+    normalScale: 0.9,
+  },
+  // PVC sports flooring — photo + green solid fallback (matches the sample
+  // photo so the fill stays coherent if the image fails to load).
+  pvc_sports: {
+    solidColor: "#3ea867",
+    imageUrl: "/images/tiles/pvc-sports.jpg",
+    tileMeters: 1.0,
+    roughness: 0.5,
+    metalness: 0,
   },
 };
 
-// Solid fill colour for surfaces that don't use a photograph — the
-// PlotSurface renderer paints the plot with this and the sample-tile
-// callout is skipped (acrylic is a coating, not tiles).
-export const SURFACE_SOLID_COLOR: Partial<Record<SurfaceFinish, string>> = {
-  acrylic_blue: "#265a9a",
-  acrylic_green: "#2f6d3a",
-  turf_40mm: "#2f8c3e",
-  turf_50mm: "#2f8c3e",
-  // Green — matches the PVC sports-floor sample photograph so the
-  // solid fallback colour stays coherent with the callout swatch even
-  // if the image fails to load.
-  pvc_sports: "#3ea867",
-};
+// Derive the legacy parallel maps from FINISH_MATERIAL so existing consumers
+// (CourtCanvas / CourtCanvas3D / wizard) are untouched. Only finishes that
+// define the field appear in the derived map — reproducing each old map's exact
+// key set + values.
+function deriveFinishMap<T>(
+  pick: (m: FinishMaterial) => T | undefined,
+): Partial<Record<SurfaceFinish, T>> {
+  const out: Partial<Record<SurfaceFinish, T>> = {};
+  (Object.keys(FINISH_MATERIAL) as SurfaceFinish[]).forEach((k) => {
+    const v = pick(FINISH_MATERIAL[k]);
+    if (v !== undefined) out[k] = v;
+  });
+  return out;
+}
 
-// Base stripe tones for turf. Rendered as alternating parallel stripes
-// across the field length, mimicking a real mowed pattern.
-export const TURF_STRIPE_COLORS: Partial<Record<SurfaceFinish, { light: string; dark: string }>> = {
-  turf_40mm: { light: "#3fa050", dark: "#256c30" },
-  turf_50mm: { light: "#3fa050", dark: "#256c30" },
-};
+// URL served by Next.js from /public for surfaces that render with a photograph
+// in the sample callout. Acrylic surfaces have no image (solid colour).
+export const SURFACE_IMAGE_URL = deriveFinishMap((m) => m.imageUrl);
+
+// Turf finishes are laid as alternating light + dark rolls (mowed stripe
+// effect). Each finish has TWO photographs — one per shade.
+export const TURF_IMAGE_URLS = deriveFinishMap((m) => m.turfImages);
+
+// Solid fill colour for surfaces that don't use a photograph — PlotSurface
+// paints the plot with this and skips the sample-tile callout.
+export const SURFACE_SOLID_COLOR = deriveFinishMap((m) => m.solidColor);
+
+// Base stripe tones for turf. Rendered as alternating parallel stripes across
+// the field length, mimicking a real mowed pattern (P1-04 widened the spread).
+export const TURF_STRIPE_COLORS = deriveFinishMap((m) => m.stripeColors);
+
+// P2-02: real-world size (in METRES) that ONE surface photo should cover when
+// tiled across the 2D plot with fillPatternImage, so the material reads at true
+// scale (a PPE tile is 30 cm; a turf/PVC texture repeats every ~1 m). Absent
+// surfaces keep their solid fill (no photo tiling).
+export const SURFACE_TILE_METERS = deriveFinishMap((m) => m.tileMeters);
 
 // Which surfaces are counted as "tiled" (PPE tile family) vs a
 // solid-coat material. Drives the tile-count pill visibility and the
@@ -778,6 +990,17 @@ export type Style = {
   // Optional watermark (logo URL + opacity).
   watermarkUrl?: string;
   watermarkOpacity?: number;
+  // P4-01: optional PBR override for the plot SURFACE finish. Undefined on
+  // every saved layout, so the surface keeps deriving its look from `surface`
+  // (SurfaceFinish → FINISH_MATERIAL). When set, a future renderer can override
+  // the finish's stock roughness/sheen/maps for a bespoke material without a
+  // new SurfaceFinish enum value.
+  surfaceMaterial?: MaterialSpec;
+  // P6-01 — scene time-of-day for the 3D preview. "day" (default / undefined)
+  // keeps the bright sky; "evening" and "night" dim the sun + sky + ambient so
+  // any floodlight masts read as the light source (floodlit evening scene).
+  // 2D is unaffected; existing layouts render as day.
+  timeOfDay?: "day" | "evening" | "night";
 };
 
 export const DEFAULT_STYLE: Style = {
@@ -902,6 +1125,21 @@ export const RUNOFF_DEFAULT_COLOR: Partial<Record<Sport, string>> = {
 // A-side proportional configs — football fields scale their markings off
 // these so the same renderer covers 5/7/11-a-side turfs without per-side
 // code paths. All values are *fractions of field width/height*.
+//
+// P4-05: the 11-a-side proportions were corrected to the IFAB Laws of the Game
+// (105 × 68 m). This INTENTIONALLY changes how 11-a-side football renders (2D
+// and 3D read these ratios live at draw time, so re-rendering a saved 11-a-side
+// design will reflect the fix). Do NOT silently re-render / re-cache designs
+// already sent to a customer — leave those on their existing PDF. 5- and
+// 7-a-side are unchanged.
+//
+//   penaltyBoxHeightRatio  40.32 m / 68 m = 0.593  (was 0.66)
+//   goalAreaHeightRatio     18.32 m / 68 m = 0.269  (was 0.36)
+//   centerCircleRadiusRatio  9.15 m / 68 m = 0.135  (was 0.15, radius of min side)
+//
+// `lineWidthFt` is the real IFAB pitch-line width (12 cm ≈ 0.394 ft) carried as
+// data for a future true-scale line renderer; it is NOT consumed yet, so line
+// weights are unchanged in this phase.
 const A_SIDE_PROPS = {
   5: {
     penaltyBoxWidthRatio: 0.16, // along x (length)
@@ -910,6 +1148,7 @@ const A_SIDE_PROPS = {
     goalAreaHeightRatio: 0.25,
     centerCircleRadiusRatio: 0.12,
     goalWidthRatio: 0.17,
+    lineWidthFt: 0.394,
   },
   7: {
     penaltyBoxWidthRatio: 0.18,
@@ -918,14 +1157,16 @@ const A_SIDE_PROPS = {
     goalAreaHeightRatio: 0.3,
     centerCircleRadiusRatio: 0.14,
     goalWidthRatio: 0.18,
+    lineWidthFt: 0.394,
   },
   11: {
     penaltyBoxWidthRatio: 0.165,
-    penaltyBoxHeightRatio: 0.66,
+    penaltyBoxHeightRatio: 0.593,
     goalAreaWidthRatio: 0.055,
-    goalAreaHeightRatio: 0.36,
-    centerCircleRadiusRatio: 0.15,
+    goalAreaHeightRatio: 0.269,
+    centerCircleRadiusRatio: 0.135,
     goalWidthRatio: 0.12,
+    lineWidthFt: 0.394,
   },
 };
 
@@ -1104,15 +1345,19 @@ function courtExactSize(
   return { courtW: playLengthFt * scale, courtH: playWidthFt * scale };
 }
 
-// Regulation court sizes (ft) per sport — used to work out how many courts a
-// plot can hold and to size tiled courts. Mirrors the multisport REG table.
+// Court sizes (ft) per sport used by retileCourts to tile + size courts.
+// P4-03: sourced from the canonical SPORT_DIMS registry. NOTE football uses the
+// CAPACITY footprint (197 × 131 — the 7-a-side representative pitch you actually
+// tile), NOT the 344 × 223 drawing size; the other sports use their nominal
+// drawing size. Values are byte-identical to the previous literal (football
+// 197×131, volleyball 59×30, badminton 44×20, …).
 const COURT_REG: Partial<Record<Sport, { l: number; w: number }>> = {
-  football: { l: 197, w: 131 },
-  basketball: { l: 91.86, w: 49.21 },
-  tennis: { l: 78, w: 36 },
-  volleyball: { l: 59, w: 30 },
-  pickleball: { l: 44, w: 20 },
-  badminton: { l: 44, w: 20 },
+  football: SPORT_DIMS.football.capacity,
+  basketball: SPORT_DIMS.basketball.drawing,
+  tennis: SPORT_DIMS.tennis.drawing,
+  volleyball: SPORT_DIMS.volleyball.drawing,
+  pickleball: SPORT_DIMS.pickleball.drawing,
+  badminton: SPORT_DIMS.badminton.drawing,
 };
 
 // How many regulation courts of a sport fit in the plot (best of either
@@ -1304,15 +1549,10 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     //   5-a-side  : 40 × 20 m ≈ 131 × 66 ft
     //   7-a-side  : 60 × 40 m ≈ 197 × 131 ft
     //   11-a-side : 105 × 68 m ≈ 344 × 223 ft
-    // Playing-area sizes (ft) per format, exact from the dimensions
-    // reference: futsal 40 × 20 m, FA 7-a-side 54.86 × 36.58 m, FIFA
-    // 11-a-side 105 × 68 m (metric → ft, so the drawn pitch matches to <0.1 m).
-    const playSizes: Record<5 | 7 | 11, { l: number; w: number }> = {
-      5: { l: 131.23, w: 65.62 },
-      7: { l: 180, w: 120 },
-      11: { l: 344.49, w: 223.1 },
-    };
-    const ps = playSizes[aSide];
+    // Playing-area sizes (ft) per format — P4-03: from the canonical
+    // FOOTBALL_PLAY_SIZES registry (exact metric → ft, so the drawn pitch
+    // matches to < 0.1 m). Byte-identical to the previous inline literal.
+    const ps = FOOTBALL_PLAY_SIZES[aSide];
     // Draw the pitch at its EXACT playing area (see courtExactSize) — the
     // plot's leftover forms the run-off. Old note (pre-exact-size): scaled
     // the FIFA playing area to fill the plot, which left the run-off on
@@ -1593,14 +1833,16 @@ export function buildInitialLayout(input: InitialLayoutInput): CourtLayout {
     // badminton inside it) instead of separate courts tiled side by side.
     //
     // Regulation playing-area dimensions (long × short, ft) used to
-    // derive the relative sizes.
+    // derive the relative sizes. P4-03: from SPORT_DIMS.*.drawing (the nominal
+    // drawing size). Byte-identical to the previous literal (football 344×223,
+    // volleyball 59×30, …).
     const REG: Partial<Record<Sport, { l: number; w: number }>> = {
-      football: { l: 344, w: 223 },
-      basketball: { l: 91.86, w: 49.21 },
-      tennis: { l: 78, w: 36 },
-      volleyball: { l: 59, w: 30 },
-      pickleball: { l: 44, w: 20 },
-      badminton: { l: 44, w: 20 },
+      football: SPORT_DIMS.football.drawing,
+      basketball: SPORT_DIMS.basketball.drawing,
+      tennis: SPORT_DIMS.tennis.drawing,
+      volleyball: SPORT_DIMS.volleyball.drawing,
+      pickleball: SPORT_DIMS.pickleball.drawing,
+      badminton: SPORT_DIMS.badminton.drawing,
     };
     // Court elements to stack (skip cricket-pitch overlay + multisport
     // base + nets). Keep a handle on each with its regulation size.
@@ -2000,4 +2242,335 @@ export function newBasketballHoop(plot: Plot): BasketballHoopElement {
     rimColor: "#ef4444",
     z: 50,
   };
+}
+
+// ── P6-01 / P6-02 — facility element factories ───────────────────────
+// Placed near an edge/corner by default so they don't land on top of the
+// court. All carry sensible sizes derived from the plot; the wizard's
+// "Add element" menu (out of this phase's scope) can call these.
+
+// Rotation (deg, clockwise) so a mast placed at (x,y) aims toward the plot
+// centre. Beam default (rotation 0) points toward +Y ("north"); this returns
+// the clockwise angle from +Y to the centre direction.
+function aimRotationToCenter(plot: Plot, x: number, y: number): number {
+  const dx = plot.lengthFt / 2 - x;
+  const dy = plot.widthFt / 2 - y;
+  return (Math.atan2(dx, dy) * 180) / Math.PI;
+}
+
+export function newFloodlight(plot: Plot): FloodlightElement {
+  // Drop it just inside the top-right corner, aimed at the field.
+  const x = plot.lengthFt * 0.9;
+  const y = plot.widthFt * 0.9;
+  return {
+    id: newId("floodlight"),
+    type: "floodlight",
+    x,
+    y,
+    rotation: aimRotationToCenter(plot, x, y),
+    poleHeightFt: Math.max(18, Math.min(40, Math.max(plot.lengthFt, plot.widthFt) * 0.18)),
+    heads: 4,
+    lumens: 60000,
+    colorTempK: 5000,
+    aimReachFt: Math.max(plot.lengthFt, plot.widthFt) * 0.45,
+    z: 60,
+  };
+}
+
+export function newSeating(plot: Plot): SeatingElement {
+  return {
+    id: newId("seating"),
+    type: "seating",
+    x: plot.lengthFt / 2,
+    // Along the south edge just outside the run-off.
+    y: Math.max(4, plot.widthFt * 0.06),
+    rotation: 0,
+    width: Math.min(plot.lengthFt * 0.5, 60),
+    depth: Math.min(plot.widthFt * 0.12, 12),
+    rows: 4,
+    color: "#3b82f6",
+    z: 45,
+  };
+}
+
+export function newScoreboard(plot: Plot): ScoreboardElement {
+  return {
+    id: newId("scoreboard"),
+    type: "scoreboard",
+    x: plot.lengthFt / 2,
+    y: Math.max(3, plot.widthFt * 0.05),
+    rotation: 0,
+    widthFt: Math.min(16, plot.lengthFt * 0.18),
+    heightFt: 10,
+    color: "#0f172a",
+    z: 48,
+  };
+}
+
+export function newSightScreen(plot: Plot): SightScreenElement {
+  return {
+    id: newId("sightscreen"),
+    type: "sight-screen",
+    x: plot.lengthFt * 0.12,
+    y: plot.widthFt / 2,
+    rotation: 0,
+    widthFt: Math.min(24, plot.lengthFt * 0.2),
+    heightFt: 12,
+    color: "#f1f5f9",
+    z: 44,
+  };
+}
+
+export function newCornerFlag(plot: Plot): CornerFlagElement {
+  return {
+    id: newId("cornerflag"),
+    type: "corner-flag",
+    x: plot.lengthFt * 0.08,
+    y: plot.widthFt * 0.08,
+    rotation: 0,
+    heightFt: 5,
+    color: "#ef4444",
+    z: 46,
+  };
+}
+
+export function newGate(plot: Plot): GateElement {
+  return {
+    id: newId("gate"),
+    type: "gate",
+    x: plot.lengthFt / 2,
+    y: 1,
+    rotation: 0,
+    widthFt: Math.min(12, plot.lengthFt * 0.14),
+    heightFt: 8,
+    color: "#94a3b8",
+    z: 47,
+  };
+}
+
+export function newCenterLogo(plot: Plot): CenterLogoElement {
+  return {
+    id: newId("logo"),
+    type: "center-logo",
+    x: plot.lengthFt / 2,
+    y: plot.widthFt / 2,
+    rotation: 0,
+    diameterFt: Math.min(plot.lengthFt, plot.widthFt) * 0.16,
+    imageUrl: "/quotation-assets/image1.png",
+    color: "#ffffff",
+    z: 8,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  P5-01 — One-click colour schemes
+// ─────────────────────────────────────────────────────────────────────
+
+// A coordinated (surface + line + run-off) palette applied to the whole
+// design in one click, so a non-designer lands on a legible, on-brand
+// scheme instead of hand-tuning three pickers. Led by the Fitoverse brand
+// tokens (#159341 / #73CAF0 / #C81124).
+export type ColorScheme = {
+  id: string;
+  name: string;
+  surface: string; // playing-surface / court fill (also grass / pitch)
+  line: string; // line markings
+  runOff: string; // non-playing run-off ring
+};
+
+export const COLOR_SCHEMES: ColorScheme[] = [
+  { id: "fitoverse-green", name: "Fitoverse Green", surface: "#159341", line: "#FFFFFF", runOff: "#0C5E29" },
+  { id: "cool-blue", name: "Cool Blue", surface: "#1E60A8", line: "#73CAF0", runOff: "#123B66" },
+  { id: "bold-red", name: "Bold Red", surface: "#C81124", line: "#FFFFFF", runOff: "#7C0B17" },
+  { id: "classic-acrylic", name: "Classic Acrylic", surface: "#265A9A", line: "#FFFFFF", runOff: "#20603A" },
+  { id: "terracotta", name: "Terracotta Clay", surface: "#C0563B", line: "#FFFFFF", runOff: "#6E3C2C" },
+];
+
+// Recolour every court element + the plot surface/run-off to a scheme.
+// Turf sports take the scheme colour on grass / pitch so the whole design
+// stays coherent. All other fields (dims, positions, equipment) untouched.
+export function applyColorScheme(layout: CourtLayout, scheme: ColorScheme): CourtLayout {
+  const elements: Element[] = layout.elements.map((el) => {
+    switch (el.type) {
+      case "football-field":
+        return { ...el, grassColor: scheme.surface, lineColor: scheme.line };
+      case "basketball-court":
+      case "pickleball-court":
+      case "generic-court":
+        return { ...el, surfaceColor: scheme.surface, lineColor: scheme.line };
+      case "cricket-pitch":
+        return { ...el, pitchColor: scheme.surface, markingColor: scheme.line };
+      default:
+        return el;
+    }
+  });
+  return {
+    ...layout,
+    elements,
+    style: {
+      ...layout.style,
+      lineColor: scheme.line,
+      surfaceColorOverride: scheme.surface,
+      runOffColorOverride: scheme.runOff,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  P5-04 — Starter-template gallery
+// ─────────────────────────────────────────────────────────────────────
+
+// A ready-made "Start from a template" preset. Seeds Step 1 (plot, sports,
+// surface, sport config); the wizard builds the layout via buildInitialLayout
+// and then applies `extras` (perimeter fence, dugouts, a colour scheme) so the
+// design opens as a finished, on-brand facility rather than a bare court.
+export type StarterTemplate = {
+  id: string;
+  name: string;
+  blurb: string;
+  plot: { lengthFt: number; widthFt: number };
+  sports: Sport[];
+  surface: SurfaceFinish;
+  footballASide?: 5 | 7 | 11;
+  basketballHalfCourt?: boolean;
+  cricketStripM?: 10 | 20;
+  extras?: {
+    fence?: boolean;
+    dugouts?: boolean;
+    schemeId?: string;
+    // P6 — full-facility extras: corner floodlight masts, a spectator stand,
+    // and a centre-court crest. All optional; only ADD elements.
+    floodlights?: boolean;
+    seating?: boolean;
+    centerLogo?: boolean;
+  };
+};
+
+export const STARTER_TEMPLATES: StarterTemplate[] = [
+  {
+    id: "7aside-turf",
+    name: "7-a-side turf arena",
+    blurb: "Fenced turf pitch with two team dugouts",
+    plot: { lengthFt: 200, widthFt: 140 },
+    sports: ["football"],
+    surface: "turf_40mm",
+    footballASide: 7,
+    extras: { fence: true, dugouts: true, floodlights: true, seating: true },
+  },
+  {
+    id: "multisport-tile",
+    name: "Multisport tile court",
+    blurb: "Basketball + badminton on interlocking PP tile",
+    plot: { lengthFt: 100, widthFt: 60 },
+    sports: ["basketball", "badminton"],
+    surface: "ppe_tile_red",
+    basketballHalfCourt: false,
+    extras: { fence: true, seating: true },
+  },
+  {
+    id: "3x3-halfcourt",
+    name: "3×3 half-court",
+    blurb: "Acrylic half-court with a single hoop",
+    plot: { lengthFt: 55, widthFt: 40 },
+    sports: ["basketball"],
+    surface: "acrylic_blue",
+    basketballHalfCourt: true,
+    extras: { schemeId: "cool-blue" },
+  },
+  {
+    id: "cricket-lane",
+    name: "Cricket practice lane",
+    blurb: "Fenced turf net lane, 20 m strip",
+    plot: { lengthFt: 90, widthFt: 24 },
+    sports: ["cricket"],
+    surface: "turf_40mm",
+    cricketStripM: 20,
+    extras: { fence: true },
+  },
+];
+
+// Layer a template's extras onto an already-built layout (from
+// buildInitialLayout). Adds a perimeter fence, flanking dugouts and/or a
+// colour scheme. Safe to call on any layout — it only ADDS elements + tweaks
+// style, so it never breaks an existing design.
+export function applyTemplateExtras(
+  layout: CourtLayout,
+  template: StarterTemplate,
+): CourtLayout {
+  const extras = template.extras;
+  if (!extras) return layout;
+  let out = layout;
+  const plot = out.plot;
+  const added: Element[] = [];
+  if (extras.fence) {
+    added.push(newFenceRect(plot));
+  }
+  if (extras.dugouts) {
+    const cx = plot.lengthFt / 2;
+    const w = Math.min(18, Math.max(10, plot.lengthFt * 0.16));
+    const h = Math.min(6, Math.max(4, plot.widthFt * 0.07));
+    const inset = h / 2 + 2;
+    // South-edge dugout, opening north toward the pitch.
+    added.push({
+      ...newDugout(plot),
+      id: newId("dugout"),
+      x: cx,
+      y: inset,
+      width: w,
+      height: h,
+      openSide: "north",
+      z: 42,
+    });
+    // North-edge dugout, opening south toward the pitch.
+    added.push({
+      ...newDugout(plot),
+      id: newId("dugout"),
+      x: cx,
+      y: plot.widthFt - inset,
+      width: w,
+      height: h,
+      openSide: "south",
+      z: 42,
+    });
+  }
+  if (extras.floodlights) {
+    // Four corner masts, each aimed at the field centre.
+    const insetX = Math.max(4, plot.lengthFt * 0.05);
+    const insetY = Math.max(4, plot.widthFt * 0.05);
+    const corners: Array<[number, number]> = [
+      [insetX, insetY],
+      [plot.lengthFt - insetX, insetY],
+      [insetX, plot.widthFt - insetY],
+      [plot.lengthFt - insetX, plot.widthFt - insetY],
+    ];
+    for (const [x, y] of corners) {
+      added.push({
+        ...newFloodlight(plot),
+        id: newId("floodlight"),
+        x,
+        y,
+        rotation: aimRotationToCenter(plot, x, y),
+      });
+    }
+  }
+  if (extras.seating) {
+    // A stand along the south edge (front facing the field / +Y).
+    added.push({
+      ...newSeating(plot),
+      id: newId("seating"),
+      x: plot.lengthFt / 2,
+      y: Math.max(3, plot.widthFt * 0.045),
+      width: Math.min(plot.lengthFt * 0.55, 70),
+      depth: Math.min(plot.widthFt * 0.1, 12),
+    });
+  }
+  if (extras.centerLogo) {
+    added.push({ ...newCenterLogo(plot), id: newId("logo") });
+  }
+  if (added.length) out = { ...out, elements: [...out.elements, ...added] };
+  if (extras.schemeId) {
+    const scheme = COLOR_SCHEMES.find((s) => s.id === extras.schemeId);
+    if (scheme) out = applyColorScheme(out, scheme);
+  }
+  return out;
 }

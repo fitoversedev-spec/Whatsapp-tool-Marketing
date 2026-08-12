@@ -3678,59 +3678,6 @@ function Step1(props: {
 
   return (
     <div className="p-6 sm:p-8 overflow-y-auto h-full max-w-3xl mx-auto space-y-6">
-      {/* P5-04: Starter-template gallery — pick a ready-made, on-brand facility
-          to seed the whole Step-1 form in one click. */}
-      <section>
-        <h3 className="text-sm font-semibold text-slate-900 mb-1">
-          Start from a template{" "}
-          <span className="text-xs font-normal text-slate-500">(optional)</span>
-        </h3>
-        <p className="text-[11px] text-slate-500 mb-3 leading-snug">
-          Seeds the plot, sports, surface and equipment for a finished layout.
-          You can tweak everything afterwards.
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {STARTER_TEMPLATES.map((t) => {
-            const active = selectedTemplateId === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => applyTemplate(t)}
-                className={`text-left rounded-lg border-2 overflow-hidden transition ${
-                  active
-                    ? "border-wa-green ring-2 ring-wa-green/30"
-                    : "border-slate-200 hover:border-slate-400"
-                }`}
-              >
-                <MaterialSwatch finish={t.surface} />
-                <div className="px-2 py-1.5">
-                  <div
-                    className={`text-[11.5px] font-semibold leading-tight ${
-                      active ? "text-wa-dark" : "text-slate-800"
-                    }`}
-                  >
-                    {t.name}
-                  </div>
-                  <div className="text-[10px] text-slate-500 leading-snug mt-0.5">
-                    {t.blurb}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        {selectedTemplateId && (
-          <button
-            type="button"
-            onClick={() => setSelectedTemplateId(null)}
-            className="mt-2 text-[10.5px] text-slate-500 hover:text-slate-700 underline"
-          >
-            Clear template
-          </button>
-        )}
-      </section>
-
       {/* Design mode — standard preset court, or free-form custom
           shape. Custom is a placeholder for now; the free-form editor
           will land in a later release. */}

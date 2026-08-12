@@ -342,10 +342,36 @@ export async function renderCombinedPdf(
   if (twoD) {
     newLandscapePage(ctx);
     landscapeTitle(ctx, "2D court plan");
-    await drawImageFit(ctx, twoD.bytes, ctx.y - MARGIN, {
-      boxX: 18,
-      boxW: LAND_W - 36,
-    });
+    // T3-4: place the 2D plan on the FULL landscape box, centred, at native
+    // resolution — never upscaled past 1:1, so the high-DPI (3x pixelRatio)
+    // export stays crisp and pdf-lib embeds the PNG losslessly (no
+    // over-compression / softening). A thin hairline frame reads as print-ready.
+    const embedded = await tryEmbed(ctx.doc, twoD.bytes);
+    if (embedded) {
+      const boxX = 18;
+      const boxW = LAND_W - 36;
+      const availH = Math.max(120, ctx.y - MARGIN - 6);
+      const scale = Math.min(boxW / embedded.width, availH / embedded.height, 1);
+      const w = embedded.width * scale;
+      const h = embedded.height * scale;
+      const ix = boxX + (boxW - w) / 2;
+      const iy = ctx.y - (availH + h) / 2; // centre vertically within the box
+      ctx.page.drawRectangle({
+        x: ix - 3,
+        y: iy - 3,
+        width: w + 6,
+        height: h + 6,
+        borderColor: COL.line,
+        borderWidth: 1,
+      });
+      ctx.page.drawImage(embedded, { x: ix, y: iy, width: w, height: h });
+      ctx.y = iy - 6;
+    } else {
+      text(ctx, "(2D plan image could not be embedded.)", {
+        color: COL.faint,
+        size: 9,
+      });
+    }
   }
 
   // ── Dimensions — a dedicated, easy-to-read table (kept OFF the 2D diagram),

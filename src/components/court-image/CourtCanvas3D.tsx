@@ -37,6 +37,9 @@ import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+// T1-3 colour-grade / vignette pass appended after OutputPass. ShaderPass is a
+// tiny full-screen quad pass present in three r0.185's examples/jsm.
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import type {
   CourtLayout,
   CricketPitchElement,
@@ -61,12 +64,15 @@ import type {
   CornerFlagElement,
   GateElement,
   CenterLogoElement,
+  SurfaceFinish as PlotSurfaceFinish,
 } from "@/lib/court-image/schema";
 import {
   aSideProps,
   isTurfSurface,
   isTiledSurface,
+  isPvcSurface,
   SURFACE_SOLID_COLOR,
+  FINISH_MATERIAL,
 } from "@/lib/court-image/schema";
 
 // Max anisotropic filtering the GPU supports. Seeded to a safe 8 and raised to
@@ -188,9 +194,12 @@ export default function CourtCanvas3D({
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    // Solid sky-blue fallback so a snapshot is never washed grey/black if
-    // the Sky dome hasn't painted yet (the dome renders in front of it).
-    scene.background = new THREE.Color(0x8fb8de);
+    // T1-1 — studio gradient backdrop (light top → soft mid → deeper bottom)
+    // instead of a flat fill, so the scene reads like a soft product-shot
+    // sweep. Regenerated/tinted per time-of-day in the layout effect. Additive:
+    // if the CanvasTexture can't build we fall back to today's flat sky-blue
+    // colour (also the safety fill before the first paint).
+    scene.background = makeBackdropTexture(0x8fb8de) ?? new THREE.Color(0x8fb8de);
     // Ground haze so the flat plane's far edge melts into the horizon
     // instead of ending in a hard line. The Sky dome is a fog-less
     // ShaderMaterial, so this only affects the ground + court objects.
@@ -201,8 +210,13 @@ export default function CourtCanvas3D({
     // and causes the co-planar court/overlay planes to z-fight at grazing
     // angles. A larger near also sharpens GTAO depth reconstruction. Nothing
     // the camera ever gets within 0.6 ft of, so nothing clips.
-    const camera = new THREE.PerspectiveCamera(42, canvasWidth / canvasHeight, 0.6, 6000);
-    camera.position.set(80, 70, 80);
+    // T1-4 — product-shot focal length. fov 42 → 34 flattens perspective
+    // distortion for a more premium "hero still" look (a longer lens). The view
+    // presets below pull the camera back proportionally so the court still
+    // fills the frame at every plot size; captureTopDown solves its height from
+    // camera.fov analytically, so it adapts automatically.
+    const camera = new THREE.PerspectiveCamera(34, canvasWidth / canvasHeight, 0.6, 6000);
+    camera.position.set(96, 84, 96);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({
@@ -219,7 +233,8 @@ export default function CourtCanvas3D({
     // Filmic tone mapping + sRGB output = photographic contrast and
     // colour instead of the flat, washed-out look of raw linear output.
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    // Slightly under 1.0 so the bright day sky + sun don't wash the surface out.
+    renderer.toneMappingExposure = 0.85;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     rendererRef.current = renderer;
     MAX_ANISOTROPY = renderer.capabilities.getMaxAnisotropy();
@@ -258,9 +273,9 @@ export default function CourtCanvas3D({
     const pmrem = new THREE.PMREMGenerator(renderer);
     const skyEnvRT = pmrem.fromScene(scene, 0.04, 1, 10000);
     scene.environment = skyEnvRT.texture;
-    // The sky probe is brighter + bluer than the old RoomEnvironment studio
-    // box, so the ambient multiplier is dialled up from 0.55 to sky levels.
-    scene.environmentIntensity = 0.9;
+    // Sky IBL kept very low ("remove the sky light" feedback); the day profile
+    // below re-applies it. (Overridden per time-of-day at rebuild.)
+    scene.environmentIntensity = 0.1;
 
     // Lights — the env map does the ambient fill now, so the hemisphere
     // is dialled way down; the sun stays strong for crisp shadows and
@@ -386,36 +401,34 @@ export default function CourtCanvas3D({
     composer.setSize(canvasWidth, canvasHeight);
     composer.addPass(new RenderPass(scene, camera));
     if (!lowEnd) {
-      // GTAO radius is in WORLD FEET (screenSpaceRadius:false) — contact AO
-      // reaches a few feet, enough to visibly ground goal posts, fence posts,
-      // dugouts + hoop poles onto the surface without haloing the open field.
-      const gtao = new GTAOPass(scene, camera, bufW, bufH);
-      gtao.output = GTAOPass.OUTPUT.Default;
-      gtao.updateGtaoMaterial({
-        radius: 3.0,
-        distanceExponent: 1.0,
-        thickness: 2.0,
-        scale: 1.25,
-        samples: 16,
-        distanceFallOff: 1.0,
-        screenSpaceRadius: false,
-      });
-      gtao.blendIntensity = 0.9;
-      composer.addPass(gtao);
+      // GTAO ambient-occlusion REMOVED (root cause of the "black box"): its
+      // occlusion GBuffer rendered the flat billboard dimension labels (and the
+      // alpha-mapped nets) as SOLID quads and darkened the ground behind them.
+      // Grounding now comes from the sun's real cast shadows + the sky IBL.
       // Very subtle HDR bloom (P3-07). Threshold sits just ABOVE 1.0 so the
       // white court lines (linear ~1.0 pre-tone-map) never bloom — only true
       // HDR highlights (sun specular on metal posts/rims) glow softly.
       const bloom = new UnrealBloomPass(
         new THREE.Vector2(bufW, bufH),
-        0.28, // strength
+        0.18, // strength (gentle)
         0.5, // radius
-        1.05, // threshold (linear HDR)
+        1.6, // threshold (linear HDR) — only true highlights (sun specular on
+        //      metal/rims) glow; broad lit turf/ground must NOT bloom.
       );
       composer.addPass(bloom);
     } else {
       composer.addPass(new SMAAPass());
     }
     composer.addPass(new OutputPass());
+    // T1-3 — colour grade + vignette. ONE final full-screen pass after the
+    // OutputPass (which has already done ACES tone-map + sRGB encode), so this
+    // grades the display-space image: a subtle S-curve for contrast, a small
+    // saturation lift, and a soft radial vignette that draws the eye to the
+    // court. Gated by the same !lowEnd flag as bloom (skipped on weak GPUs).
+    // Additive: if it isn't added the pipeline is exactly today's chain.
+    if (!lowEnd) {
+      composer.addPass(new ShaderPass(gradeVignetteShader()));
+    }
     composerRef.current = composer;
     // Shared render entry point for the on-demand loop: composer when present,
     // otherwise a direct render (safety only). The export handlers render
@@ -475,6 +488,9 @@ export default function CourtCanvas3D({
         }
       });
       scene.environment?.dispose();
+      // Free the gradient backdrop CanvasTexture (T1-1) — it's a scene property,
+      // not a child, so the traversal above doesn't reach it.
+      if (scene.background instanceof THREE.Texture) scene.background.dispose();
       // composer.dispose() only frees its two swap targets + copy pass, so
       // dispose each pass (GTAO's GBuffer targets, SMAA/bloom targets, the
       // OutputPass quad) individually first to avoid leaking on remount.
@@ -616,6 +632,38 @@ export default function CourtCanvas3D({
     const plotSurf = makePlotSurface(layout);
     if (plotSurf) group.add(plotSurf);
 
+    // T1-2 — soft contact shadow "decal" under the whole court so it reads as
+    // placed on the ground (the grounding cue the removed GTAO used to hint at,
+    // without the black-box artefact). A radial-gradient CanvasTexture (dark
+    // centre → transparent edge) on an unlit, depth-write-off transparent plane
+    // sized to the plot AABB + margin, sitting just above the earth and below
+    // the flooring. Rebuilt with the layout (disposed via the group). Additive:
+    // skipped entirely if the texture can't build → today's no-shadow look.
+    const contactTex = makeContactShadowTexture();
+    if (contactTex) {
+      const csMat = new THREE.MeshBasicMaterial({
+        map: contactTex,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        // Keep it a clean shadow tint — don't let scene fog wash it out.
+        fog: false,
+      });
+      const cs = new THREE.Mesh(
+        new THREE.PlaneGeometry(
+          layout.plot.lengthFt * 1.7,
+          layout.plot.widthFt * 1.7,
+        ),
+        csMat,
+      );
+      cs.rotation.x = -Math.PI / 2;
+      // World y ≈ -0.03 (just above the ground plane at -0.05, below the
+      // flooring at ≈ -0.02): the group is lifted by baseH, so compensate.
+      cs.position.y = -0.03 - baseH;
+      cs.renderOrder = -1;
+      group.add(cs);
+    }
+
     // Sort by z so larger fields render under overlays (cricket pitch
     // should be on top of the football field).
     const sorted = [...layout.elements].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
@@ -672,11 +720,15 @@ export default function CourtCanvas3D({
     // Dimension sprites — drawn outside the plot footprint so they don't
     // overlap with court markings, but readable from any orbit angle.
     if (layout.style.showDimensions !== false) {
-      const lenSprite = makeDimensionSprite(`${layout.plot.lengthFt} ft`);
-      lenSprite.position.set(0, 0.5, -layout.plot.widthFt / 2 - 6);
+      // Just a clean readable label per edge — NO CAD lines/arrows. White pill,
+      // black numbers; depth-tested so it sits at the plot edge without overlap.
+      const dimW = Math.max(22, Math.max(layout.plot.lengthFt, layout.plot.widthFt) * 0.075);
+      const clr = 6 + dimW * 0.2;
+      const lenSprite = makeDimensionSprite(`${layout.plot.lengthFt} ft`, dimW);
+      lenSprite.position.set(0, 2, -layout.plot.widthFt / 2 - clr);
       group.add(lenSprite);
-      const widthSprite = makeDimensionSprite(`${layout.plot.widthFt} ft`);
-      widthSprite.position.set(-layout.plot.lengthFt / 2 - 6, 0.5, 0);
+      const widthSprite = makeDimensionSprite(`${layout.plot.widthFt} ft`, dimW);
+      widthSprite.position.set(-layout.plot.lengthFt / 2 - clr, 2, 0);
       group.add(widthSprite);
     }
     // Fit the sun's shadow frustum to THIS plot (P3-05). The old ±140 ft box
@@ -711,13 +763,44 @@ export default function CourtCanvas3D({
     if (hemiRef.current) hemiRef.current.intensity = prof.hemi;
     if (fillRef.current) fillRef.current.intensity = prof.fill;
     scene.environmentIntensity = prof.env;
-    if (scene.background instanceof THREE.Color) scene.background.setHex(prof.bg);
-    else scene.background = new THREE.Color(prof.bg);
-    if (scene.fog) (scene.fog as THREE.Fog).color.setHex(prof.fog);
-    // Hide the bright daytime sky dome at dusk/night so the dark background
-    // shows; the env probe stays (dimmed by environmentIntensity).
+    // T1-1 — retint the studio gradient backdrop to this time-of-day bg. Only
+    // rebuild when the target hex actually changed (the texture caches its
+    // source hex in userData) so we don't churn a new CanvasTexture per layout
+    // edit. Falls back to a flat THREE.Color if the gradient can't build.
+    {
+      const prevBg = scene.background;
+      const alreadyGradient =
+        prevBg instanceof THREE.Texture && prevBg.userData?.bgHex === prof.bg;
+      if (!alreadyGradient) {
+        const grad = makeBackdropTexture(prof.bg);
+        if (grad) {
+          scene.background = grad;
+          if (prevBg instanceof THREE.Texture) prevBg.dispose();
+        } else if (prevBg instanceof THREE.Color) {
+          prevBg.setHex(prof.bg);
+        } else {
+          scene.background = new THREE.Color(prof.bg);
+          if (prevBg instanceof THREE.Texture) prevBg.dispose();
+        }
+      }
+    }
+    if (scene.fog) {
+      const f = scene.fog as THREE.Fog;
+      f.color.setHex(prof.fog);
+      // Scale the fog to the plot so the COURT is never inside it. A fixed
+      // 260-900 range washed large pitches (e.g. 344 ft football) to a pale
+      // haze toward the far end; here only the ground/horizon BEYOND the court
+      // fades, keeping the playing surface crisp at every plot size.
+      const plotMax = Math.max(layout.plot.lengthFt, layout.plot.widthFt);
+      f.near = plotMax * 3;
+      f.far = plotMax * 10;
+    }
+    // Hide the physical sky DOME in EVERY view — at eye level it blew the
+    // horizon out to white ("remove the sky light" feedback). The soft flat
+    // scene background shows instead; the env IBL was already baked from the
+    // sky at init, so surface lighting is unaffected.
     if (skyRef.current) {
-      skyRef.current.visible = layout.style.timeOfDay !== "evening" && layout.style.timeOfDay !== "night";
+      skyRef.current.visible = false;
     }
 
     // Newly rebuilt geometry must be painted at least once even in a static
@@ -740,13 +823,16 @@ export default function CourtCanvas3D({
     const L = layout.plot.lengthFt;
     const W = layout.plot.widthFt;
     const radius = Math.max(24, Math.max(L, W));
-    const orbitDist = radius * 0.95;
-    const orbitH = radius * 0.62;
+    // T1-4 — the narrower 34° lens magnifies the scene ~1.25× vs the old 42°,
+    // so pull every preset back by the same factor to keep the court filling
+    // the frame elegantly (framing stays proportional to the plot extents).
+    const orbitDist = radius * 1.19;
+    const orbitH = radius * 0.78;
     const presets: Record<CourtView, { pos: [number, number, number]; tgt: [number, number, number]; rot: boolean }> = {
       orbit: { pos: [orbitDist, orbitH, orbitDist], tgt: [0, 3, 0], rot: true },
-      top: { pos: [0.1, radius * 1.35, 0.1], tgt: [0, 0, 0], rot: false },
+      top: { pos: [0.1, radius * 1.7, 0.1], tgt: [0, 0, 0], rot: false },
       iso: { pos: [orbitDist, orbitH, orbitDist], tgt: [0, 3, 0], rot: false },
-      side: { pos: [0, radius * 0.14 + 6, radius * 0.92], tgt: [0, 4, 0], rot: false },
+      side: { pos: [0, radius * 0.18 + 6, radius * 1.16], tgt: [0, 4, 0], rot: false },
     };
     // Widen the zoom clamps so large plots can actually pull back to frame.
     controls.minDistance = Math.max(10, radius * 0.22);
@@ -973,7 +1059,9 @@ export default function CourtCanvas3D({
         // small plots get a closer pass and large plots stay framed.
         const plotL = currentLayout.plot.lengthFt;
         const plotW = currentLayout.plot.widthFt;
-        const radius = Math.max(plotL, plotW) * 1.1;
+        // 1.38 (was 1.1) compensates for the narrower T1-4 34° lens so the
+        // recorded orbit / spin frames keep the same framing as before.
+        const radius = Math.max(plotL, plotW) * 1.38;
         const targetY = 0;
 
         try {
@@ -1066,7 +1154,9 @@ export default function CourtCanvas3D({
         // MP4 recorder, but y stays constant so it's a pure yaw spin.
         const plotL = currentLayout.plot.lengthFt;
         const plotW = currentLayout.plot.widthFt;
-        const radius = Math.max(plotL, plotW) * 1.1;
+        // 1.38 (was 1.1) compensates for the narrower T1-4 34° lens so the
+        // recorded orbit / spin frames keep the same framing as before.
+        const radius = Math.max(plotL, plotW) * 1.38;
 
         const urls: string[] = [];
         try {
@@ -1258,9 +1348,16 @@ function makeFootballField(
   yOffset: number
 ): THREE.Object3D {
   const tex = footballTexture(el, layout);
+  // T2-1/T2-2 — a football field is ALWAYS grass, so it always takes the turf
+  // mow-sheen path (finish "turf"). Route the plot surface ONLY when it is a
+  // turf finish so the registry's turf roughness/normalScale/mow-direction
+  // apply; a non-turf plot (acrylic/tile/plain) is left undefined so the grass
+  // never inherits acrylic gloss — today's matte-grass look is the fallback.
+  const plotSurface = layout.style.surface;
   const mat = surfaceMaterial(tex, {
     roughness: 0.92,
     finish: "turf",
+    surface: plotSurface && isTurfSurface(plotSurface) ? plotSurface : undefined,
     widthFt: el.width,
     heightFt: el.height,
   });
@@ -1313,7 +1410,18 @@ function makeBasketballCourt(
   yOffset: number
 ): THREE.Object3D {
   const tex = basketballTexture(el, layout);
-  const mat = surfaceMaterial(tex, { roughness: 0.55, finish: "flat" });
+  // T2-1 — route the plot's real surface so the hard-court reads as its actual
+  // material (acrylic wet-gloss / PPE tile / turf / PVC) instead of the old
+  // hardcoded flat. surfaceToFinish picks the micro-relief; the registry drives
+  // roughness/clearcoat. Falls back to today's 0.55 flat when surface is plain.
+  const surface = layout.style.surface;
+  const mat = surfaceMaterial(tex, {
+    roughness: 0.55,
+    finish: surfaceToFinish(surface),
+    surface,
+    widthFt: el.width,
+    heightFt: el.height,
+  });
   const geo = new THREE.PlaneGeometry(el.width, el.height);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
@@ -1328,7 +1436,17 @@ function makePickleballCourt(
   yOffset: number
 ): THREE.Object3D {
   const tex = pickleballTexture(el, layout);
-  const mat = surfaceMaterial(tex, { roughness: 0.55, finish: "flat" });
+  // T2-1 — route the plot's real surface (acrylic / tile / turf / PVC) so the
+  // pickleball court reads as its actual material; today's 0.55 flat is the
+  // fallback when the plot surface is plain.
+  const surface = layout.style.surface;
+  const mat = surfaceMaterial(tex, {
+    roughness: 0.55,
+    finish: surfaceToFinish(surface),
+    surface,
+    widthFt: el.width,
+    heightFt: el.height,
+  });
   const geo = new THREE.PlaneGeometry(el.width, el.height);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
@@ -1343,7 +1461,17 @@ function makeGenericCourt(
   yOffset: number
 ): THREE.Object3D {
   const tex = genericCourtTexture(el, layout);
-  const mat = surfaceMaterial(tex, { roughness: 0.6, finish: "flat" });
+  // T2-1 — generic court draws tennis / badminton / volleyball; route the plot's
+  // real surface so all three read as their actual material (acrylic wet-gloss /
+  // tile / turf / PVC). Today's 0.6 flat is the fallback for a plain plot.
+  const surface = layout.style.surface;
+  const mat = surfaceMaterial(tex, {
+    roughness: 0.6,
+    finish: surfaceToFinish(surface),
+    surface,
+    widthFt: el.width,
+    heightFt: el.height,
+  });
   const geo = new THREE.PlaneGeometry(el.width, el.height);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
@@ -1358,11 +1486,12 @@ function makeGoalPost(el: GoalPostElement): THREE.Object3D {
 
 function makeNet(el: NetElement): THREE.Object3D {
   const g = new THREE.Group();
+  // T2-4 — brushed-metal net uprights (volleyball / tennis / badminton).
   const postMat = new THREE.MeshStandardMaterial({
     color: 0x2a2a2a,
-    metalness: 0.6,
-    roughness: 0.45,
-    envMapIntensity: 0.7,
+    metalness: 0.88,
+    roughness: 0.38,
+    envMapIntensity: 1.1,
   });
   const postGeo = new THREE.CylinderGeometry(0.15, 0.15, el.heightFt, 16);
   const left = new THREE.Mesh(postGeo, postMat);
@@ -1615,16 +1744,19 @@ function makeDugout(el: DugoutElement): THREE.Object3D {
 
 function makeBasketballHoop(el: BasketballHoopElement): THREE.Object3D {
   const group = new THREE.Group();
+  // T2-4 — brushed-metal pole + rim so they read as steel against the low
+  // ambient (raised envMapIntensity + higher metalness / tighter roughness).
   const poleMat = new THREE.MeshStandardMaterial({
     color: parseColor(el.color ?? "#0f172a"),
-    metalness: 0.6,
-    roughness: 0.4,
-    envMapIntensity: 0.8,
+    metalness: 0.9,
+    roughness: 0.35,
+    envMapIntensity: 1.2,
   });
   const rimMat = new THREE.MeshStandardMaterial({
     color: parseColor(el.rimColor ?? "#ef4444"),
-    metalness: 0.5,
-    roughness: 0.45,
+    metalness: 0.85,
+    roughness: 0.35,
+    envMapIntensity: 1.2,
   });
   // Pole — vertical cylinder behind the backboard
   const pole = new THREE.Mesh(
@@ -1648,11 +1780,13 @@ function makeBasketballHoop(el: BasketballHoopElement): THREE.Object3D {
   const bbH = bbW * 0.6;
   const bb = new THREE.Mesh(
     new RoundedBoxGeometry(bbW, bbH, 0.1, 2, 0.04),
+    // T2-4 — glassy tempered backboard: lower roughness + raised envMapIntensity
+    // so it catches a clean sky/sun reflection like a real board.
     new THREE.MeshStandardMaterial({
       color: 0xfafafa,
-      roughness: 0.25,
+      roughness: 0.15,
       metalness: 0.0,
-      envMapIntensity: 0.6,
+      envMapIntensity: 1.0,
     })
   );
   bb.position.set(0, el.poleHeightFt - 0.5, armLen);
@@ -1735,13 +1869,137 @@ function lightingProfile(t: CourtLayout["style"]["timeOfDay"]): LightProfile {
   return {
     sun: 2.6,
     sunColor: 0xfff2d6,
-    hemi: 0.35,
+    hemi: 0.22,
     fill: 0.35,
-    env: 0.9,
+    // Sky-based ambient (IBL) kept very LOW per feedback — the bright sky probe
+    // washed the pitch out even after earlier cuts ("remove the sky light").
+    // Sun + hemisphere carry the lighting now; only a whisper of env stays so
+    // metal posts/rims aren't pure black.
+    env: 0.1,
     bg: 0x8fb8de,
     fog: 0xcbd9e6,
     floodBeam: 0.55,
     floodEmissive: 0.35,
+  };
+}
+
+// T1-1 — studio gradient backdrop. Builds a small vertical-gradient
+// CanvasTexture from the time-of-day bg colour: a lifted, slightly desaturated
+// top (soft "sky"), the base colour through the middle, and a deeper, faintly
+// warmer bottom — so the scene reads like a photographer's sweep instead of a
+// flat fill. Caches its source hex in userData so the layout effect can skip
+// rebuilding when the colour hasn't changed. Returns null on any failure so the
+// caller degrades to today's flat THREE.Color background.
+function makeBackdropTexture(bgHex: number): THREE.Texture | null {
+  try {
+    if (typeof document === "undefined") return null;
+    const w = 16;
+    const h = 256;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    const base = new THREE.Color(bgHex);
+    // Wider lightness sweep so it reads as a real studio backdrop, not a flat panel.
+    const top = base.clone().offsetHSL(0, -0.08, 0.2);
+    const mid = base.clone().offsetHSL(0, 0.0, 0.0);
+    const bottom = base.clone().offsetHSL(0, 0.06, -0.3);
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, `#${top.getHexString()}`);
+    grad.addColorStop(0.55, `#${mid.getHexString()}`);
+    grad.addColorStop(1, `#${bottom.getHexString()}`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.userData.bgHex = bgHex;
+    return tex;
+  } catch {
+    return null;
+  }
+}
+
+// T1-2 — radial-gradient alpha "decal" for the soft contact shadow under the
+// court (dark centre → transparent edge). Unlit; stretched to the plot aspect
+// by the caller. Returns null on failure so the caller skips the shadow (today's
+// look) rather than erroring.
+function makeContactShadowTexture(): THREE.CanvasTexture | null {
+  try {
+    if (typeof document === "undefined") return null;
+    const size = 256;
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    const mid = size / 2;
+    const g = ctx.createRadialGradient(
+      mid,
+      mid,
+      size * 0.06,
+      mid,
+      mid,
+      size * 0.5,
+    );
+    // Stay dark THROUGH the court footprint (inner ~0.6) so a soft dark halo
+    // shows just outside the court edge (the centre is hidden under the
+    // flooring); fade to nothing by the plane edge so there's no hard rim.
+    g.addColorStop(0, "rgba(0,0,0,0.5)");
+    g.addColorStop(0.6, "rgba(0,0,0,0.45)");
+    g.addColorStop(0.85, "rgba(0,0,0,0.15)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    const tex = new THREE.CanvasTexture(c);
+    return tex;
+  } catch {
+    return null;
+  }
+}
+
+// T1-3 — final colour-grade + vignette shader (fed to a ShaderPass after the
+// OutputPass, so it grades the display-space image). Subtle S-curve contrast,
+// a ~+6% saturation lift, and a soft radial vignette. Values are intentionally
+// gentle and are the ones to dial in on 3100.
+function gradeVignetteShader() {
+  return {
+    uniforms: {
+      tDiffuse: { value: null as THREE.Texture | null },
+      uContrast: { value: 0.12 },
+      uSaturation: { value: 1.06 },
+      uVignette: { value: 0.22 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tDiffuse;
+      uniform float uContrast;
+      uniform float uSaturation;
+      uniform float uVignette;
+      varying vec2 vUv;
+      void main() {
+        vec4 texel = texture2D(tDiffuse, vUv);
+        vec3 c = texel.rgb;
+        // Subtle S-curve contrast: blend toward a smoothstep response so mids
+        // gain a little punch without crushing shadows/highlights.
+        vec3 s = smoothstep(0.0, 1.0, c);
+        c = mix(c, s, uContrast);
+        // Gentle saturation lift around perceptual luma.
+        float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(vec3(luma), c, uSaturation);
+        // Soft radial vignette to draw the eye to the court.
+        float d = distance(vUv, vec2(0.5));
+        float vig = 1.0 - uVignette * smoothstep(0.35, 0.85, d);
+        c *= vig;
+        gl_FragColor = vec4(clamp(c, 0.0, 1.0), texel.a);
+      }
+    `,
   };
 }
 
@@ -2050,13 +2308,15 @@ function makeCenterLogo(el: CenterLogoElement, yOffset: number): THREE.Object3D 
 
 function buildPostsAndCrossbar(widthFt: number, heightFt: number, depthFt: number): THREE.Group {
   const g = new THREE.Group();
-  // Painted galvanised-steel goal — semi-metallic so the env map + sun
-  // leave a realistic soft highlight down each post.
+  // T2-4 — brushed galvanised-steel goal: near-full metalness with a brushed
+  // roughness so the sun leaves a crisp specular streak down each post, and a
+  // raised envMapIntensity so the frame reads as real metal against the low
+  // ambient (the sky probe is dialled way down).
   const mat = new THREE.MeshStandardMaterial({
     color: 0xf4f6f8,
-    metalness: 0.55,
-    roughness: 0.33,
-    envMapIntensity: 0.8,
+    metalness: 0.9,
+    roughness: 0.38,
+    envMapIntensity: 1.2,
   });
   const postGeo = new THREE.CylinderGeometry(0.32, 0.32, heightFt, 20);
   const left = new THREE.Mesh(postGeo, mat);
@@ -2131,10 +2391,28 @@ type SurfaceMaterialOpts = {
   widthFt?: number;
   heightFt?: number;
   finish?: SurfaceFinish;
+  // T2-1 — the plot's REAL finish (schema SurfaceFinish). When present (and not
+  // "plain"), surfaceMaterial reads roughness/metalness/clearcoat/normalScale/
+  // stripeDirectionDeg from FINISH_MATERIAL[surface] — ONE source of truth with
+  // the 2D layer — so acrylic reads wet-glossy, turf gets a mow sheen, etc.
+  // Absent/"plain" → the per-sport `roughness`/`finish` above stay in charge
+  // (today's look, the additive fallback).
+  surface?: PlotSurfaceFinish;
   // Depth-bias so co-planar overlays (e.g. a cricket strip lying on the
   // football grass) win the depth test without a large physical y-gap (P3-06).
   polygonOffsetUnits?: number;
 };
+
+// Map a real plot finish (schema) onto the local micro-relief family used for
+// the tiling normal map: turf → directional pile, PPE tile / PVC → grain,
+// acrylic / plain → smooth (flat). Keeps the normal-map selection in sync when
+// a court routes its plot surface into surfaceMaterial (T2-1).
+function surfaceToFinish(surface?: PlotSurfaceFinish): SurfaceFinish {
+  if (!surface) return "flat";
+  if (isTurfSurface(surface)) return "turf";
+  if (isTiledSurface(surface) || isPvcSurface(surface)) return "hard";
+  return "flat"; // acrylic (smooth, glossed via clearcoat) + plain earth
+}
 
 // Procedural tiling NORMAL map for court/ground surfaces (P3-02). Builds a
 // small height field (directional pile for turf, isotropic speckle for hard
@@ -2217,13 +2495,68 @@ function surfaceMaterial(
 ): THREE.MeshStandardMaterial {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = MAX_ANISOTROPY;
-  const mat = new THREE.MeshStandardMaterial({
-    map: tex,
-    roughness: opts.roughness,
-    metalness: 0.0,
-    envMapIntensity: 0.5,
-  });
+
   const finish = opts.finish ?? "flat";
+  // T2-1 — pull PBR from the FINISH_MATERIAL registry (ONE source of truth with
+  // the 2D layer). Only a REAL finish counts: "plain"/undefined carries no
+  // material intent, so the per-sport `roughness`/`finish` stay in charge and
+  // legacy layouts render byte-for-byte as today (the additive fallback).
+  const fm =
+    opts.surface && opts.surface !== "plain"
+      ? FINISH_MATERIAL[opts.surface]
+      : undefined;
+  const roughness = fm?.roughness ?? opts.roughness;
+  const metalness = fm?.metalness ?? 0;
+  const clearcoat = fm?.clearcoat ?? 0;
+  const isTurf = finish === "turf";
+
+  // T2-2 (turf mow sheen) + T2-3 (acrylic wet-gloss clearcoat) need a
+  // MeshPhysicalMaterial; everything else stays MeshStandard (today's look).
+  // MeshPhysical extends MeshStandard, so the return type + every caller are
+  // unaffected. Wrapped in try/catch so any failure degrades to the plain
+  // MeshStandard path instead of throwing.
+  const wantPhysical = isTurf || clearcoat > 0;
+  let mat: THREE.MeshStandardMaterial | null = null;
+  if (wantPhysical) {
+    try {
+      const phys = new THREE.MeshPhysicalMaterial({
+        map: tex,
+        roughness,
+        metalness,
+        envMapIntensity: 0.5,
+      });
+      if (isTurf) {
+        // T2-2 — velvety directional sheen so mow bands catch a real highlight
+        // under the sun instead of reading as flat paint, plus an anisotropic
+        // reflection aligned to the mow direction (registry stripeDirectionDeg,
+        // 0 for the current turf finishes).
+        phys.sheen = 0.6;
+        phys.sheenRoughness = 0.55;
+        phys.sheenColor = new THREE.Color(0xd9edbf);
+        phys.anisotropy = 0.45;
+        phys.anisotropyRotation = THREE.MathUtils.degToRad(
+          fm?.stripeDirectionDeg ?? 0,
+        );
+      }
+      if (clearcoat > 0) {
+        // T2-3 — thin wet-look clearcoat over the acrylic coat (registry value).
+        phys.clearcoat = clearcoat;
+        phys.clearcoatRoughness = 0.12;
+      }
+      mat = phys;
+    } catch {
+      mat = null;
+    }
+  }
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({
+      map: tex,
+      roughness,
+      metalness,
+      envMapIntensity: 0.5,
+    });
+  }
+
   if (finish !== "flat" && opts.widthFt && opts.heightFt) {
     const tileFt = finish === "turf" ? 1.6 : 3.2; // real size of one normal tile
     const rx = Math.round(opts.widthFt / tileFt);
@@ -2233,7 +2566,9 @@ function surfaceMaterial(
       rx,
       ry,
     );
-    const ns = finish === "turf" ? 0.85 : 0.3; // strong pile, faint hard-court
+    // Registry pile depth for turf (turf_40mm 0.8 / turf_50mm 0.9); faint grain
+    // for hard courts. Both fall back to today's constants.
+    const ns = finish === "turf" ? fm?.normalScale ?? 0.85 : 0.3;
     mat.normalScale = new THREE.Vector2(ns, ns);
   }
   if (opts.polygonOffsetUnits) {
@@ -2261,7 +2596,11 @@ function makeNetAlphaTexture(
   ctx.fillStyle = "#000000"; // holes
   ctx.fillRect(0, 0, size, size);
   ctx.strokeStyle = "#ffffff"; // threads
-  ctx.lineWidth = kind === "diamond" ? 3 : 3.5;
+  // T2-5 — round caps/joins + slightly thinner square threads so the weave
+  // reads as an open net (clear holes) rather than a dense gauze sheet.
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = kind === "diamond" ? 3 : 2.8;
   const step = 16;
   if (kind === "square") {
     for (let i = 0; i <= size; i += step) {
@@ -2306,7 +2645,12 @@ function netMaterial(
   const cellFt = kind === "diamond" ? 0.9 : 0.5; // real mesh cell size
   const rx = Math.max(2, Math.round(spanFt / cellFt));
   const ry = Math.max(2, Math.round(heightFt / cellFt));
-  return new THREE.MeshStandardMaterial({
+  // T2-5 — MeshPhysical so the sports-net weave carries a faint nylon sheen:
+  // the threads catch a soft highlight and read as real netting instead of a
+  // flat grey gauze. Chain-link (diamond) keeps its galvanised metalness.
+  // MeshPhysical extends MeshStandard, so the return type + every caller are
+  // unchanged; if it ever failed to build we still return a valid material.
+  const mat = new THREE.MeshPhysicalMaterial({
     color,
     roughness: 0.85,
     metalness: kind === "diamond" ? 0.5 : 0.0,
@@ -2314,8 +2658,14 @@ function netMaterial(
     alphaMap: makeNetAlphaTexture(kind, rx, ry),
     alphaTest: 0.5,
     side: THREE.DoubleSide,
-    envMapIntensity: kind === "diamond" ? 0.7 : 0.4,
+    envMapIntensity: kind === "diamond" ? 0.9 : 0.45,
   });
+  if (kind === "square") {
+    mat.sheen = 0.5;
+    mat.sheenRoughness = 0.6;
+    mat.sheenColor = new THREE.Color(0xffffff);
+  }
+  return mat;
 }
 
 // Plot-surface base — the whole plot rendered in its chosen flooring (turf
@@ -2373,6 +2723,9 @@ function makePlotSurface(layout: CourtLayout): THREE.Object3D | null {
   const mat = surfaceMaterial(tex, {
     roughness: turf ? 0.92 : 0.6,
     finish: turf ? "turf" : isTiledSurface(surface) ? "hard" : "flat",
+    // T2-1 — the plot base is itself a real finish; feed it so acrylic gets
+    // wet-gloss clearcoat and turf gets the mow sheen from the registry.
+    surface,
     widthFt: Lft,
     heightFt: Wft,
   });
@@ -2725,26 +3078,92 @@ function genericCourtTexture(
 //  Dimension labels — canvas-textured Three.js sprites
 // ─────────────────────────────────────────────────────────────────────
 
-function makeDimensionSprite(text: string): THREE.Sprite {
+function makeDimensionSprite(text: string, worldWidth = 16): THREE.Sprite {
+  const W = 512;
+  const H = 188;
   const c = document.createElement("canvas");
-  c.width = 384;
-  c.height = 128;
+  c.width = W;
+  c.height = H;
   const ctx = c.getContext("2d")!;
-  // Pill background for legibility against any orbit angle
-  ctx.fillStyle = "rgba(255,255,255,0.95)";
-  roundRect(ctx, 0, 0, c.width, c.height, 32);
+  ctx.clearRect(0, 0, W, H);
+  // Solid white pill FILLING the label (no transparent band above/below that
+  // read as a dark layer) + extra-bold black numbers. depthWrite:false so the
+  // transparent rounded corners leave no dark fringe.
+  ctx.fillStyle = "#ffffff";
+  roundRect(ctx, 8, 8, W - 16, H - 16, 42);
   ctx.fill();
-  ctx.fillStyle = "#0f172a";
-  ctx.font = "600 64px system-ui, -apple-system, sans-serif";
+  ctx.strokeStyle = "rgba(15,23,42,0.22)";
+  ctx.lineWidth = 4;
+  roundRect(ctx, 8, 8, W - 16, H - 16, 42);
+  ctx.stroke();
+  ctx.fillStyle = "#0b1220";
+  ctx.font = "800 112px system-ui, -apple-system, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, c.width / 2, c.height / 2);
+  ctx.fillText(text, W / 2, H / 2 + 6);
   const tex = new THREE.CanvasTexture(c);
   tex.anisotropy = MAX_ANISOTROPY;
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+  // NO mipmaps — mip-averaging the transparent corners with the white pill
+  // produced the dark halo / "black box" the user saw. Linear filtering only.
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
   const sp = new THREE.Sprite(mat);
-  sp.scale.set(12, 4, 1);
+  sp.scale.set(worldWidth, worldWidth * (H / W), 1);
   return sp;
+}
+
+// CAD-style linear dimension drawn FLAT on the ground just outside the plot:
+// a witness line out from each end of the measured edge, a dimension line
+// between them with an arrowhead at each end, and the measurement label
+// centred above it. Sits outside the footprint so it never overlaps the pitch
+// or goals. `a`/`b` are the two measured-edge corners (y ignored); `outDir` is
+// the unit outward direction (in the XZ plane); `offset` how far out it sits.
+function makeDimensionLine(
+  a: THREE.Vector3,
+  b: THREE.Vector3,
+  outDir: THREE.Vector3,
+  offset: number,
+  label: string,
+  scale: number,
+): THREE.Group {
+  const g = new THREE.Group();
+  const y = 0.35;
+  const mat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+  const off = outDir.clone().setY(0).normalize().multiplyScalar(offset);
+  const a0 = new THREE.Vector3(a.x, y, a.z);
+  const b0 = new THREE.Vector3(b.x, y, b.z);
+  const aO = a0.clone().add(off);
+  const bO = b0.clone().add(off);
+  const barW = Math.max(0.25, scale * 0.015);
+  // A thin flat bar (box) laid on the ground from p to q.
+  const bar = (p: THREE.Vector3, q: THREE.Vector3) => {
+    const d = new THREE.Vector3().subVectors(q, p);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(d.length(), 0.12, barW), mat);
+    m.position.copy(p).add(q).multiplyScalar(0.5);
+    m.position.y = y;
+    m.rotation.y = Math.atan2(-d.z, d.x);
+    return m;
+  };
+  g.add(bar(a0, aO)); // witness line, end A
+  g.add(bar(b0, bO)); // witness line, end B
+  g.add(bar(aO, bO)); // dimension line
+  const along = new THREE.Vector3().subVectors(bO, aO).normalize();
+  const arrow = (pos: THREE.Vector3, dir: THREE.Vector3) => {
+    const h = Math.max(1.2, scale * 0.22);
+    const c = new THREE.Mesh(new THREE.ConeGeometry(h * 0.38, h, 14), mat);
+    c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); // apex → dir
+    c.position.copy(pos).addScaledVector(dir, -h / 2); // apex sits at `pos`
+    c.position.y = y;
+    return c;
+  };
+  g.add(arrow(aO, along.clone().negate())); // arrowhead pointing outward at A
+  g.add(arrow(bO, along)); // arrowhead pointing outward at B
+  const mid = aO.clone().add(bO).multiplyScalar(0.5);
+  const sprite = makeDimensionSprite(label, scale);
+  sprite.position.set(mid.x, 2.2, mid.z);
+  g.add(sprite);
+  return g;
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -54,6 +54,7 @@ import type {
 import {
   aSideProps,
   SURFACE_IMAGE_URL,
+  SURFACE_LABEL,
   SURFACE_SOLID_COLOR,
   SURFACE_TILE_METERS,
   TURF_IMAGE_URLS,
@@ -173,6 +174,36 @@ export default function CourtCanvas({
   // plots like a cricket strip.
   const designAreas = computeDesignAreas(layout);
   const calloutTopY = DIM_TOP + dimPanelHeight(designAreas) + 10;
+
+  // T3-3: branded title-block content — project name, plot area + a surface
+  // swatch/label. Built from data the layout always carries so it renders for
+  // EVERY sport (plot-level chrome). TILE_SOLID_COLORS / SURFACE_SOLID_COLOR are
+  // module consts read at render time.
+  const titleBlock = (() => {
+    const SQFT_SQM = 0.092903;
+    const nf = (n: number) => Math.round(n).toLocaleString("en-IN");
+    const p = designAreas.plot;
+    const projectTitle =
+      layout.title && layout.title.trim()
+        ? layout.title.trim()
+        : layout.sports.length
+          ? layout.sports
+              .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+              .join(" · ")
+          : "Court design";
+    return {
+      projectTitle,
+      areaLine: `${Math.round(p.lengthFt)} × ${Math.round(p.widthFt)} ft · ${nf(
+        p.areaSqFt,
+      )} sq.ft (${nf(p.areaSqFt * SQFT_SQM)} sq.m)`,
+      surfaceLabel: SURFACE_LABEL[layout.style.surface] ?? "Surface",
+      surfaceColor:
+        layout.style.surfaceColorOverride ??
+        TILE_SOLID_COLORS[layout.style.surface] ??
+        SURFACE_SOLID_COLOR[layout.style.surface] ??
+        "#3fa050",
+    };
+  })();
 
   // Convert plot coords (origin bottom-left) to Konva canvas coords (origin
   // top-left). Used everywhere we draw or read positions.
@@ -592,6 +623,7 @@ export default function CourtCanvas({
         </Layer>
       )}
 
+
       {/* Watermark layer — bottom-right corner, on top of every element so
           it's always visible in the export. */}
       {layout.style.watermarkUrl && (
@@ -682,6 +714,67 @@ const HALO_COURT_TYPES = new Set<string>([
   "pickleball-court",
   "generic-court",
 ]);
+
+// ─────────────────────────────────────────────────────────────────────
+//  T3-2: crisp-markings treatment (shared across ALL per-sport shapes)
+// ─────────────────────────────────────────────────────────────────────
+// Round joins/caps keep line intersections + endpoints clean, and
+// perfectDrawEnabled=false skips Konva's intermediate off-screen buffer that
+// can soften thin strokes. Spread onto every stroked marking primitive (Line /
+// Rect / Circle / Arc) in every sport component so all markings render sharp.
+// Additive: geometry is unchanged — this only affects how strokes are rasterised.
+const CRISP_STROKE = {
+  lineJoin: "round" as const,
+  lineCap: "round" as const,
+  perfectDrawEnabled: false,
+} as const;
+
+// ─────────────────────────────────────────────────────────────────────
+//  T3-1: procedural grass grain (shared, cached once)
+// ─────────────────────────────────────────────────────────────────────
+// A small offscreen canvas of fine green jitter, tiled seamlessly (per-pixel
+// white noise has no low-frequency structure, so it repeats without a visible
+// seam). Overlaid on turf stripes / grass at low opacity with
+// globalCompositeOperation="overlay" so the flat mow bands gain a subtle fibre
+// texture. Values centre on mid-grey (128 = neutral for the "overlay" blend);
+// deviations lighten/darken slightly, with a faint green bias so it reads as
+// grass, not TV static. This is procedural noise — NOT the removed photo tiling.
+// Built lazily on first use (client-only) and cached at module scope so it is
+// created once for the whole session. Returns null off the client / on failure
+// so callers degrade to the plain solid stripes (fallback preserved).
+let _grassGrain: HTMLCanvasElement | null = null;
+let _grassGrainTried = false;
+function grassGrainPattern(): HTMLCanvasElement | null {
+  if (_grassGrainTried) return _grassGrain;
+  _grassGrainTried = true;
+  if (typeof document === "undefined") return null;
+  try {
+    const size = 96;
+    const cv = document.createElement("canvas");
+    cv.width = size;
+    cv.height = size;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return null;
+    const imgData = ctx.createImageData(size, size);
+    const d = imgData.data;
+    for (let i = 0; i < size * size; i++) {
+      const n = 128 + (Math.random() - 0.5) * 52; // ±26 around neutral grey
+      const j = i * 4;
+      d[j] = Math.max(0, Math.min(255, n - 6)); // slightly less red
+      d[j + 1] = Math.max(0, Math.min(255, n + 8)); // slightly more green
+      d[j + 2] = Math.max(0, Math.min(255, n - 4)); // slightly less blue
+      d[j + 3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    _grassGrain = cv;
+  } catch {
+    _grassGrain = null;
+  }
+  return _grassGrain;
+}
+
+// Opacity of the grain overlay — low so it reads as texture, not noise.
+const GRASS_GRAIN_OPACITY = 0.4;
 
 // ─────────────────────────────────────────────────────────────────────
 //  Element renderer
@@ -1323,6 +1416,29 @@ function FootballFieldShapeBase({
           <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill={grassColor} />
         ))}
 
+      {/* T3-1: fine grass-grain overlay on the field's own grass — a subtle
+          procedural fibre texture over the flat mow bands (overlay blend, low
+          opacity). Degrades to no overlay if the noise canvas can't be built,
+          so the plain grass fill stays the fallback. */}
+      {drawOwnGrass &&
+        (() => {
+          const grain = grassGrainPattern();
+          return grain ? (
+            <Rect
+              x={-w / 2}
+              y={-h / 2}
+              width={w}
+              height={h}
+              fillPatternImage={grain as unknown as HTMLImageElement}
+              fillPatternRepeat="repeat"
+              opacity={GRASS_GRAIN_OPACITY}
+              globalCompositeOperation="overlay"
+              listening={false}
+              perfectDrawEnabled={false}
+            />
+          ) : null;
+        })()}
+
       {/* Outer boundary */}
       <Rect
         x={-w / 2}
@@ -1331,13 +1447,14 @@ function FootballFieldShapeBase({
         height={h}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
 
       {/* Halfway line */}
-      <Line points={[0, -h / 2, 0, h / 2]} stroke={lineColor} strokeWidth={lineWidth} />
+      <Line points={[0, -h / 2, 0, h / 2]} stroke={lineColor} strokeWidth={lineWidth} {...CRISP_STROKE} />
 
       {/* Center circle + spot */}
-      <Circle x={0} y={0} radius={centerR} stroke={lineColor} strokeWidth={lineWidth} />
+      <Circle x={0} y={0} radius={centerR} stroke={lineColor} strokeWidth={lineWidth} {...CRISP_STROKE} />
       <Circle x={0} y={0} radius={Math.max(2, lineWidth * 1.3)} fill={lineColor} />
 
       {/* Penalty boxes */}
@@ -1348,6 +1465,7 @@ function FootballFieldShapeBase({
         height={pbH}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
       <Rect
         x={w / 2 - pbW}
@@ -1356,6 +1474,7 @@ function FootballFieldShapeBase({
         height={pbH}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
 
       {/* Goal areas */}
@@ -1366,6 +1485,7 @@ function FootballFieldShapeBase({
         height={gaH}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
       <Rect
         x={w / 2 - gaW}
@@ -1374,6 +1494,7 @@ function FootballFieldShapeBase({
         height={gaH}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
 
       {/* Penalty spots */}
@@ -1400,6 +1521,7 @@ function FootballFieldShapeBase({
         rotation={-42}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
       <Arc
         x={w / 2 - penaltySpotOffset}
@@ -1410,6 +1532,7 @@ function FootballFieldShapeBase({
         rotation={138}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
 
       {/* Corner arcs */}
@@ -1422,6 +1545,7 @@ function FootballFieldShapeBase({
         rotation={0}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
       <Arc
         x={w / 2}
@@ -1432,6 +1556,7 @@ function FootballFieldShapeBase({
         rotation={90}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
       <Arc
         x={-w / 2}
@@ -1442,6 +1567,7 @@ function FootballFieldShapeBase({
         rotation={270}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
       <Arc
         x={w / 2}
@@ -1452,6 +1578,7 @@ function FootballFieldShapeBase({
         rotation={180}
         stroke={lineColor}
         strokeWidth={lineWidth}
+        {...CRISP_STROKE}
       />
 
       {/* Goal mouth fills (visualize where the goal sits) */}
@@ -1463,6 +1590,7 @@ function FootballFieldShapeBase({
         fill="#e2e8f0"
         stroke="#0f172a"
         strokeWidth={1}
+        {...CRISP_STROKE}
       />
       <Rect
         x={w / 2}
@@ -1472,6 +1600,7 @@ function FootballFieldShapeBase({
         fill="#e2e8f0"
         stroke="#0f172a"
         strokeWidth={1}
+        {...CRISP_STROKE}
       />
       <CourtNameLabel w={w} h={h} name="FOOTBALL" dims={courtDims(el)} side={labelSide} />
     </>
@@ -1505,13 +1634,14 @@ function CricketPitchShapeBase({
         stroke={darken(fill, 0.25)}
         strokeWidth={1.5}
         cornerRadius={1}
+        {...CRISP_STROKE}
       />
       {/* Popping crease lines (full pitch width at each end) */}
-      <Line points={[-w / 2 + popDistPx, -h / 2, -w / 2 + popDistPx, h / 2]} stroke={mark} strokeWidth={1.5} />
-      <Line points={[w / 2 - popDistPx, -h / 2, w / 2 - popDistPx, h / 2]} stroke={mark} strokeWidth={1.5} />
+      <Line points={[-w / 2 + popDistPx, -h / 2, -w / 2 + popDistPx, h / 2]} stroke={mark} strokeWidth={1.5} {...CRISP_STROKE} />
+      <Line points={[w / 2 - popDistPx, -h / 2, w / 2 - popDistPx, h / 2]} stroke={mark} strokeWidth={1.5} {...CRISP_STROKE} />
       {/* Return crease (short stubs inside the pitch) */}
-      <Line points={[-w / 2 + popDistPx, -h / 4, -w / 2 + popDistPx, -h / 2 + h * 0.18]} stroke={mark} strokeWidth={1.5} />
-      <Line points={[w / 2 - popDistPx, -h / 4, w / 2 - popDistPx, -h / 2 + h * 0.18]} stroke={mark} strokeWidth={1.5} />
+      <Line points={[-w / 2 + popDistPx, -h / 4, -w / 2 + popDistPx, -h / 2 + h * 0.18]} stroke={mark} strokeWidth={1.5} {...CRISP_STROKE} />
+      <Line points={[w / 2 - popDistPx, -h / 4, w / 2 - popDistPx, -h / 2 + h * 0.18]} stroke={mark} strokeWidth={1.5} {...CRISP_STROKE} />
       {/* Wickets (3 stumps each end) */}
       {[
         -w / 2 + popDistPx * 1.6,
@@ -1723,12 +1853,12 @@ function BasketballCourtShapeBase({
           opacity={0.55}
         />
       )}
-      <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} />
+      <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {!el.halfCourt && (
-        <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth} />
+        <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       )}
       {!el.halfCourt && (
-        <Circle x={0} y={0} radius={centerR} stroke={line} strokeWidth={lineWidth} />
+        <Circle x={0} y={0} radius={centerR} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       )}
 
       {/* Two ends — key + free throw circle + backboard + basket + no-charge + 3-pt line */}
@@ -1808,6 +1938,7 @@ function BasketballCourtShapeBase({
               height={keyH}
               stroke={line}
               strokeWidth={lineWidth}
+              {...CRISP_STROKE}
             />
 
             {/* Free-throw circle — centred on the top of the key */}
@@ -1817,6 +1948,7 @@ function BasketballCourtShapeBase({
               radius={ftR}
               stroke={line}
               strokeWidth={lineWidth}
+              {...CRISP_STROKE}
             />
 
             {/* Backboard — 1.80 m wide, drawn 1.20 m from baseline */}
@@ -1829,6 +1961,7 @@ function BasketballCourtShapeBase({
               ]}
               stroke={line}
               strokeWidth={lineWidth * 2}
+              {...CRISP_STROKE}
             />
 
             {/* Basket rim — small circle at the basket centre */}
@@ -1838,6 +1971,7 @@ function BasketballCourtShapeBase({
               radius={Math.max(2, h * 0.015)}
               stroke={line}
               strokeWidth={lineWidth}
+              {...CRISP_STROKE}
             />
 
             {/* No-charge semi-circle — 1.25 m radius around basket, open toward
@@ -1851,6 +1985,7 @@ function BasketballCourtShapeBase({
               rotation={dir < 0 ? -90 : 90}
               stroke={line}
               strokeWidth={lineWidth}
+              {...CRISP_STROKE}
             />
 
             {/* Corner 3-point straight segments — from baseline at
@@ -1859,11 +1994,13 @@ function BasketballCourtShapeBase({
               points={[baselineX, cornerY, cornerArcX, cornerY]}
               stroke={line}
               strokeWidth={lineWidth}
+              {...CRISP_STROKE}
             />
             <Line
               points={[baselineX, -cornerY, cornerArcX, -cornerY]}
               stroke={line}
               strokeWidth={lineWidth}
+              {...CRISP_STROKE}
             />
 
             {/* 3-point arc — from top corner endpoint clockwise through the
@@ -1877,6 +2014,7 @@ function BasketballCourtShapeBase({
               rotation={arcRotation}
               stroke={line}
               strokeWidth={lineWidth}
+              {...CRISP_STROKE}
             />
           </Group>
         );
@@ -1944,15 +2082,15 @@ function PickleballCourtShapeBase({
             listening={false}
           />
         )}
-      <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} />
+      <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {/* Net line (center) */}
-      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.2} />
+      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.2} {...CRISP_STROKE} />
       {/* Kitchen boundaries */}
-      <Line points={[-kitchenW, -h / 2, -kitchenW, h / 2]} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[kitchenW, -h / 2, kitchenW, h / 2]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-kitchenW, -h / 2, -kitchenW, h / 2]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
+      <Line points={[kitchenW, -h / 2, kitchenW, h / 2]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {/* Service court divider (between baseline and kitchen) */}
-      <Line points={[-w / 2, 0, -kitchenW, 0]} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[kitchenW, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-w / 2, 0, -kitchenW, 0]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
+      <Line points={[kitchenW, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {!strokeOverride && (
         <CourtNameLabel w={w} h={h} name="PICKLEBALL" dims={courtDims(el)} side={labelSide} />
       )}
@@ -2012,7 +2150,7 @@ function GenericCourtShapeBase({
           sport's service / attack LINES below still render, so volleyball now
           reads as a whole-court colour + run-off. */}
       {/* Outer boundary */}
-      <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} />
+      <Rect x={-w / 2} y={-h / 2} width={w} height={h} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {/* Sport-specific line pattern */}
       {el.sport === "tennis" && (
         <TennisMarkings w={w} h={h} line={line} lineWidth={lineWidth} />
@@ -2030,6 +2168,7 @@ function GenericCourtShapeBase({
             points={[0, -h / 2, 0, h / 2]}
             stroke={line}
             strokeWidth={lineWidth}
+            {...CRISP_STROKE}
           />
         )}
       {!strokeOverride && (
@@ -2050,18 +2189,18 @@ function TennisMarkings({ w, h, line, lineWidth }: { w: number; h: number; line:
   return (
     <>
       {/* Net line — vertical centre, thicker */}
-      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.4} />
+      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.4} {...CRISP_STROKE} />
       {/* Singles sidelines */}
-      <Line points={[-w / 2, -h / 2 + singlesInset, w / 2, -h / 2 + singlesInset]} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[-w / 2, h / 2 - singlesInset, w / 2, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-w / 2, -h / 2 + singlesInset, w / 2, -h / 2 + singlesInset]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
+      <Line points={[-w / 2, h / 2 - singlesInset, w / 2, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {/* Service lines (both sides of net) */}
-      <Line points={[-serviceLineOffset, -h / 2 + singlesInset, -serviceLineOffset, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[serviceLineOffset, -h / 2 + singlesInset, serviceLineOffset, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-serviceLineOffset, -h / 2 + singlesInset, -serviceLineOffset, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
+      <Line points={[serviceLineOffset, -h / 2 + singlesInset, serviceLineOffset, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {/* Centre service line (between service line and net) */}
-      <Line points={[-serviceLineOffset, 0, serviceLineOffset, 0]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-serviceLineOffset, 0, serviceLineOffset, 0]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {/* Centre mark on baseline */}
-      <Line points={[-w / 2, 0, -w / 2 + w * 0.02, 0]} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[w / 2 - w * 0.02, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-w / 2, 0, -w / 2 + w * 0.02, 0]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
+      <Line points={[w / 2 - w * 0.02, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
     </>
   );
 }
@@ -2078,19 +2217,19 @@ function BadmintonMarkings({ w, h, line, lineWidth }: { w: number; h: number; li
   return (
     <>
       {/* Net line */}
-      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.4} />
+      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.4} {...CRISP_STROKE} />
       {/* Singles sidelines */}
-      <Line points={[-w / 2, -h / 2 + singlesInset, w / 2, -h / 2 + singlesInset]} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[-w / 2, h / 2 - singlesInset, w / 2, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-w / 2, -h / 2 + singlesInset, w / 2, -h / 2 + singlesInset]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
+      <Line points={[-w / 2, h / 2 - singlesInset, w / 2, h / 2 - singlesInset]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {/* Short service lines */}
-      <Line points={[-shortServiceOffset, -h / 2, -shortServiceOffset, h / 2]} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[shortServiceOffset, -h / 2, shortServiceOffset, h / 2]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-shortServiceOffset, -h / 2, -shortServiceOffset, h / 2]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
+      <Line points={[shortServiceOffset, -h / 2, shortServiceOffset, h / 2]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {/* Long service (doubles) — inset from back boundary */}
-      <Line points={[-w / 2 + longServiceInset, -h / 2, -w / 2 + longServiceInset, h / 2]} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[w / 2 - longServiceInset, -h / 2, w / 2 - longServiceInset, h / 2]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-w / 2 + longServiceInset, -h / 2, -w / 2 + longServiceInset, h / 2]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
+      <Line points={[w / 2 - longServiceInset, -h / 2, w / 2 - longServiceInset, h / 2]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
       {/* Centre service line (between short-service and back-boundary) */}
-      <Line points={[-shortServiceOffset, 0, -w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[shortServiceOffset, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-shortServiceOffset, 0, -w / 2, 0]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
+      <Line points={[shortServiceOffset, 0, w / 2, 0]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
     </>
   );
 }
@@ -2103,10 +2242,10 @@ function VolleyballMarkings({ w, h, line, lineWidth }: { w: number; h: number; l
   return (
     <>
       {/* Net line — thicker */}
-      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.6} />
+      <Line points={[0, -h / 2, 0, h / 2]} stroke={line} strokeWidth={lineWidth * 1.6} {...CRISP_STROKE} />
       {/* Attack lines each side */}
-      <Line points={[-attackOffset, -h / 2, -attackOffset, h / 2]} stroke={line} strokeWidth={lineWidth} />
-      <Line points={[attackOffset, -h / 2, attackOffset, h / 2]} stroke={line} strokeWidth={lineWidth} />
+      <Line points={[-attackOffset, -h / 2, -attackOffset, h / 2]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
+      <Line points={[attackOffset, -h / 2, attackOffset, h / 2]} stroke={line} strokeWidth={lineWidth} {...CRISP_STROKE} />
     </>
   );
 }
@@ -2939,6 +3078,121 @@ const WATERMARK_RESERVE = WATERMARK_BOX_H + 36;
 // exported PNG) so sales + the customer read the sizes at a glance. Each of
 // Plot / Playing area / Non-playing shows "L × W ft = A sq.ft" and
 // "L × W m = A sq.m".
+// T3-3: branded bottom title block + compact surface→colour legend. A white
+// rounded card (reusing the DIMENSIONS card polish — teal border, soft shadow,
+// green accent bar) carrying the Fitoverse wordmark, the project name, the plot
+// area, and a surface swatch + label. Rendered plot-level so it applies to every
+// sport, and included in the exported PNG so the plan is branded + print-ready.
+function PlotTitleBlock({
+  x,
+  bottom,
+  width,
+  projectTitle,
+  areaLine,
+  surfaceLabel,
+  surfaceColor,
+}: {
+  x: number;
+  // Canvas-y of the block's BOTTOM edge; the card grows upward from here.
+  bottom: number;
+  width: number;
+  projectTitle: string;
+  areaLine: string;
+  surfaceLabel: string;
+  surfaceColor: string;
+}) {
+  const padX = 14;
+  const padY = 10;
+  const brandFs = 15;
+  const titleFs = 12.5;
+  const subFs = 10.5;
+  const boxH = padY * 2 + brandFs + 6 + titleFs + 4 + subFs;
+  const top = bottom - boxH;
+  // Surface legend region — right-aligned on the brand row so it never collides
+  // with the (full-width) title/area rows below it.
+  const swatch = 12;
+  const legendW = Math.min(160, width * 0.5);
+  const legendX = x + width - padX - legendW;
+  return (
+    <Group listening={false}>
+      <Rect
+        x={x}
+        y={top}
+        width={width}
+        height={boxH}
+        fill="#ffffff"
+        stroke="#0f766e"
+        strokeWidth={1.5}
+        cornerRadius={7}
+        shadowColor="rgba(0,0,0,0.22)"
+        shadowBlur={7}
+        shadowOffsetY={2}
+      />
+      {/* Brand-green accent bar on the left edge */}
+      <Rect x={x} y={top} width={4} height={boxH} fill="#15803d" cornerRadius={[7, 0, 0, 7]} />
+      {/* Fitoverse wordmark */}
+      <Text
+        x={x + padX}
+        y={top + padY}
+        text="FITOVERSE"
+        fontSize={brandFs}
+        fontStyle="700"
+        fill="#15803d"
+        letterSpacing={1.5}
+        fontFamily="system-ui, -apple-system, sans-serif"
+      />
+      {/* Surface → colour legend (swatch + label), right-aligned on the brand row */}
+      <Rect
+        x={legendX}
+        y={top + padY + 1}
+        width={swatch}
+        height={swatch}
+        fill={surfaceColor}
+        stroke="#94a3b8"
+        strokeWidth={1}
+        cornerRadius={2}
+      />
+      <Text
+        x={legendX + swatch + 6}
+        y={top + padY + 2}
+        text={surfaceLabel}
+        fontSize={subFs}
+        fontStyle="600"
+        fill="#0f172a"
+        width={legendW - swatch - 6}
+        wrap="none"
+        ellipsis
+        fontFamily="system-ui, -apple-system, sans-serif"
+      />
+      {/* Project title */}
+      <Text
+        x={x + padX}
+        y={top + padY + brandFs + 6}
+        text={projectTitle}
+        fontSize={titleFs}
+        fontStyle="700"
+        fill="#0f172a"
+        width={width - padX * 2}
+        wrap="none"
+        ellipsis
+        fontFamily="system-ui, -apple-system, sans-serif"
+      />
+      {/* Plot area (dual-unit) */}
+      <Text
+        x={x + padX}
+        y={top + padY + brandFs + 6 + titleFs + 4}
+        text={areaLine}
+        fontSize={subFs}
+        fill="#475569"
+        width={width - padX * 2}
+        wrap="none"
+        ellipsis
+        fontFamily="system-ui, -apple-system, sans-serif"
+      />
+    </Group>
+  );
+}
+
 function DesignInfoPanel({
   areas,
   top,
@@ -3741,14 +3995,11 @@ function PlotSurface({
       })()
     : null;
 
-  // P2-02: real material-photo fills. The tiled/PVC plot base repeats its
-  // sample photo at true tile scale (solid colour is the load-fallback); turf
-  // stripes use the light photo on even bands and the dark photo on odd bands,
-  // giving a real mowed-grass look while preserving the light/dark mow
-  // direction. `null` → the caller keeps its solid fill.
-  const basePattern = tiled || pvc ? tilePatternProps(img) : null;
-  const stripeFill = (isLight: boolean, fallback: string) =>
-    tilePatternProps(isLight ? turfLightImg : turfDarkImg) ?? { fill: fallback };
+  // No material/product PHOTO is tiled onto the plot surface — it read as a
+  // photo thumbnail grid (turf, and PPE tile alike). Every surface now renders
+  // as a clean solid/gradient fill; PPE tile keeps its drawn grid overlay and
+  // turf its solid mow stripes. Per user feedback, all sports/surfaces.
+  const basePattern = null;
 
   return (
     <>
@@ -3824,10 +4075,31 @@ function PlotSurface({
               y={plotOriginY}
               width={s.width}
               height={plotPxHeight}
-              {...stripeFill(s.isLight, s.fill)}
+              fill={s.fill}
               listening={false}
             />
           ))}
+          {/* T3-1: seamless procedural grass grain over the mow stripes (all
+              turf sports — this is the SHARED turf path). Overlay blend at low
+              opacity so the flat bands gain fibre texture; null-guarded so a
+              failed noise build degrades to the plain stripes (fallback kept). */}
+          {(() => {
+            const grain = grassGrainPattern();
+            return grain ? (
+              <Rect
+                x={plotOriginX}
+                y={plotOriginY}
+                width={plotPxWidth}
+                height={plotPxHeight}
+                fillPatternImage={grain as unknown as HTMLImageElement}
+                fillPatternRepeat="repeat"
+                opacity={GRASS_GRAIN_OPACITY}
+                globalCompositeOperation="overlay"
+                listening={false}
+                perfectDrawEnabled={false}
+              />
+            ) : null;
+          })()}
           <Rect
             x={plotOriginX}
             y={plotOriginY}

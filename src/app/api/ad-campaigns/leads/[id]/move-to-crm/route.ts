@@ -1,9 +1,9 @@
 // "Move to CRM" for a Meta Instant-Form lead — the ad-campaign Leads table's
 // per-row action that promotes a raw MetaLead into the live CRM. Mirrors the
 // Inbox conversation flow (src/app/api/conversations/[id]/move-to-crm) but
-// starts from a MetaLead instead of a WhatsApp Conversation, and is admin-only
-// (ad-campaign data isn't rep-scoped, and picking the owning rep is an admin
-// act). One POST, no form beyond the picked rep:
+// starts from a MetaLead instead of a WhatsApp Conversation, and is open to all
+// approved reps (ad-campaign data isn't rep-scoped, so any rep can work a lead
+// into the CRM and pick its owner). One POST, no form beyond the picked rep:
 //   1. Already linked (MetaLead.accountContactId set) -> just return it.
 //   2. An AccountContact already exists for this phone -> link to it.
 //   3. Otherwise -> create Account + AccountContact(pipelineStage=LEAD) and link.
@@ -19,7 +19,7 @@ import { normalizePhone } from "@/lib/phone";
 import { findAccountContactDuplicate } from "@/lib/crm/accounts";
 
 const bodySchema = z.object({
-  // The rep to own the created Account. Optional — falls back to the admin
+  // The rep to own the created Account. Optional — falls back to the user
   // performing the promotion if the caller doesn't pick one.
   ownerUserId: z.string().uuid().optional(),
 });
@@ -27,7 +27,7 @@ const bodySchema = z.object({
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  // Open to all approved reps — reps work their own ad leads into the CRM.
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });

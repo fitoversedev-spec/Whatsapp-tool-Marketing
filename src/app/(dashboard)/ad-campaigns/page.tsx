@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import {
   getAdCampaignOverview,
   getMetaLeads,
@@ -7,8 +7,8 @@ import {
 } from "@/lib/meta-ads/queries";
 import AdCampaignsClient from "./AdCampaignsClient";
 
-// Admin-only (the All Tools entry is adminOnly) — requireAdmin redirects a
-// non-admin who reaches the URL directly. The date range is driven by the
+// Open to all approved reps (ad-campaign data is not rep-scoped) — requireUser
+// redirects a logged-out visitor who reaches the URL directly. The date range is driven by the
 // ?from/?to search params so the client's DateRangePicker can re-run this
 // server fetch by pushing a new query string (no dedicated API route needed).
 
@@ -26,7 +26,7 @@ export default async function AdCampaignsPage({
 }: {
   searchParams: { from?: string; to?: string };
 }) {
-  await requireAdmin();
+  await requireUser();
 
   const from = parseDateParam(searchParams.from, new Date("2000-01-01T00:00:00Z"));
   // Guard the upper bound against a malformed ?to= (an Invalid Date would throw

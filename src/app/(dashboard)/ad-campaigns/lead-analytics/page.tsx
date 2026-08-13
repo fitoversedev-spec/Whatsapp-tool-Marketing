@@ -1,9 +1,9 @@
-import { requireAdmin } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { leadsByCity, sportByCity, repeatLeads } from "@/lib/meta-ads/leadAnalytics";
 import LeadAnalyticsClient from "./LeadAnalyticsClient";
 
-// Admin-only (the All Tools entry is adminOnly) — requireAdmin redirects a
-// non-admin who reaches the URL directly. The date range is driven by the
+// Open to all approved reps — requireUser redirects a logged-out visitor who
+// reaches the URL directly. The date range is driven by the
 // ?from/?to search params, the same convention as the Ad Campaigns page and the
 // CRM analytics routes: blank picker => all-time (2000-01-01..now); a picked
 // range narrows to exactly that window, with the upper bound pushed to
@@ -21,7 +21,7 @@ export default async function LeadAnalyticsPage({
 }: {
   searchParams: { from?: string; to?: string };
 }) {
-  await requireAdmin();
+  await requireUser();
 
   const from = parseDateParam(searchParams.from, new Date("2000-01-01T00:00:00Z"));
   // Guard the upper bound against a malformed ?to= (an Invalid Date would throw

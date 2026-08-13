@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { getCampaignById, getLeadsForCampaign } from "@/lib/meta-ads/queries";
 import CampaignDetailClient from "./CampaignDetailClient";
 
-// Admin-only detail view for one Meta ad campaign, addressed by its RAW Meta
-// campaign id: params.campaignId === MetaCampaign.metaId — the id MetaLead
-// rows join on (NEVER the internal MetaCampaign.id). requireAdmin redirects a
-// non-admin who reaches the URL directly.
+// Detail view for one Meta ad campaign, addressed by its RAW Meta campaign id:
+// params.campaignId === MetaCampaign.metaId — the id MetaLead rows join on
+// (NEVER the internal MetaCampaign.id). Open to all approved reps; requireUser
+// redirects a logged-out visitor who reaches the URL directly.
 //
 // Same ?from/?to convention as the CRM analytics rep drill-down and the Ad
 // Campaigns list: a blank picker means all-time (2000-01-01..now); a picked
@@ -35,7 +35,7 @@ export default async function CampaignDetailPage({
   params: { campaignId: string };
   searchParams: { from?: string; to?: string };
 }) {
-  await requireAdmin();
+  await requireUser();
 
   const range = { from: parseFrom(searchParams.from), to: parseTo(searchParams.to) };
 

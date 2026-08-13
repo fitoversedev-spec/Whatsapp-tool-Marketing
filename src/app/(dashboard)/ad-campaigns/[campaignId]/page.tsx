@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getCampaignById, getLeadsForCampaign } from "@/lib/meta-ads/queries";
+import { getCampaignById, getLeadsForCampaign, getAssignableReps, getAdLeadBreakdown } from "@/lib/meta-ads/queries";
 import CampaignDetailClient from "./CampaignDetailClient";
 
 // Detail view for one Meta ad campaign, addressed by its RAW Meta campaign id:
@@ -42,9 +42,11 @@ export default async function CampaignDetailPage({
   // The captured-lead list keys off params.campaignId (the raw Meta id), known
   // before any query, so it rides in the same parallel batch as the detail
   // rollup. On a 404 the wasted lead query is harmless (it just returns []).
-  const [detail, leads] = await Promise.all([
+  const [detail, leads, reps, adBreakdown] = await Promise.all([
     getCampaignById(params.campaignId, range),
     getLeadsForCampaign(params.campaignId, range),
+    getAssignableReps(),
+    getAdLeadBreakdown(params.campaignId, range),
   ]);
 
   if (!detail) notFound();
@@ -53,6 +55,8 @@ export default async function CampaignDetailPage({
     <CampaignDetailClient
       detail={detail}
       leads={leads}
+      reps={reps}
+      adBreakdown={adBreakdown}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}
     />
   );

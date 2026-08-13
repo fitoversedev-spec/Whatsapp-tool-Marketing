@@ -1,14 +1,15 @@
 "use client";
 
-import { Fragment, useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import { AnalyticsCard } from "@/components/analytics/AnalyticsCard";
-import { ExportButtons } from "@/components/analytics/ExportButtons";
 import { StackedBarChart, fmtInr, fmtPct } from "@/components/analytics/charts";
 import { StatusBadge } from "@/components/meta/StatusBadge";
-import type { CampaignDetail, MetaLeadRow } from "@/lib/meta-ads/queries";
+import LeadsTable from "@/components/meta/LeadsTable";
+import type { Rep } from "@/components/meta/MoveToCrmDialog";
+import type { CampaignDetail, MetaLeadRow, AdLeadBreakdownRow } from "@/lib/meta-ads/queries";
 
 // Cost per lead is plain rupees — there is no fmtCpl, so it's formatted with
 // fmtInr like every other money figure. CTR arrives as a fraction (0..1), so it
@@ -28,36 +29,6 @@ function shortDate(ymd: string): string {
     : d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
-// field_data is a raw JSON string produced by the lead-ingest path; its exact
-// shape isn't guaranteed here, so parse defensively and support both Meta's
-// [{ name, values: [...] }] array form and a plain { key: value } object.
-// Mirrors the parseFieldData in the Ad Campaigns list so the expandable row
-// renders identically here.
-function parseFieldData(raw: string): { name: string; value: string }[] {
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed
-        .map((f: { name?: unknown; value?: unknown; values?: unknown }) => ({
-          name: String(f?.name ?? ""),
-          value: Array.isArray(f?.values)
-            ? f.values.join(", ")
-            : String(f?.value ?? (f?.values as unknown) ?? ""),
-        }))
-        .filter((f) => f.name);
-    }
-    if (parsed && typeof parsed === "object") {
-      return Object.entries(parsed as Record<string, unknown>).map(([name, value]) => ({
-        name,
-        value: Array.isArray(value) ? value.join(", ") : String(value),
-      }));
-    }
-  } catch {
-    /* not JSON — nothing to expand */
-  }
-  return [];
-}
-
 function KpiTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="bg-slate-50 rounded-lg p-4">
@@ -68,21 +39,66 @@ function KpiTile({ label, value, sub }: { label: string; value: string; sub?: st
   );
 }
 
+// Ranked "which ad drove the most leads" list, most → least, each with the city
+// distribution of its leads and a mini bar scaled to the top ad.
+function AdBreakdown({ rows }: { rows: AdLeadBreakdownRow[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-slate-400">No leads captured for this campaign in this range.</p>;
+  }
+  const max = rows[0].leadCount || 1;
+  return (
+    <div className="space-y-2">
+      {rows.map((r, i) => (
+        <div key={r.adId ?? `none-${i}`} className="border border-slate-200 rounded-lg p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-medium text-slate-900 break-words">
+                <span className="text-slate-400 tabular-nums mr-1.5">{i + 1}.</span>
+                {r.adName}
+              </div>
+            </div>
+            <div className="shrink-0 text-right leading-tight">
+              <div className="text-lg font-semibold text-slate-900 tabular-nums">{fmtInt(r.leadCount)}</div>
+              <div className="text-[11px] text-slate-400">leads</div>
+            </div>
+          </div>
+          <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-wa-green rounded-full"
+              style={{ width: `${Math.max(3, Math.round((r.leadCount / max) * 100))}%` }}
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {r.cities.map((c) => (
+              <span key={c.city} className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                {c.city} <span className="text-slate-400 tabular-nums">{c.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const SPEND_COLOR = "#159341"; // brand green — daily spend bars
 const LEADS_COLOR = "#0ea5e9"; // sky — daily captured-insight lead bars
 
 export default function CampaignDetailClient({
   detail,
   leads,
+  reps,
+  adBreakdown,
   range,
 }: {
   detail: CampaignDetail;
   leads: MetaLeadRow[];
+  reps: Rep[];
+  adBreakdown: AdLeadBreakdownRow[];
   range: DateRange;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [openLead, setOpenLead] = useState<string | null>(null);
 
   // Applying a range pushes ?from/?to on THIS campaign's URL; the server page
   // re-fetches on the new query string. useTransition keeps the old data
@@ -105,18 +121,6 @@ export default function CampaignDetailClient({
     spend: p.spend,
     leads: p.leads,
   }));
-
-  const leadHeaders = ["Name", "Phone", "Email", "City", "Sport", "Form", "Captured", "CRM"];
-  const leadRows: (string | number)[][] = leads.map((l) => [
-    l.fullName ?? "—",
-    l.phone ?? "—",
-    l.email ?? "—",
-    l.city ?? "—",
-    l.sport ?? "—",
-    l.formName ?? "—",
-    new Date(l.capturedAt).toLocaleDateString("en-IN"),
-    l.inCrm ? "In CRM" : "—",
-  ]);
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
@@ -150,10 +154,7 @@ export default function CampaignDetailClient({
         </div>
 
         {/* Spend / leads trend */}
-        <AnalyticsCard
-          title="Daily trend"
-          description="Spend and lead volume per day over the selected range."
-        >
+        <AnalyticsCard title="Daily trend" description="Spend and lead volume per day over the selected range.">
           {trend.length === 0 ? (
             <p className="text-sm text-slate-400">No daily insights in this range.</p>
           ) : (
@@ -184,102 +185,25 @@ export default function CampaignDetailClient({
           )}
         </AnalyticsCard>
 
-        {/* This campaign's captured leads */}
+        {/* Which ad drove the most leads, and from which cities */}
+        <AnalyticsCard
+          title="Leads by ad"
+          description="Which ad drove the most leads for this campaign — most to least — and the cities those leads came from."
+        >
+          <AdBreakdown rows={adBreakdown} />
+        </AnalyticsCard>
+
+        {/* This campaign's captured leads — filterable by city / sport */}
         <AnalyticsCard
           title="Captured leads"
-          description="Every Instant-Form submission captured from this campaign. Click a row to see the full form answers."
+          description="Every Instant-Form submission captured from this campaign. Filter by city or sport, click a breakdown value to drill in, or click a row for the full form answers."
         >
-          {leads.length === 0 ? (
-            <p className="text-sm text-slate-400">No leads captured for this campaign in this range.</p>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex justify-end">
-                <ExportButtons filename={`campaign-${detail.metaId}-leads`} headers={leadHeaders} rows={leadRows} />
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left border-b border-slate-200">
-                      {["Name", "Phone", "Email", "City", "Sport", "Form", "Captured", ""].map((h, i) => (
-                        <th
-                          key={i}
-                          className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap"
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leads.map((l) => {
-                      const isOpen = openLead === l.id;
-                      const fields = isOpen ? parseFieldData(l.fieldData) : [];
-                      return (
-                        <Fragment key={l.id}>
-                          <tr
-                            onClick={() => setOpenLead(isOpen ? null : l.id)}
-                            className="border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50"
-                          >
-                            <td className="px-2 py-2 whitespace-nowrap font-medium text-slate-900">
-                              <span className={`inline-block mr-1.5 text-slate-400 text-xs transition-transform ${isOpen ? "rotate-90" : ""}`}>
-                                ▶
-                              </span>
-                              {l.fullName ?? "—"}
-                            </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.phone ?? "—"}</td>
-                            <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.email ?? "—"}</td>
-                            <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.city ?? "—"}</td>
-                            <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.sport ?? "—"}</td>
-                            <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.formName ?? "—"}</td>
-                            <td className="px-2 py-2 whitespace-nowrap text-slate-500">
-                              {new Date(l.capturedAt).toLocaleDateString("en-IN")}
-                            </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-right">
-                              {l.inCrm ? (
-                                <span className="text-xs font-medium text-emerald-700">In CRM</span>
-                              ) : (
-                                <span className="text-xs text-slate-400">—</span>
-                              )}
-                            </td>
-                          </tr>
-                          {isOpen && (
-                            <tr className="border-b border-slate-100 bg-slate-50/60">
-                              <td colSpan={8} className="px-4 py-3">
-                                {fields.length === 0 ? (
-                                  <p className="text-xs text-slate-400">No additional form fields recorded.</p>
-                                ) : (
-                                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
-                                    {fields.map((f, i) => (
-                                      <div key={i} className="flex gap-2 text-xs">
-                                        <dt className="text-slate-500 font-medium capitalize whitespace-nowrap">
-                                          {f.name.replace(/_/g, " ")}
-                                        </dt>
-                                        <dd className="text-slate-800 break-words">{f.value || "—"}</dd>
-                                      </div>
-                                    ))}
-                                  </dl>
-                                )}
-                                <div className="mt-3">
-                                  <button
-                                    type="button"
-                                    disabled
-                                    title="Coming soon — link this lead into the CRM pipeline"
-                                    className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed"
-                                  >
-                                    {l.inCrm ? "Already in CRM" : "Move to CRM (coming soon)"}
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          <LeadsTable
+            leads={leads}
+            reps={reps}
+            showCampaignColumn={false}
+            exportFilename={`campaign-${detail.metaId}-leads`}
+          />
         </AnalyticsCard>
       </div>
     </div>

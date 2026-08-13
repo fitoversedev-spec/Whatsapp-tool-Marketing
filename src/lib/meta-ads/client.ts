@@ -306,6 +306,48 @@ export async function fetchLeadForms(): Promise<LeadForm[]> {
   }
 }
 
+// GET /?ids=<adId,…>&fields=name — resolve ad ids to their names in one batch
+// call (chunked at 50, Graph's practical ?ids= cap). Uses the SU token (ads are
+// ad-account scoped, same as campaigns/insights). Returns a Map(adId → name);
+// ids that error or lack a name are simply absent, so callers fall back to the
+// raw id. Non-fatal — ad names are cosmetic for the breakdown.
+export async function fetchAdNames(adIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const ids = [...new Set(adIds.filter(Boolean))];
+  if (ids.length === 0) return out;
+  const { token } = await requireAdsToken();
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    try {
+      const res = await axios.get(graphUrl(""), {
+        headers: authHeaders(token),
+        params: { ids: chunk.join(","), fields: "name" },
+        timeout: META_TIMEOUT_MS,
+      });
+      const data = (res.data ?? {}) as Record<string, { name?: string }>;
+      for (const [id, v] of Object.entries(data)) if (v?.name) out.set(id, v.name);
+    } catch {
+      // The batch ?ids= read is all-or-nothing: one deleted/inaccessible id
+      // fails the whole chunk. Fall back to resolving each id on its own so a
+      // single bad id only costs its own name (the rest still resolve).
+      for (const id of chunk) {
+        try {
+          const r = await axios.get(graphUrl(id), {
+            headers: authHeaders(token),
+            params: { fields: "name" },
+            timeout: META_TIMEOUT_MS,
+          });
+          const name = r.data?.name as string | undefined;
+          if (name) out.set(id, name);
+        } catch {
+          /* leave unresolved — caller falls back to "Ad <id>" */
+        }
+      }
+    }
+  }
+  return out;
+}
+
 // GET /<form_id>?fields=name — a lead form's friendly name (the leadgen webhook
 // carries only form_id). Cached per form. Returns null on ANY failure — formName
 // is cosmetic and must never block lead ingestion.

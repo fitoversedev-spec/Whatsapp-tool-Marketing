@@ -11,6 +11,7 @@
 // pattern invoices.ts uses, rather than prisma groupBy.
 
 import { prisma } from "@/lib/prisma";
+import { fetchAdNames } from "./client";
 
 export type AdCampaignKpis = {
   totalSpend: number; // rupees
@@ -425,4 +426,59 @@ export async function getAssignableReps(): Promise<{ id: string; name: string }[
     orderBy: [{ role: "asc" }, { name: "asc" }],
     select: { id: true, name: true },
   });
+}
+
+// Ad-level lead breakdown for one campaign: which AD produced the most leads
+// (most → least), each with the city distribution of those leads. Ad NAMES are
+// resolved from Meta on demand (fetchAdNames, SU token) and fall back to the raw
+// id when unavailable. Grouping is done in JS (findMany + reduce), same pattern
+// as the other reads here. Leads with no ad_id fall into an "organic" bucket.
+export type AdLeadBreakdownRow = {
+  adId: string | null;
+  adName: string;
+  leadCount: number;
+  cities: { city: string; count: number }[]; // desc by count
+};
+
+export async function getAdLeadBreakdown(
+  metaId: string,
+  range?: { from: Date; to: Date }
+): Promise<AdLeadBreakdownRow[]> {
+  const leads = await prisma.metaLead.findMany({
+    where: { campaignId: metaId, ...(range ? leadWindowWhere(range) : {}) },
+    select: { adId: true, city: true },
+  });
+
+  const NONE = "__none__";
+  const byAd = new Map<string, { adId: string | null; count: number; cities: Map<string, number> }>();
+  for (const l of leads) {
+    const key = l.adId ?? NONE;
+    let g = byAd.get(key);
+    if (!g) {
+      g = { adId: l.adId ?? null, count: 0, cities: new Map() };
+      byAd.set(key, g);
+    }
+    g.count += 1;
+    const city = (l.city ?? "").trim() || "—";
+    g.cities.set(city, (g.cities.get(city) ?? 0) + 1);
+  }
+
+  const adIds = [...byAd.values()].map((g) => g.adId).filter((x): x is string => !!x);
+  let names = new Map<string, string>();
+  try {
+    names = await fetchAdNames(adIds);
+  } catch {
+    /* ad names are cosmetic — fall back to the raw id below */
+  }
+
+  return [...byAd.values()]
+    .map((g) => ({
+      adId: g.adId,
+      adName: g.adId ? names.get(g.adId) ?? `Ad ${g.adId}` : "(no ad / organic)",
+      leadCount: g.count,
+      cities: [...g.cities.entries()]
+        .map(([city, count]) => ({ city, count }))
+        .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city)),
+    }))
+    .sort((a, b) => b.leadCount - a.leadCount);
 }

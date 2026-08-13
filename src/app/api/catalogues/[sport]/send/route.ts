@@ -15,6 +15,7 @@ import { renderCatalogue, type FeaturedProject } from "@/lib/catalogue/pdf";
 import { getSportMeta, type SportKey } from "@/lib/catalogue/sport-meta";
 import { uploadToBlob } from "@/lib/media";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
+import { resolveWhatsAppDelivery } from "@/lib/whatsapp-delivery";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -108,6 +109,24 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
     caption?.trim() ||
     `Fitoverse ${meta.label} catalogue. Reply with your plot size + location and we will send a custom quote.`;
 
+  // Route by whether the customer has an OPEN 24h WhatsApp session (located by
+  // phone number — see resolveWhatsAppDelivery). No open session (cold CRM lead,
+  // or the window has lapsed) → hand off to WhatsApp Web/App, since the Cloud
+  // API would reject a free-form send. Click-to-chat can only pre-fill TEXT, so
+  // the message links to the catalogue PDF instead of attaching it, and the
+  // follow-up project photos are omitted (they can't ride on a click-to-chat
+  // link). The rep sends it from their own WhatsApp.
+  const delivery = await resolveWhatsAppDelivery({
+    contactPhone,
+    linkedConversationId: conversationId ?? null,
+  });
+  if (delivery.mode === "whatsapp-web") {
+    const message = `${baseCaption}\n\nView/download: ${pdfUrl}`;
+    const digits = delivery.normalizedPhone ?? contactPhone.replace(/[^0-9]/g, "");
+    const whatsappWebUrl = `https://api.whatsapp.com/send/?phone=${digits}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
+    return NextResponse.json({ ok: true, sent: 0, whatsappWebUrl });
+  }
+
   type Sent = {
     format: string;
     waMessageId: string;
@@ -115,10 +134,11 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
     type: "text" | "document" | "image";
   };
   const sent: Sent[] = [];
+  const sendTo = delivery.normalizedPhone ?? contactPhone;
 
   if (baseCaption) {
     try {
-      const t = await sendText({ to: contactPhone, body: baseCaption });
+      const t = await sendText({ to: sendTo, body: baseCaption });
       sent.push({
         format: "caption",
         waMessageId: t.waMessageId,
@@ -136,7 +156,7 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
 
   try {
     const r = await sendMedia({
-      to: contactPhone,
+      to: sendTo,
       mediaType: "document",
       url: pdfUrl,
       filename: fileName,
@@ -163,7 +183,7 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
     if (!p.heroPhotoUrl) continue;
     try {
       const r = await sendMedia({
-        to: contactPhone,
+        to: sendTo,
         mediaType: "image",
         url: p.heroPhotoUrl,
         caption: `${p.customerName}${p.location ? ` - ${p.location}` : ""}`,
@@ -184,14 +204,16 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
     }
   }
 
-  // 4. Mirror everything into the linked conversation thread (if any)
-  if (conversationId) {
+  // 4. Mirror everything into the customer's conversation thread (linked, or
+  //    found by phone)
+  const mirrorConversationId = delivery.conversationId;
+  if (mirrorConversationId) {
     for (const s of sent) {
       const type = s.type;
       await prisma.message
         .create({
           data: {
-            conversationId,
+            conversationId: mirrorConversationId,
             direction: "outbound",
             type,
             body:
@@ -216,7 +238,7 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
         .catch(() => null);
     }
     await prisma.conversation.update({
-      where: { id: conversationId },
+      where: { id: mirrorConversationId },
       data: { lastOutboundAt: new Date() },
     });
   }

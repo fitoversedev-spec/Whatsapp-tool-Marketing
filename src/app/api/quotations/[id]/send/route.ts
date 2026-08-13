@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { renderQuotationPdf } from "@/lib/quotation/pdf";
 import { uploadToBlob } from "@/lib/media";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
+import { resolveWhatsAppDelivery } from "@/lib/whatsapp-delivery";
 import { advanceDealStageIfEarlier } from "@/lib/funnel/transitionDeal";
 import { z } from "zod";
 
@@ -42,7 +43,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const q = await prisma.quotation.findUnique({
     where: { id: params.id },
-    include: { deal: { select: { dealChannel: true } } },
   });
   if (!q) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
@@ -115,20 +115,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
-  // CRM-channel deals: hand off to WhatsApp Web/App instead of sending via
-  // the Cloud API directly. Cloud API sends need either an active 24h
-  // customer-service session or a pre-approved template; CRM-originated
-  // contacts (cold leads, not an inbound WhatsApp conversation) usually
-  // have neither, so a human sends it manually from their own WhatsApp —
-  // same message, just not through Meta's API. See docs/DECISIONS.md.
-  // WhatsApp click-to-chat can only pre-fill TEXT, never attach a file, so
-  // the message links to the PDF instead. Links through /q/[id] (this
-  // app's own domain) rather than the raw pdfUrl — the Vercel Blob
-  // storage subdomain reads as a random/untrustworthy link to a customer;
-  // see docs/DECISIONS.md. /q/[id] is itself unauthenticated (unlike the
-  // session-gated /api/quotations/[id]/pdf the app uses internally) and
-  // just 302s to pdfUrl, which is genuinely public either way.
-  if (q.deal?.dealChannel === "crm") {
+  // Route by whether the customer has an OPEN 24h WhatsApp session (located
+  // by phone number — see resolveWhatsAppDelivery). An open session → send
+  // directly from the marketing number below. No open session (cold CRM lead,
+  // or the window has lapsed) → hand off to WhatsApp Web/App, since the Cloud
+  // API would reject a free-form file send; a human sends it from their own
+  // WhatsApp. Click-to-chat can only pre-fill TEXT, never attach a file, so the
+  // message links to the PDF instead. Links through /q/[id] (this app's own
+  // domain) rather than the raw pdfUrl — the Vercel Blob storage subdomain
+  // reads as a random/untrustworthy link to a customer; see docs/DECISIONS.md.
+  // /q/[id] is itself unauthenticated (unlike the session-gated
+  // /api/quotations/[id]/pdf the app uses internally) and just 302s to pdfUrl,
+  // which is genuinely public either way.
+  const delivery = await resolveWhatsAppDelivery({
+    contactPhone: q.contactPhone,
+    linkedConversationId: q.conversationId,
+  });
+  if (delivery.mode === "whatsapp-web") {
     await prisma.quotation.update({
       where: { id: params.id },
       data: { pdfUrl, status: "sent", sentAt: new Date() },
@@ -145,7 +148,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       q.caption?.trim() ||
       `Quotation ${q.number} from Fitoverse — total ₹${Number(q.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
     const message = `${introText}\n\nView/download: ${APP_URL}/q/${q.id}`;
-    const digits = q.contactPhone.replace(/[^0-9]/g, "");
+    const digits = delivery.normalizedPhone ?? q.contactPhone.replace(/[^0-9]/g, "");
     const whatsappWebUrl = `https://api.whatsapp.com/send/?phone=${digits}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
     return NextResponse.json({ ok: true, pdfUrl, waMessageId: null, whatsappWebUrl });
   }
@@ -159,13 +162,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     `Quotation ${q.number} from Fitoverse — total ₹${Number(q.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   let captionMessageId: string | null = null;
   let waMessageId = "";
+  const sendTo = delivery.normalizedPhone ?? q.contactPhone;
   try {
     if (captionText) {
-      const t = await sendText({ to: q.contactPhone, body: captionText });
+      const t = await sendText({ to: sendTo, body: captionText });
       captionMessageId = t.waMessageId;
     }
     const r = await sendMedia({
-      to: q.contactPhone,
+      to: sendTo,
       mediaType: "document",
       url: pdfUrl,
       // No inline caption — the intro text message already delivered it.
@@ -203,14 +207,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     });
   }
 
-  if (q.conversationId) {
+  const mirrorConversationId = delivery.conversationId;
+  if (mirrorConversationId) {
     // Mirror the caption text (if sent) + the PDF into the inbox thread
     // so the conversation shows both, matching what the customer sees.
     if (captionMessageId) {
       await prisma.message
         .create({
           data: {
-            conversationId: q.conversationId,
+            conversationId: mirrorConversationId,
             direction: "outbound",
             type: "text",
             body: captionText,
@@ -224,7 +229,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await prisma.message
       .create({
         data: {
-          conversationId: q.conversationId,
+          conversationId: mirrorConversationId,
           direction: "outbound",
           type: "document",
           body: `📄 Quotation ${q.number} sent`,
@@ -238,7 +243,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       })
       .catch(() => null);
     await prisma.conversation.update({
-      where: { id: q.conversationId },
+      where: { id: mirrorConversationId },
       data: { lastOutboundAt: new Date() },
     });
   }

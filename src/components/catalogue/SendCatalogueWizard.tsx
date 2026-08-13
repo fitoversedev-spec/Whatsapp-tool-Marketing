@@ -63,6 +63,11 @@ export default function SendCatalogueWizard({
       return;
     }
     setSending(true);
+    // Pre-open a blank tab synchronously (inside the click gesture) so that if
+    // the send resolves to a WhatsApp Web handoff — the customer has no open
+    // 24h session — we can navigate it without the popup blocker killing it.
+    // Closed again when the send goes directly via the Cloud API.
+    const pendingTab = window.open("", "_blank");
     try {
       const res = await fetch(`/api/catalogues/${sport}/send`, {
         method: "POST",
@@ -76,17 +81,26 @@ export default function SendCatalogueWizard({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        pendingTab?.close();
         toast.error(data.message ?? data.error ?? "Send failed");
         return;
       }
-      toast.success(
-        `Catalogue sent to ${contactPhone}${
-          data.sent > 1 ? ` (+${data.sent - 1} photos)` : ""
-        }`
-      );
+      if (data.whatsappWebUrl) {
+        if (pendingTab) pendingTab.location.href = data.whatsappWebUrl;
+        else window.open(data.whatsappWebUrl, "_blank");
+        toast.success("Catalogue ready — send it from the WhatsApp tab that just opened");
+      } else {
+        pendingTab?.close();
+        toast.success(
+          `Catalogue sent to ${contactPhone}${
+            data.sent > 1 ? ` (+${data.sent - 1} photos)` : ""
+          }`
+        );
+      }
       onComplete?.();
       onClose();
     } catch (err) {
+      pendingTab?.close();
       toast.error(err instanceof Error ? err.message : "Send failed");
     } finally {
       setSending(false);

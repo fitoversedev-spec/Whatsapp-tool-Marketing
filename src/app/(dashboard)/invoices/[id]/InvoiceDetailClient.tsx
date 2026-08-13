@@ -45,13 +45,26 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
 
   async function send() {
     setBusy(true);
+    // Pre-open a blank tab synchronously (inside the click gesture) so a
+    // WhatsApp-Web handoff survives the popup blocker; closed again if the
+    // send goes directly via the Cloud API or errors.
+    const pendingTab = window.open("", "_blank");
     try {
       const res = await fetch(`/api/invoices/${id}/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       const d = await res.json();
-      if (!res.ok) { toast.error(d.error ?? "Send failed"); return; }
-      if (d.whatsappWebUrl) { window.open(d.whatsappWebUrl, "_blank"); toast.success("Opening WhatsApp — send from your number"); }
-      else toast.success("Invoice sent");
+      if (!res.ok) { pendingTab?.close(); toast.error(d.error ?? "Send failed"); return; }
+      if (d.whatsappWebUrl) {
+        if (pendingTab) pendingTab.location.href = d.whatsappWebUrl;
+        else window.open(d.whatsappWebUrl, "_blank");
+        toast.success("Opening WhatsApp — send from your number");
+      } else {
+        pendingTab?.close();
+        toast.success("Invoice sent");
+      }
       load();
+    } catch (err) {
+      pendingTab?.close();
+      toast.error(err instanceof Error ? err.message : "Send failed");
     } finally { setBusy(false); }
   }
 

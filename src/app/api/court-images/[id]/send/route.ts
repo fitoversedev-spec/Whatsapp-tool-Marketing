@@ -12,6 +12,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
+import { resolveWhatsAppDelivery } from "@/lib/whatsapp-delivery";
 import { advanceDealStageIfEarlier } from "@/lib/funnel/transitionDeal";
 
 // Same convention as staffCommands.ts's own APP_URL constant.
@@ -40,7 +41,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const row = await prisma.courtImage.findUnique({
     where: { id: params.id },
-    include: { deal: { select: { dealChannel: true } } },
   });
   if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (user.role !== "admin" && row.createdByUserId !== user.id) {
@@ -109,14 +109,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     row.caption?.trim() ||
     `Court design ${row.number} from Fitoverse — ${row.customerName}`;
 
-  // CRM-channel deals: hand off to WhatsApp Web/App instead of sending via
-  // the Cloud API directly — same reasoning as the quotation /send route
-  // (see its own comment, and docs/DECISIONS.md). Click-to-chat can only
-  // pre-fill TEXT, never attach a file, so the message links to each
-  // selected format instead — through /d/[id] (this app's own domain,
-  // unauthenticated, 302s to the real media URL) rather than the raw
+  // Route by whether the customer has an OPEN 24h WhatsApp session (located by
+  // phone number — see resolveWhatsAppDelivery) — same reasoning as the
+  // quotation /send route (see its own comment, and docs/DECISIONS.md). No open
+  // session (cold CRM lead, or window lapsed) → hand off to WhatsApp Web/App.
+  // Click-to-chat can only pre-fill TEXT, never attach a file, so the message
+  // links to each selected format instead — through /d/[id] (this app's own
+  // domain, unauthenticated, 302s to the real media URL) rather than the raw
   // Blob URL, which reads as untrustworthy to a customer.
-  if (row.deal?.dealChannel === "crm") {
+  const delivery = await resolveWhatsAppDelivery({
+    contactPhone: row.contactPhone,
+    linkedConversationId: row.conversationId,
+  });
+  if (delivery.mode === "whatsapp-web") {
     await prisma.courtImage.update({
       where: { id: params.id },
       data: { status: "sent", sentAt: new Date() },
@@ -131,7 +136,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     const links = items.map((i) => `${i.format}: ${APP_URL}/d/${row.id}?format=${i.format}`).join("\n");
     const message = `${baseCaption}\n\n${links}`;
-    const digits = row.contactPhone.replace(/[^0-9]/g, "");
+    const digits = delivery.normalizedPhone ?? row.contactPhone.replace(/[^0-9]/g, "");
     const whatsappWebUrl = `https://api.whatsapp.com/send/?phone=${digits}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
     return NextResponse.json({ ok: true, sent: [], whatsappWebUrl });
   }
@@ -143,12 +148,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     type: "image" | "video" | "text";
   };
   const sent: Sent[] = [];
+  const sendTo = delivery.normalizedPhone ?? row.contactPhone;
 
   // Send the caption as a preceding text message so WhatsApp displays
   // it as a clear intro rather than hiding it under inline media.
   if (baseCaption) {
     try {
-      const t = await sendText({ to: row.contactPhone, body: baseCaption });
+      const t = await sendText({ to: sendTo, body: baseCaption });
       sent.push({ format: "caption", waMessageId: t.waMessageId, url: null, type: "text" });
     } catch (err) {
       const e = describeMetaError(err);
@@ -162,7 +168,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   for (const item of items) {
     try {
       const r = await sendMedia({
-        to: row.contactPhone,
+        to: sendTo,
         mediaType: item.mediaType,
         url: item.url,
         // No inline caption — the intro text delivered it up-front.
@@ -203,7 +209,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     });
   }
 
-  if (row.conversationId) {
+  const mirrorConversationId = delivery.conversationId;
+  if (mirrorConversationId) {
     // Mirror each sent item as its own inbox message so the thread shows
     // exactly what the customer received. Text-caption message first,
     // then each media.
@@ -212,7 +219,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         await prisma.message
           .create({
             data: {
-              conversationId: row.conversationId,
+              conversationId: mirrorConversationId,
               direction: "outbound",
               type: "text",
               body: baseCaption,
@@ -228,7 +235,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       await prisma.message
         .create({
           data: {
-            conversationId: row.conversationId,
+            conversationId: mirrorConversationId,
             direction: "outbound",
             type: isVideo ? "video" : "image",
             body: `Court design ${row.number} sent (${s.format})`,
@@ -243,7 +250,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         .catch(() => null);
     }
     await prisma.conversation.update({
-      where: { id: row.conversationId },
+      where: { id: mirrorConversationId },
       data: { lastOutboundAt: new Date() },
     });
   }

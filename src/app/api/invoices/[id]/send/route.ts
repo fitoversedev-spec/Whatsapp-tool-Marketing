@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureInvoicePdfUrl, invoiceFileName } from "@/lib/invoice/render";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
+import { resolveWhatsAppDelivery } from "@/lib/whatsapp-delivery";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -22,7 +23,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const inv = await prisma.invoice.findUnique({
     where: { id: params.id },
     include: {
-      deal: { select: { dealChannel: true } },
       quotation: { select: { conversationId: true } },
     },
   });
@@ -52,11 +52,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const nextStatus = inv.status === "issued" ? "sent" : inv.status;
   const introText = `Invoice ${inv.number} from Fitoverse — total ₹${Number(inv.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
-  // 2a. CRM-channel deal → click-to-chat link (rep's own number).
-  if (inv.deal?.dealChannel === "crm") {
+  // Route by whether the customer has an OPEN 24h WhatsApp session (located by
+  // phone number — see resolveWhatsAppDelivery). Same rule as the quotation /
+  // court-design send routes.
+  const delivery = await resolveWhatsAppDelivery({
+    contactPhone: inv.contactPhone,
+    linkedConversationId: inv.quotation?.conversationId ?? null,
+  });
+
+  // 2a. No open session → click-to-chat link (rep sends from their own number).
+  if (delivery.mode === "whatsapp-web") {
     await prisma.invoice.update({ where: { id: params.id }, data: { pdfUrl, status: nextStatus, sentAt: inv.sentAt ?? new Date() } });
     const message = `${introText}\n\nView/download: ${APP_URL}/inv/${inv.id}`;
-    const digits = inv.contactPhone.replace(/[^0-9]/g, "");
+    const digits = delivery.normalizedPhone ?? inv.contactPhone.replace(/[^0-9]/g, "");
     const whatsappWebUrl = `https://api.whatsapp.com/send/?phone=${digits}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
     return NextResponse.json({ ok: true, pdfUrl, waMessageId: null, whatsappWebUrl });
   }
@@ -64,10 +72,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // 2b. Inbound conversation → Cloud API document send.
   let waMessageId = "";
   let captionMessageId: string | null = null;
+  const sendTo = delivery.normalizedPhone ?? inv.contactPhone;
   try {
-    const t = await sendText({ to: inv.contactPhone, body: introText });
+    const t = await sendText({ to: sendTo, body: introText });
     captionMessageId = t.waMessageId;
-    const r = await sendMedia({ to: inv.contactPhone, mediaType: "document", url: pdfUrl, filename: fileName });
+    const r = await sendMedia({ to: sendTo, mediaType: "document", url: pdfUrl, filename: fileName });
     waMessageId = r.waMessageId;
   } catch (err) {
     const e = describeMetaError(err);
@@ -76,8 +85,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   await prisma.invoice.update({ where: { id: params.id }, data: { pdfUrl, status: nextStatus, sentAt: inv.sentAt ?? new Date() } });
 
-  // Mirror into the originating conversation, if any.
-  const conversationId = inv.quotation?.conversationId ?? null;
+  // Mirror into the customer's conversation thread (linked, or found by phone).
+  const conversationId = delivery.conversationId;
   if (conversationId) {
     if (captionMessageId) {
       await prisma.message

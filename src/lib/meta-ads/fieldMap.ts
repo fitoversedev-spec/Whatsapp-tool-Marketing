@@ -21,15 +21,20 @@ const SPORT_ALIASES = [
 ];
 
 function findByAlias(fieldData: MetaLeadFieldDatum[], aliases: string[]): string | null {
+  // Prefer an EXACT name match anywhere in the form; only fall back to the first
+  // substring match if no field matches exactly. This stops a broad alias like
+  // CITY's "area" from hijacking a "what is the area (in sq.ft)?" question when a
+  // real "city" field is also present — exact "city" wins regardless of order.
+  let contains: string | null = null;
   for (const f of fieldData) {
     const name = (f.name ?? "").toLowerCase().trim();
     if (!name) continue;
-    if (aliases.some((a) => name === a || name.includes(a))) {
-      const v = f.values?.[0];
-      if (v && v.trim()) return v.trim();
-    }
+    const v = f.values?.[0];
+    if (!v || !v.trim()) continue;
+    if (aliases.some((a) => name === a)) return v.trim();
+    if (contains === null && aliases.some((a) => name.includes(a))) contains = v.trim();
   }
-  return null;
+  return contains;
 }
 
 /** Raw (trimmed) city as the lead typed it — preserves the original for display. */

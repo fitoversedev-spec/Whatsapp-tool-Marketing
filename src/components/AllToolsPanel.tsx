@@ -78,6 +78,25 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
     ],
   },
   {
+    title: "Meta Ads",
+    items: [
+      {
+        href: "/ad-campaigns",
+        label: "Ad Campaigns",
+        icon: "📣",
+        description: "Meta ad performance, lead-gen leads & AI summaries",
+        adminOnly: true,
+      },
+      {
+        href: "/ad-campaigns/lead-analytics",
+        label: "Lead Analytics",
+        icon: "📈",
+        description: "Leads by city, sport demand, repeat submitters + AI",
+        adminOnly: true,
+      },
+    ],
+  },
+  {
     title: "Organization",
     items: [
       {

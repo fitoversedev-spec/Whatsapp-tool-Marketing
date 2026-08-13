@@ -50,6 +50,9 @@ const LEAD_SOURCES = [
   "Referral — Contractor",
   "Google Ads",
   "Google Organic / SEO",
+  // Generic Meta-ads source (slug "meta_ads") — used by move-to-CRM to attribute
+  // Instant-Form leads when the specific FB/IG placement isn't distinguished.
+  "Meta Ads",
   "Meta Ads — Facebook",
   "Meta Ads — Instagram",
   "YouTube Ads",

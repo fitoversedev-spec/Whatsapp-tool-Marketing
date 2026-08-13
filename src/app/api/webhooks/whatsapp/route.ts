@@ -7,6 +7,7 @@ import { dispatchAutoReply } from "@/lib/auto-replies/dispatch";
 import { dispatchAfterHoursGate } from "@/lib/auto-replies/after-hours-gate";
 import { dispatchChatbot } from "@/lib/chatbot/dispatch";
 import { handleStaffMessage } from "@/lib/chatbot/staffCommands";
+import { handleLeadgen } from "@/lib/meta-ads/leads";
 
 // Meta requires GET for verification handshake
 export async function GET(req: NextRequest) {
@@ -70,6 +71,11 @@ export async function POST(req: NextRequest) {
       // Template approval status callbacks
       if (field === "message_template_status_update") {
         await handleTemplateStatusUpdate(value);
+      }
+
+      // Lead-gen Instant-Form submissions (Meta Marketing API)
+      if (field === "leadgen") {
+        await handleLeadgen(value);
       }
     }
   }

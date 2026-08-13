@@ -28,6 +28,10 @@ export default function ConnectionClient({
   const [seedingToken, setSeedingToken] = useState(false);
   const [forceRefreshing, setForceRefreshing] = useState(false);
   const [shortToken, setShortToken] = useState("");
+  const [adsToken, setAdsToken] = useState("");
+  const [adsAccountId, setAdsAccountId] = useState("");
+  const [adsPageId, setAdsPageId] = useState("");
+  const [savingAds, setSavingAds] = useState(false);
 
   async function seedToken() {
     if (!shortToken.trim()) {
@@ -48,6 +52,33 @@ export default function ConnectionClient({
       router.refresh();
     } else {
       toast.error(data.error ?? "Token exchange failed");
+    }
+  }
+
+  async function saveAdsConfig() {
+    const token = adsToken.trim();
+    const adAccountId = adsAccountId.trim();
+    const pageId = adsPageId.trim();
+    if (!token && !adAccountId && !pageId) {
+      toast.error("Enter at least one value first");
+      return;
+    }
+    setSavingAds(true);
+    const res = await fetch("/api/admin/meta-ads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, adAccountId, pageId }),
+    });
+    setSavingAds(false);
+    const data = await res.json();
+    if (res.ok) {
+      toast.success("Meta Ads settings saved");
+      setAdsToken("");
+      setAdsAccountId("");
+      setAdsPageId("");
+      router.refresh();
+    } else {
+      toast.error(data.error ?? "Save failed");
     }
   }
 
@@ -411,6 +442,65 @@ export default function ConnectionClient({
                 {seedingToken ? "Exchanging…" : "Exchange & save"}
               </button>
             </div>
+          </div>
+        </Card>
+
+        {/* Meta Ads (Marketing API) — separate credential from the WhatsApp token */}
+        <Card
+          title="Meta Ads"
+          subtitle="Marketing API credentials for ad performance + lead-gen (separate from the WhatsApp token)"
+        >
+          <div className="text-xs text-slate-500 mb-3">
+            Paste the ads <strong>system-user token</strong> and the account/page IDs. Stored
+            server-side only — the token is never shown back here.
+          </div>
+          <div className="space-y-3">
+            <div>
+              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                System-user token
+              </div>
+              <input
+                type="password"
+                value={adsToken}
+                onChange={(e) => setAdsToken(e.target.value)}
+                placeholder="EAAU…"
+                className="flex-1 input text-sm font-mono w-full"
+                disabled={savingAds}
+              />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                Ad account ID
+              </div>
+              <input
+                type="text"
+                value={adsAccountId}
+                onChange={(e) => setAdsAccountId(e.target.value)}
+                placeholder="act_962048109192445"
+                className="flex-1 input text-sm font-mono w-full"
+                disabled={savingAds}
+              />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                Page ID
+              </div>
+              <input
+                type="text"
+                value={adsPageId}
+                onChange={(e) => setAdsPageId(e.target.value)}
+                placeholder="109192094983145"
+                className="flex-1 input text-sm font-mono w-full"
+                disabled={savingAds}
+              />
+            </div>
+            <button
+              onClick={saveAdsConfig}
+              disabled={savingAds}
+              className="bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-4 py-2 rounded-lg text-sm"
+            >
+              {savingAds ? "Saving…" : "Save Meta Ads settings"}
+            </button>
           </div>
         </Card>
 

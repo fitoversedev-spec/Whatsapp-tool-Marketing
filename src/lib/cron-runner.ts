@@ -12,6 +12,7 @@ import { runBroadcast } from "@/lib/sender";
 import { sendText } from "@/lib/whatsapp";
 import { runWeeklyDigest } from "@/lib/analytics/digestJob";
 import { postThreadNote } from "@/lib/chat/events";
+import { syncAdsInsights } from "@/lib/meta-ads/sync";
 
 // The weekday the weekly digest fires on — Monday (getDay() 0=Sun..6=Sat).
 // A visible default, not a business-mandated day: Monday so the digest lands
@@ -215,7 +216,7 @@ export async function markOverdueInvoices(): Promise<{ overdue: number }> {
 }
 
 export async function sweepAll() {
-  const [reminders, broadcasts, coverage, staleSessions, overdueInvoices] = await Promise.all([
+  const [reminders, broadcasts, coverage, staleSessions, overdueInvoices, adsInsights] = await Promise.all([
     fireDueReminders(),
     launchDueScheduledBroadcasts(),
     revertExpiredCoverage().catch((err) => {
@@ -230,6 +231,9 @@ export async function sweepAll() {
       console.error("[cron] overdue-invoice sweep threw", err);
       return { overdue: 0 };
     }),
+    // syncAdsInsights is no-throw by contract (gates + wraps internally); the
+    // .catch is defence-in-depth mirroring the sweeps above.
+    syncAdsInsights().catch(() => ({ skipped: "error" })),
   ]);
 
   // Day-of-week-gated weekly digest. Wrapped in its own try/catch — and
@@ -249,5 +253,5 @@ export async function sweepAll() {
     }
   }
 
-  return { reminders, broadcasts, coverage, staleSessions, overdueInvoices, digest, sweptAt: new Date().toISOString() };
+  return { reminders, broadcasts, coverage, staleSessions, overdueInvoices, adsInsights, digest, sweptAt: new Date().toISOString() };
 }

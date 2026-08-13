@@ -1937,3 +1937,79 @@ model UserAvailability {
   @@index([userId, endsAt])
   @@map("user_availability")
 }
+
+// --- Meta Marketing API + Lead Ads ---
+// Ad-campaign performance + lead-gen Instant-Form leads pulled from the Meta
+// Marketing API. Distinct from the WhatsApp Cloud API (messaging). Uses its own
+// ads system-user token (see src/lib/meta-ads/config.ts). No relation to the CRM
+// Lead model yet — MetaLead.leadId is a nullable mirror filled in a later phase.
+
+// One row per Meta ad campaign (mirrored from the ad account).
+model MetaCampaign {
+  id            String    @id @default(uuid())
+  metaId        String    @unique @map("meta_id")
+  adAccountId   String    @map("ad_account_id")
+  name          String
+  objective     String?
+  status        String?
+  createdAtMeta DateTime? @map("created_at_meta")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  insights AdInsight[]
+
+  @@index([adAccountId])
+  @@map("meta_campaigns")
+}
+
+// Per-campaign, per-day performance rollup from the Insights edge.
+model AdInsight {
+  id          String   @id @default(uuid())
+  campaignId  String   @map("campaign_id")
+  date        DateTime @map("date") // date-only semantics; plain DateTime (NO @db.Date — no precedent in repo)
+  spend       Decimal  @default(0) @db.Decimal(12, 2)
+  impressions Int      @default(0)
+  reach       Int      @default(0)
+  clicks      Int      @default(0)
+  leads       Int      @default(0)
+  ctr         Decimal? @db.Decimal(8, 4)
+  cpl         Decimal? @db.Decimal(12, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  campaign MetaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, date])
+  @@index([date])
+  @@map("ad_insights")
+}
+
+// One row per lead-gen Instant-Form submission (from the leadgen webhook + backfill).
+model MetaLead {
+  id            String    @id @default(uuid())
+  leadgenId     String    @unique @map("leadgen_id")
+  formId        String?   @map("form_id")
+  formName      String?   @map("form_name")
+  pageId        String?   @map("page_id")
+  adId          String?   @map("ad_id")
+  campaignId    String?   @map("campaign_id") // raw Meta campaign id (join to MetaCampaign.metaId)
+  campaignName  String?   @map("campaign_name")
+  fullName      String?   @map("full_name")
+  phone         String?
+  email         String?
+  city          String?   // extracted from field_data (form's city question) for lead analytics
+  sport         String?   // extracted from field_data (form's sport question) for lead analytics
+  fieldData     String    @map("field_data") // JSON string of all form answers (Setting-style: stringify, value is String)
+  rawPayload    String?   @map("raw_payload")
+  createdAtMeta DateTime? @map("created_at_meta")
+  leadId           String?  @map("lead_id") // legacy mirror into the (deprecated) Lead model; prefer accountContactId
+  accountContactId String?  @map("account_contact_id") // CRM link: AccountContact(pipelineStage=LEAD) id set on move-to-CRM
+  normalizedPhone  String?  @map("normalized_phone") // E.164 dedupe key for repeat-lead detection
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([pageId])
+  @@index([campaignId])
+  @@index([createdAtMeta])
+  @@index([normalizedPhone])
+  @@map("meta_leads")
+}

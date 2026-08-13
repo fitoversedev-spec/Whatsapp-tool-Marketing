@@ -42,7 +42,8 @@ export async function runMetaAdsReport(opts: {
     "If the tools return no data, an empty result, an error, or n=0 for what was asked, DO NOT guess or fabricate: reply plainly that you don't have enough data for that specific question, and suggest one or two other things they could ask (a different time period, or a metric you DO have data for). " +
     "TIME WINDOW: if the question names a period in words ('last week', 'yesterday', 'last 7 days', 'in July', 'so far this month', 'between 1 and 15 August') or gives explicit dates, work out the exact from/to dates from today's date and pass them to the tool as customRange { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } — do not rely on the default window in that case. Weeks run Monday to Sunday. " +
     "Spend and cost-per-lead (CPL) are in INR. Always state how many campaigns or leads the numbers are based on and flag thin data (a handful of leads is not reliable). " +
-    "You MAY close with a short 'Recommendations' line or paragraph (at most 2-3 sentences) of practical next steps — but every suggestion must follow DIRECTLY from a pattern visible in the rows the tools returned this session (e.g. a city or sport with clearly more leads than the rest, a repeat submitter worth a personal call, a campaign with wasted spend). Do NOT introduce any new number, benchmark, target, or fact a tool did not return, and do not recommend anything the returned data doesn't support; if the data is too thin to justify a recommendation, say so instead of inventing one. Today is " +
+    "You MAY close with a short 'Recommendations' line or paragraph (at most 2-3 sentences) of practical next steps — but every suggestion must follow DIRECTLY from a pattern visible in the rows the tools returned this session (e.g. a city or sport with clearly more leads than the rest, a repeat submitter worth a personal call, a campaign with wasted spend). Do NOT introduce any new number, benchmark, target, or fact a tool did not return, and do not recommend anything the returned data doesn't support; if the data is too thin to justify a recommendation, say so instead of inventing one. " +
+    "EFFICIENCY: call every tool you need for the answer in as few turns as possible — request multiple tools together in one turn rather than one per turn. campaignName matching is fuzzy, so pass a rough campaign name ONCE and trust the result; do not retry a tool with different spellings after a match. Format the answer as clean Markdown (a short heading, a compact metrics table where useful, and tight prose). Today is " +
     new Date().toISOString().slice(0, 10) +
     ". Be concise; lead with the answer.";
 
@@ -56,8 +57,17 @@ export async function runMetaAdsReport(opts: {
     maxRounds: 6,
   });
 
-  return {
-    narrative: text,
-    dataBlocks: toolResults.map((r) => ({ tool: r.name, title: titleFor(r.name), rows: r.output })),
-  };
+  // Clean the tool trace for the (collapsed) "underlying data" appendix: drop
+  // error/empty results and keep only the LAST successful call per tool — the
+  // model often calls the same tool more than once (e.g. all-campaigns then a
+  // named one), and the raw every-round dump was noisy and confusing.
+  const isErr = (o: unknown): boolean =>
+    !!o && typeof o === "object" && "error" in (o as Record<string, unknown>);
+  const byTool = new Map<string, MetaAdsDataBlock>();
+  for (const r of toolResults) {
+    if (isErr(r.output)) continue;
+    byTool.set(r.name, { tool: r.name, title: titleFor(r.name), rows: r.output });
+  }
+
+  return { narrative: text, dataBlocks: [...byTool.values()] };
 }

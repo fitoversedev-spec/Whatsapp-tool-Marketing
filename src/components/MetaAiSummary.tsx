@@ -8,6 +8,7 @@
 // route returns. Self-contained: default export, no required props, so it can
 // be dropped straight onto the Ad Campaigns page.
 import { useState } from "react";
+import Markdown from "@/components/Markdown";
 
 // Route response shape (fixed contract). `rows: unknown` because each ads tool
 // returns its own shape — the flexible table below normalizes whatever comes
@@ -161,10 +162,6 @@ export default function MetaAiSummary() {
     }
   }
 
-  // Narrative → readable paragraphs. Blank lines separate paragraphs; single
-  // newlines inside a paragraph are preserved via whitespace-pre-line.
-  const paragraphs = result ? result.narrative.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean) : [];
-
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -216,23 +213,26 @@ export default function MetaAiSummary() {
       {!loading && result && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-base font-semibold text-slate-900">AI summary</h3>
-            {paragraphs.length > 0 ? (
-              <div className="mt-3 space-y-3">
-                {paragraphs.map((para, i) => (
-                  <p key={i} className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                    {para}
-                  </p>
-                ))}
-              </div>
+            <h3 className="text-base font-semibold text-slate-900 mb-3">AI summary</h3>
+            {result.narrative.trim() ? (
+              <Markdown text={result.narrative} />
             ) : (
-              <p className="mt-3 text-sm text-slate-400">The assistant didn't return a written summary for this question.</p>
+              <p className="text-sm text-slate-400">The assistant didn&apos;t return a written summary for this question.</p>
             )}
           </div>
 
-          {result.dataBlocks.map((block, i) => (
-            <DataBlockCard key={i} block={block} />
-          ))}
+          {result.dataBlocks.length > 0 && (
+            <details className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+              <summary className="text-sm font-medium text-slate-600 cursor-pointer select-none marker:text-slate-400">
+                Show the data behind this report
+              </summary>
+              <div className="mt-3 space-y-4">
+                {result.dataBlocks.map((block, i) => (
+                  <DataBlockCard key={i} block={block} />
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       )}
     </div>

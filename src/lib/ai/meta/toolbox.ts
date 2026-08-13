@@ -142,7 +142,8 @@ const PERIOD_PROPS = {
 const CAMPAIGN_PROP = {
   campaignName: {
     type: "string",
-    description: "Optional: restrict to ad campaigns whose name contains this text (partial, case-insensitive).",
+    description:
+      "Optional: restrict to a specific ad campaign. Matching is FUZZY and case-insensitive — a rough name works (e.g. '5th aug football' finds '5th Aug camp(Football)'), so pass the name once and trust the match rather than retrying different spellings.",
   },
 } as const;
 
@@ -254,6 +255,36 @@ function totalsOf(rows: InsightRow[]) {
   };
 }
 
+// Match a rough, human-typed campaign name to real campaigns. First an exact
+// case-insensitive substring (precise). If that misses, tokenize the query and
+// score every campaign by how many query tokens appear in its name — prefix-
+// aware (so "campaign" matches "camp") — and return the top-scoring campaign(s)
+// when they cover at least half the query tokens. This stops the model burning
+// whole tool rounds retrying after a strict-match miss (e.g. the user typing
+// "5th aug campaign football" for the campaign "5th Aug camp(Football)").
+async function matchCampaigns(name: string): Promise<{ id: string; metaId: string }[]> {
+  const exact = await prisma.metaCampaign.findMany({
+    where: { name: { contains: name, mode: "insensitive" } },
+    select: { id: true, metaId: true },
+  });
+  if (exact.length > 0) return exact;
+
+  const qTokens = name.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 2);
+  if (qTokens.length === 0) return [];
+  const all = await prisma.metaCampaign.findMany({ select: { id: true, metaId: true, name: true } });
+  const scored = all.map((c) => {
+    const n = c.name.toLowerCase();
+    let score = 0;
+    for (const t of qTokens) {
+      if (n.includes(t) || (t.length >= 4 && n.includes(t.slice(0, 4)))) score += 1;
+    }
+    return { c, score };
+  });
+  const top = Math.max(0, ...scored.map((s) => s.score));
+  if (top === 0 || top < Math.ceil(qTokens.length / 2)) return [];
+  return scored.filter((s) => s.score === top).map((s) => ({ id: s.c.id, metaId: s.c.metaId }));
+}
+
 // ── Toolbox ─────────────────────────────────────────────────────────────────
 export function buildMetaAdsToolbox(defaultPeriod: PeriodInput = "last_30_days"): AiTool[] {
   // Resolve the period (+ optional named-campaign filter) for a tool call.
@@ -265,10 +296,7 @@ export function buildMetaAdsToolbox(defaultPeriod: PeriodInput = "last_30_days")
     const { from, to } = resolvePeriod(pickPeriod(input), defaultPeriod);
     const name = typeof input.campaignName === "string" ? input.campaignName.trim() : "";
     if (name) {
-      const found = await prisma.metaCampaign.findMany({
-        where: { name: { contains: name, mode: "insensitive" } },
-        select: { id: true, metaId: true },
-      });
+      const found = await matchCampaigns(name);
       if (found.length === 0) return { error: `No ad campaign found matching "${name}".` };
       return { from, to, campaignIds: found.map((c) => c.id), campaignMetaIds: found.map((c) => c.metaId) };
     }

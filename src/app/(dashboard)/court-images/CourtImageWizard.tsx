@@ -870,18 +870,28 @@ function CourtColourSection({
   overrideColor: string | undefined;
   fallback: string;
   onSetGlobal: (c: string | undefined) => void;
-  onSetCourt: (id: string, c: string) => void;
+  onSetCourt: (id: string, c: string | undefined) => void;
 }) {
   if (courts.length <= 1) {
+    const only = courts[0];
     return (
       <ColorPickerSection
         title="Court colour"
         defaultOpen
         hint="The playing-surface colour, shown in both the 2D plan and the 3D render. Pick a preset or type any hex / CSS name. Football & cricket use the grass colour instead."
         presets={COURT_COLORS}
-        value={overrideColor}
+        value={only?.surfaceColor ?? overrideColor}
         fallback={fallback}
-        onChange={onSetGlobal}
+        onChange={(c) => {
+          // Write BOTH the global override (drives the plot / run-off base) AND
+          // the court's own surfaceColor, which takes precedence in the 2D + 3D
+          // fill (el.surfaceColor ?? surfaceColorOverride). Without the per-court
+          // write, a surfaceColor baked onto the element by a colour scheme
+          // (applyColorScheme) shadows the picker and the court never changes.
+          // Mirrors LineMarkingSection's single-court handling.
+          onSetGlobal(c);
+          if (only) onSetCourt(only.id, c);
+        }}
       />
     );
   }

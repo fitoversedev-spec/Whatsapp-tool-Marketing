@@ -7,7 +7,7 @@
 // credential path only (fetchLead), never the WhatsApp/WABA token.
 
 import { prisma } from "@/lib/prisma";
-import { fetchLead } from "./client";
+import { fetchLead, fetchFormName } from "./client";
 import type { MetaLeadFieldDatum, MetaLeadRaw } from "./client";
 import { extractCity, extractSport } from "./fieldMap";
 import { normalizePhone } from "@/lib/phone";
@@ -43,6 +43,7 @@ export async function upsertMetaLead(
     pageId?: string | null;
     adId?: string | null;
     formId?: string | null;
+    formName?: string | null;
     rawPayload?: unknown;
   } = {}
 ): Promise<void> {
@@ -62,6 +63,7 @@ export async function upsertMetaLead(
 
   const data = {
     formId: lead.form_id ?? hints.formId ?? null,
+    formName: hints.formName ?? null,
     pageId: hints.pageId ?? null,
     adId: lead.ad_id ?? hints.adId ?? null,
     campaignId: lead.campaign_id ?? null,
@@ -91,10 +93,13 @@ export async function handleLeadgen(value: LeadgenValue): Promise<void> {
     if (!leadgenId) return;
 
     const lead = await fetchLead(leadgenId);
+    const formId = lead.form_id ?? value.form_id ?? null;
+    const formName = formId ? await fetchFormName(formId) : null;
     await upsertMetaLead(lead, {
       pageId: value.page_id ?? null,
       adId: value.ad_id ?? null,
-      formId: value.form_id ?? null,
+      formId,
+      formName,
       rawPayload: { value, lead },
     });
   } catch (err) {

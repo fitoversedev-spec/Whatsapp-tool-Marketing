@@ -7,9 +7,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { getMetaAdsConfig, metaAdsConfigured } from "@/lib/meta-ads/config";
-import { fetchFormLeads } from "@/lib/meta-ads/client";
+import { fetchFormLeads, fetchLeadForms } from "@/lib/meta-ads/client";
 import { upsertMetaLead } from "@/lib/meta-ads/leads";
 
 export async function POST(req: NextRequest) {
@@ -25,18 +24,26 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const limit = Number(body?.limit) > 0 ? Math.min(Number(body.limit), 500) : 100;
 
-  // Which forms to backfill: explicit ids from the body, else the distinct form
-  // ids we've already recorded from prior leadgen webhooks.
+  // formId -> friendly name, so backfilled leads get formName too.
+  const formNames = new Map<string, string>();
+
+  // Which forms to backfill: explicit ids from the body, else discover every
+  // lead-gen form on the page directly from Meta (works on the first backfill,
+  // before any webhook has been seen).
   let formIds: string[] = Array.isArray(body?.formIds)
     ? body.formIds.map((f: unknown) => String(f)).filter(Boolean)
     : [];
   if (formIds.length === 0) {
-    const seen = await prisma.metaLead.findMany({
-      where: { formId: { not: null } },
-      distinct: ["formId"],
-      select: { formId: true },
-    });
-    formIds = seen.map((r) => r.formId).filter((f): f is string => !!f);
+    try {
+      const forms = await fetchLeadForms();
+      formIds = forms.map((f) => f.id);
+      forms.forEach((f) => formNames.set(f.id, f.name));
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "form_discovery_failed" },
+        { status: 502 }
+      );
+    }
   }
 
   if (formIds.length === 0) {
@@ -44,7 +51,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       forms: 0,
       upserted: 0,
-      note: "No form ids supplied and none seen yet — pass { formIds: [...] } to backfill.",
+      note: "No lead-gen forms found on the page.",
     });
   }
 
@@ -57,7 +64,7 @@ export async function POST(req: NextRequest) {
       const leads = await fetchFormLeads(formId, limit);
       for (const lead of leads) {
         try {
-          await upsertMetaLead(lead, { pageId: cfg.pageId || null, formId });
+          await upsertMetaLead(lead, { pageId: cfg.pageId || null, formId, formName: formNames.get(formId) ?? null });
           upserted += 1;
         } catch (err) {
           console.error("[meta-ads] backfill upsert failed", lead.id, err);

@@ -45,6 +45,38 @@ function authHeaders(token: string) {
   };
 }
 
+// Lead-gen endpoints (/<leadgen_id>, /<form_id>/leads, /<form_id>,
+// /<page_id>/leadgen_forms) must be called with a PAGE access token, not the
+// system-user token (Graph rejects the SU token with #190/#200). We derive a
+// page token from the SU token — which requires the system user to have the
+// Page assigned with full access — and cache it for the process. A caller
+// clears the cache on an auth rejection so the next call re-derives.
+let pageTokenCache: string | null = null;
+
+async function getPageToken(): Promise<string> {
+  if (pageTokenCache) return pageTokenCache;
+  const { token, pageId } = await requireAdsToken();
+  if (!pageId) {
+    throw new Error("Meta ads page id not configured (needed for lead retrieval).");
+  }
+  try {
+    const res = await axios.get(graphUrl(pageId), {
+      headers: authHeaders(token),
+      params: { fields: "access_token" },
+      timeout: META_TIMEOUT_MS,
+    });
+    const pt = res.data?.access_token as string | undefined;
+    if (!pt) throw new Error("Graph returned no page access_token.");
+    pageTokenCache = pt;
+    return pt;
+  } catch (err) {
+    const { code, message } = metaAdsErr(err);
+    throw new Error(
+      `Meta ads getPageToken failed (${code}): ${message}. Ensure the system user has the Page assigned with full access.`
+    );
+  }
+}
+
 export type MetaCampaignRow = {
   id: string;
   name: string;
@@ -207,15 +239,16 @@ export async function fetchInsights(since: string, until: string): Promise<MetaI
 // GET /<leadgen_id> — a single lead's full form answers. Used by the webhook
 // handler and backfill.
 export async function fetchLead(leadgenId: string): Promise<MetaLeadRaw> {
-  const { token } = await requireAdsToken();
+  const pageToken = await getPageToken();
   try {
     const res = await axios.get(graphUrl(leadgenId), {
-      headers: authHeaders(token),
+      headers: authHeaders(pageToken),
       params: { fields: "id,created_time,field_data,ad_id,form_id,campaign_id,campaign_name" },
       timeout: META_TIMEOUT_MS,
     });
     return res.data as MetaLeadRaw;
   } catch (err) {
+    pageTokenCache = null; // page token may be stale/invalid — re-derive next call
     const { code, message } = metaAdsErr(err);
     throw new Error(`Meta ads fetchLead failed (${code}): ${message}`);
   }
@@ -224,7 +257,7 @@ export async function fetchLead(leadgenId: string): Promise<MetaLeadRaw> {
 // GET /<form_id>/leads — backfill leads for a form (Meta doesn't replay
 // webhooks). Paginates; `limit` caps rows requested per page.
 export async function fetchFormLeads(formId: string, limit = 100): Promise<MetaLeadRaw[]> {
-  const { token } = await requireAdsToken();
+  const pageToken = await getPageToken();
   try {
     return await paginate<MetaLeadRaw>(
       graphUrl(`${formId}/leads`),
@@ -232,10 +265,65 @@ export async function fetchFormLeads(formId: string, limit = 100): Promise<MetaL
         fields: "id,created_time,field_data,ad_id,form_id,campaign_id,campaign_name",
         limit,
       },
-      token
+      pageToken
     );
   } catch (err) {
+    pageTokenCache = null;
     const { code, message } = metaAdsErr(err);
     throw new Error(`Meta ads fetchFormLeads failed (${code}): ${message}`);
+  }
+}
+
+export type LeadForm = { id: string; name: string; status?: string; leadsCount?: number };
+
+// GET /<page_id>/leadgen_forms — the page's lead-gen forms (id + friendly name).
+// Used to discover forms for backfill and to resolve form names. Page token.
+export async function fetchLeadForms(): Promise<LeadForm[]> {
+  const { pageId } = await requireAdsToken();
+  if (!pageId) throw new Error("Meta ads page id not configured.");
+  const pageToken = await getPageToken();
+  try {
+    const rows = await paginate<{
+      id: string;
+      name?: string;
+      status?: string;
+      leads_count?: number;
+    }>(
+      graphUrl(`${pageId}/leadgen_forms`),
+      { fields: "id,name,status,leads_count", limit: 100 },
+      pageToken
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name ?? r.id,
+      status: r.status,
+      leadsCount: r.leads_count,
+    }));
+  } catch (err) {
+    pageTokenCache = null;
+    const { code, message } = metaAdsErr(err);
+    throw new Error(`Meta ads fetchLeadForms failed (${code}): ${message}`);
+  }
+}
+
+// GET /<form_id>?fields=name — a lead form's friendly name (the leadgen webhook
+// carries only form_id). Cached per form. Returns null on ANY failure — formName
+// is cosmetic and must never block lead ingestion.
+const formNameCache = new Map<string, string | null>();
+export async function fetchFormName(formId: string): Promise<string | null> {
+  if (formNameCache.has(formId)) return formNameCache.get(formId) ?? null;
+  try {
+    const pageToken = await getPageToken();
+    const res = await axios.get(graphUrl(formId), {
+      headers: authHeaders(pageToken),
+      params: { fields: "name" },
+      timeout: META_TIMEOUT_MS,
+    });
+    const name = (res.data?.name as string | undefined) ?? null;
+    formNameCache.set(formId, name);
+    return name;
+  } catch {
+    formNameCache.set(formId, null);
+    return null;
   }
 }

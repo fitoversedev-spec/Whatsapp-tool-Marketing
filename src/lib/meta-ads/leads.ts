@@ -52,7 +52,7 @@ export async function upsertMetaLead(
   const first = pickField(fieldData, ["first_name"]);
   const last = pickField(fieldData, ["last_name"]);
   const fullName =
-    pickField(fieldData, ["full_name", "name"]) ??
+    pickField(fieldData, ["full_name", "full name", "fullname", "name"]) ??
     ([first, last].filter(Boolean).join(" ").trim() || null);
   const phone = pickField(fieldData, ["phone_number", "phone"]);
   const email = pickField(fieldData, ["email"]);
@@ -63,7 +63,6 @@ export async function upsertMetaLead(
 
   const data = {
     formId: lead.form_id ?? hints.formId ?? null,
-    formName: hints.formName ?? null,
     pageId: hints.pageId ?? null,
     adId: lead.ad_id ?? hints.adId ?? null,
     campaignId: lead.campaign_id ?? null,
@@ -79,10 +78,16 @@ export async function upsertMetaLead(
     createdAtMeta,
   };
 
+  // formName is monotonic: set it on create, but on UPDATE only overwrite when
+  // we actually resolved a name — never blank a previously-stored one. A
+  // name-less re-processing (explicit-formIds backfill, or a webhook retry where
+  // fetchFormName transiently returned null) must not wipe a good form name.
+  const formNamePatch = hints.formName ? { formName: hints.formName } : {};
+
   await prisma.metaLead.upsert({
     where: { leadgenId: lead.id },
-    update: data,
-    create: { leadgenId: lead.id, ...data },
+    update: { ...data, ...formNamePatch },
+    create: { leadgenId: lead.id, ...data, formName: hints.formName ?? null },
   });
 }
 

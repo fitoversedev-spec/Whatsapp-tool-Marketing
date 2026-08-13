@@ -320,10 +320,11 @@ export async function fetchFormName(formId: string): Promise<string | null> {
       timeout: META_TIMEOUT_MS,
     });
     const name = (res.data?.name as string | undefined) ?? null;
-    formNameCache.set(formId, name);
+    formNameCache.set(formId, name); // positive-cache only (a real null = form has no name)
     return name;
   } catch {
-    formNameCache.set(formId, null);
+    // Don't negative-cache — a transient failure (timeout/rate-limit/token blip)
+    // must not pin this form's name blank for the whole instance lifetime.
     return null;
   }
 }

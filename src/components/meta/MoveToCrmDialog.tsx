@@ -23,20 +23,19 @@ export default function MoveToCrmDialog({
   onDone: () => void;
 }) {
   const toast = useToast();
-  const [ownerUserId, setOwnerUserId] = useState<string>(reps[0]?.id ?? "");
+  // Default to unassigned — an owner is optional.
+  const [ownerUserId, setOwnerUserId] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   async function submit() {
-    if (!ownerUserId) {
-      toast.error("Pick an owner first");
-      return;
-    }
     setSaving(true);
     try {
       const res = await fetch(`/api/ad-campaigns/leads/${lead.id}/move-to-crm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ownerUserId }),
+        // Empty = don't assign a specific rep; the route defaults the owner to
+        // the current user when ownerUserId is omitted.
+        body: JSON.stringify(ownerUserId ? { ownerUserId } : {}),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -62,27 +61,22 @@ export default function MoveToCrmDialog({
         <p className="text-xs text-slate-500 mt-1">
           Creates a CRM contact from{" "}
           {lead.fullName ? <span className="font-medium text-slate-700">{lead.fullName}</span> : "this lead"}
-          {lead.phone ? ` (${lead.phone})` : ""} and assigns it to the owner you pick.
+          {lead.phone ? ` (${lead.phone})` : ""}. Assign it to a sales rep, or leave it unassigned.
         </p>
 
-        <label className="block text-xs font-medium text-slate-600 mt-4 mb-1">Owner</label>
-        {reps.length === 0 ? (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-            No assignable reps found — add an active, approved user first.
-          </p>
-        ) : (
-          <select
-            value={ownerUserId}
-            onChange={(e) => setOwnerUserId(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30"
-          >
-            {reps.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        )}
+        <label className="block text-xs font-medium text-slate-600 mt-4 mb-1">Assign to</label>
+        <select
+          value={ownerUserId}
+          onChange={(e) => setOwnerUserId(e.target.value)}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30"
+        >
+          <option value="">Don&apos;t assign (unassigned)</option>
+          {reps.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
 
         <div className="mt-5 flex gap-2">
           <button
@@ -94,7 +88,7 @@ export default function MoveToCrmDialog({
           </button>
           <button
             onClick={submit}
-            disabled={saving || reps.length === 0 || !ownerUserId}
+            disabled={saving}
             className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
           >
             {saving ? "Moving…" : "Move to CRM"}

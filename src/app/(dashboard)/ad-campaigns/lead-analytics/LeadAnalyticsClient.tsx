@@ -11,7 +11,7 @@
 // repeat_leads tools). Same ?from/?to range convention as AdCampaignsClient:
 // applying a range pushes the query string and the server page re-fetches.
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
@@ -68,6 +68,40 @@ function KpiTile({ label, value, sub }: { label: string; value: string; sub?: st
   );
 }
 
+// Type-or-choose filter for a section (datalist-backed), mirroring LeadsTable's
+// filter inputs. `options` are the distinct values to offer for autocomplete.
+function FilterCombo({
+  id,
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      <input
+        list={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Type or choose…"
+        className="w-44 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30"
+      />
+      <datalist id={id}>
+        {options.map((o) => (
+          <option key={o} value={o} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
 export default function LeadAnalyticsClient({
   byCity,
   sportByCity,
@@ -95,31 +129,52 @@ export default function LeadAnalyticsClient({
     });
   }
 
+  // --- Per-section filter state (client-side, over the already-fetched data) ---
+  const [cityFilter, setCityFilter] = useState("");
+  const [sportCityFilter, setSportCityFilter] = useState("");
+  const [sportSportFilter, setSportSportFilter] = useState("");
+
   // --- Leads by city ---
+  // Totals + top city stay GLOBAL (KPI tiles + the share % denominator), so a
+  // city filter narrows which rows show without making one city read "100%".
   const totalCityLeads = byCity.reduce((acc, r) => acc + r.count, 0);
   const topCity = byCity[0] ?? null;
-  const cityBars = byCity.slice(0, 12); // chart caps to top 12; table/export keep all
-  const cityDonut = byCity.slice(0, 8); // donut caps to top 8 for a legible legend
+  const cq = cityFilter.trim().toLowerCase();
+  const byCityF = cq ? byCity.filter((r) => r.city.toLowerCase().includes(cq)) : byCity;
+  const cityBars = byCityF.slice(0, 12); // chart caps to top 12; table/export keep all
+  const cityDonut = byCityF.slice(0, 8); // donut caps to top 8 for a legible legend
   const cityHeaders = ["City", "Leads", "Share"];
-  const cityRows: (string | number)[][] = byCity.map((r) => [
+  const cityRows: (string | number)[][] = byCityF.map((r) => [
     r.city,
     r.count,
     totalCityLeads > 0 ? `${Math.round((r.count / totalCityLeads) * 100)}%` : "—",
   ]);
 
   // --- Sport demand (overall + city × sport) ---
-  const sportTotals = new Map<string, number>();
-  for (const c of sportByCity) sportTotals.set(c.sport, (sportTotals.get(c.sport) ?? 0) + c.count);
-  const sportRanking = [...sportTotals.entries()]
+  // Global ranking feeds the KPI tiles + action hint; the section's chart/table
+  // use the city+sport-filtered cells.
+  const sportTotalsAll = new Map<string, number>();
+  for (const c of sportByCity) sportTotalsAll.set(c.sport, (sportTotalsAll.get(c.sport) ?? 0) + c.count);
+  const sportRankingAll = [...sportTotalsAll.entries()]
     .map(([sport, count]) => ({ sport, count }))
     .sort((a, b) => b.count - a.count || a.sport.localeCompare(b.sport));
-  const topSport = sportRanking[0] ?? null;
+  const topSport = sportRankingAll[0] ?? null;
+
+  const scq = sportCityFilter.trim().toLowerCase();
+  const ssq = sportSportFilter.trim().toLowerCase();
+  const sportCellsF = sportByCity.filter(
+    (c) => (!scq || c.city.toLowerCase().includes(scq)) && (!ssq || c.sport.toLowerCase().includes(ssq)),
+  );
   const sportStack = stackedSeries(
-    sportByCity.map((c) => ({ x: c.city, group: c.sport, value: c.count })),
+    sportCellsF.map((c) => ({ x: c.city, group: c.sport, value: c.count })),
     6,
   );
   const sportHeaders = ["City", "Sport", "Leads"];
-  const sportRows: (string | number)[][] = sportByCity.map((c) => [c.city, c.sport, c.count]);
+  const sportRows: (string | number)[][] = sportCellsF.map((c) => [c.city, c.sport, c.count]);
+
+  // Distinct option lists for the filter comboboxes.
+  const citySportCities = [...new Set(sportByCity.map((c) => c.city))];
+  const citySportSports = [...new Set(sportByCity.map((c) => c.sport))];
 
   // --- Repeat submitters ---
   const repeatHeaders = ["Person", "Phone", "Campaigns", "Which campaigns", "First seen", "Last seen"];
@@ -160,7 +215,7 @@ export default function LeadAnalyticsClient({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <KpiTile label="Leads (with location)" value={fmtInt(totalCityLeads)} sub="Instant-Form submissions" />
           <KpiTile label="Cities" value={fmtInt(byCity.length)} sub={topCity ? `Top: ${topCity.city}` : "No city data"} />
-          <KpiTile label="Sports asked for" value={fmtInt(sportRanking.length)} sub={topSport ? `Top: ${topSport.sport}` : "No sport data"} />
+          <KpiTile label="Sports asked for" value={fmtInt(sportRankingAll.length)} sub={topSport ? `Top: ${topSport.sport}` : "No sport data"} />
           <KpiTile
             label="Repeat submitters"
             value={fmtInt(repeats.length)}
@@ -181,35 +236,53 @@ export default function LeadAnalyticsClient({
             <p className="text-sm text-slate-400">No location data in this range yet.</p>
           ) : (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Top cities</div>
-                  <HorizontalBarChart
-                    data={cityBars}
-                    dataKey="count"
-                    labelKey="city"
-                    height={Math.max(140, cityBars.length * 34)}
-                    colorFor={() => "#159341"}
-                    tooltipFormatter={(d) => `${d.city}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
-                  />
+              <div className="flex flex-wrap items-end gap-3">
+                <FilterCombo id="la-city" label="City" value={cityFilter} onChange={setCityFilter} options={byCity.map((r) => r.city)} />
+                <div className="text-xs text-slate-500 pb-1.5">
+                  Showing <b className="text-slate-800">{byCityF.length}</b> of {byCity.length} cities
+                  {cq && <span className="text-slate-400"> (filtered)</span>}
                 </div>
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Share of leads</div>
-                  <DonutChart
-                    data={cityDonut}
-                    dataKey="count"
-                    labelKey="city"
-                    colorFor={(_r, i) => DONUT_PALETTE[i % DONUT_PALETTE.length]}
-                    tooltipFormatter={(r) =>
-                      `${r.city}: ${fmtInt(r.count)} (${totalCityLeads > 0 ? Math.round((r.count / totalCityLeads) * 100) : 0}%)`
-                    }
-                  />
-                </div>
+                {cityFilter && (
+                  <button type="button" onClick={() => setCityFilter("")} className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5">
+                    Clear
+                  </button>
+                )}
               </div>
-              <div className="flex justify-end">
-                <ExportButtons filename="leads-by-city" headers={cityHeaders} rows={cityRows} />
-              </div>
-              <DataTable headers={cityHeaders} rows={cityRows} />
+              {byCityF.length === 0 ? (
+                <p className="text-sm text-slate-400">No cities match “{cityFilter}”.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Top cities</div>
+                      <HorizontalBarChart
+                        data={cityBars}
+                        dataKey="count"
+                        labelKey="city"
+                        height={Math.max(140, cityBars.length * 34)}
+                        colorFor={() => "#159341"}
+                        tooltipFormatter={(d) => `${d.city}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
+                      />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Share of leads</div>
+                      <DonutChart
+                        data={cityDonut}
+                        dataKey="count"
+                        labelKey="city"
+                        colorFor={(_r, i) => DONUT_PALETTE[i % DONUT_PALETTE.length]}
+                        tooltipFormatter={(r) =>
+                          `${r.city}: ${fmtInt(r.count)} (${totalCityLeads > 0 ? Math.round((r.count / totalCityLeads) * 100) : 0}%)`
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <ExportButtons filename="leads-by-city" headers={cityHeaders} rows={cityRows} />
+                  </div>
+                  <DataTable headers={cityHeaders} rows={cityRows} />
+                </>
+              )}
             </div>
           )}
         </AnalyticsCard>
@@ -224,23 +297,49 @@ export default function LeadAnalyticsClient({
             <p className="text-sm text-slate-400">No sport data in this range yet.</p>
           ) : (
             <div className="space-y-4">
-              <StackedBarChart
-                data={sportStack.data}
-                dataKey="x"
-                stackKeys={sportStack.stackKeys}
-                height={280}
-                colorFor={sportStack.colorFor}
-                tooltipFormatter={(d) =>
-                  `${d.x} · ${sportStack.stackKeys
-                    .filter((k) => Number(d[k] ?? 0) > 0)
-                    .map((k) => `${k}: ${fmtInt(Number(d[k] ?? 0))}`)
-                    .join(" · ")}`
-                }
-              />
-              <div className="flex justify-end">
-                <ExportButtons filename="sport-by-city" headers={sportHeaders} rows={sportRows} />
+              <div className="flex flex-wrap items-end gap-3">
+                <FilterCombo id="la-sport-city" label="City" value={sportCityFilter} onChange={setSportCityFilter} options={citySportCities} />
+                <FilterCombo id="la-sport-sport" label="Sport" value={sportSportFilter} onChange={setSportSportFilter} options={citySportSports} />
+                <div className="text-xs text-slate-500 pb-1.5">
+                  <b className="text-slate-800">{sportCellsF.reduce((a, c) => a + c.count, 0)}</b> leads
+                  {(scq || ssq) && <span className="text-slate-400"> (filtered)</span>}
+                </div>
+                {(sportCityFilter || sportSportFilter) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSportCityFilter("");
+                      setSportSportFilter("");
+                    }}
+                    className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-              <DataTable headers={sportHeaders} rows={sportRows} />
+              {sportCellsF.length === 0 ? (
+                <p className="text-sm text-slate-400">No leads match the current filters.</p>
+              ) : (
+                <>
+                  <StackedBarChart
+                    data={sportStack.data}
+                    dataKey="x"
+                    stackKeys={sportStack.stackKeys}
+                    height={280}
+                    colorFor={sportStack.colorFor}
+                    tooltipFormatter={(d) =>
+                      `${d.x} · ${sportStack.stackKeys
+                        .filter((k) => Number(d[k] ?? 0) > 0)
+                        .map((k) => `${k}: ${fmtInt(Number(d[k] ?? 0))}`)
+                        .join(" · ")}`
+                    }
+                  />
+                  <div className="flex justify-end">
+                    <ExportButtons filename="sport-by-city" headers={sportHeaders} rows={sportRows} />
+                  </div>
+                  <DataTable headers={sportHeaders} rows={sportRows} />
+                </>
+              )}
             </div>
           )}
         </AnalyticsCard>

@@ -5,6 +5,15 @@ const config: Config = {
   darkMode: "class",
   theme: {
     extend: {
+      // App-wide text-only readability lift: each size renders a notch larger
+      // than Tailwind's default so body copy is easier to read WITHOUT inflating
+      // spacing/layout (padding/margin/gap utilities are unaffected). Only
+      // xs/sm/base are overridden; lg and up keep their defaults. Root stays 17px.
+      fontSize: {
+        xs: ["0.8rem", { lineHeight: "1.1rem" }],
+        sm: ["0.9375rem", { lineHeight: "1.35rem" }],
+        base: ["1.0625rem", { lineHeight: "1.6rem" }],
+      },
       fontFamily: {
         sans: [
           "Manrope",

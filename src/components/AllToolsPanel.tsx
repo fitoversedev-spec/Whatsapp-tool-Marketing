@@ -339,7 +339,7 @@ export default function AllToolsPanel({
             if (visible.length === 0) return null;
             return (
               <section key={group.title}>
-                <h3 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                   {group.title}
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
@@ -366,7 +366,7 @@ export default function AllToolsPanel({
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-snug">
+                          <div className="text-sm text-slate-500 mt-0.5 line-clamp-3 leading-snug">
                             {item.description}
                           </div>
                         </div>

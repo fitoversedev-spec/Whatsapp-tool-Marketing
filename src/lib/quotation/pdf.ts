@@ -873,16 +873,16 @@ function drawTotals(ctx: Ctx, subtotal: number, gst: number, grandTotal: number)
   const drawTotalRow = (label: string, value: string) => {
     safeDraw(ctx.page, label, {
       x: x + 10,
-      y: yFromTop(ctx.y + 14.5),
-      size: 11.5,
+      y: yFromTop(ctx.y + 15),
+      size: 12.5,
       font: ctx.font,
       color: COL.text,
     });
-    const valW = safeWidth(ctx.bold, value, 11.5);
+    const valW = safeWidth(ctx.bold, value, 12.5);
     safeDraw(ctx.page, value, {
       x: PAGE_W - MARGIN - valW - 10,
-      y: yFromTop(ctx.y + 14.5),
-      size: 11.5,
+      y: yFromTop(ctx.y + 15),
+      size: 12.5,
       font: ctx.bold,
       color: COL.text,
     });
@@ -899,16 +899,16 @@ function drawTotals(ctx: Ctx, subtotal: number, gst: number, grandTotal: number)
   safeDraw(ctx.page, "Grand Total", {
     x: x + 10,
     y: yFromTop(ctx.y + 21),
-    size: 13,
+    size: 14.5,
     font: ctx.bold,
     color: COL.text,
   });
   const grandText = `₹ ${inr(grandTotal)}`;
-  const grandW = safeWidth(ctx.bold, grandText, 13);
+  const grandW = safeWidth(ctx.bold, grandText, 14.5);
   safeDraw(ctx.page, grandText, {
     x: PAGE_W - MARGIN - grandW - 10,
     y: yFromTop(ctx.y + 21),
-    size: 13,
+    size: 14.5,
     font: ctx.bold,
     color: COL.text,
   });
@@ -1045,13 +1045,13 @@ function drawConnectSection(ctx: Ctx) {
 
 function drawBullets(ctx: Ctx, lines: string[]) {
   for (const line of lines) {
-    const wrapped = wordWrap(ctx.font, line, 10.5, CONTENT_W - 18);
-    ensureSpace(ctx, wrapped.length * 14 + 2);
+    const wrapped = wordWrap(ctx.font, line, 12, CONTENT_W - 18);
+    ensureSpace(ctx, wrapped.length * 15 + 2);
     // Bullet
     safeDraw(ctx.page, "•", {
       x: MARGIN + 6,
-      y: yFromTop(ctx.y + 9),
-      size: 10.5,
+      y: yFromTop(ctx.y + 10),
+      size: 12,
       font: ctx.font,
       color: COL.text,
     });
@@ -1060,12 +1060,12 @@ function drawBullets(ctx: Ctx, lines: string[]) {
     for (const w of wrapped) {
       safeDraw(ctx.page, w, {
         x: MARGIN + 18,
-        y: yFromTop(lineY + 9),
-        size: 10.5,
+        y: yFromTop(lineY + 10),
+        size: 12,
         font: ctx.font,
         color: COL.text,
       });
-      lineY += 14;
+      lineY += 15;
     }
     ctx.y = lineY + 2;
   }
@@ -1075,19 +1075,19 @@ function drawTerm(ctx: Ctx, title: string, body: string) {
   // Keep the whole clause (title + wrapped body) together — reserve its full
   // height so a numbered point never splits across a page break, leaving an
   // orphan line (e.g. point 6's tail) at the top of the next page.
-  const titleH = 10 * 1.35;
-  const bodyH = wordWrap(ctx.font, body, 9.5, CONTENT_W).length * (9.5 * 1.35);
+  const titleH = 11.5 * 1.35;
+  const bodyH = wordWrap(ctx.font, body, 11, CONTENT_W).length * (11 * 1.35);
   ensureSpace(ctx, titleH + bodyH + 5);
-  drawText(ctx, title, { x: MARGIN, size: 10, bold: true });
-  drawText(ctx, body, { x: MARGIN, size: 9.5, maxWidth: CONTENT_W, color: COL.text });
+  drawText(ctx, title, { x: MARGIN, size: 11.5, bold: true });
+  drawText(ctx, body, { x: MARGIN, size: 11, maxWidth: CONTENT_W, color: COL.text });
   space(ctx, 5);
 }
 
 function drawBankBlock(ctx: Ctx) {
-  const blockH = 88;
+  const blockH = 98;
   ensureSpace(ctx, blockH);
   drawRect(ctx, MARGIN, ctx.y, CONTENT_W, blockH, { fill: COL.greenSoft, border: COL.border });
-  const startY = ctx.y + 9;
+  const startY = ctx.y + 10;
   const rows = [
     ["Account Name", "FITOVERSE PVT LTD"],
     ["Bank Name", "HDFC BANK"],
@@ -1096,18 +1096,18 @@ function drawBankBlock(ctx: Ctx) {
     ["IFSC", "HDFC0001281"],
   ];
   rows.forEach(([label, value], i) => {
-    const yTop = startY + i * 15;
+    const yTop = startY + i * 16;
     safeDraw(ctx.page, `${label}:`, {
       x: MARGIN + 12,
       y: yFromTop(yTop + 10),
-      size: 10,
+      size: 11,
       font: ctx.bold,
       color: COL.text,
     });
     safeDraw(ctx.page, value, {
-      x: MARGIN + 115,
+      x: MARGIN + 124,
       y: yFromTop(yTop + 10),
-      size: 10,
+      size: 11,
       font: ctx.font,
       color: COL.text,
     });
@@ -1289,7 +1289,7 @@ function drawParticularsTable(
   };
   const rightEdge = MARGIN + CONTENT_W;
   const PAD = 5;
-  const headerH = 26;
+  const headerH = 28;
   // Table grid: outer left/right borders on every band + inner column
   // separators on data rows. Drawn per-band (using each band's own top/height)
   // so the grid survives page breaks. `inner` adds the column dividers.
@@ -1320,11 +1320,11 @@ function drawParticularsTable(
     const w = safeWidth(font, t, size);
     safeDraw(ctx.page, t, { x: cx0 + cw - w - PAD, y, size, font, color });
   };
-  const HEAD_SIZE = 10;
+  const HEAD_SIZE = 11;
   const drawHead = () => {
     ensureSpace(ctx, headerH);
     drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.tableHead });
-    const hy = yFromTop(ctx.y + 17);
+    const hy = yFromTop(ctx.y + 18.5);
     centerAt("S.NO", x.sno, cols.sno, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("ITEM", x.item, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("DESCRIPTION", x.desc, HEAD_SIZE, ctx.bold, COL.text, hy);
@@ -1339,22 +1339,21 @@ function drawParticularsTable(
     ctx.y += headerH;
   };
   drawHead();
-  const NAME_SIZE = 10.5;
-  const NAME_LH = 14;
-  const OPT_SIZE = 9.5;
-  const OPT_LH = 13;
-  const DESC_SIZE = 10;
-  const DESC_LH = 13;
-  const SEC_SIZE = 11;
-  const SEC_LH = 14;
+  const NAME_SIZE = 11.5;
+  const NAME_LH = 15;
+  const OPT_SIZE = 10.5;
+  const OPT_LH = 14;
+  const DESC_SIZE = 11;
+  const DESC_LH = 14.5;
+  const SEC_SIZE = 12;
+  const SEC_LH = 15;
   let lastSection: string | null = null;
   let serial = 0;
   // Group rows by scope section (stable sort preserves within-section order).
   const ordered = [...items].sort((a, b) => sectionOrder(a.section) - sectionOrder(b.section));
-  const includedIds = ordered.filter((i) => i.included).map((i) => i.id);
-  const lastIncludedId = includedIds[includedIds.length - 1];
-  for (const item of ordered) {
-    if (!item.included) continue;
+  const inc = ordered.filter((i) => i.included);
+  for (let idx = 0; idx < inc.length; idx++) {
+    const item = inc[idx];
     const sec = item.section ?? null;
     const isNewSection = !!sec && sec !== lastSection;
     // ITEM column carries the SECTION title (shown once per section group);
@@ -1367,7 +1366,7 @@ function drawParticularsTable(
     const descColH = nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0) + descLines.length * DESC_LH;
     const rowH = 6 + Math.max(itemColH, descColH, NAME_LH) + 6;
     // Only the truly last row drags the totals block's reserve along with it.
-    const reserve = item.id === lastIncludedId ? finalReserve : 0;
+    const reserve = idx === inc.length - 1 ? finalReserve : 0;
 
     const pb = ctx.pageNumber;
     ensureSpace(ctx, rowH + reserve);
@@ -1394,7 +1393,7 @@ function drawParticularsTable(
       below += OPT_LH;
     }
     descLines.forEach((ln, i) => {
-      safeDraw(ctx.page, ln, { x: x.desc + PAD, y: yFromTop(below + DESC_SIZE + i * DESC_LH), size: DESC_SIZE, font: ctx.font, color: COL.textSoft });
+      safeDraw(ctx.page, ln, { x: x.desc + PAD, y: yFromTop(below + DESC_SIZE + i * DESC_LH), size: DESC_SIZE, font: ctx.font, color: COL.text });
     });
     // Numeric cells, aligned to the first line.
     const amt = item.areaSqFt * item.ratePerSqFt;
@@ -1404,9 +1403,14 @@ function drawParticularsTable(
     centerAt(gstLabel(item.gstPercent), x.gst, cols.gst, NAME_SIZE, ctx.font, COL.text, numY);
     rightAt(inr(amt), x.amt, cols.amt, NAME_SIZE, ctx.bold, COL.text, numY);
 
+    // Section grouping: a BOLD dark rule only where the section CHANGES (or the
+    // table ends); a light rule between items INSIDE one section, so a section
+    // reads as one grouped block (a continuation row like LED under "Fencing &
+    // Fixtures" is never cut off from its section title by a dark line).
+    const nextSec = idx + 1 < inc.length ? (inc[idx + 1].section ?? null) : null;
+    const sectionEndsHere = idx === inc.length - 1 || nextSec !== sec;
     drawGrid(ctx.y, rowH, true);
-    // Bold dark rule at each item's foot so item boundaries read clearly.
-    rowLine(ctx.y + rowH, 1.1);
+    rowLine(ctx.y + rowH, sectionEndsHere ? 1.3 : 0.4);
     ctx.y += rowH;
     if (sec) lastSection = sec;
   }
@@ -1588,13 +1592,13 @@ function drawSpecCards(ctx: Ctx, items: QuoteLineItem[], images: Map<string, PDF
 // alone can fit at a page's bottom while the whole list it introduces gets
 // pushed to the next page on its own.
 function numberedListHeight(ctx: Ctx, lines: string[]): number {
-  return lines.reduce((h, line) => h + wordWrap(ctx.font, line, 10.5, CONTENT_W - 28).length * 14 + 2, 0);
+  return lines.reduce((h, line) => h + wordWrap(ctx.font, line, 12, CONTENT_W - 28).length * 15 + 2, 0);
 }
 
 // Total height a drawBullets() list will consume — mirrors its own wrapping so
 // a heading can be reserved TOGETHER with its bullets (no orphaned subheading).
 function bulletsHeight(ctx: Ctx, lines: string[]): number {
-  return lines.reduce((h, line) => h + wordWrap(ctx.font, line, 10.5, CONTENT_W - 18).length * 14 + 2, 0);
+  return lines.reduce((h, line) => h + wordWrap(ctx.font, line, 12, CONTENT_W - 18).length * 15 + 2, 0);
 }
 
 function drawNumbered(ctx: Ctx, lines: string[]) {
@@ -1603,15 +1607,15 @@ function drawNumbered(ctx: Ctx, lines: string[]) {
   // page boundary falling mid-list orphans the first item(s) alone at the
   // bottom of one page while the rest spill to the next. Reserving the full
   // block keeps the list together, pushing all of it to a new page instead.
-  const wrapped = lines.map((line) => wordWrap(ctx.font, line, 10.5, CONTENT_W - 28));
+  const wrapped = lines.map((line) => wordWrap(ctx.font, line, 12, CONTENT_W - 28));
   ensureSpace(ctx, numberedListHeight(ctx, lines));
   lines.forEach((line, i) => {
     const num = `${i + 1}.`;
-    safeDraw(ctx.page, num, { x: MARGIN + 4, y: yFromTop(ctx.y + 9), size: 10.5, font: ctx.font, color: COL.text });
+    safeDraw(ctx.page, num, { x: MARGIN + 4, y: yFromTop(ctx.y + 10), size: 12, font: ctx.font, color: COL.text });
     let ly = ctx.y;
     for (const w of wrapped[i]) {
-      safeDraw(ctx.page, w, { x: MARGIN + 22, y: yFromTop(ly + 9), size: 10.5, font: ctx.font, color: COL.text });
-      ly += 14;
+      safeDraw(ctx.page, w, { x: MARGIN + 22, y: yFromTop(ly + 10), size: 12, font: ctx.font, color: COL.text });
+      ly += 15;
     }
     ctx.y = ly + 2;
   });
@@ -1619,9 +1623,9 @@ function drawNumbered(ctx: Ctx, lines: string[]) {
 
 function drawSubheading(ctx: Ctx, title: string) {
   space(ctx, 6);
-  ensureSpace(ctx, 19);
-  safeDraw(ctx.page, title, { x: MARGIN, y: yFromTop(ctx.y + 12), size: 12, font: ctx.bold, color: COL.blue });
-  ctx.y += 19;
+  ensureSpace(ctx, 22);
+  safeDraw(ctx.page, title, { x: MARGIN, y: yFromTop(ctx.y + 13), size: 13.5, font: ctx.bold, color: COL.blue });
+  ctx.y += 22;
 }
 
 function drawPaymentTerms(ctx: Ctx, sport: string) {
@@ -1632,11 +1636,11 @@ function drawPaymentTerms(ctx: Ctx, sport: string) {
     ["5%", "after completion of work"],
   ];
   for (const [pct, rest] of parts) {
-    ensureSpace(ctx, 17);
-    safeDraw(ctx.page, pct, { x: MARGIN + 4, y: yFromTop(ctx.y + 10), size: 11, font: ctx.bold, color: COL.green });
-    const pw = safeWidth(ctx.bold, pct, 11);
-    safeDraw(ctx.page, "  " + rest, { x: MARGIN + 4 + pw, y: yFromTop(ctx.y + 10), size: 11, font: ctx.font, color: COL.text });
-    ctx.y += 17;
+    ensureSpace(ctx, 19);
+    safeDraw(ctx.page, pct, { x: MARGIN + 4, y: yFromTop(ctx.y + 11), size: 12.5, font: ctx.bold, color: COL.green });
+    const pw = safeWidth(ctx.bold, pct, 12.5);
+    safeDraw(ctx.page, "  " + rest, { x: MARGIN + 4 + pw, y: yFromTop(ctx.y + 11), size: 12.5, font: ctx.font, color: COL.text });
+    ctx.y += 19;
   }
 }
 
@@ -1654,41 +1658,41 @@ function drawAdvantagePage(ctx: Ctx) {
   // unit. Nothing inside must split — a lone stat band orphaning onto a
   // near-empty page is exactly the "one line on page 6" bug we're fixing.
   // We want only continuous information in the quotation, never a stub page.
-  const paraLH = 10 * 1.35;
+  const paraLH = 11 * 1.35;
   let parasH = 0;
   for (const p of paras) {
-    parasH += wordWrap(ctx.font, p, 10, CONTENT_W).length * paraLH + 8;
+    parasH += wordWrap(ctx.font, p, 11, CONTENT_W).length * paraLH + 8;
   }
   const sectionH = 6 + 30 + 16 + parasH + 14 + cardH + 18 + statH;
   ensureSpace(ctx, sectionH);
 
   space(ctx, 6);
-  safeDraw(ctx.page, "The Fitoverse Advantage", { x: MARGIN, y: yFromTop(ctx.y + 22), size: 22, font: ctx.bold, color: COL.text });
+  safeDraw(ctx.page, "The Fitoverse Advantage", { x: MARGIN, y: yFromTop(ctx.y + 22), size: 24, font: ctx.bold, color: COL.text });
   ctx.y += 30;
   ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y) }, end: { x: MARGIN + 64, y: yFromTop(ctx.y) }, color: COL.accent, thickness: 2.5 });
   space(ctx, 16);
   for (const p of paras) {
-    drawText(ctx, p, { x: MARGIN, size: 10, maxWidth: CONTENT_W, color: COL.textSoft });
+    drawText(ctx, p, { x: MARGIN, size: 11, maxWidth: CONTENT_W, color: COL.text });
     space(ctx, 8);
   }
   space(ctx, 14);
   const top = ctx.y;
   drawRect(ctx, MARGIN, top, cardW, cardH, { fill: COL.light, border: COL.border });
-  drawCentered(ctx, "PROUD MEMBERS OF", MARGIN, cardW, top + 16, 10, ctx.bold, COL.text);
-  drawCentered(ctx, "IAKS   ·   SFBA India", MARGIN, cardW, top + 42, 13, ctx.bold, COL.green);
+  drawCentered(ctx, "PROUD MEMBERS OF", MARGIN, cardW, top + 16, 11, ctx.bold, COL.text);
+  drawCentered(ctx, "IAKS   ·   SFBA India", MARGIN, cardW, top + 42, 14, ctx.bold, COL.green);
   const c2 = MARGIN + cardW + 16;
   drawRect(ctx, c2, top, cardW, cardH, { fill: COL.light, border: COL.border });
-  drawCentered(ctx, "WE USE FLOORINGS AUTHORIZED BY", c2, cardW, top + 16, 10, ctx.bold, COL.text);
-  drawCentered(ctx, "FIFA Quality   ·   FIFA Quality Pro", c2, cardW, top + 42, 13, ctx.bold, COL.green);
+  drawCentered(ctx, "WE USE FLOORINGS AUTHORIZED BY", c2, cardW, top + 16, 11, ctx.bold, COL.text);
+  drawCentered(ctx, "FIFA Quality   ·   FIFA Quality Pro", c2, cardW, top + 42, 14, ctx.bold, COL.green);
   ctx.y = top + cardH;
   space(ctx, 18);
   drawRect(ctx, MARGIN, ctx.y, CONTENT_W, statH, { fill: COL.greenSoft });
   const statTop = ctx.y;
   const halfW = CONTENT_W / 2;
-  drawCentered(ctx, "65+", MARGIN, halfW, statTop + 18, 26, ctx.bold, COL.green);
-  drawCentered(ctx, "infra projects", MARGIN, halfW, statTop + 46, 10, ctx.font, COL.muted);
-  drawCentered(ctx, "4 Lakh+", MARGIN + halfW, halfW, statTop + 18, 26, ctx.bold, COL.green);
-  drawCentered(ctx, "Sq. Ft. Covered", MARGIN + halfW, halfW, statTop + 46, 10, ctx.font, COL.muted);
+  drawCentered(ctx, "65+", MARGIN, halfW, statTop + 18, 28, ctx.bold, COL.green);
+  drawCentered(ctx, "infra projects", MARGIN, halfW, statTop + 46, 11, ctx.font, COL.muted);
+  drawCentered(ctx, "4 Lakh+", MARGIN + halfW, halfW, statTop + 18, 28, ctx.bold, COL.green);
+  drawCentered(ctx, "Sq. Ft. Covered", MARGIN + halfW, halfW, statTop + 46, 11, ctx.font, COL.muted);
   ctx.y += statH;
 }
 

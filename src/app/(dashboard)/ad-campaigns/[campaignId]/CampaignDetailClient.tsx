@@ -196,7 +196,7 @@ export default function CampaignDetailClient({
         {/* This campaign's captured leads — filterable by city / sport */}
         <AnalyticsCard
           title="Captured leads"
-          description="Every Instant-Form submission captured from this campaign. Filter by city or sport, click a breakdown value to drill in, or click a row for the full form answers."
+          description="Every Instant-Form submission captured from this campaign. Filter by city or sport, click a breakdown value to drill in, or open a lead for the full form answers."
         >
           <LeadsTable
             leads={leads}

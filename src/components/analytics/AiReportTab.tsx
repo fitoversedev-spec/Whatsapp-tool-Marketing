@@ -7,6 +7,8 @@
 // computes or invents figures, it just displays the narrative + dataBlocks the
 // route returns. Nothing here sends anything to a customer.
 import { useState } from "react";
+import Markdown from "@/components/Markdown";
+import { useToast } from "@/components/Toast";
 
 // Mirrors the route contract's PeriodInput preset arm. The { from, to } custom
 // arm exists in the contract but this panel intentionally exposes only the
@@ -47,6 +49,21 @@ type DataBlock = { tool: string; title: string; rows: unknown };
 type AiReportResponse = { narrative: string; dataBlocks: DataBlock[] };
 
 type AskedBody = { question: string; period: PeriodPreset };
+
+// A share target from GET /api/chat/threads — the Team channel plus a DM row per
+// teammate. We post the report narrative into the chosen one via the existing
+// chat messages API (no new endpoint).
+type ShareThread = {
+  threadId: string;
+  entityType: "account_contact" | "deal" | "team" | "dm";
+  entityId: string;
+  label: string;
+  sublabel: string;
+};
+
+// Team-chat message bodies are capped at 4000 chars (postSchema). Leave a little
+// headroom for the header line we prepend.
+const MAX_CHAT_BODY = 4000;
 
 function messageForStatus(status: number): string {
   if (status === 402) return "The AI credit has run out — please top up your Anthropic balance to keep using AI.";
@@ -154,6 +171,7 @@ function DataBlockCard({ block }: { block: DataBlock }) {
 }
 
 export default function AiReportTab() {
+  const toast = useToast();
   const [question, setQuestion] = useState("");
   const [period, setPeriod] = useState<PeriodPreset>("this_month");
   const [loading, setLoading] = useState(false);
@@ -164,6 +182,13 @@ export default function AiReportTab() {
   // reuses this so the downloaded report always matches what's on screen, even
   // if the user has since edited the textarea.
   const [asked, setAsked] = useState<AskedBody | null>(null);
+
+  // "Share to chat" — a lazy-loaded teammate/thread picker that posts the
+  // report's narrative into a team-chat DM (or the Team channel).
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareThreads, setShareThreads] = useState<ShareThread[] | null>(null);
+  const [shareQuery, setShareQuery] = useState("");
+  const [sharingId, setSharingId] = useState<string | null>(null);
 
   async function ask() {
     const q = question.trim();
@@ -223,9 +248,61 @@ export default function AiReportTab() {
     }
   }
 
-  // Narrative → readable paragraphs. Blank lines separate paragraphs; single
-  // newlines inside a paragraph are preserved via whitespace-pre-line.
-  const paragraphs = result ? result.narrative.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean) : [];
+  // Toggle the picker; lazy-load the share targets (Team channel + teammate DMs)
+  // the first time it's opened.
+  async function toggleShare() {
+    const next = !shareOpen;
+    setShareOpen(next);
+    if (next && shareThreads === null) {
+      try {
+        const res = await fetch("/api/chat/threads");
+        const data = res.ok ? await res.json() : { threads: [] };
+        setShareThreads((data.threads ?? []) as ShareThread[]);
+      } catch {
+        setShareThreads([]);
+      }
+    }
+  }
+
+  // The narrative, prefixed with a one-line header, clamped to the chat body
+  // limit. Markdown is posted as-is — chat renders it as plain text.
+  function buildShareText(): string {
+    const q = asked?.question.trim();
+    const periodLabel = PERIOD_PRESETS.find((p) => p.value === asked?.period)?.label;
+    const header = q
+      ? `✨ AI report — ${q}${periodLabel ? ` (${periodLabel})` : ""}`
+      : "✨ AI report";
+    const text = `${header}\n\n${result?.narrative.trim() ?? ""}`;
+    return text.length > MAX_CHAT_BODY ? `${text.slice(0, MAX_CHAT_BODY - 1)}…` : text;
+  }
+
+  async function shareTo(t: ShareThread) {
+    if (!result || sharingId) return;
+    setSharingId(t.entityId);
+    try {
+      const res = await fetch(`/api/chat/threads/${t.entityType}/${t.entityId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: buildShareText() }),
+      });
+      if (!res.ok) {
+        toast.error("Couldn't share the report. Please try again.");
+        return;
+      }
+      toast.success(`Report shared to ${t.label}`);
+      setShareOpen(false);
+      setShareQuery("");
+    } catch {
+      toast.error("Couldn't reach the server. Please try again.");
+    } finally {
+      setSharingId(null);
+    }
+  }
+
+  const hasNarrative = !!result && result.narrative.trim().length > 0;
+  const filteredShareThreads = (shareThreads ?? []).filter((t) =>
+    t.label.toLowerCase().includes(shareQuery.trim().toLowerCase()),
+  );
 
   return (
     <div className="space-y-4">
@@ -295,25 +372,81 @@ export default function AiReportTab() {
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-base font-semibold text-slate-900">AI report</h3>
-              <button
-                type="button"
-                onClick={downloadPdf}
-                disabled={pdfLoading}
-                className="border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 text-sm font-medium px-4 py-1.5 rounded-xl whitespace-nowrap"
-              >
-                {pdfLoading ? "Preparing…" : "Download PDF"}
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={toggleShare}
+                  disabled={!hasNarrative}
+                  className={`text-sm font-medium px-4 py-1.5 rounded-xl whitespace-nowrap border ${
+                    shareOpen
+                      ? "bg-wa-green/10 border-wa-green text-wa-dark"
+                      : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                  } disabled:opacity-40`}
+                >
+                  Share to chat
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadPdf}
+                  disabled={pdfLoading}
+                  className="border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 text-sm font-medium px-4 py-1.5 rounded-xl whitespace-nowrap"
+                >
+                  {pdfLoading ? "Preparing…" : "Download PDF"}
+                </button>
+              </div>
             </div>
-            {paragraphs.length > 0 ? (
-              <div className="mt-3 space-y-3">
-                {paragraphs.map((para, i) => (
-                  <p key={i} className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                    {para}
-                  </p>
-                ))}
+
+            {shareOpen && (
+              <div className="mt-3 border border-slate-200 rounded-xl p-3 bg-slate-50">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-slate-600">Send this report to a teammate</p>
+                  <button
+                    type="button"
+                    onClick={() => setShareOpen(false)}
+                    className="text-xs text-slate-400 hover:text-slate-700"
+                  >
+                    Close
+                  </button>
+                </div>
+                <input
+                  value={shareQuery}
+                  onChange={(e) => setShareQuery(e.target.value)}
+                  placeholder="Search teammates…"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/20"
+                />
+                <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                  {shareThreads === null ? (
+                    <div className="px-3 py-3 text-xs text-slate-400 text-center">Loading…</div>
+                  ) : filteredShareThreads.length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-slate-400 text-center">No teammates found.</div>
+                  ) : (
+                    filteredShareThreads.map((t) => (
+                      <button
+                        key={t.threadId}
+                        type="button"
+                        disabled={sharingId !== null}
+                        onClick={() => shareTo(t)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 border-b border-slate-100 last:border-0 disabled:opacity-50"
+                      >
+                        <span aria-hidden>{t.entityType === "team" ? "📢" : "👤"}</span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block font-medium text-slate-800 truncate">{t.label}</span>
+                          <span className="block text-[11px] text-slate-400 truncate">{t.sublabel}</span>
+                        </span>
+                        {sharingId === t.entityId && <span className="text-xs text-slate-400 shrink-0">Sending…</span>}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {hasNarrative ? (
+              <div className="mt-3">
+                <Markdown text={result.narrative} />
               </div>
             ) : (
-              <p className="mt-3 text-sm text-slate-400">The assistant didn't return a written summary for this question.</p>
+              <p className="mt-3 text-sm text-slate-400">The assistant didn&apos;t return a written summary for this question.</p>
             )}
           </div>
 

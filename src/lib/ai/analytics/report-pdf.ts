@@ -275,10 +275,15 @@ export async function renderAiReportPdf(input: AiReportPdfInput): Promise<Uint8A
   y -= 10;
 
   // ── Narrative (the model's prose answer) ──
+  // The model answers in Markdown (headings, **bold**, tables, lists). pdf-lib
+  // draws plain runs, so flatten the markup to readable text first — strip
+  // leading #, inline * / `, and | table pipes (see mdToPlainLines) — otherwise
+  // the raw markers would print literally.
   text(page, "ANSWER", MARGIN, y, 9, bold, MUTED);
   y -= 15;
-  const narrative = (input.narrative || "").trim() || "(the model returned no narrative)";
-  for (const para of narrative.split(/\n/)) {
+  const hasNarrative = (input.narrative || "").trim().length > 0;
+  const narrativeLines = hasNarrative ? mdToPlainLines(input.narrative) : ["(the model returned no narrative)"];
+  for (const para of narrativeLines) {
     if (para.trim() === "") {
       y -= 6;
       continue;
@@ -322,6 +327,51 @@ export async function renderAiReportPdf(input: AiReportPdfInput): Promise<Uint8A
   });
 
   return doc.save();
+}
+
+// Strip inline Markdown markers from one run of text so nothing prints as a
+// literal marker: `code`, **bold**, *emphasis*, any stray "*", and a leading
+// ATX heading (## ...).
+function stripInlineMd(s: string): string {
+  return s
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/\*/g, "")
+    .replace(/^\s*#{1,6}\s+/, "")
+    .trim();
+}
+
+// Flatten a Markdown narrative into plain display lines for the PDF: drop table
+// separator rows, turn a "| a | b |" table row into space-separated columns,
+// normalize "- "/"* "/numbered list markers to a simple dash, and strip every
+// inline marker. Blank lines are preserved (paragraph spacing).
+function mdToPlainLines(narrative: string): string[] {
+  const out: string[] = [];
+  for (const raw of narrative.replace(/\r\n/g, "\n").split("\n")) {
+    if (raw.trim() === "") {
+      out.push("");
+      continue;
+    }
+    const trimmed = raw.trim();
+    // Table separator row (|---|:--:|) — carries no content.
+    if (/^[\s|:-]+$/.test(trimmed) && trimmed.includes("-") && trimmed.includes("|")) continue;
+    // Table row → columns joined by spaces.
+    if (/^\|.*\|?$/.test(trimmed) && trimmed.includes("|")) {
+      const cols = trimmed
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((c) => stripInlineMd(c.trim()))
+        .filter((c) => c.length > 0);
+      out.push(cols.join("   "));
+      continue;
+    }
+    // List markers → dash bullet; numbered markers → drop the "N." prefix.
+    const listNormalized = raw.replace(/^(\s*)[-*]\s+/, "$1- ").replace(/^(\s*)\d+\.\s+/, "$1- ");
+    out.push(stripInlineMd(listNormalized));
+  }
+  return out;
 }
 
 // Naive word wrap (character estimate) — same helper the invoice renderer uses.

@@ -69,40 +69,39 @@ const MARGIN = 36;
 const CONTENT_W = PAGE_W - MARGIN * 2;
 const FOOTER_RESERVE = 30;
 
-// Polished palette — more contrast on titles, softer borders, dedicated
-// link colour. The two-tone accent (deep + soft) lets us layer cards and
-// dividers without everything looking flat.
-// Palette from the Fitoverse quotation design template — charcoal headers, a
-// blue primary accent, and a green→blue→dark-blue→magenta gradient rule.
-// Brand-green palette matching the reference quotation: green #159341 for
-// section heads / table head / accents; blue + red used only for option chips
-// and links; dark-slate ink; soft neutrals for cards and rows.
+// Plain government bill-of-quantities palette — neutral greys, near-black
+// grid lines, dark-slate ink throughout. The brand-green multi-block look was
+// retired in favour of a plain/readable BOQ aesthetic: white/grey bands with
+// black borders, ink text, and no coloured header fills. Several keys keep
+// their old (brand) names for compatibility with dead code paths
+// (drawHeader/drawItemsTable/drawConnectSection) but now resolve to neutral
+// values, so the whole live document renders plainly.
 const COL = {
   text: rgb(0.114, 0.157, 0.192), // #1d2831 dark slate ink
-  textSoft: rgb(0.275, 0.325, 0.375),
-  muted: rgb(0.451, 0.502, 0.549), // #737f8c labels / footer
-  charcoal: rgb(0.114, 0.157, 0.192), // (legacy alias) → dark slate
-  blue: rgb(0.098, 0.522, 0.851), // #1985d9 — option B1 chip / links
-  red: rgb(0.784, 0.067, 0.141), // #c81124 — option B3 chip
-  accent: rgb(0.082, 0.576, 0.255), // #159341 brand green — the primary accent
-  green: rgb(0.082, 0.576, 0.255), // #159341 (alias for readability)
-  greenDeep: rgb(0.043, 0.42, 0.184), // #0b6b2f — grand-total / emphasis text
-  greenSoft: rgb(0.914, 0.957, 0.929), // #e9f4ed — pale green band (project, A/B subhead)
-  accentSoft: rgb(0.914, 0.957, 0.929), // pale green card highlight
-  accentText: rgb(1, 1, 1),
-  light: rgb(0.957, 0.965, 0.973), // #f4f6f8 info card
-  border: rgb(0.851, 0.871, 0.894), // #d9dee4
-  borderStrong: rgb(0.72, 0.75, 0.79),
-  // Darker, higher-contrast grid used specifically for the particulars table
-  // and the spec cards, so they visually stand out — kept separate from the
-  // lighter `border` used for subtle dividers elsewhere (footer, terms, bank
-  // block) so those aren't affected.
-  tableGrid: rgb(0.35, 0.38, 0.42), // #596170
-  rowAlt: rgb(0.972, 0.98, 0.988), // #f8fafc alt row
+  textSoft: rgb(0.30, 0.34, 0.38), // secondary ink (descriptions)
+  muted: rgb(0.45, 0.48, 0.52), // grey labels / footer
+  charcoal: rgb(0.114, 0.157, 0.192), // dark slate
+  blue: rgb(0.114, 0.157, 0.192), // headings — now plain ink (was brand blue)
+  red: rgb(0.35, 0.38, 0.42), // neutral grey (was option-chip red)
+  accent: rgb(0.114, 0.157, 0.192), // thin rules / bars — now ink (was green)
+  green: rgb(0.114, 0.157, 0.192), // ink (was green)
+  greenDeep: rgb(0.114, 0.157, 0.192), // emphasis text — now ink (was deep green)
+  greenSoft: rgb(0.931, 0.933, 0.941), // pale grey band (project / subheaders)
+  accentSoft: rgb(0.949, 0.953, 0.961), // pale grey card highlight
+  accentText: rgb(1, 1, 1), // retained for dead code; live bands use ink
+  headFill: rgb(0.882, 0.886, 0.898), // grey table/summary header band
+  light: rgb(0.965, 0.968, 0.972), // very pale grey card
+  border: rgb(0.78, 0.80, 0.83), // subtle dividers (footer, terms, signatures)
+  borderStrong: rgb(0.55, 0.58, 0.62),
+  // Near-black grid used for the particulars table, totals block and spec
+  // cards so they read as a crisp bordered BOQ grid — kept separate from the
+  // lighter `border` used for subtle dividers elsewhere.
+  tableGrid: rgb(0.10, 0.12, 0.15), // near-black grid lines
+  rowAlt: rgb(0.965, 0.968, 0.972), // light grey alternating row
   highlight: rgb(1, 0.953, 0.749), // #fff3bf highlighted value bg
   highlightText: rgb(0.478, 0.361, 0), // #7a5c00
-  grandTotalBg: rgb(0.082, 0.576, 0.255), // #159341 green grand-total band
-  link: rgb(0.098, 0.522, 0.851),
+  grandTotalBg: rgb(0.862, 0.866, 0.878), // grey grand-total band (was green)
+  link: rgb(0.121, 0.278, 0.501), // muted navy — links stay recognisable
 };
 
 // The 4-stop brand gradient (green → blue → dark-blue → magenta) at positions
@@ -609,12 +608,23 @@ function drawFromTo(ctx: Ctx, customerName: string, quoteDate: string) {
   const city = parts.slice(1).join(",").trim();
   const colW = CONTENT_W / 2;
   const s = ctx.y;
-  ensureSpace(ctx, 110);
+  ensureSpace(ctx, 124);
   // From (left)
   safeDraw(ctx.page, "From", { x: MARGIN, y: yFromTop(s + 12), size: 13, font: ctx.bold, color: COL.blue });
   safeDraw(ctx.page, "Fitoverse Private Limited", { x: MARGIN, y: yFromTop(s + 33), size: 15, font: ctx.bold, color: COL.text });
   safeDraw(ctx.page, "Phone: 6381502055", { x: MARGIN, y: yFromTop(s + 51), size: 10.5, font: ctx.font, color: COL.textSoft });
   safeDraw(ctx.page, "GSTIN: 33AAECF8905G1ZQ", { x: MARGIN, y: yFromTop(s + 66), size: 10.5, font: ctx.font, color: COL.textSoft });
+  // Seller street address, printed with the GSTIN in the header (wraps to the
+  // left column's width so it never bleeds into the To / Quoted-on column).
+  const addrLines = wordWrap(
+    ctx.font,
+    "Plot no 96, Samiyappa Nagar 3rd cross west street, Seelanaickenpatti, Salem, Tamil Nadu, 636201",
+    9,
+    colW - 10,
+  );
+  addrLines.forEach((ln, i) => {
+    safeDraw(ctx.page, ln, { x: MARGIN, y: yFromTop(s + 81 + i * 11), size: 9, font: ctx.font, color: COL.muted });
+  });
   // To (right)
   const rx = MARGIN + colW;
   safeDraw(ctx.page, "To", { x: rx, y: yFromTop(s + 12), size: 13, font: ctx.bold, color: COL.blue });
@@ -622,7 +632,7 @@ function drawFromTo(ctx: Ctx, customerName: string, quoteDate: string) {
   if (city) safeDraw(ctx.page, city, { x: rx, y: yFromTop(s + 50), size: 10.5, font: ctx.font, color: COL.textSoft });
   safeDraw(ctx.page, "Quoted on", { x: rx, y: yFromTop(s + 74), size: 13, font: ctx.bold, color: COL.blue });
   safeDraw(ctx.page, quoteDate, { x: rx, y: yFromTop(s + 94), size: 15, font: ctx.bold, color: COL.text });
-  ctx.y = s + 110;
+  ctx.y = s + 124;
   space(ctx, 8);
 }
 
@@ -882,14 +892,15 @@ function drawTotals(ctx: Ctx, subtotal: number, gst: number, grandTotal: number)
   drawLine(ctx, x, PAGE_W - MARGIN, COL.tableGrid, 0.7);
   drawTotalRow("GST Amount", `₹ ${inr(gst)}`);
 
-  // Grand total band — brand green — still inside the same bordered block.
+  // Grand total band — plain grey with ink text — inside the same bordered block.
+  drawLine(ctx, x, PAGE_W - MARGIN, COL.tableGrid, 0.7);
   drawRect(ctx, x, ctx.y, totalsW, grandH, { fill: COL.grandTotalBg });
   safeDraw(ctx.page, "Grand Total", {
     x: x + 10,
     y: yFromTop(ctx.y + 21),
     size: 13,
     font: ctx.bold,
-    color: COL.accentText,
+    color: COL.text,
   });
   const grandText = `₹ ${inr(grandTotal)}`;
   const grandW = safeWidth(ctx.bold, grandText, 13);
@@ -898,7 +909,7 @@ function drawTotals(ctx: Ctx, subtotal: number, gst: number, grandTotal: number)
     y: yFromTop(ctx.y + 21),
     size: 13,
     font: ctx.bold,
-    color: COL.accentText,
+    color: COL.text,
   });
   ctx.y += grandH;
 
@@ -1242,8 +1253,15 @@ function drawOptionChip(ctx: Ctx, x: number, yTop: number, tag: string, color?: 
   return w;
 }
 
-// Six-column particulars table (PARTICULARS · UNIT · QTY · RATE · GST · AMOUNT)
-// with optional A/B section subheaders and option chips.
+// Plain government bill-of-quantities particulars table: an 8-column bordered
+// grid — S.NO | ITEM | DESCRIPTION | UNIT | QTY | RATE | GST | AMOUNT — with a
+// grey header band, near-black grid lines and plain sub-header rows per scope
+// section. Item name and description live in separate columns (no in-table
+// product photos — those reappear in the spec cards below the table).
+//
+// The `_images` map is retained in the signature (the caller shares it with the
+// spec cards) but is intentionally unused here now that the table carries no
+// photos.
 //
 // finalReserve: extra space to require alongside the LAST row specifically,
 // matching whatever totals/comparison block is about to be drawn right
@@ -1253,24 +1271,28 @@ function drawOptionChip(ctx: Ctx, x: number, yTop: number, tag: string, color?: 
 function drawParticularsTable(
   ctx: Ctx,
   items: QuoteLineItem[],
-  images: Map<string, PDFImage>,
+  _images: Map<string, PDFImage>,
   finalReserve = 0,
 ) {
-  const cols = { part: 264, unit: 44, qty: 48, rate: 55, gst: 42, amt: 70 };
+  // 8 columns; widths sum to CONTENT_W (S.NO narrowest, DESCRIPTION widest).
+  const cols = { sno: 30, item: 112, desc: 156, unit: 34, qty: 46, rate: 52, gst: 30, amt: 63.28 };
   const x = {
-    part: MARGIN,
-    unit: MARGIN + cols.part,
-    qty: MARGIN + cols.part + cols.unit,
-    rate: MARGIN + cols.part + cols.unit + cols.qty,
-    gst: MARGIN + cols.part + cols.unit + cols.qty + cols.rate,
-    amt: MARGIN + cols.part + cols.unit + cols.qty + cols.rate + cols.gst,
+    sno: MARGIN,
+    item: MARGIN + cols.sno,
+    desc: MARGIN + cols.sno + cols.item,
+    unit: MARGIN + cols.sno + cols.item + cols.desc,
+    qty: MARGIN + cols.sno + cols.item + cols.desc + cols.unit,
+    rate: MARGIN + cols.sno + cols.item + cols.desc + cols.unit + cols.qty,
+    gst: MARGIN + cols.sno + cols.item + cols.desc + cols.unit + cols.qty + cols.rate,
+    amt: MARGIN + cols.sno + cols.item + cols.desc + cols.unit + cols.qty + cols.rate + cols.gst,
   };
-  const headerH = 20;
-  // Table grid: outer left/right borders on every band + inner column
-  // separators on data rows. Drawn per-row (using each row's own top/height)
-  // so the grid survives page breaks. `inner` adds the column dividers.
-  const innerXs = [x.unit, x.qty, x.rate, x.gst, x.amt];
   const rightEdge = MARGIN + CONTENT_W;
+  const PAD = 5;
+  const headerH = 22;
+  // Table grid: outer left/right borders on every band + inner column
+  // separators on data rows. Drawn per-band (using each band's own top/height)
+  // so the grid survives page breaks. `inner` adds the column dividers.
+  const innerXs = [x.item, x.desc, x.unit, x.qty, x.rate, x.gst, x.amt];
   const drawGrid = (top: number, h: number, inner: boolean) => {
     const yTop = yFromTop(top);
     const yBot = yFromTop(top + h);
@@ -1279,12 +1301,15 @@ function drawParticularsTable(
     }
     if (inner) {
       for (const vx of innerXs) {
-        ctx.page.drawLine({ start: { x: vx, y: yTop }, end: { x: vx, y: yBot }, color: COL.tableGrid, thickness: 0.7 });
+        ctx.page.drawLine({ start: { x: vx, y: yTop }, end: { x: vx, y: yBot }, color: COL.tableGrid, thickness: 0.6 });
       }
     }
   };
-  const rowLine = (top: number) => {
-    ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(top) }, end: { x: rightEdge, y: yFromTop(top) }, color: COL.tableGrid, thickness: 0.7 });
+  const rowLine = (top: number, thickness = 0.6) => {
+    ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(top) }, end: { x: rightEdge, y: yFromTop(top) }, color: COL.tableGrid, thickness });
+  };
+  const leftAt = (t: string, cx0: number, size: number, font: PDFFont, color: ReturnType<typeof rgb>, y: number) => {
+    safeDraw(ctx.page, t, { x: cx0 + PAD, y, size, font, color });
   };
   const centerAt = (t: string, cx0: number, cw: number, size: number, font: PDFFont, color: ReturnType<typeof rgb>, y: number) => {
     const w = safeWidth(font, t, size);
@@ -1292,34 +1317,46 @@ function drawParticularsTable(
   };
   const rightAt = (t: string, cx0: number, cw: number, size: number, font: PDFFont, color: ReturnType<typeof rgb>, y: number) => {
     const w = safeWidth(font, t, size);
-    safeDraw(ctx.page, t, { x: cx0 + cw - w - 6, y, size, font, color });
+    safeDraw(ctx.page, t, { x: cx0 + cw - w - PAD, y, size, font, color });
   };
+  const HEAD_SIZE = 8.5;
   const drawHead = () => {
     ensureSpace(ctx, headerH);
-    drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.accent });
-    const hy = yFromTop(ctx.y + 14);
-    safeDraw(ctx.page, "PARTICULARS", { x: x.part + 8, y: hy, size: 10.5, font: ctx.bold, color: COL.accentText });
-    centerAt("UNIT", x.unit, cols.unit, 10.5, ctx.bold, COL.accentText, hy);
-    rightAt("QTY", x.qty, cols.qty, 10.5, ctx.bold, COL.accentText, hy);
-    rightAt("RATE", x.rate, cols.rate, 10.5, ctx.bold, COL.accentText, hy);
-    centerAt("GST", x.gst, cols.gst, 10.5, ctx.bold, COL.accentText, hy);
-    rightAt("AMOUNT", x.amt, cols.amt, 10.5, ctx.bold, COL.accentText, hy);
-    drawGrid(ctx.y, headerH, false);
+    drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.headFill });
+    const hy = yFromTop(ctx.y + 14.5);
+    centerAt("S.NO", x.sno, cols.sno, HEAD_SIZE, ctx.bold, COL.text, hy);
+    leftAt("ITEM", x.item, HEAD_SIZE, ctx.bold, COL.text, hy);
+    leftAt("DESCRIPTION", x.desc, HEAD_SIZE, ctx.bold, COL.text, hy);
+    centerAt("UNIT", x.unit, cols.unit, HEAD_SIZE, ctx.bold, COL.text, hy);
+    rightAt("QTY", x.qty, cols.qty, HEAD_SIZE, ctx.bold, COL.text, hy);
+    rightAt("RATE", x.rate, cols.rate, HEAD_SIZE, ctx.bold, COL.text, hy);
+    centerAt("GST", x.gst, cols.gst, HEAD_SIZE, ctx.bold, COL.text, hy);
+    rightAt("AMOUNT", x.amt, cols.amt, HEAD_SIZE, ctx.bold, COL.text, hy);
+    rowLine(ctx.y, 0.9);
+    drawGrid(ctx.y, headerH, true);
+    rowLine(ctx.y + headerH, 0.9);
     ctx.y += headerH;
   };
   drawHead();
-  const subH = 19;
-  // Draw a section subheader band (green band + label + grid) at the current
-  // cursor. Extracted so it can be re-emitted at the top of a continued page.
+  const subH = 18;
+  // Plain grey section sub-header row (e.g. "Base Preparation", "Sports
+  // Flooring") spanning the full width. Extracted so it can be re-emitted at
+  // the top of a continued page.
   const drawSubheader = (sec: string) => {
     drawRect(ctx, MARGIN, ctx.y, CONTENT_W, subH, { fill: COL.greenSoft });
-    safeDraw(ctx.page, sec, { x: x.part + 8, y: yFromTop(ctx.y + 13.5), size: 11, font: ctx.bold, color: COL.greenDeep });
+    safeDraw(ctx.page, sec, { x: x.sno + PAD, y: yFromTop(ctx.y + 12.5), size: 9.5, font: ctx.bold, color: COL.text });
     drawGrid(ctx.y, subH, false);
     rowLine(ctx.y + subH);
     ctx.y += subH;
   };
+  const NAME_SIZE = 9;
+  const NAME_LH = 12;
+  const OPT_SIZE = 8;
+  const OPT_LH = 11;
+  const DESC_SIZE = 8.5;
+  const DESC_LH = 11;
   let lastSection: string | null = null;
-  let rowIdx = 0;
+  let serial = 0;
   // Group rows by scope section (stable sort preserves within-section order).
   const ordered = [...items].sort((a, b) => sectionOrder(a.section) - sectionOrder(b.section));
   const includedIds = ordered.filter((i) => i.included).map((i) => i.id);
@@ -1327,48 +1364,15 @@ function drawParticularsTable(
   for (const item of ordered) {
     if (!item.included) continue;
     const sec = item.section ?? null;
-    // Compute this row's height FIRST — the enlarged product photo can make a
-    // row ~200pt tall, so the subheader must reserve room for its first row too
-    // (else the band orphans at a page bottom), and a mid-section page break
-    // must re-emit the band rather than reset the section tracking.
-    // Optional product photo (from the Products step) shown under the name.
-    // Sized large for a strong visual (fits inside the PARTICULARS column,
-    // which is 264pt wide → keep width within ~240pt incl. the 8pt inset).
-    const img = images.get(item.id);
-    let imgW = 0;
-    let imgH = 0;
-    if (img) {
-      const s = Math.min(230 / img.width, 165 / img.height, 1);
-      imgW = img.width * s;
-      imgH = img.height * s;
-    }
-    const descLines = wordWrap(ctx.bold, item.description, 11, cols.part - 16);
-    // Long product names must wrap too — at 13pt bold a one-line name can
-    // easily exceed the 264pt column and bleed into the UNIT/QTY cells.
-    const nameLines = wordWrap(ctx.bold, item.name, 13, cols.part - 16);
-    const NAME_LH = 16;
-    // A long/wrapped name can't always share its last line with the option
-    // chip (13pt bold name + "OPTION Bn" badge may not both fit in the
-    // 264pt column) — stack the chip below the name instead, which needs
-    // extra row height reserved up front so the band/grid don't undershoot it.
-    let chipStacks = false;
-    if (item.optionTag) {
-      if (nameLines.length > 1) {
-        chipStacks = true;
-      } else {
-        const nameW = safeWidth(ctx.bold, item.name, 13);
-        const chipW = safeWidth(ctx.bold, `OPTION ${item.optionTag}`, 6.5) + 8;
-        chipStacks = cols.part - 16 - nameW - 8 < chipW;
-      }
-    }
-    const rowH =
-      8 +
-      nameLines.length * NAME_LH +
-      5 +
-      (chipStacks ? 16 : 0) +
-      (img ? imgH + 6 : 0) +
-      descLines.length * 14 +
-      8;
+    // Compute this row's height FIRST — the subheader must reserve room for its
+    // first row too (else the band orphans at a page bottom), and a mid-section
+    // page break must re-emit the band rather than reset the section tracking.
+    const nameLines = wordWrap(ctx.bold, item.name, NAME_SIZE, cols.item - PAD * 2);
+    const descLines = wordWrap(ctx.font, item.description, DESC_SIZE, cols.desc - PAD * 2);
+    const hasOpt = !!item.optionTag;
+    const itemColH = nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0);
+    const descColH = descLines.length * DESC_LH;
+    const rowH = 6 + Math.max(itemColH, descColH, NAME_LH) + 6;
     // Only the truly last row needs to drag the totals block's space
     // requirement along with it — every other row just needs to fit itself.
     const reserve = item.id === lastIncludedId ? finalReserve : 0;
@@ -1380,11 +1384,10 @@ function drawParticularsTable(
       if (ctx.pageNumber !== pb) drawHead();
       drawSubheader(sec);
       lastSection = sec;
-      rowIdx = 0;
     } else {
       // Continuing a section: if the row doesn't fit, break and re-emit the
-      // section band at the top of the new page — WITHOUT resetting lastSection
-      // (that would make the following row redraw the band mid-section).
+      // header + section band at the top of the new page — WITHOUT resetting
+      // lastSection (that would redraw the band mid-section on the next row).
       const pb = ctx.pageNumber;
       ensureSpace(ctx, rowH + reserve);
       if (ctx.pageNumber !== pb) {
@@ -1392,54 +1395,38 @@ function drawParticularsTable(
         if (sec) drawSubheader(sec);
       }
     }
-    if (rowIdx % 2 === 1) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
-    const sy = ctx.y + 8;
-    const nameY = yFromTop(sy + 12.5);
+
+    serial++;
+    if (serial % 2 === 0) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
+    const sy = ctx.y + 6;
+    const line0 = sy + NAME_SIZE; // baseline (distance from top) of the first line
+    const numY = yFromTop(line0);
+    // S.NO
+    centerAt(String(serial), x.sno, cols.sno, NAME_SIZE, ctx.font, COL.text, numY);
+    // Item name (wrapped, bold)
     nameLines.forEach((ln, i) => {
-      safeDraw(ctx.page, ln, {
-        x: x.part + 8,
-        y: yFromTop(sy + 12.5 + i * NAME_LH),
-        size: 13,
-        font: ctx.bold,
-        color: COL.text,
-      });
+      safeDraw(ctx.page, ln, { x: x.item + PAD, y: yFromTop(line0 + i * NAME_LH), size: NAME_SIZE, font: ctx.bold, color: COL.text });
     });
-    let cy = sy + nameLines.length * NAME_LH + 5;
-    if (item.optionTag) {
-      if (chipStacks) {
-        drawOptionChip(ctx, x.part + 8, cy, item.optionTag, item.optionColor);
-        cy += 16;
-      } else {
-        const nameW = safeWidth(ctx.bold, nameLines[0], 13);
-        drawOptionChip(ctx, x.part + 8 + nameW + 8, sy, item.optionTag, item.optionColor);
-      }
+    // Option tag, plain grey, under the name (replaces the old colour chip).
+    if (hasOpt) {
+      const optY = line0 + (nameLines.length - 1) * NAME_LH + OPT_LH;
+      safeDraw(ctx.page, `Option ${item.optionTag}`, { x: x.item + PAD, y: yFromTop(optY), size: OPT_SIZE, font: ctx.font, color: COL.muted });
     }
-    if (img) {
-      ctx.page.drawImage(img, { x: x.part + 8, y: yFromTop(cy + imgH), width: imgW, height: imgH });
-      ctx.page.drawRectangle({
-        x: x.part + 8,
-        y: yFromTop(cy + imgH),
-        width: imgW,
-        height: imgH,
-        borderColor: COL.tableGrid,
-        borderWidth: 0.9,
-      });
-      cy += imgH + 6;
-    }
-    for (const ln of descLines) {
-      safeDraw(ctx.page, ln, { x: x.part + 8, y: yFromTop(cy + 10), size: 11, font: ctx.bold, color: COL.text });
-      cy += 14;
-    }
+    // Description (wrapped) in its own column.
+    descLines.forEach((ln, i) => {
+      safeDraw(ctx.page, ln, { x: x.desc + PAD, y: yFromTop(line0 + i * DESC_LH), size: DESC_SIZE, font: ctx.font, color: COL.textSoft });
+    });
+    // Numeric cells, aligned to the first line.
     const amt = item.areaSqFt * item.ratePerSqFt;
-    centerAt(item.unit ?? "sq.ft", x.unit, cols.unit, 11, ctx.bold, COL.text, nameY);
-    rightAt(inr(item.areaSqFt), x.qty, cols.qty, 12, ctx.bold, COL.text, nameY);
-    rightAt(inrRate(item.ratePerSqFt), x.rate, cols.rate, 12, ctx.bold, COL.text, nameY);
-    centerAt(gstLabel(item.gstPercent), x.gst, cols.gst, 11, ctx.bold, COL.text, nameY);
-    rightAt(inr(amt), x.amt, cols.amt, 12.5, ctx.bold, COL.greenDeep, nameY);
-    rowLine(ctx.y + rowH);
+    centerAt(item.unit ?? "sq.ft", x.unit, cols.unit, NAME_SIZE, ctx.font, COL.text, numY);
+    rightAt(inr(item.areaSqFt), x.qty, cols.qty, NAME_SIZE, ctx.font, COL.text, numY);
+    rightAt(inrRate(item.ratePerSqFt), x.rate, cols.rate, NAME_SIZE, ctx.font, COL.text, numY);
+    centerAt(gstLabel(item.gstPercent), x.gst, cols.gst, NAME_SIZE, ctx.font, COL.text, numY);
+    rightAt(inr(amt), x.amt, cols.amt, NAME_SIZE, ctx.bold, COL.text, numY);
+
     drawGrid(ctx.y, rowH, true);
+    rowLine(ctx.y + rowH);
     ctx.y += rowH;
-    rowIdx++;
   }
   space(ctx, 6);
 }
@@ -1461,17 +1448,17 @@ function drawComparisonTable(ctx: Ctx, items: QuoteLineItem[]) {
   drawSectionTitle(ctx, "Total Payable - choose one option");
   const labelW = 156;
   const optW = (CONTENT_W - labelW) / opts.length;
-  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.accent });
-  safeDraw(ctx.page, "Amount Details", { x: MARGIN + 8, y: yFromTop(ctx.y + 19), size: 9, font: ctx.bold, color: COL.accentText });
+  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.headFill, border: COL.tableGrid, borderWidth: 0.9 });
+  safeDraw(ctx.page, "Amount Details", { x: MARGIN + 8, y: yFromTop(ctx.y + 19), size: 9, font: ctx.bold, color: COL.text });
   opts.forEach((o, i) => {
     const cx = MARGIN + labelW + i * optW;
     const t1 = `Option ${o.optionTag}`;
     const w1 = safeWidth(ctx.bold, t1, 9);
-    safeDraw(ctx.page, t1, { x: cx + optW - w1 - 8, y: yFromTop(ctx.y + 13), size: 9, font: ctx.bold, color: COL.accentText });
+    safeDraw(ctx.page, t1, { x: cx + optW - w1 - 8, y: yFromTop(ctx.y + 13), size: 9, font: ctx.bold, color: COL.text });
     let sub = o.optionShort ?? o.name ?? "";
     while (sub.length > 3 && safeWidth(ctx.font, sub, 7) > optW - 14) sub = sub.slice(0, -1);
     const w2 = safeWidth(ctx.font, sub, 7);
-    safeDraw(ctx.page, sub, { x: cx + optW - w2 - 8, y: yFromTop(ctx.y + 25), size: 7, font: ctx.font, color: COL.accentText });
+    safeDraw(ctx.page, sub, { x: cx + optW - w2 - 8, y: yFromTop(ctx.y + 25), size: 7, font: ctx.font, color: COL.muted });
   });
   ctx.y += headerH;
   const rowH = 20;
@@ -1481,7 +1468,7 @@ function drawComparisonTable(ctx: Ctx, items: QuoteLineItem[]) {
     const ty = yFromTop(ctx.y + (o2.band ? 16 : 13));
     const size = o2.bold ? 10 : 9;
     const font = o2.bold ? ctx.bold : ctx.font;
-    const col = o2.band ? COL.accentText : COL.text;
+    const col = COL.text;
     safeDraw(ctx.page, label, { x: MARGIN + 8, y: ty, size, font, color: col });
     opts.forEach((o, i) => {
       const cx = MARGIN + labelW + i * optW;
@@ -1489,7 +1476,9 @@ function drawComparisonTable(ctx: Ctx, items: QuoteLineItem[]) {
       const w = safeWidth(font, v, size);
       safeDraw(ctx.page, v, { x: cx + optW - w - 8, y: ty, size, font, color: col });
     });
-    if (!o2.band) {
+    if (o2.band) {
+      ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y + h) }, end: { x: PAGE_W - MARGIN, y: yFromTop(ctx.y + h) }, color: COL.tableGrid, thickness: 0.9 });
+    } else {
       ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y + rowH) }, end: { x: PAGE_W - MARGIN, y: yFromTop(ctx.y + rowH) }, color: COL.border, thickness: 0.5 });
     }
     ctx.y += h;

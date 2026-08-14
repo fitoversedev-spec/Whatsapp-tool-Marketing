@@ -231,6 +231,14 @@ export async function getMetaLeads({ from, to }: { from: Date; to: Date }): Prom
   return leads.map(toMetaLeadRow);
 }
 
+// One captured MetaLead by its internal id (MetaLead.id, NOT the raw Meta
+// leadgen id) for the dedicated lead detail page. Same MetaLeadRow shape as the
+// list queries; returns null when no such lead exists.
+export async function getMetaLeadById(id: string): Promise<MetaLeadRow | null> {
+  const lead = await prisma.metaLead.findUnique({ where: { id }, select: META_LEAD_SELECT });
+  return lead ? toMetaLeadRow(lead) : null;
+}
+
 // ---------------------------------------------------------------------------
 // Campaign-centric reads (the "Campaigns" drill-down list + detail).
 // ---------------------------------------------------------------------------

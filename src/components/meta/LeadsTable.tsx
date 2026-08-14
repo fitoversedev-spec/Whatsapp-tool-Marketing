@@ -1,36 +1,12 @@
 "use client";
 
-import { Fragment, useId, useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ExportButtons } from "@/components/analytics/ExportButtons";
+import { useToast } from "@/components/Toast";
 import MoveToCrmDialog, { type Rep } from "@/components/meta/MoveToCrmDialog";
 import type { MetaLeadRow } from "@/lib/meta-ads/queries";
-
-// field_data is a raw JSON string produced by the lead-ingest path; parse
-// defensively and support both Meta's [{ name, values: [...] }] array form and a
-// plain { key: value } object.
-function parseFieldData(raw: string): { name: string; value: string }[] {
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed
-        .map((f: { name?: unknown; value?: unknown; values?: unknown }) => ({
-          name: String(f?.name ?? ""),
-          value: Array.isArray(f?.values) ? f.values.join(", ") : String(f?.value ?? (f?.values as unknown) ?? ""),
-        }))
-        .filter((f) => f.name);
-    }
-    if (parsed && typeof parsed === "object") {
-      return Object.entries(parsed as Record<string, unknown>).map(([name, value]) => ({
-        name,
-        value: Array.isArray(value) ? value.join(", ") : String(value),
-      }));
-    }
-  } catch {
-    /* not JSON — nothing to expand */
-  }
-  return [];
-}
 
 type Tally = { key: string; label: string; count: number };
 
@@ -111,11 +87,31 @@ export default function LeadsTable({
   exportFilename: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const uid = useId();
-  const [openLead, setOpenLead] = useState<string | null>(null);
   const [movingLead, setMovingLead] = useState<MetaLeadRow | null>(null);
+  const [marketingBusyId, setMarketingBusyId] = useState<string | null>(null);
   const [cityQuery, setCityQuery] = useState("");
   const [sportQuery, setSportQuery] = useState("");
+
+  // One-click "Move to WhatsApp marketing" — upserts the lead's phone into the
+  // marketing Contact list. No owner picker; the route is idempotent.
+  async function moveToMarketing(l: MetaLeadRow) {
+    setMarketingBusyId(l.id);
+    try {
+      const res = await fetch(`/api/ad-campaigns/leads/${l.id}/move-to-marketing`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ? String(err.error) : "Could not add this lead to WhatsApp marketing");
+        return;
+      }
+      toast.success("Lead added to WhatsApp marketing");
+    } catch {
+      toast.error("Could not add this lead to WhatsApp marketing");
+    } finally {
+      setMarketingBusyId(null);
+    }
+  }
 
   const cq = cityQuery.trim().toLowerCase();
   const sq = sportQuery.trim().toLowerCase();
@@ -155,7 +151,6 @@ export default function LeadsTable({
     new Date(l.capturedAt).toLocaleDateString("en-IN"),
     l.inCrm ? "In CRM" : "—",
   ]);
-  const colSpan = headers.length;
 
   if (leads.length === 0) {
     return <p className="text-sm text-slate-400">No leads captured in this range.</p>;
@@ -256,77 +251,50 @@ export default function LeadsTable({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((l) => {
-                const isOpen = openLead === l.id;
-                const fields = isOpen ? parseFieldData(l.fieldData) : [];
-                return (
-                  <Fragment key={l.id}>
-                    <tr
-                      onClick={() => setOpenLead(isOpen ? null : l.id)}
-                      className="border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50"
-                    >
-                      <td className="px-2 py-2 whitespace-nowrap font-medium text-slate-900">
-                        <span className={`inline-block mr-1.5 text-slate-400 text-xs transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
-                        {l.fullName ?? "—"}
-                      </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.phone ?? "—"}</td>
-                      <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.email ?? "—"}</td>
-                      <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.city ?? "—"}</td>
-                      <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.sport ?? "—"}</td>
-                      <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.formName ?? "—"}</td>
-                      {showCampaignColumn && (
-                        <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.campaignName ?? "—"}</td>
+              {filtered.map((l) => (
+                <tr key={l.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <td className="px-2 py-2 whitespace-nowrap font-medium">
+                    <Link href={`/ad-campaigns/leads/${l.id}`} className="text-wa-dark hover:underline">
+                      {l.fullName ?? "—"}
+                    </Link>
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.phone ?? "—"}</td>
+                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.email ?? "—"}</td>
+                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.city ?? "—"}</td>
+                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.sport ?? "—"}</td>
+                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.formName ?? "—"}</td>
+                  {showCampaignColumn && (
+                    <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.campaignName ?? "—"}</td>
+                  )}
+                  <td className="px-2 py-2 whitespace-nowrap text-slate-500">
+                    {new Date(l.capturedAt).toLocaleDateString("en-IN")}
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => moveToMarketing(l)}
+                        disabled={marketingBusyId === l.id}
+                        title="Add this lead's phone to the WhatsApp marketing contact list"
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        {marketingBusyId === l.id ? "…" : "→ WhatsApp"}
+                      </button>
+                      {l.inCrm ? (
+                        <span className="text-xs font-semibold text-emerald-700">In CRM ✓</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setMovingLead(l)}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg bg-wa-green/10 text-wa-dark hover:bg-wa-green/20"
+                        >
+                          Move to CRM
+                        </button>
                       )}
-                      <td className="px-2 py-2 whitespace-nowrap text-slate-500">
-                        {new Date(l.capturedAt).toLocaleDateString("en-IN")}
-                      </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
-                        {l.inCrm ? (
-                          <span className="text-xs font-semibold text-emerald-700">In CRM ✓</span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setMovingLead(l)}
-                            className="text-xs font-medium px-2.5 py-1 rounded-lg bg-wa-green/10 text-wa-dark hover:bg-wa-green/20"
-                          >
-                            Move to CRM
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                    {isOpen && (
-                      <tr className="border-b border-slate-100 bg-slate-50/60">
-                        <td colSpan={colSpan} className="px-4 py-3">
-                          {fields.length === 0 ? (
-                            <p className="text-xs text-slate-400">No additional form fields recorded.</p>
-                          ) : (
-                            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
-                              {fields.map((f, i) => (
-                                <div key={i} className="flex gap-2 text-xs">
-                                  <dt className="text-slate-500 font-medium capitalize whitespace-nowrap">{f.name.replace(/_/g, " ")}</dt>
-                                  <dd className="text-slate-800 break-words">{f.value || "—"}</dd>
-                                </div>
-                              ))}
-                            </dl>
-                          )}
-                          {!l.inCrm && (
-                            <div className="mt-3">
-                              <button
-                                type="button"
-                                onClick={() => setMovingLead(l)}
-                                title="Create a CRM contact from this lead and assign an owner"
-                                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-wa-green text-white hover:bg-wa-green/90"
-                              >
-                                Move to CRM
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

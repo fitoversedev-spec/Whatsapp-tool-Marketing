@@ -170,7 +170,7 @@ export default function AdCampaignsClient({
         {/* Lead-gen leads — filterable by city / sport, with a live breakdown */}
         <AnalyticsCard
           title="Lead-gen leads"
-          description="Every Instant-Form submission captured from your ads. Filter by city or sport, click a breakdown value to drill in, or click a row for the full form answers."
+          description="Every Instant-Form submission captured from your ads. Filter by city or sport, click a breakdown value to drill in, or open a lead for the full form answers."
         >
           <LeadsTable leads={leads} reps={reps} showCampaignColumn exportFilename="ad-leads" />
         </AnalyticsCard>

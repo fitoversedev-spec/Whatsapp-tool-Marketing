@@ -28,6 +28,13 @@ import { getInvoiceAnalytics } from "@/lib/analytics/invoices";
 import { winLossBySegment } from "@/lib/analytics/winLossSegment";
 import { seasonality } from "@/lib/analytics/seasonality";
 import { getDealsDrilldown } from "@/lib/analytics/dealsDrilldown";
+import { fuzzyMatch } from "@/lib/ai/fuzzy";
+import {
+  findPerson,
+  dealDetail,
+  quotationLookup,
+  invoiceLookup,
+} from "./recordLookups";
 
 // ── Period handling ─────────────────────────────────────────────────────────
 // The route body carries an optional default period; each tool may also name
@@ -150,10 +157,15 @@ async function resolveOwnerIds(scope: AnalyticsScope, repName?: unknown): Promis
   if (!scope.companyWide) return { ownerIds: scope.ownerIds };
   const name = typeof repName === "string" ? repName.trim() : "";
   if (!name) return { ownerIds: undefined };
-  const users = await prisma.user.findMany({
+  let users = await prisma.user.findMany({
     where: { deletedAt: null, name: { contains: name, mode: "insensitive" } },
     select: { id: true },
   });
+  // Typo/case fallback: the model may pass a rough rep name ("arjn", "ARJUN K").
+  if (users.length === 0) {
+    const all = await prisma.user.findMany({ where: { deletedAt: null }, select: { id: true, name: true } });
+    users = fuzzyMatch(name, all, (u) => u.name).map((u) => ({ id: u.id }));
+  }
   if (users.length === 0) return { error: `No sales rep found matching "${name}".` };
   return { ownerIds: users.map((u) => u.id) };
 }
@@ -161,12 +173,43 @@ async function resolveOwnerIds(scope: AnalyticsScope, repName?: unknown): Promis
 async function resolveSportIds(sportName?: unknown): Promise<{ sportIds?: string[]; error?: string }> {
   const name = typeof sportName === "string" ? sportName.trim() : "";
   if (!name) return {};
-  const sports = await prisma.sport.findMany({
+  let sports = await prisma.sport.findMany({
     where: { name: { contains: name, mode: "insensitive" } },
     select: { id: true },
   });
+  // Typo/case fallback (match against both the display name and the slug).
+  if (sports.length === 0) {
+    const all = await prisma.sport.findMany({ select: { id: true, name: true, slug: true } });
+    sports = fuzzyMatch(name, all, (s) => `${s.name} ${s.slug}`).map((s) => ({ id: s.id }));
+  }
   if (sports.length === 0) return { error: `No sport found matching "${name}".` };
   return { sportIds: sports.map((s) => s.id) };
+}
+
+// Canonicalize a rough/misspelled city to the exact string geography.ts groups
+// on (getDealsDrilldown filters city post-query by an exact === match, so the
+// spelling has to line up). Falls back to the raw input when nothing matches, so
+// behaviour only ever improves. Distinct cities come from both Deal.siteCity and
+// the deal's Account.city — the same two sources resolveCity() blends.
+async function resolveCityName(raw?: unknown): Promise<string | undefined> {
+  const q = typeof raw === "string" ? raw.trim() : "";
+  if (!q) return undefined;
+  const [dealCities, accountCities] = await Promise.all([
+    prisma.deal.findMany({ where: { deletedAt: null, siteCity: { not: null } }, select: { siteCity: true }, distinct: ["siteCity"], take: 1000 }),
+    prisma.account.findMany({ where: { deletedAt: null, city: { not: null } }, select: { city: true }, distinct: ["city"], take: 1000 }),
+  ]);
+  const cities = Array.from(
+    new Set(
+      [...dealCities.map((d) => d.siteCity ?? ""), ...accountCities.map((a) => a.city ?? "")]
+        .map((c) => c.trim())
+        .filter(Boolean),
+    ),
+  );
+  const lower = q.toLowerCase();
+  const exact = cities.find((c) => c.toLowerCase() === lower) ?? cities.find((c) => c.toLowerCase().includes(lower));
+  if (exact) return exact;
+  const matched = fuzzyMatch(q, cities.map((c) => ({ c })), (x) => x.c);
+  return matched[0]?.c ?? q;
 }
 
 // ── Shared JSON-schema fragments ────────────────────────────────────────────
@@ -390,16 +433,72 @@ export function buildAnalyticsToolbox(scope: AnalyticsScope, defaultPeriod: Peri
         if (owner.error) return owner;
         const sport = await resolveSportIds(input?.sportName);
         if (sport.error) return sport;
+        const city = await resolveCityName(input?.city);
         const drilldown: DealsDrilldownFilter = {
           outcome: null, // open deals only
           from,
           to,
           ...(owner.ownerIds ? { ownerIds: owner.ownerIds } : {}),
           ...(sport.sportIds?.length ? { sportId: sport.sportIds[0] } : {}),
-          ...(typeof input?.city === "string" && input.city.trim() ? { city: input.city.trim() } : {}),
+          ...(city ? { city } : {}),
         };
         return getDealsDrilldown(drilldown);
       },
+    },
+    // ── Record lookups (individual records, not aggregates) ──────────────────
+    // Every one applies the caller's owner scope (recordLookups.ts): a rep can
+    // only ever see records they own, an admin sees everyone.
+    {
+      name: "find_person",
+      description:
+        "Look up a SPECIFIC person or company by name, phone, or email — a CRM contact, a lead, or an account/company. Use for a question about ONE named individual or organisation ('what's the status of Balaji', 'which deals does Anand Sports have', 'find 9876543210'), NOT for aggregates. Returns each match with their account, owner, and their deals (stage, value, outcome, last activity/note). Name matching is fuzzy/typo-tolerant and case-insensitive; phone matching ignores +, spaces and punctuation — pass the rough name/number ONCE and trust the result. Reps only see their own records.",
+      input_schema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The person or company name, phone number, or email to look up (rough/misspelled is fine)." },
+        },
+        required: ["query"],
+      },
+      handler: async (input) => findPerson(scope, input ?? {}),
+    },
+    {
+      name: "deal_detail",
+      description:
+        "Full detail for a SPECIFIC deal/project by its code, title, or customer name — stage, owner, account & contact, estimated/quoted/won value, outcome & loss reason, the stage timeline, quotations, invoices and recent activity. Use when asked about a particular deal ('status of the Salem cricket court deal', 'details of FIT-...'). Matching is fuzzy/typo-tolerant. Reps only see their own deals.",
+      input_schema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Deal code, title, or customer/company name (rough/misspelled is fine)." },
+        },
+        required: ["query"],
+      },
+      handler: async (input) => dealDetail(scope, input ?? {}),
+    },
+    {
+      name: "quotation_lookup",
+      description:
+        "Look up quotation(s) by quote number or customer name — number, customer, sport, status, dates, totals (subtotal, GST, grand total) and the owning deal. Use for 'find quote FIT-QT-...' or 'what quotations does X have'. Matching is fuzzy/typo-tolerant. Reps only see quotations on their own deals / that they created.",
+      input_schema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Quotation number or customer name (rough/misspelled is fine)." },
+        },
+        required: ["query"],
+      },
+      handler: async (input) => quotationLookup(scope, input ?? {}),
+    },
+    {
+      name: "invoice_lookup",
+      description:
+        "Look up invoice(s) by invoice number or customer name — number, customer, status, invoice/due dates, totals, amount paid and outstanding, and the owning deal. Use for 'find invoice X' or 'is customer Y's invoice paid'. Matching is fuzzy/typo-tolerant. Reps only see invoices on their own deals / that they created.",
+      input_schema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Invoice number or customer name (rough/misspelled is fine)." },
+        },
+        required: ["query"],
+      },
+      handler: async (input) => invoiceLookup(scope, input ?? {}),
     },
   ];
 }

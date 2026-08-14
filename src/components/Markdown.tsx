@@ -4,10 +4,19 @@ import { type ReactNode } from "react";
 // subset the assistant emits: ATX headings, GFM tables, bullet/numbered lists,
 // **bold**, `inline code`, and paragraphs. NOT a full CommonMark implementation.
 
-// Inline: split a line on **bold** / `code` and render the pieces.
+// Inline: split a line into **bold** / *emphasis* / `code` runs and render each
+// piece. Order matters — the double-star alternative comes first so `**x**` is
+// consumed as bold, never as an empty `*` + `*x*`. The single-star arms require
+// a non-space, non-star char right after the opener AND a real closing star, so
+// a lone stray "*" (e.g. "5 * 3", or an unterminated marker) is left untouched
+// and rendered as plain text rather than leaking as broken formatting. Only the
+// asterisk family is treated as a marker — underscores are left alone so
+// snake_case identifiers (tool/field names) never turn into emphasis.
+const INLINE_RE = /(\*\*[^*]+?\*\*|\*(?!\s)[^*]*?[^*\s]\*|\*(?!\s)[^*\s]\*|`[^`]+`)/g;
+
 function inline(text: string, keyBase: string): ReactNode[] {
   const out: ReactNode[] = [];
-  const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  const re = new RegExp(INLINE_RE);
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -20,11 +29,18 @@ function inline(text: string, keyBase: string): ReactNode[] {
           {tok.slice(2, -2)}
         </strong>
       );
-    } else {
+    } else if (tok.startsWith("`")) {
       out.push(
         <code key={`${keyBase}-c${i}`} className="px-1 py-0.5 rounded bg-slate-100 text-[0.85em]">
           {tok.slice(1, -1)}
         </code>
+      );
+    } else {
+      // single *emphasis*
+      out.push(
+        <em key={`${keyBase}-e${i}`} className="italic">
+          {tok.slice(1, -1)}
+        </em>
       );
     }
     last = m.index + tok.length;

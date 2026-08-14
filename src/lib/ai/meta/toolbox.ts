@@ -9,9 +9,11 @@
 // rep-owned.
 import { prisma } from "@/lib/prisma";
 import type { AiTool } from "@/lib/ai/tools";
+import type { AnalyticsScope } from "@/lib/analytics/scope";
 import { startOfDayIST, endOfDayIST } from "@/lib/time";
 import { normalizeLabel } from "@/lib/meta-ads/fieldMap";
 import { repeatLeads } from "@/lib/meta-ads/leadAnalytics";
+import { fuzzyMatch, normalizePhone, phoneTail } from "@/lib/ai/fuzzy";
 
 // ── Period handling ─────────────────────────────────────────────────────────
 // Rolling windows are the natural unit for ad reporting (in-flight days keep
@@ -256,12 +258,10 @@ function totalsOf(rows: InsightRow[]) {
 }
 
 // Match a rough, human-typed campaign name to real campaigns. First an exact
-// case-insensitive substring (precise). If that misses, tokenize the query and
-// score every campaign by how many query tokens appear in its name — prefix-
-// aware (so "campaign" matches "camp") — and return the top-scoring campaign(s)
-// when they cover at least half the query tokens. This stops the model burning
-// whole tool rounds retrying after a strict-match miss (e.g. the user typing
-// "5th aug campaign football" for the campaign "5th Aug camp(Football)").
+// case-insensitive substring (precise). If that misses, fall back to the shared
+// fuzzy/typo-tolerant token matcher (src/lib/ai/fuzzy.ts) over every campaign
+// name — so "5th aug campaign football" still finds "5th Aug camp(Football)"
+// without the model burning whole tool rounds retrying different spellings.
 async function matchCampaigns(name: string): Promise<{ id: string; metaId: string }[]> {
   const exact = await prisma.metaCampaign.findMany({
     where: { name: { contains: name, mode: "insensitive" } },
@@ -269,24 +269,102 @@ async function matchCampaigns(name: string): Promise<{ id: string; metaId: strin
   });
   if (exact.length > 0) return exact;
 
-  const qTokens = name.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 2);
-  if (qTokens.length === 0) return [];
   const all = await prisma.metaCampaign.findMany({ select: { id: true, metaId: true, name: true } });
-  const scored = all.map((c) => {
-    const n = c.name.toLowerCase();
-    let score = 0;
-    for (const t of qTokens) {
-      if (n.includes(t) || (t.length >= 4 && n.includes(t.slice(0, 4)))) score += 1;
-    }
-    return { c, score };
+  return fuzzyMatch(name, all, (c) => c.name).map((c) => ({ id: c.id, metaId: c.metaId }));
+}
+
+// ── find_lead: look up ONE specific lead-form submission ─────────────────────
+// PRIVACY: a rep may only ever see leads linked to a CRM record they own
+// (accountContactId → an AccountContact on an Account they own, or the legacy
+// leadId → a Lead they own). A raw, not-yet-moved-to-CRM MetaLead has no owner,
+// so it's admin-only — a scoped user gets the same empty result whether the lead
+// is unowned or simply doesn't exist (existence isn't leaked).
+async function findLead(scope: AnalyticsScope, input: Record<string, unknown>): Promise<unknown> {
+  const q = typeof input?.query === "string" ? input.query.trim() : "";
+  if (!q) return { error: "Provide a name, phone, or email to look up." };
+
+  const digits = normalizePhone(q);
+  const tail = phoneTail(q);
+  const looksPhone = digits.length >= 5;
+  const select = {
+    id: true,
+    fullName: true,
+    phone: true,
+    email: true,
+    city: true,
+    sport: true,
+    campaignName: true,
+    formName: true,
+    createdAtMeta: true,
+    createdAt: true,
+    accountContactId: true,
+    leadId: true,
+  } as const;
+
+  const or: Record<string, unknown>[] = [
+    { fullName: { contains: q, mode: "insensitive" } },
+    { email: { contains: q, mode: "insensitive" } },
+  ];
+  if (looksPhone) {
+    or.push({ normalizedPhone: { contains: tail } }, { phone: { contains: tail } });
+  }
+
+  let leads = await prisma.metaLead.findMany({
+    where: { OR: or },
+    orderBy: { createdAtMeta: "desc" },
+    take: 25,
+    select,
   });
-  const top = Math.max(0, ...scored.map((s) => s.score));
-  if (top === 0 || top < Math.ceil(qTokens.length / 2)) return [];
-  return scored.filter((s) => s.score === top).map((s) => ({ id: s.c.id, metaId: s.c.metaId }));
+
+  // Typo/case fallback on the person's name when the direct match misses.
+  if (leads.length === 0) {
+    const candidates = await prisma.metaLead.findMany({
+      where: { fullName: { not: null } },
+      take: 4000,
+      select: { id: true, fullName: true },
+    });
+    const ids = fuzzyMatch(q, candidates, (c) => c.fullName ?? "").map((c) => c.id);
+    if (ids.length > 0) {
+      leads = await prisma.metaLead.findMany({ where: { id: { in: ids } }, orderBy: { createdAtMeta: "desc" }, take: 25, select });
+    }
+  }
+
+  // Owner scope (reps only see leads tied to a CRM record they own).
+  if (!scope.companyWide) {
+    const ownerIds = scope.ownerIds ?? [];
+    const acIds = leads.map((l) => l.accountContactId).filter((v): v is string => !!v);
+    const leadIds = leads.map((l) => l.leadId).filter((v): v is string => !!v);
+    const [ownedAc, ownedLead] = await Promise.all([
+      acIds.length
+        ? prisma.accountContact.findMany({
+            where: { id: { in: acIds }, account: { ownerUserId: { in: ownerIds } } },
+            select: { id: true },
+          })
+        : Promise.resolve([] as { id: string }[]),
+      leadIds.length
+        ? prisma.lead.findMany({ where: { id: { in: leadIds }, ownerUserId: { in: ownerIds } }, select: { id: true } })
+        : Promise.resolve([] as { id: string }[]),
+    ]);
+    const okAc = new Set(ownedAc.map((r) => r.id));
+    const okLead = new Set(ownedLead.map((r) => r.id));
+    leads = leads.filter((l) => (l.accountContactId && okAc.has(l.accountContactId)) || (l.leadId && okLead.has(l.leadId)));
+  }
+
+  const matches = leads.map((l) => ({
+    name: l.fullName,
+    phone: l.phone,
+    email: l.email,
+    city: normalizeLabel(l.city),
+    sport: normalizeLabel(l.sport),
+    campaign: l.campaignName,
+    form: l.formName,
+    submittedAt: (l.createdAtMeta ?? l.createdAt)?.toISOString() ?? null,
+  }));
+  return { query: q, count: matches.length, matches };
 }
 
 // ── Toolbox ─────────────────────────────────────────────────────────────────
-export function buildMetaAdsToolbox(defaultPeriod: PeriodInput = "last_30_days"): AiTool[] {
+export function buildMetaAdsToolbox(scope: AnalyticsScope, defaultPeriod: PeriodInput = "last_30_days"): AiTool[] {
   // Resolve the period (+ optional named-campaign filter) for a tool call.
   // Returns an error bag the handler surfaces to the model instead of running a
   // query with a bad filter — mirrors analytics/toolbox.ts's ctx().
@@ -556,6 +634,19 @@ export function buildMetaAdsToolbox(defaultPeriod: PeriodInput = "last_30_days")
           ranked,
         };
       },
+    },
+    {
+      name: "find_lead",
+      description:
+        "Look up a SPECIFIC lead-form (Instant Form) submission by the person's name, phone, or email — returns each matching lead's campaign, form, city, sport and submit time. Use for a question about ONE named lead ('did we get a lead from Balaji', 'find the lead 9876543210'), not for aggregates. Name matching is fuzzy/typo-tolerant and case-insensitive; phone matching ignores +, spaces and punctuation, so pass the rough name/number ONCE and trust the result. Reps only see leads tied to their own CRM records; company-wide lead lookup is admin-only.",
+      input_schema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The lead's name, phone number, or email to look up (rough/misspelled is fine)." },
+        },
+        required: ["query"],
+      },
+      handler: async (input) => findLead(scope, input ?? {}),
     },
   ];
 }

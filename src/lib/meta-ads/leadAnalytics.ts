@@ -10,11 +10,28 @@
 // (createdAt), so leads that arrived without a Meta timestamp aren't dropped.
 
 import { prisma } from "@/lib/prisma";
-import { normalizeLabel } from "./fieldMap";
+import { normalizeLabel, parseFieldDataJson } from "./fieldMap";
 
 type Range = { from: Date; to: Date };
 
 const UNKNOWN = "Unknown";
+
+// Job title isn't a real MetaLead column (unlike city/sport) — it lives in the
+// form answers (field_data), so we read it out of the stored JSON. Match the
+// question by these name fragments (Meta slugifies the form label, e.g.
+// "job_title"), case-insensitively.
+const JOB_ALIASES = ["job_title", "job title", "job", "designation", "occupation", "profession"];
+function extractJob(fieldDataJson: string | null): string | null {
+  for (const f of parseFieldDataJson(fieldDataJson)) {
+    const name = (f.name ?? "").toLowerCase().trim();
+    if (!name) continue;
+    if (JOB_ALIASES.some((a) => name.includes(a))) {
+      const v = f.value?.trim();
+      if (v) return v;
+    }
+  }
+  return null;
+}
 
 function leadWindowWhere({ from, to }: Range) {
   return {
@@ -69,6 +86,32 @@ export async function sportByCity({ from, to }: Range): Promise<SportCityCell[]>
   return [...cityMap.entries()]
     .flatMap(([city, bySport]) => [...bySport.entries()].map(([sport, count]) => ({ city, sport, count })))
     .sort((a, b) => a.city.localeCompare(b.city) || b.count - a.count || a.sport.localeCompare(b.sport));
+}
+
+export type JobCityCell = { job: string; city: string; sport: string; count: number };
+
+// Flat job x city x sport cross-tab (one cell per non-empty combination), so
+// the UI can show "what job, from what city, wanting what sport" in one place
+// and filter on any of the three. Job comes from the form answers (extractJob);
+// city/sport from their columns. Blank values -> "Unknown". Sorted count desc.
+export async function jobAnalytics({ from, to }: Range): Promise<JobCityCell[]> {
+  const leads = await prisma.metaLead.findMany({
+    where: leadWindowWhere({ from, to }),
+    select: { city: true, sport: true, fieldData: true },
+  });
+
+  const map = new Map<string, JobCityCell>();
+  for (const l of leads) {
+    const job = normalizeLabel(extractJob(l.fieldData)) ?? UNKNOWN;
+    const city = normalizeLabel(l.city) ?? UNKNOWN;
+    const sport = normalizeLabel(l.sport) ?? UNKNOWN;
+    const key = `${job}||${city}||${sport}`;
+    const e = map.get(key) ?? { job, city, sport, count: 0 };
+    e.count += 1;
+    map.set(key, e);
+  }
+
+  return [...map.values()].sort((a, b) => b.count - a.count || a.job.localeCompare(b.job));
 }
 
 export type RepeatLeadCapture = { campaignName: string | null; capturedAt: string }; // ISO

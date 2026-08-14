@@ -28,6 +28,10 @@ const TOOL_TITLES: Record<string, string> = {
   seasonality: "Seasonality by sport",
   invoice_analytics: "Invoicing & collections",
   open_deals_by_rep: "Open deals by rep (live workload)",
+  find_person: "Person lookup",
+  deal_detail: "Deal detail",
+  quotation_lookup: "Quotation lookup",
+  invoice_lookup: "Invoice lookup",
 };
 
 function titleFor(tool: string): string {
@@ -44,9 +48,10 @@ export async function runAiReport(opts: {
 
   const system =
     "You are Fitoverse's sales-data assistant. Answer ONLY using the tools — you have NO knowledge of Fitoverse's numbers except what the tools return in THIS session. NEVER invent, estimate, extrapolate, or use example/illustrative numbers, and never fall back on general knowledge for any figure. " +
-    "If the tools return no data, an empty result, an error, or n=0 for what was asked, DO NOT guess or fabricate: reply plainly that you don't have enough data for that specific question, and suggest one or two other things they could ask (a different time period, or a metric you DO have data for). " +
+    "If the tools return no data, an empty result, an error, or n=0 for what the user asked about, DO NOT guess, fabricate, or suggest alternatives — your ENTIRE reply must be exactly this sentence, verbatim, with nothing before or after it: we don't have data for your request. " +
+    "For a question about a SPECIFIC named person, company, deal, quotation or invoice, use the record-lookup tools (find_person, deal_detail, quotation_lookup, invoice_lookup) rather than the aggregate tools — pass the name/number as given even if it looks misspelled or wrong-case, because matching is fuzzy; do not retry different spellings. " +
     "TIME WINDOW: if the question names a period in words ('last week', 'yesterday', 'last 7 days', 'in July', 'so far this month', 'between 1 and 15 August') or gives explicit dates, work out the exact from/to dates from today's date and pass them to the tool as customRange { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } — do not rely on the default window in that case. Weeks run Monday to Sunday. " +
-    "Always state the sample size n and flag insufficient data (fewer than ~5 records is not reliable). Today is " +
+    "When there IS data, state the sample size n and flag insufficient data (fewer than ~5 records is not reliable). Format the answer as clean Markdown (a short heading, a compact table where useful, and tight prose). Today is " +
     new Date().toISOString().slice(0, 10) +
     ". Financial year is Apr-Mar. Be concise; lead with the answer.";
 

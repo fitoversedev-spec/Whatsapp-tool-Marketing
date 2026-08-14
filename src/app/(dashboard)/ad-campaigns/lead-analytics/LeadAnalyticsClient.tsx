@@ -21,7 +21,7 @@ import { DataTable } from "@/components/analytics/DataTable";
 import { ExportButtons } from "@/components/analytics/ExportButtons";
 import { HorizontalBarChart, StackedBarChart, DonutChart, DONUT_PALETTE } from "@/components/analytics/charts";
 import MetaAiSummary from "@/components/MetaAiSummary";
-import type { LeadCityRow, SportCityCell, RepeatLeadRow } from "@/lib/meta-ads/leadAnalytics";
+import type { LeadCityRow, SportCityCell, RepeatLeadRow, JobCityCell } from "@/lib/meta-ads/leadAnalytics";
 
 function fmtInt(n: number): string {
   return n.toLocaleString("en-IN");
@@ -106,11 +106,13 @@ export default function LeadAnalyticsClient({
   byCity,
   sportByCity,
   repeats,
+  jobs,
   range,
 }: {
   byCity: LeadCityRow[];
   sportByCity: SportCityCell[];
   repeats: RepeatLeadRow[];
+  jobs: JobCityCell[];
   range: DateRange;
 }) {
   const router = useRouter();
@@ -133,6 +135,9 @@ export default function LeadAnalyticsClient({
   const [cityFilter, setCityFilter] = useState("");
   const [sportCityFilter, setSportCityFilter] = useState("");
   const [sportSportFilter, setSportSportFilter] = useState("");
+  const [jobFilter, setJobFilter] = useState("");
+  const [jobCityFilter, setJobCityFilter] = useState("");
+  const [jobSportFilter, setJobSportFilter] = useState("");
 
   // --- Leads by city ---
   // Totals + top city stay GLOBAL (KPI tiles + the share % denominator), so a
@@ -175,6 +180,48 @@ export default function LeadAnalyticsClient({
   // Distinct option lists for the filter comboboxes.
   const citySportCities = [...new Set(sportByCity.map((c) => c.city))];
   const citySportSports = [...new Set(sportByCity.map((c) => c.sport))];
+
+  // --- Jobs (job × city × sport) ---
+  const jq = jobFilter.trim().toLowerCase();
+  const jcq = jobCityFilter.trim().toLowerCase();
+  const jsq = jobSportFilter.trim().toLowerCase();
+  const jobCellsF = jobs.filter(
+    (c) =>
+      (!jq || c.job.toLowerCase().includes(jq)) &&
+      (!jcq || c.city.toLowerCase().includes(jcq)) &&
+      (!jsq || c.sport.toLowerCase().includes(jsq)),
+  );
+  // Group filtered cells into a ranked list: each job title with its city + sport split.
+  const jobGroups = (() => {
+    const m = new Map<
+      string,
+      { job: string; count: number; cities: Map<string, number>; sports: Map<string, number> }
+    >();
+    for (const c of jobCellsF) {
+      const g = m.get(c.job) ?? { job: c.job, count: 0, cities: new Map(), sports: new Map() };
+      g.count += c.count;
+      g.cities.set(c.city, (g.cities.get(c.city) ?? 0) + c.count);
+      g.sports.set(c.sport, (g.sports.get(c.sport) ?? 0) + c.count);
+      m.set(c.job, g);
+    }
+    return [...m.values()]
+      .map((g) => ({
+        job: g.job,
+        count: g.count,
+        cities: [...g.cities.entries()].map(([city, count]) => ({ city, count })).sort((a, b) => b.count - a.count),
+        sports: [...g.sports.entries()].map(([sport, count]) => ({ sport, count })).sort((a, b) => b.count - a.count),
+      }))
+      .sort((a, b) => b.count - a.count || a.job.localeCompare(b.job));
+  })();
+  const jobLeadTotal = jobCellsF.reduce((a, c) => a + c.count, 0);
+  const jobHeaders = ["Job title", "City", "Sport", "Leads"];
+  const jobRows: (string | number)[][] = jobCellsF
+    .slice()
+    .sort((a, b) => b.count - a.count)
+    .map((c) => [c.job, c.city, c.sport, c.count]);
+  const jobOptions = [...new Set(jobs.map((c) => c.job))];
+  const jobCityOptions = [...new Set(jobs.map((c) => c.city))];
+  const jobSportOptions = [...new Set(jobs.map((c) => c.sport))];
 
   // --- Repeat submitters ---
   const repeatHeaders = ["Person", "Phone", "Campaigns", "Which campaigns", "First seen", "Last seen"];
@@ -338,6 +385,83 @@ export default function LeadAnalyticsClient({
                     <ExportButtons filename="sport-by-city" headers={sportHeaders} rows={sportRows} />
                   </div>
                   <DataTable headers={sportHeaders} rows={sportRows} />
+                </>
+              )}
+            </div>
+          )}
+        </AnalyticsCard>
+
+        {/* Jobs — who's asking (job title × city × sport, all in one) */}
+        <AnalyticsCard
+          title="Jobs — who's asking"
+          description="What people do for a living (from the form's job-title answer) and the cities and sports each job is asking for — all in one. Filter by job, city, or sport."
+        >
+          {jobs.length === 0 ? (
+            <p className="text-sm text-slate-400">No job-title data in this range yet.</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <FilterCombo id="la-job" label="Job title" value={jobFilter} onChange={setJobFilter} options={jobOptions} />
+                <FilterCombo id="la-job-city" label="City" value={jobCityFilter} onChange={setJobCityFilter} options={jobCityOptions} />
+                <FilterCombo id="la-job-sport" label="Sport" value={jobSportFilter} onChange={setJobSportFilter} options={jobSportOptions} />
+                <div className="text-xs text-slate-500 pb-1.5">
+                  <b className="text-slate-800">{jobLeadTotal}</b> leads · {jobGroups.length} job{jobGroups.length === 1 ? "" : "s"}
+                  {(jq || jcq || jsq) && <span className="text-slate-400"> (filtered)</span>}
+                </div>
+                {(jobFilter || jobCityFilter || jobSportFilter) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setJobFilter("");
+                      setJobCityFilter("");
+                      setJobSportFilter("");
+                    }}
+                    className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {jobGroups.length === 0 ? (
+                <p className="text-sm text-slate-400">No leads match the current filters.</p>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    {jobGroups.map((g, i) => (
+                      <div key={g.job} className="border border-slate-200 rounded-lg p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="font-medium text-slate-900 break-words">
+                            <span className="text-slate-400 tabular-nums mr-1.5">{i + 1}.</span>
+                            {g.job}
+                          </div>
+                          <div className="shrink-0 text-right leading-tight">
+                            <div className="text-lg font-semibold text-slate-900 tabular-nums">{fmtInt(g.count)}</div>
+                            <div className="text-xs text-slate-400">leads</div>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1">Cities</span>
+                          {g.cities.map((c) => (
+                            <span key={c.city} className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                              {c.city} <span className="text-slate-400 tabular-nums">{c.count}</span>
+                            </span>
+                          ))}
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1">Sports</span>
+                          {g.sports.map((s) => (
+                            <span key={s.sport} className="text-xs px-2 py-0.5 rounded-full bg-wa-green/10 text-wa-dark">
+                              {s.sport} <span className="text-slate-500 tabular-nums">{s.count}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-end">
+                    <ExportButtons filename="leads-by-job" headers={jobHeaders} rows={jobRows} />
+                  </div>
+                  <DataTable headers={jobHeaders} rows={jobRows} />
                 </>
               )}
             </div>

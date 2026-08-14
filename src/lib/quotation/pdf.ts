@@ -1338,23 +1338,14 @@ function drawParticularsTable(
     ctx.y += headerH;
   };
   drawHead();
-  const subH = 18;
-  // Plain grey section sub-header row (e.g. "Base Preparation", "Sports
-  // Flooring") spanning the full width. Extracted so it can be re-emitted at
-  // the top of a continued page.
-  const drawSubheader = (sec: string) => {
-    drawRect(ctx, MARGIN, ctx.y, CONTENT_W, subH, { fill: COL.greenSoft });
-    safeDraw(ctx.page, sec, { x: x.sno + PAD, y: yFromTop(ctx.y + 12.5), size: 9.5, font: ctx.bold, color: COL.text });
-    drawGrid(ctx.y, subH, false);
-    rowLine(ctx.y + subH);
-    ctx.y += subH;
-  };
   const NAME_SIZE = 9;
   const NAME_LH = 12;
   const OPT_SIZE = 8;
   const OPT_LH = 11;
   const DESC_SIZE = 8.5;
   const DESC_LH = 11;
+  const SEC_SIZE = 9.5;
+  const SEC_LH = 12;
   let lastSection: string | null = null;
   let serial = 0;
   // Group rows by scope section (stable sort preserves within-section order).
@@ -1364,57 +1355,45 @@ function drawParticularsTable(
   for (const item of ordered) {
     if (!item.included) continue;
     const sec = item.section ?? null;
-    // Compute this row's height FIRST — the subheader must reserve room for its
-    // first row too (else the band orphans at a page bottom), and a mid-section
-    // page break must re-emit the band rather than reset the section tracking.
-    const nameLines = wordWrap(ctx.bold, item.name, NAME_SIZE, cols.item - PAD * 2);
+    const isNewSection = !!sec && sec !== lastSection;
+    // ITEM column carries the SECTION title (shown once per section group);
+    // DESCRIPTION column carries the item name (bold) + option + spec text.
+    const secLines = isNewSection ? wordWrap(ctx.bold, sec as string, SEC_SIZE, cols.item - PAD * 2) : [];
+    const nameLines = wordWrap(ctx.bold, item.name, NAME_SIZE, cols.desc - PAD * 2);
     const descLines = wordWrap(ctx.font, item.description, DESC_SIZE, cols.desc - PAD * 2);
     const hasOpt = !!item.optionTag;
-    const itemColH = nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0);
-    const descColH = descLines.length * DESC_LH;
+    const itemColH = secLines.length * SEC_LH;
+    const descColH = nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0) + descLines.length * DESC_LH;
     const rowH = 6 + Math.max(itemColH, descColH, NAME_LH) + 6;
-    // Only the truly last row needs to drag the totals block's space
-    // requirement along with it — every other row just needs to fit itself.
+    // Only the truly last row drags the totals block's reserve along with it.
     const reserve = item.id === lastIncludedId ? finalReserve : 0;
 
-    if (sec && sec !== lastSection) {
-      // New section: keep the band together with its first row on one page.
-      const pb = ctx.pageNumber;
-      ensureSpace(ctx, subH + rowH + reserve);
-      if (ctx.pageNumber !== pb) drawHead();
-      drawSubheader(sec);
-      lastSection = sec;
-    } else {
-      // Continuing a section: if the row doesn't fit, break and re-emit the
-      // header + section band at the top of the new page — WITHOUT resetting
-      // lastSection (that would redraw the band mid-section on the next row).
-      const pb = ctx.pageNumber;
-      ensureSpace(ctx, rowH + reserve);
-      if (ctx.pageNumber !== pb) {
-        drawHead();
-        if (sec) drawSubheader(sec);
-      }
-    }
+    const pb = ctx.pageNumber;
+    ensureSpace(ctx, rowH + reserve);
+    if (ctx.pageNumber !== pb) drawHead();
 
     serial++;
     if (serial % 2 === 0) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
     const sy = ctx.y + 6;
-    const line0 = sy + NAME_SIZE; // baseline (distance from top) of the first line
+    const line0 = sy + NAME_SIZE; // first-line baseline (distance from row top)
     const numY = yFromTop(line0);
     // S.NO
     centerAt(String(serial), x.sno, cols.sno, NAME_SIZE, ctx.font, COL.text, numY);
-    // Item name (wrapped, bold)
-    nameLines.forEach((ln, i) => {
-      safeDraw(ctx.page, ln, { x: x.item + PAD, y: yFromTop(line0 + i * NAME_LH), size: NAME_SIZE, font: ctx.bold, color: COL.text });
+    // ITEM = section title (only on the first row of each section)
+    secLines.forEach((ln, i) => {
+      safeDraw(ctx.page, ln, { x: x.item + PAD, y: yFromTop(sy + SEC_SIZE + i * SEC_LH), size: SEC_SIZE, font: ctx.bold, color: COL.text });
     });
-    // Option tag, plain grey, under the name (replaces the old colour chip).
+    // DESCRIPTION = item name (bold) + option + description, stacked.
+    nameLines.forEach((ln, i) => {
+      safeDraw(ctx.page, ln, { x: x.desc + PAD, y: yFromTop(line0 + i * NAME_LH), size: NAME_SIZE, font: ctx.bold, color: COL.text });
+    });
+    let below = sy + nameLines.length * NAME_LH; // top of the next stacked element
     if (hasOpt) {
-      const optY = line0 + (nameLines.length - 1) * NAME_LH + OPT_LH;
-      safeDraw(ctx.page, `Option ${item.optionTag}`, { x: x.item + PAD, y: yFromTop(optY), size: OPT_SIZE, font: ctx.font, color: COL.muted });
+      safeDraw(ctx.page, `Option ${item.optionTag}`, { x: x.desc + PAD, y: yFromTop(below + OPT_SIZE), size: OPT_SIZE, font: ctx.font, color: COL.muted });
+      below += OPT_LH;
     }
-    // Description (wrapped) in its own column.
     descLines.forEach((ln, i) => {
-      safeDraw(ctx.page, ln, { x: x.desc + PAD, y: yFromTop(line0 + i * DESC_LH), size: DESC_SIZE, font: ctx.font, color: COL.textSoft });
+      safeDraw(ctx.page, ln, { x: x.desc + PAD, y: yFromTop(below + DESC_SIZE + i * DESC_LH), size: DESC_SIZE, font: ctx.font, color: COL.textSoft });
     });
     // Numeric cells, aligned to the first line.
     const amt = item.areaSqFt * item.ratePerSqFt;
@@ -1427,6 +1406,7 @@ function drawParticularsTable(
     drawGrid(ctx.y, rowH, true);
     rowLine(ctx.y + rowH);
     ctx.y += rowH;
+    if (sec) lastSection = sec;
   }
   space(ctx, 6);
 }
@@ -1817,6 +1797,86 @@ export type QuotationPdfData = {
   driveLink?: string | null;
 };
 
+// Sample-style COVER PAGE (page 1): company header top-right, big centered
+// logo, the TO block (project subject in green + customer/city below), the
+// "From FITOVERSE…" block, and the date. The accent green/blue here match the
+// sample cover; the body/table stays plain. Absolute-Y layout (not the ctx.y
+// cursor) since it's a one-off page.
+function drawCoverPage(
+  ctx: Ctx,
+  data: QuotationPdfData,
+  quoteDate: string,
+  logoImage: PDFImage | null,
+  boldItalic: PDFFont,
+) {
+  const GREEN = rgb(0x15 / 255, 0x93 / 255, 0x41 / 255);
+  const BLUE = rgb(0x2e / 255, 0x9b / 255, 0xd6 / 255);
+  const rightX = MARGIN + CONTENT_W;
+  const centerText = (t: string, topY: number, size: number, font: PDFFont, color: ReturnType<typeof rgb>) => {
+    const w = safeWidth(font, t, size);
+    safeDraw(ctx.page, t, { x: MARGIN + (CONTENT_W - w) / 2, y: yFromTop(topY + size), size, font, color });
+  };
+
+  // Company details, top-right (right-aligned).
+  const headerLines = [
+    "Plot no 96, Samiyappa Nagar 3rd cross west street,",
+    "Seelanaickenpatti, Salem, Tamil Nadu, Pincode: 636201",
+    "Phone: 9894570997, 9597766524",
+    "GSTIN: 33AAECF8905G1ZQ",
+    "CIN: U92490TZ2022PTC038004",
+  ];
+  let hy = MARGIN;
+  for (const ln of headerLines) {
+    const w = safeWidth(ctx.font, ln, 8);
+    safeDraw(ctx.page, ln, { x: rightX - w, y: yFromTop(hy + 8), size: 8, font: ctx.font, color: COL.textSoft });
+    hy += 11;
+  }
+  const ruleY = yFromTop(hy + 6);
+  ctx.page.drawLine({ start: { x: MARGIN, y: ruleY }, end: { x: rightX, y: ruleY }, color: COL.text, thickness: 1 });
+
+  // Big centered logo.
+  if (logoImage) {
+    const f = logoImage.scaleToFit(260, 92);
+    ctx.page.drawImage(logoImage, {
+      x: MARGIN + (CONTENT_W - f.width) / 2,
+      y: yFromTop(200 + f.height),
+      width: f.width,
+      height: f.height,
+    });
+  } else {
+    centerText("FIT O VERSE", 210, 28, ctx.bold, GREEN);
+  }
+
+  // TO block — project subject (green italic) + customer/city (dark italic).
+  const subject = titleForSport(data.sport).replace(/^Quotation for\s+/i, "");
+  const projectLine = `${subject} - ${data.lengthFt} ft x ${data.widthFt} ft`.toUpperCase();
+  const parts = (data.customerName ?? "").split(",");
+  const toName = (parts[0] ?? "").trim();
+  const city = parts.slice(1).join(",").trim();
+  const customerLine = (toName + (city ? ` - ${city}` : "")).toUpperCase().trim();
+  centerText(projectLine, 320, 13, boldItalic, GREEN);
+  if (customerLine) centerText(customerLine, 344, 11, boldItalic, COL.text);
+
+  // From block, centered.
+  centerText("From", 440, 11, ctx.bold, COL.text);
+  {
+    const a = "FITOVERSE ";
+    const b = "PRIVATE LIMITED";
+    const wa = safeWidth(ctx.bold, a, 12);
+    const wb = safeWidth(ctx.bold, b, 12);
+    const startX = MARGIN + (CONTENT_W - (wa + wb)) / 2;
+    const fy = yFromTop(457 + 12);
+    safeDraw(ctx.page, a, { x: startX, y: fy, size: 12, font: ctx.bold, color: BLUE });
+    safeDraw(ctx.page, b, { x: startX + wa, y: fy, size: 12, font: ctx.bold, color: COL.text });
+  }
+  centerText("Plot no 96, Samiyappa Nagar 3rd cross west street,", 476, 8.5, ctx.font, COL.textSoft);
+  centerText("Seelanaickenpatti, Salem, Tamil Nadu, 636201", 488, 8.5, ctx.font, COL.textSoft);
+  centerText("Phone: 9894570997, 9597766524", 500, 8.5, ctx.font, COL.textSoft);
+
+  // Date, centered lower.
+  centerText(quoteDate, 570, 12, ctx.bold, COL.text);
+}
+
 export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer> {
   const doc = await PDFDocument.create();
   doc.setTitle(`Quotation ${data.number}`);
@@ -1824,6 +1884,7 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
 
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const boldItalic = await doc.embedFont(StandardFonts.HelveticaBoldOblique);
 
   // Embed logo once — reused across all 3 pages' footers/headers. Null if
   // /public file was missing or embed failed (graceful text-only fallback).
@@ -1847,16 +1908,15 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
     logo: logoImage,
   };
 
-  // ── PAGE 1: masthead (logo + From/To + project), line items, totals, notes ──
   const quoteDateStr = data.quoteDate
     .toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
     .replace(/\//g, " / ");
-  const cityFromName = (data.customerName ?? "").split(",").slice(1).join(",").trim();
-  space(ctx, 6);
-  drawBrandLogo(ctx, logoImage);
-  drawQuoteTitle(ctx, data.sport);
-  drawFromTo(ctx, data.customerName, quoteDateStr);
-  drawProjectLine(ctx, data.sport, data.lengthFt, data.widthFt, cityFromName);
+
+  // ── PAGE 1: sample-style cover (logo + project + From + date) ──
+  drawCoverPage(ctx, data, quoteDateStr, logoImage, boldItalic);
+
+  // ── PAGE 2+: line items, totals, notes ──
+  newPage(ctx);
   space(ctx, 6);
   const hasOptions = anyOptions(data.lineItems);
   drawSectionTitle(ctx, "Commercial Quotation");

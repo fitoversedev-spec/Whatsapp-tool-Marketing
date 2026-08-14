@@ -307,7 +307,7 @@ export default function AllToolsPanel({
         className={`
           fixed z-[60] bg-white shadow-2xl border border-slate-200
           inset-x-4 top-20 bottom-4 max-h-[80vh] overflow-y-auto rounded-2xl
-          lg:inset-auto lg:top-4 lg:bottom-4 lg:left-[var(--all-tools-left)] lg:w-[520px] lg:max-h-[calc(100vh-2rem)]
+          lg:inset-auto lg:top-4 lg:bottom-4 lg:left-[var(--all-tools-left)] lg:w-[760px] lg:max-w-[calc(100vw-var(--all-tools-left)-1rem)] lg:max-h-[calc(100vh-2rem)]
         `}
       >
         {/* Header */}
@@ -342,7 +342,7 @@ export default function AllToolsPanel({
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                   {group.title}
                 </h3>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                   {visible.map((item) => {
                     const active = pathname.startsWith(item.href);
                     return (

@@ -138,6 +138,13 @@ export default function LeadAnalyticsClient({
   const [jobFilter, setJobFilter] = useState("");
   const [jobCityFilter, setJobCityFilter] = useState("");
   const [jobSportFilter, setJobSportFilter] = useState("");
+  // Each data card shows only its chart/top rows by default; the full itemised
+  // list (table, and the rest of the job cards) reveals on "expand".
+  const [cityExpanded, setCityExpanded] = useState(false);
+  const [sportExpanded, setSportExpanded] = useState(false);
+  const [jobsExpanded, setJobsExpanded] = useState(false);
+  const [repeatExpanded, setRepeatExpanded] = useState(false);
+  const JOBS_PREVIEW = 5;
 
   // --- Leads by city ---
   // Totals + top city stay GLOBAL (KPI tiles + the share % denominator), so a
@@ -324,10 +331,13 @@ export default function LeadAnalyticsClient({
                       />
                     </div>
                   </div>
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between gap-3">
+                    <button type="button" onClick={() => setCityExpanded((v) => !v)} className="text-sm font-medium text-wa-dark hover:underline">
+                      {cityExpanded ? "Show less ▲" : `Show full list (${cityRows.length}) ▼`}
+                    </button>
                     <ExportButtons filename="leads-by-city" headers={cityHeaders} rows={cityRows} />
                   </div>
-                  <DataTable headers={cityHeaders} rows={cityRows} />
+                  {cityExpanded && <DataTable headers={cityHeaders} rows={cityRows} />}
                 </>
               )}
             </div>
@@ -381,10 +391,13 @@ export default function LeadAnalyticsClient({
                         .join(" · ")}`
                     }
                   />
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between gap-3">
+                    <button type="button" onClick={() => setSportExpanded((v) => !v)} className="text-sm font-medium text-wa-dark hover:underline">
+                      {sportExpanded ? "Show less ▲" : `Show full list (${sportRows.length}) ▼`}
+                    </button>
                     <ExportButtons filename="sport-by-city" headers={sportHeaders} rows={sportRows} />
                   </div>
-                  <DataTable headers={sportHeaders} rows={sportRows} />
+                  {sportExpanded && <DataTable headers={sportHeaders} rows={sportRows} />}
                 </>
               )}
             </div>
@@ -427,7 +440,7 @@ export default function LeadAnalyticsClient({
               ) : (
                 <>
                   <div className="space-y-2">
-                    {jobGroups.map((g, i) => (
+                    {(jobsExpanded ? jobGroups : jobGroups.slice(0, JOBS_PREVIEW)).map((g, i) => (
                       <div key={g.job} className="border border-slate-200 rounded-lg p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="font-medium text-slate-900 break-words">
@@ -458,10 +471,13 @@ export default function LeadAnalyticsClient({
                       </div>
                     ))}
                   </div>
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between gap-3">
+                    <button type="button" onClick={() => setJobsExpanded((v) => !v)} className="text-sm font-medium text-wa-dark hover:underline">
+                      {jobsExpanded ? "Show less ▲" : `Show all ${jobGroups.length} jobs ▼`}
+                    </button>
                     <ExportButtons filename="leads-by-job" headers={jobHeaders} rows={jobRows} />
                   </div>
-                  <DataTable headers={jobHeaders} rows={jobRows} />
+                  {jobsExpanded && <DataTable headers={jobHeaders} rows={jobRows} />}
                 </>
               )}
             </div>
@@ -482,10 +498,13 @@ export default function LeadAnalyticsClient({
             <p className="text-sm text-slate-400">No repeat submitters in this range — nobody has appeared across more than one campaign yet.</p>
           ) : (
             <div className="space-y-3">
-              <div className="flex justify-end">
+              <div className="flex items-center justify-between gap-3">
+                <button type="button" onClick={() => setRepeatExpanded((v) => !v)} className="text-sm font-medium text-wa-dark hover:underline">
+                  {repeatExpanded ? "Show less ▲" : `Show all ${repeatRows.length} ▼`}
+                </button>
                 <ExportButtons filename="repeat-leads" headers={repeatHeaders} rows={repeatRows} />
               </div>
-              <DataTable headers={repeatHeaders} rows={repeatRows} />
+              <DataTable headers={repeatHeaders} rows={repeatExpanded ? repeatRows : repeatRows.slice(0, 5)} />
             </div>
           )}
         </AnalyticsCard>

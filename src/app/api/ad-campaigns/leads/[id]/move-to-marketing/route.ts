@@ -2,7 +2,9 @@
 // Move to CRM. Upserts the lead's phone into the WhatsApp marketing Contact list
 // (the same explicit, user-triggered, one-way sync as
 // account-contacts/sync-to-marketing). Open to all approved reps. Idempotent:
-// an existing marketing contact is updated (name + a merged {City} field), never
+// an existing marketing contact is updated (name + the city merged into the
+// "Attribute 1" field — the same key the imported contacts store city in, and
+// only when it's still empty so a curated value is never clobbered), never
 // duplicated (NOT a 409), and its allowCampaign is NEVER touched, so a prior
 // opt-out is preserved. New contacts default to allowCampaign:true, matching
 // every other contact-creation path in this app.
@@ -35,10 +37,11 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
   const existing = await prisma.contact.findUnique({ where: { phone } });
   if (existing) {
-    // Merge {City} into the existing fields (a JSON STRING), preserving every
-    // other key. Guard on city so a re-submitted lead that lost its city never
-    // clobbers a good stored value — matching the create path, which omits City
-    // when absent. NEVER touch allowCampaign.
+    // Merge the city into the existing fields (a JSON STRING) under the
+    // "Attribute 1" key — the same key imported contacts use for city — and ONLY
+    // when that key is still empty, so a value the user already curated is never
+    // clobbered. Guard on city too. Every other key is preserved. NEVER touch
+    // allowCampaign.
     let fields: Record<string, unknown> = {};
     try {
       const parsed = JSON.parse(existing.fields);
@@ -46,7 +49,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     } catch {
       /* corrupt fields — start fresh */
     }
-    if (city) fields.City = city;
+    const existingAttr1 = String(fields["Attribute 1"] ?? "").trim();
+    if (city && !existingAttr1) fields["Attribute 1"] = city;
     await prisma.contact.update({
       where: { id: existing.id },
       // Only overwrite the name when we actually have one.
@@ -60,7 +64,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       phone,
       name,
       allowCampaign: true,
-      fields: JSON.stringify(city ? { City: city } : {}),
+      fields: JSON.stringify(city ? { "Attribute 1": city } : {}),
     },
   });
   return NextResponse.json({ ok: true, created: true });

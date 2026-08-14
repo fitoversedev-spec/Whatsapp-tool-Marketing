@@ -90,6 +90,7 @@ const COL = {
   accentSoft: rgb(0.949, 0.953, 0.961), // pale grey card highlight
   accentText: rgb(1, 1, 1), // retained for dead code; live bands use ink
   headFill: rgb(0.882, 0.886, 0.898), // grey table/summary header band
+  tableHead: rgb(0.827, 0.867, 0.929), // #d3dded light steel-blue — particulars header highlight
   light: rgb(0.965, 0.968, 0.972), // very pale grey card
   border: rgb(0.78, 0.80, 0.83), // subtle dividers (footer, terms, signatures)
   borderStrong: rgb(0.55, 0.58, 0.62),
@@ -927,17 +928,17 @@ function drawTotals(ctx: Ctx, subtotal: number, gst: number, grandTotal: number)
 
 function drawSectionTitle(ctx: Ctx, title: string) {
   space(ctx, 10);
-  ensureSpace(ctx, 28);
+  ensureSpace(ctx, 32);
   // Coloured accent bar on the left + larger title for better visual rhythm
-  drawRect(ctx, MARGIN, ctx.y + 1, 4, 17, { fill: COL.accent });
+  drawRect(ctx, MARGIN, ctx.y + 1, 4, 20, { fill: COL.accent });
   safeDraw(ctx.page, title, {
     x: MARGIN + 12,
-    y: yFromTop(ctx.y + 14),
-    size: 14.5,
+    y: yFromTop(ctx.y + 16),
+    size: 17,
     font: ctx.bold,
     color: COL.blue,
   });
-  ctx.y += 22;
+  ctx.y += 26;
   drawLine(ctx, MARGIN, PAGE_W - MARGIN, COL.border, 0.5);
   space(ctx, 6);
 }
@@ -1288,7 +1289,7 @@ function drawParticularsTable(
   };
   const rightEdge = MARGIN + CONTENT_W;
   const PAD = 5;
-  const headerH = 22;
+  const headerH = 26;
   // Table grid: outer left/right borders on every band + inner column
   // separators on data rows. Drawn per-band (using each band's own top/height)
   // so the grid survives page breaks. `inner` adds the column dividers.
@@ -1319,11 +1320,11 @@ function drawParticularsTable(
     const w = safeWidth(font, t, size);
     safeDraw(ctx.page, t, { x: cx0 + cw - w - PAD, y, size, font, color });
   };
-  const HEAD_SIZE = 8.5;
+  const HEAD_SIZE = 10;
   const drawHead = () => {
     ensureSpace(ctx, headerH);
-    drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.headFill });
-    const hy = yFromTop(ctx.y + 14.5);
+    drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.tableHead });
+    const hy = yFromTop(ctx.y + 17);
     centerAt("S.NO", x.sno, cols.sno, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("ITEM", x.item, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("DESCRIPTION", x.desc, HEAD_SIZE, ctx.bold, COL.text, hy);
@@ -1338,14 +1339,14 @@ function drawParticularsTable(
     ctx.y += headerH;
   };
   drawHead();
-  const NAME_SIZE = 9;
-  const NAME_LH = 12;
-  const OPT_SIZE = 8;
-  const OPT_LH = 11;
-  const DESC_SIZE = 8.5;
-  const DESC_LH = 11;
-  const SEC_SIZE = 9.5;
-  const SEC_LH = 12;
+  const NAME_SIZE = 10.5;
+  const NAME_LH = 14;
+  const OPT_SIZE = 9.5;
+  const OPT_LH = 13;
+  const DESC_SIZE = 10;
+  const DESC_LH = 13;
+  const SEC_SIZE = 11;
+  const SEC_LH = 14;
   let lastSection: string | null = null;
   let serial = 0;
   // Group rows by scope section (stable sort preserves within-section order).
@@ -1404,7 +1405,8 @@ function drawParticularsTable(
     rightAt(inr(amt), x.amt, cols.amt, NAME_SIZE, ctx.bold, COL.text, numY);
 
     drawGrid(ctx.y, rowH, true);
-    rowLine(ctx.y + rowH);
+    // Bold dark rule at each item's foot so item boundaries read clearly.
+    rowLine(ctx.y + rowH, 1.1);
     ctx.y += rowH;
     if (sec) lastSection = sec;
   }
@@ -1827,11 +1829,16 @@ function drawCoverPage(
   ];
   let hy = MARGIN;
   for (const ln of headerLines) {
-    const w = safeWidth(ctx.font, ln, 8);
-    safeDraw(ctx.page, ln, { x: rightX - w, y: yFromTop(hy + 8), size: 8, font: ctx.font, color: COL.textSoft });
-    hy += 11;
+    const w = safeWidth(ctx.font, ln, 9);
+    safeDraw(ctx.page, ln, { x: rightX - w, y: yFromTop(hy + 9), size: 9, font: ctx.font, color: COL.textSoft });
+    hy += 12.5;
   }
-  const ruleY = yFromTop(hy + 6);
+  // Letterhead logo, top-left — balances the company block on the right.
+  if (logoImage) {
+    const lf = logoImage.scaleToFit(140, 46);
+    ctx.page.drawImage(logoImage, { x: MARGIN, y: yFromTop(MARGIN + lf.height), width: lf.width, height: lf.height });
+  }
+  const ruleY = yFromTop(hy + 8);
   ctx.page.drawLine({ start: { x: MARGIN, y: ruleY }, end: { x: rightX, y: ruleY }, color: COL.text, thickness: 1 });
 
   // Big centered logo.
@@ -1854,27 +1861,27 @@ function drawCoverPage(
   const toName = (parts[0] ?? "").trim();
   const city = parts.slice(1).join(",").trim();
   const customerLine = (toName + (city ? ` - ${city}` : "")).toUpperCase().trim();
-  centerText(projectLine, 320, 13, boldItalic, GREEN);
-  if (customerLine) centerText(customerLine, 344, 11, boldItalic, COL.text);
+  centerText(projectLine, 318, 15, boldItalic, GREEN);
+  if (customerLine) centerText(customerLine, 344, 13, boldItalic, COL.text);
 
   // From block, centered.
-  centerText("From", 440, 11, ctx.bold, COL.text);
+  centerText("From", 438, 13, ctx.bold, COL.text);
   {
     const a = "FITOVERSE ";
     const b = "PRIVATE LIMITED";
-    const wa = safeWidth(ctx.bold, a, 12);
-    const wb = safeWidth(ctx.bold, b, 12);
+    const wa = safeWidth(ctx.bold, a, 14);
+    const wb = safeWidth(ctx.bold, b, 14);
     const startX = MARGIN + (CONTENT_W - (wa + wb)) / 2;
-    const fy = yFromTop(457 + 12);
-    safeDraw(ctx.page, a, { x: startX, y: fy, size: 12, font: ctx.bold, color: BLUE });
-    safeDraw(ctx.page, b, { x: startX + wa, y: fy, size: 12, font: ctx.bold, color: COL.text });
+    const fy = yFromTop(456 + 14);
+    safeDraw(ctx.page, a, { x: startX, y: fy, size: 14, font: ctx.bold, color: BLUE });
+    safeDraw(ctx.page, b, { x: startX + wa, y: fy, size: 14, font: ctx.bold, color: COL.text });
   }
-  centerText("Plot no 96, Samiyappa Nagar 3rd cross west street,", 476, 8.5, ctx.font, COL.textSoft);
-  centerText("Seelanaickenpatti, Salem, Tamil Nadu, 636201", 488, 8.5, ctx.font, COL.textSoft);
-  centerText("Phone: 9894570997, 9597766524", 500, 8.5, ctx.font, COL.textSoft);
+  centerText("Plot no 96, Samiyappa Nagar 3rd cross west street,", 478, 10, ctx.font, COL.textSoft);
+  centerText("Seelanaickenpatti, Salem, Tamil Nadu, 636201", 491, 10, ctx.font, COL.textSoft);
+  centerText("Phone: 9894570997, 9597766524", 504, 10, ctx.font, COL.textSoft);
 
   // Date, centered lower.
-  centerText(quoteDate, 570, 12, ctx.bold, COL.text);
+  centerText(quoteDate, 568, 14, ctx.bold, COL.text);
 }
 
 export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer> {

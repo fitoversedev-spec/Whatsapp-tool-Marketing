@@ -19,8 +19,8 @@ import { normalizePhone } from "@/lib/phone";
 import { findAccountContactDuplicate } from "@/lib/crm/accounts";
 
 const bodySchema = z.object({
-  // The rep to own the created Account. Optional — falls back to the user
-  // performing the promotion if the caller doesn't pick one.
+  // The rep to own the created Account. Optional — when omitted, the Account is
+  // created UNASSIGNED (the dialog's "Don't assign" choice), not self-assigned.
   ownerUserId: z.string().uuid().optional(),
 });
 
@@ -51,8 +51,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ ok: true, alreadyLinked: true, accountContactId: metaLead.accountContactId });
   }
 
-  // Resolve + verify the owning rep (avoids an FK violation on a stale id).
-  const ownerUserId = parsed.data.ownerUserId ?? user.id;
+  // Owner = the picked rep, or null (left unassigned) when none was chosen.
+  // Verify a picked rep still exists (avoids an FK violation on a stale id).
+  const ownerUserId = parsed.data.ownerUserId ?? null;
   if (parsed.data.ownerUserId) {
     const rep = await prisma.user.findUnique({
       where: { id: parsed.data.ownerUserId },

@@ -412,11 +412,14 @@ export function buildAnalyticsToolbox(scope: AnalyticsScope, defaultPeriod: Peri
     {
       name: "invoice_analytics",
       description:
-        "Invoicing & collections for the period (company-wide, not rep-scoped): invoiced value and count, collected, outstanding, overdue, collection rate, average days-to-pay; a per-rep breakdown; and a monthly invoiced-vs-received series. Use for cash-collection and billing questions.",
+        "Invoicing & collections for the period (owner-scoped: a sales rep sees ONLY invoices they created; admins see company-wide): invoiced value and count, collected, outstanding, overdue, collection rate, average days-to-pay; a per-rep breakdown; and a monthly invoiced-vs-received series. Use for cash-collection and billing questions.",
       input_schema: { type: "object", properties: { ...PERIOD_PROPS }, required: [] },
       handler: async (input) => {
+        // Hard owner-scope: a non-admin is pinned to their own ownerIds so the AI
+        // never surfaces other reps' invoicing/collections (admin => undefined => all).
+        const owner = await resolveOwnerIds(scope);
         const { from, to } = resolvePeriod(pickPeriod(input ?? {}), defaultPeriod);
-        return getInvoiceAnalytics({ from, to });
+        return getInvoiceAnalytics({ from, to, ownerIds: owner.ownerIds });
       },
     },
     {

@@ -22,15 +22,20 @@ const UNKNOWN = "Unknown";
 // "job_title"), case-insensitively.
 const JOB_ALIASES = ["job_title", "job title", "job", "designation", "occupation", "profession"];
 function extractJob(fieldDataJson: string | null): string | null {
+  // Exact alias match wins anywhere in the form; fall back to the first substring
+  // match only if nothing matches exactly — so a field like
+  // "professional_experience_years" can't hijack the real "job_title" answer
+  // (mirrors the exact-then-substring rule in fieldMap.findByAlias).
+  let contains: string | null = null;
   for (const f of parseFieldDataJson(fieldDataJson)) {
     const name = (f.name ?? "").toLowerCase().trim();
     if (!name) continue;
-    if (JOB_ALIASES.some((a) => name.includes(a))) {
-      const v = f.value?.trim();
-      if (v) return v;
-    }
+    const v = f.value?.trim();
+    if (!v) continue;
+    if (JOB_ALIASES.some((a) => name === a)) return v;
+    if (contains === null && JOB_ALIASES.some((a) => name.includes(a))) contains = v;
   }
-  return null;
+  return contains;
 }
 
 function leadWindowWhere({ from, to }: Range) {
@@ -90,10 +95,12 @@ export async function sportByCity({ from, to }: Range): Promise<SportCityCell[]>
 
 export type JobCityCell = { job: string; city: string; sport: string; count: number };
 
-// Flat job x city x sport cross-tab (one cell per non-empty combination), so
-// the UI can show "what job, from what city, wanting what sport" in one place
-// and filter on any of the three. Job comes from the form answers (extractJob);
-// city/sport from their columns. Blank values -> "Unknown". Sorted count desc.
+// Flat job x city x sport cross-tab (one cell per combination), so the UI can
+// show "what job, from what city, wanting what sport" in one place and filter on
+// any of the three. Job comes from the form answers (extractJob); city/sport from
+// their columns. Leads with NO job stated are EXCLUDED (so an all-"Unknown" job
+// column can't mask the "no job data yet" empty state); blank city/sport ->
+// "Unknown". Sorted count desc.
 export async function jobAnalytics({ from, to }: Range): Promise<JobCityCell[]> {
   const leads = await prisma.metaLead.findMany({
     where: leadWindowWhere({ from, to }),
@@ -102,7 +109,8 @@ export async function jobAnalytics({ from, to }: Range): Promise<JobCityCell[]> 
 
   const map = new Map<string, JobCityCell>();
   for (const l of leads) {
-    const job = normalizeLabel(extractJob(l.fieldData)) ?? UNKNOWN;
+    const job = normalizeLabel(extractJob(l.fieldData));
+    if (!job) continue; // no job stated -> not part of the jobs cross-tab
     const city = normalizeLabel(l.city) ?? UNKNOWN;
     const sport = normalizeLabel(l.sport) ?? UNKNOWN;
     const key = `${job}||${city}||${sport}`;

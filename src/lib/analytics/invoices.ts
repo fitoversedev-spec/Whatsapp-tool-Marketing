@@ -1,7 +1,9 @@
-// Invoice analytics — read side for the admin "Invoices" tab in CRM Analytics.
-// Reads Invoice + InvoicePayment. Admin-only (route enforces it); not
-// owner-scoped. Cancelled invoices are excluded from every figure. Amounts in
-// rupees; months bucketed in IST.
+// Invoice analytics — read side for the "Invoices" tab in CRM Analytics and the
+// AI analytics toolbox. Reads Invoice + InvoicePayment. The admin Invoices tab
+// reads company-wide; the AI toolbox passes ownerIds to scope a non-admin rep to
+// invoices THEY created, so the AI never leaks other reps' collections.
+// Cancelled invoices are excluded from every figure. Amounts in rupees; months
+// bucketed in IST.
 //
 // Two different "collected" definitions, intentionally: the KPI `collected` and
 // `collectionRate` are a COHORT measure — total paid to date on invoices ISSUED
@@ -40,10 +42,13 @@ export type InvoiceRepRow = {
 export type InvoiceMonthly = { month: string; invoiced: number; collected: number };
 export type InvoiceAnalytics = { kpis: InvoiceKpis; reps: InvoiceRepRow[]; monthly: InvoiceMonthly[] };
 
-export async function getInvoiceAnalytics({ from, to }: { from: Date; to: Date }): Promise<InvoiceAnalytics> {
+export async function getInvoiceAnalytics({ from, to, ownerIds }: { from: Date; to: Date; ownerIds?: string[] }): Promise<InvoiceAnalytics> {
+  // ownerIds present -> restrict to invoices created by those reps (AI rep scope);
+  // an empty array matches nothing (fails closed). Absent -> company-wide.
+  const ownerWhere = ownerIds ? { createdByUserId: { in: ownerIds } } : {};
   const [invoices, payments] = await Promise.all([
     prisma.invoice.findMany({
-      where: { invoiceDate: { gte: from, lte: to }, status: { not: "cancelled" } },
+      where: { invoiceDate: { gte: from, lte: to }, status: { not: "cancelled" }, ...ownerWhere },
       select: {
         createdByUserId: true,
         grandTotal: true,
@@ -56,7 +61,7 @@ export async function getInvoiceAnalytics({ from, to }: { from: Date; to: Date }
       },
     }),
     prisma.invoicePayment.findMany({
-      where: { paidAt: { gte: from, lte: to }, invoice: { status: { not: "cancelled" } } },
+      where: { paidAt: { gte: from, lte: to }, invoice: { status: { not: "cancelled" }, ...ownerWhere } },
       select: { amount: true, paidAt: true },
     }),
   ]);

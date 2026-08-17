@@ -82,6 +82,7 @@ export default function AuditLogClient() {
           ) : rows.length === 0 ? (
             <div className="p-10 text-center text-sm text-slate-400">No audit events yet.</div>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-slate-500 border-b border-slate-200 text-xs uppercase tracking-wide">
@@ -125,6 +126,7 @@ export default function AuditLogClient() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 

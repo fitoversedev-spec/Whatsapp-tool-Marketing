@@ -21,11 +21,11 @@ const SECTION_ROUTES: { href: string; title: string }[] = ALL_TOOLS_GROUPS
 // Per-section pill colours. MUST be complete literal class strings — Tailwind's
 // JIT can't see classes built by string concatenation.
 const SECTION_STYLE: Record<string, { pill: string; dot: string }> = {
-  CRM: { pill: "bg-[#2E7D4F]/10 text-[#205537]", dot: "bg-[#2E7D4F]" }, // turf
-  "Meta Ads": { pill: "bg-[#1C6E8C]/10 text-[#144B61]", dot: "bg-[#1C6E8C]" }, // court
-  "Marketing & Sales": { pill: "bg-[#7c3aed]/10 text-[#7c3aed]", dot: "bg-[#7c3aed]" }, // accent (orthogonal)
+  CRM: { pill: "bg-turf-500/10 text-turf-700", dot: "bg-turf-500" }, // turf
+  "Meta Ads": { pill: "bg-court-500/10 text-court-700", dot: "bg-court-500" }, // court
+  "Marketing & Sales": { pill: "bg-[#7c3aed]/10 text-[#7c3aed]", dot: "bg-[#7c3aed]" }, // accent (orthogonal — no palette token)
   Organization: { pill: "bg-slate-500/10 text-slate-600", dot: "bg-slate-500" },
-  Admin: { pill: "bg-[#B33A26]/10 text-[#7C271A]", dot: "bg-[#B33A26]" }, // track
+  Admin: { pill: "bg-track-500/10 text-track-700", dot: "bg-track-500" }, // track
 };
 const DEFAULT_STYLE = { pill: "bg-wa-green/10 text-wa-dark", dot: "bg-wa-green" };
 

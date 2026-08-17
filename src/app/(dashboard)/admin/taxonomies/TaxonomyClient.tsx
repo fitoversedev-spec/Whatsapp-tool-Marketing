@@ -206,6 +206,7 @@ export default function TaxonomyClient() {
         {loading ? (
           <div className="p-8 text-center text-slate-400 text-sm">Loading…</div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-500 border-b border-slate-200">
@@ -304,6 +305,7 @@ export default function TaxonomyClient() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
         <div className="p-3 border-t border-slate-200 flex gap-2">
           <input

@@ -256,7 +256,7 @@ export default function QuotationsClient({
             )}
             <button
               onClick={() => setShowWizard(true)}
-              className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
+              className="btn btn-primary"
             >
               + New quotation
             </button>
@@ -266,18 +266,18 @@ export default function QuotationsClient({
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-4">
         {/* Filters */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row gap-2 flex-wrap">
+        <div className="card p-3 sm:p-4 flex flex-col sm:flex-row gap-2 flex-wrap">
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by number, customer, phone…"
-            className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="input flex-1 min-w-[200px] text-sm"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="input w-auto text-sm"
           >
             <option value="all">All statuses</option>
             <option value="draft">Draft</option>
@@ -290,7 +290,7 @@ export default function QuotationsClient({
             <select
               value={ownerFilter}
               onChange={(e) => setOwnerFilter(e.target.value)}
-              className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+              className="input w-auto text-sm"
             >
               <option value="all">All sales people</option>
               {salesUsers.map((u) => (
@@ -305,14 +305,14 @@ export default function QuotationsClient({
             value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
             placeholder="From"
-            className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="input w-auto text-sm font-mono"
           />
           <input
             type="date"
             value={toDate}
             onChange={(e) => setToDate(e.target.value)}
             placeholder="To"
-            className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="input w-auto text-sm font-mono"
           />
         </div>
 
@@ -334,7 +334,7 @@ export default function QuotationsClient({
         )}
 
         {filtered.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+          <div className="card p-10 text-center">
             <div className="text-4xl mb-2">📄</div>
             <h3 className="font-semibold text-slate-900">
               {quotations.length === 0 ? "No quotations yet" : "No matches"}
@@ -346,13 +346,13 @@ export default function QuotationsClient({
             </p>
           </div>
         ) : (
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="card overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <table className="data-table">
+                <thead>
                   <tr>
                     {isAdmin && (
-                      <th className="px-4 py-3 text-left w-8">
+                      <th className="w-8">
                         <SelectAllCheckbox
                           ids={filtered.map((q) => q.id)}
                           selected={selected}
@@ -360,24 +360,24 @@ export default function QuotationsClient({
                         />
                       </th>
                     )}
-                    <th className="px-4 py-3 text-left">Number</th>
-                    <th className="px-4 py-3 text-left">Customer</th>
-                    <th className="px-4 py-3 text-left">Sport / Size</th>
-                    <th className="px-4 py-3 text-right">Total</th>
-                    <th className="px-4 py-3 text-left">Status</th>
-                    <th className="px-4 py-3 text-left">Date</th>
-                    {isAdmin && <th className="px-4 py-3 text-left">By</th>}
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="text-left">Number</th>
+                    <th className="text-left">Customer</th>
+                    <th className="text-left">Sport / Size</th>
+                    <th className="!text-right">Total</th>
+                    <th className="text-left">Status</th>
+                    <th className="text-left">Date</th>
+                    {isAdmin && <th className="text-left">By</th>}
+                    <th className="!text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {filtered.map((q) => (
                     <tr
                       key={q.id}
-                      className={`hover:bg-slate-50 ${selected.has(q.id) ? "bg-red-50/50" : ""}`}
+                      className={selected.has(q.id) ? "bg-track-50/60" : ""}
                     >
                       {isAdmin && (
-                        <td className="px-4 py-3">
+                        <td>
                           <input
                             type="checkbox"
                             checked={selected.has(q.id)}
@@ -386,10 +386,10 @@ export default function QuotationsClient({
                           />
                         </td>
                       )}
-                      <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-900">
+                      <td className="font-mono text-xs font-semibold text-slate-900">
                         {q.number}
                       </td>
-                      <td className="px-4 py-3">
+                      <td>
                         <div className="font-medium text-slate-900">{q.customerName}</div>
                         {q.contactPhone ? (
                           <div className="text-xs text-slate-500 font-mono">+{q.contactPhone}</div>
@@ -399,12 +399,12 @@ export default function QuotationsClient({
                               value={phoneEdits[q.id] ?? ""}
                               onChange={(e) => setPhoneEdits((curr) => ({ ...curr, [q.id]: e.target.value }))}
                               placeholder="+919876543210"
-                              className="w-32 px-1.5 py-0.5 text-xs border border-amber-300 rounded font-mono"
+                              className="input w-32 !px-1.5 !py-0.5 text-xs !border-amber-300 font-mono"
                             />
                             <button
                               onClick={() => savePhone(q)}
                               disabled={savingPhone === q.id || !(phoneEdits[q.id] ?? "").trim()}
-                              className="text-xs text-blue-700 hover:underline disabled:opacity-40 disabled:no-underline"
+                              className="text-xs text-court-700 hover:underline disabled:opacity-40 disabled:no-underline"
                             >
                               {savingPhone === q.id ? "…" : "Save"}
                             </button>
@@ -413,25 +413,25 @@ export default function QuotationsClient({
                           <div className="text-xs text-amber-700">⚠ no phone</div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 capitalize">
+                      <td className="text-slate-600 capitalize">
                         {q.sport}
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-slate-400 font-mono">
                           {q.lengthFt} × {q.widthFt} ft
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                      <td className="!text-right font-semibold text-slate-900 font-mono">
                         ₹ {Number(q.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                       </td>
-                      <td className="px-4 py-3">
+                      <td>
                         <span
-                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+                          className={`badge ${
                             STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-600"
                           }`}
                         >
                           {q.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                      <td className="text-xs text-slate-500 whitespace-nowrap font-mono">
                         {new Date(q.quoteDate).toLocaleDateString("en-IN", {
                           day: "2-digit",
                           month: "short",
@@ -439,9 +439,9 @@ export default function QuotationsClient({
                         })}
                       </td>
                       {isAdmin && (
-                        <td className="px-4 py-3 text-xs text-slate-500">{q.createdByName}</td>
+                        <td className="text-xs text-slate-500">{q.createdByName}</td>
                       )}
-                      <td className="px-4 py-3 text-right">
+                      <td className="!text-right">
                         <div className="flex items-center gap-2 justify-end flex-wrap">
                           <a
                             href={`/api/quotations/${q.id}/pdf`}

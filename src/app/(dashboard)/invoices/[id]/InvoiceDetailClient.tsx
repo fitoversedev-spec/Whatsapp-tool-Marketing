@@ -118,19 +118,19 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
         description={`${inv.customerName}${inv.contactPhone ? " · " + inv.contactPhone : ""}`}
         action={
           <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_STYLE[inv.status] ?? "bg-slate-100"}`}>{STATUS_LABEL[inv.status] ?? inv.status}</span>
+            <span className={`badge ${STATUS_STYLE[inv.status] ?? "bg-slate-100"}`}>{STATUS_LABEL[inv.status] ?? inv.status}</span>
           </div>
         }
       />
 
       <div className="flex flex-wrap gap-2 mt-3">
         {!cancelled && (
-          <button onClick={send} disabled={busy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50">
+          <button onClick={send} disabled={busy} className="btn btn-primary">
             {inv.sentAt ? "Resend" : "Send"} to customer
           </button>
         )}
-        <a href={`/inv/${inv.id}`} target="_blank" rel="noreferrer" className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Download PDF</a>
-        {!cancelled && <button onClick={cancel} disabled={busy} className="border border-red-200 text-red-600 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-red-50 disabled:opacity-50">Cancel</button>}
+        <a href={`/inv/${inv.id}`} target="_blank" rel="noreferrer" className="btn btn-secondary">Download PDF</a>
+        {!cancelled && <button onClick={cancel} disabled={busy} className="btn bg-white border-track-300 text-track-700 hover:bg-track-50">Cancel</button>}
       </div>
 
       {/* Summary */}
@@ -142,67 +142,67 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
       </div>
 
       {/* Line items */}
-      <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200">
-        <table className="w-full text-sm">
+      <div className="mt-6 card overflow-x-auto">
+        <table className="data-table">
           <thead>
-            <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-              <th className="text-left font-medium px-3 py-2.5">Particulars</th>
-              <th className="text-right font-medium px-3 py-2.5">Qty</th>
-              <th className="text-right font-medium px-3 py-2.5">Rate</th>
-              <th className="text-right font-medium px-3 py-2.5">GST%</th>
-              <th className="text-right font-medium px-3 py-2.5">Amount</th>
+            <tr>
+              <th className="text-left">Particulars</th>
+              <th className="!text-right">Qty</th>
+              <th className="!text-right">Rate</th>
+              <th className="!text-right">GST%</th>
+              <th className="!text-right">Amount</th>
             </tr>
           </thead>
           <tbody>
             {inv.lineItems.filter((li) => li.included).map((li, i) => (
-              <tr key={i} className="border-t border-slate-100">
-                <td className="px-3 py-2 text-slate-700">{li.name}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{Math.round(li.areaSqFt).toLocaleString("en-IN")}{li.unit ? ` ${li.unit}` : ""}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{inr(li.ratePerSqFt)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{li.gstPercent}%</td>
-                <td className="px-3 py-2 text-right tabular-nums">{inr(li.total)}</td>
+              <tr key={i}>
+                <td className="text-slate-700">{li.name}</td>
+                <td className="text-right font-mono">{Math.round(li.areaSqFt).toLocaleString("en-IN")}{li.unit ? ` ${li.unit}` : ""}</td>
+                <td className="text-right font-mono">{inr(li.ratePerSqFt)}</td>
+                <td className="text-right font-mono">{li.gstPercent}%</td>
+                <td className="text-right font-mono">{inr(li.total)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t border-slate-200 text-slate-600"><td colSpan={4} className="px-3 py-1.5 text-right">Subtotal</td><td className="px-3 py-1.5 text-right tabular-nums">{inr(inv.subtotal)}</td></tr>
-            <tr className="text-slate-600"><td colSpan={4} className="px-3 py-1.5 text-right">GST</td><td className="px-3 py-1.5 text-right tabular-nums">{inr(inv.gstAmount)}</td></tr>
-            <tr className="border-t border-slate-200 font-semibold text-slate-900"><td colSpan={4} className="px-3 py-2 text-right">Grand total</td><td className="px-3 py-2 text-right tabular-nums">{inr(inv.grandTotal)}</td></tr>
+            <tr className="text-slate-600"><td colSpan={4} className="text-right">Subtotal</td><td className="text-right font-mono">{inr(inv.subtotal)}</td></tr>
+            <tr className="text-slate-600"><td colSpan={4} className="text-right">GST</td><td className="text-right font-mono">{inr(inv.gstAmount)}</td></tr>
+            <tr className="font-semibold text-slate-900"><td colSpan={4} className="text-right">Grand total</td><td className="text-right font-mono">{inr(inv.grandTotal)}</td></tr>
           </tfoot>
         </table>
       </div>
 
       {/* Payments */}
       <div className="mt-6">
-        <div className="text-sm font-semibold text-slate-800 mb-2">Payments — {inr(inv.amountPaid)} of {inr(inv.grandTotal)} collected</div>
+        <div className="text-sm font-semibold text-slate-800 mb-2">Payments — <span className="font-mono">{inr(inv.amountPaid)}</span> of <span className="font-mono">{inr(inv.grandTotal)}</span> collected</div>
         {!cancelled && balance > 0 && (
-          <div className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3">
+          <div className="flex flex-wrap items-end gap-2 card bg-slate-50 p-3 mb-3">
             <label className="text-xs text-slate-500">Amount
-              <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={String(Math.round(balance))} className="block mt-1 w-32 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+              <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={String(Math.round(balance))} className="input block mt-1 w-32 text-sm font-mono" />
             </label>
             <label className="text-xs text-slate-500">Method
-              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className="block mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className="input block mt-1 w-auto text-sm">
                 <option value="upi">UPI</option><option value="bank">Bank</option><option value="cash">Cash</option><option value="cheque">Cheque</option><option value="other">Other</option>
               </select>
             </label>
             <label className="text-xs text-slate-500">Reference
-              <input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="txn / UTR (optional)" className="block mt-1 w-40 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+              <input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="txn / UTR (optional)" className="input block mt-1 w-40 text-sm" />
             </label>
-            <button onClick={recordPayment} disabled={busy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">Record payment</button>
+            <button onClick={recordPayment} disabled={busy} className="btn btn-turf">Record payment</button>
           </div>
         )}
-        <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
+        <div className="card divide-y divide-slate-100">
           {inv.payments.length === 0 ? (
             <div className="px-3 py-4 text-sm text-slate-400 text-center">No payments recorded yet.</div>
           ) : (
             inv.payments.map((p) => (
               <div key={p.id} className="px-3 py-2 flex items-center gap-3 text-sm">
-                <span className="font-medium tabular-nums text-slate-800 w-24">{inr(p.amount)}</span>
-                <span className="text-slate-500">{dt(p.paidAt)}</span>
-                {p.method && <span className="text-xs bg-slate-100 rounded px-1.5 py-0.5 text-slate-500 uppercase">{p.method}</span>}
-                {p.reference && <span className="text-xs text-slate-400">{p.reference}</span>}
+                <span className="font-medium font-mono text-slate-800 w-24">{inr(p.amount)}</span>
+                <span className="text-slate-500 font-mono">{dt(p.paidAt)}</span>
+                {p.method && <span className="chip uppercase">{p.method}</span>}
+                {p.reference && <span className="text-xs text-slate-400 font-mono">{p.reference}</span>}
                 <span className="text-xs text-slate-400 ml-auto">by {p.recordedByName}</span>
-                {!cancelled && <button onClick={() => deletePayment(p.id)} className="text-xs text-slate-400 hover:text-red-600">remove</button>}
+                {!cancelled && <button onClick={() => deletePayment(p.id)} className="text-xs text-slate-400 hover:text-track-600">remove</button>}
               </div>
             ))
           )}
@@ -215,11 +215,11 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
 }
 
 function Info({ label, value, tone }: { label: string; value: string; tone?: "good" | "warn" }) {
-  const color = tone === "warn" ? "text-amber-600" : tone === "good" ? "text-wa-dark" : "text-slate-900";
+  const color = tone === "warn" ? "text-amber-600" : tone === "good" ? "text-court-700" : "text-slate-900";
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+    <div className="card px-3 py-2.5">
       <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
-      <div className={`text-sm font-semibold mt-0.5 tabular-nums ${color}`}>{value}</div>
+      <div className={`text-sm font-semibold mt-0.5 font-mono ${color}`}>{value}</div>
     </div>
   );
 }

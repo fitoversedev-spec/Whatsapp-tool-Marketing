@@ -153,7 +153,7 @@ export default function Sidebar({
   return (
     <>
       {/* Mobile top bar */}
-      <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3">
+      <header className="font-sans lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3">
         <button
           aria-label="Open menu"
           onClick={() => setOpen(true)}
@@ -186,6 +186,7 @@ export default function Sidebar({
       {/* Sidebar */}
       <aside
         className={`
+          font-sans
           fixed lg:sticky inset-y-0 left-0 top-0 z-50 lg:z-auto
           w-64 h-screen lg:h-screen shrink-0
           app-sidebar border-r flex flex-col

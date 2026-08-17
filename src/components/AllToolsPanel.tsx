@@ -305,6 +305,7 @@ export default function AllToolsPanel({
           ["--all-tools-left" as never]: `${anchorOffset}px`,
         }}
         className={`
+          font-sans
           fixed z-[60] bg-white shadow-2xl border border-slate-200
           inset-x-4 top-20 bottom-4 max-h-[80vh] overflow-y-auto rounded-2xl
           lg:inset-auto lg:top-4 lg:bottom-4 lg:left-[var(--all-tools-left)] lg:w-[760px] lg:max-w-[calc(100vw-var(--all-tools-left)-1rem)] lg:max-h-[calc(100vh-2rem)]

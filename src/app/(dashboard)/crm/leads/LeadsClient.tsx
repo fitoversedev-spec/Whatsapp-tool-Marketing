@@ -124,7 +124,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
               resetAdd();
               setShowAdd(true);
             }}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-3.5 py-2 rounded-xl text-sm"
+            className="btn btn-primary"
           >
             + Add Lead
           </button>
@@ -136,46 +136,46 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by name or company..."
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+          className="input w-full max-w-xs text-sm"
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="card overflow-x-auto">
+        <table className="data-table">
           <thead>
-            <tr className="text-left border-b border-slate-200">
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Name</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Company</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Phone</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Status</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 text-right"><span className="sr-only">Actions</span></th>
+            <tr>
+              <th>Name</th>
+              <th>Company</th>
+              <th>Phone</th>
+              <th>Status</th>
+              <th className="!text-right"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {visible.map((l) => (
-              <tr key={l.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                <td className="px-4 py-2.5">
-                  <Link href={`/crm/contacts/${l.id}`} className="font-medium text-wa-dark hover:underline">
+              <tr key={l.id}>
+                <td>
+                  <Link href={`/crm/contacts/${l.id}`} className="font-medium text-court-700 hover:underline">
                     {l.name}
                   </Link>
                 </td>
-                <td className="px-4 py-2.5">
+                <td>
                   <Link href={`/crm/companies/${l.accountId}`} className="text-slate-600 hover:underline">{l.accountName}</Link>
                 </td>
-                <td className="px-4 py-2.5 text-slate-600">{l.phone ?? "—"}</td>
-                <td className="px-4 py-2.5">
+                <td className="text-slate-600 font-mono">{l.phone ?? "—"}</td>
+                <td>
                   {l.converted ? (
-                    <span className="text-[10px] font-semibold text-wa-dark bg-wa-green/10 px-1.5 py-0.5 rounded">CONVERTED</span>
+                    <span className="badge bg-green-100 text-green-700">Converted</span>
                   ) : (
-                    <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">OPEN</span>
+                    <span className="badge bg-amber-100 text-amber-700">Open</span>
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-right">
+                <td className="!text-right">
                   {!l.converted && (
                     <button
                       onClick={() => convertToDeal(l)}
                       disabled={convertingId === l.id}
-                      className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-3 py-1 rounded-md text-xs disabled:opacity-50"
+                      className="btn btn-primary !px-3 !py-1 !text-xs"
                     >
                       {convertingId === l.id ? "Converting..." : "Convert to Deal"}
                     </button>
@@ -185,7 +185,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
             ))}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={5} className="py-8 text-center text-slate-400">
                   No leads yet — promote a contact from the Contacts list.
                 </td>
               </tr>
@@ -212,7 +212,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                   value={name}
                   onChange={(e) => { setName(e.target.value); setDupWarn(false); }}
                   placeholder="e.g. Ravi Kumar"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                  className="input text-sm"
                 />
               </div>
               <div>
@@ -221,7 +221,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="e.g. 9876543210"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                  className="input text-sm"
                 />
               </div>
               <div>
@@ -230,7 +230,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="e.g. Salem"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                  className="input text-sm"
                 />
               </div>
             </div>
@@ -243,14 +243,14 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
               <button
                 onClick={() => setShowAdd(false)}
                 disabled={saving}
-                className="px-3.5 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                className="btn btn-ghost"
               >
                 Cancel
               </button>
               <button
                 onClick={() => submitLead(dupWarn)}
                 disabled={saving || !name.trim()}
-                className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-3.5 py-2 rounded-xl text-sm disabled:opacity-50"
+                className="btn btn-primary"
               >
                 {saving ? "Adding..." : dupWarn ? "Add anyway" : "Add lead"}
               </button>

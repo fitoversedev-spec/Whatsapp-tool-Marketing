@@ -55,33 +55,33 @@ type RepSummary = {
 function DealsTable({ deals, showOwner }: { deals: RepDealRow[]; showOwner: boolean }) {
   const emptyColSpan = showOwner ? 5 : 4;
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="card overflow-x-auto">
+      <table className="data-table">
         <thead>
-          <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
-            <th className="px-4 py-3 font-medium">Customer</th>
-            {showOwner && <th className="px-4 py-3 font-medium">Owner</th>}
-            <th className="px-4 py-3 font-medium">Quote / design / product</th>
-            <th className="px-4 py-3 font-medium">Stage</th>
-            <th className="px-4 py-3 font-medium">Notes / upcoming</th>
+          <tr>
+            <th>Customer</th>
+            {showOwner && <th>Owner</th>}
+            <th>Quote / design / product</th>
+            <th>Stage</th>
+            <th>Notes / upcoming</th>
           </tr>
         </thead>
         <tbody>
           {deals.map((d) => (
-            <tr key={d.dealId} className="border-b border-slate-100 last:border-0 align-top hover:bg-slate-50">
-              <td className="px-4 py-4">
-                <Link href={`/deals/${d.dealId}`} className="text-base font-semibold text-wa-dark hover:underline">
+            <tr key={d.dealId} className="align-top">
+              <td>
+                <Link href={`/deals/${d.dealId}`} className="text-base font-semibold text-court-700 hover:underline">
                   {d.customerName}
                 </Link>
-                <div className="text-xs text-slate-500 mt-0.5">{d.dealCode}</div>
+                <div className="text-xs text-slate-500 mt-0.5 font-mono">{d.dealCode}</div>
               </td>
               {showOwner && (
-                <td className="px-4 py-4 text-sm">
+                <td className="text-sm">
                   <div className="font-medium text-slate-800">{d.ownerName}</div>
-                  {d.dealValue > 0 && <div className="text-xs text-slate-500 mt-0.5">{fmtInr(d.dealValue)}</div>}
+                  {d.dealValue > 0 && <div className="text-xs text-slate-500 mt-0.5 font-mono">{fmtInr(d.dealValue)}</div>}
                 </td>
               )}
-              <td className="px-4 py-4 text-sm space-y-1.5">
+              <td className="text-sm space-y-1.5">
                 {d.quotations.length === 0 && d.courtImages.length === 0 && d.interestedProducts.length === 0 && (
                   <span className="text-slate-300">—</span>
                 )}
@@ -89,7 +89,7 @@ function DealsTable({ deals, showOwner }: { deals: RepDealRow[]; showOwner: bool
                     already its own column, so the label is sport + status. */}
                 {d.quotations.map((q) => (
                   <div key={q.id}>
-                    <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline font-medium">
+                    <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-court-700 hover:underline font-medium">
                       📄 {q.sport} quote · {q.status}
                     </a>
                   </div>
@@ -97,7 +97,7 @@ function DealsTable({ deals, showOwner }: { deals: RepDealRow[]; showOwner: bool
                 {d.courtImages.map((c) => (
                   <div key={c.id}>
                     {c.imageUrl ? (
-                      <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline font-medium">
+                      <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-court-700 hover:underline font-medium">
                         🎨 Design {c.number}
                       </a>
                     ) : (
@@ -110,7 +110,7 @@ function DealsTable({ deals, showOwner }: { deals: RepDealRow[]; showOwner: bool
                   <div className="text-slate-600">📦 {d.interestedProducts.join(", ")}</div>
                 )}
               </td>
-              <td className="px-4 py-4">
+              <td>
                 <span
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
                   style={{ background: (d.stageColorHex ?? "#64748b") + "20", color: d.stageColorHex ?? "#475569" }}
@@ -118,12 +118,12 @@ function DealsTable({ deals, showOwner }: { deals: RepDealRow[]; showOwner: bool
                   {d.stageName}
                 </span>
               </td>
-              <td className="px-4 py-4 text-sm text-slate-600 space-y-1.5 max-w-sm">
+              <td className="text-sm text-slate-600 space-y-1.5 max-w-sm">
                 {d.latestNote ? (
                   <div>
                     <span className="font-semibold text-slate-900">{d.latestNote.subject}</span>
                     {d.latestNote.notes && <div className="text-slate-600 mt-0.5">{d.latestNote.notes}</div>}
-                    <div className="text-xs text-slate-400 mt-0.5">{fmtDate(d.latestNote.occurredAt)}</div>
+                    <div className="text-xs text-slate-400 mt-0.5 font-mono">{fmtDate(d.latestNote.occurredAt)}</div>
                   </div>
                 ) : (
                   <div className="text-slate-300">No notes yet</div>
@@ -138,7 +138,7 @@ function DealsTable({ deals, showOwner }: { deals: RepDealRow[]; showOwner: bool
           ))}
           {deals.length === 0 && (
             <tr>
-              <td colSpan={emptyColSpan} className="px-4 py-8 text-center text-slate-400">
+              <td colSpan={emptyColSpan} className="py-8 text-center text-slate-400">
                 No deals match this filter.
               </td>
             </tr>
@@ -270,7 +270,7 @@ export default function DealsDrilldownClient({
             <button
               type="button"
               onClick={goBack}
-              className="text-sm text-wa-dark hover:underline font-medium whitespace-nowrap"
+              className="text-sm text-court-700 hover:underline font-medium whitespace-nowrap"
             >
               ← Back
             </button>
@@ -281,13 +281,13 @@ export default function DealsDrilldownClient({
       />
 
       {isAdmin && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+        <div className="card p-4 space-y-3">
           <div className="text-sm font-semibold text-slate-700">Compare two reps</div>
           <div className="flex items-center gap-3 flex-wrap">
             <select
               value={selectedReps[0] ?? ""}
               onChange={(e) => applyReps(e.target.value, selectedReps[1] ?? "")}
-              className="text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white"
+              className="input w-auto text-sm"
             >
               <option value="">Rep A…</option>
               {users.map((u) => (
@@ -300,7 +300,7 @@ export default function DealsDrilldownClient({
             <select
               value={selectedReps[1] ?? ""}
               onChange={(e) => applyReps(selectedReps[0] ?? "", e.target.value)}
-              className="text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white"
+              className="input w-auto text-sm"
             >
               <option value="">Rep B…</option>
               {users.map((u) => (
@@ -332,19 +332,19 @@ export default function DealsDrilldownClient({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {summaries.map((s) => (
             <div key={s.ownerId} className="space-y-3">
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-                <div className="text-base font-semibold text-wa-dark">{s.ownerName}</div>
+              <div className="card p-4 space-y-3">
+                <div className="text-base font-semibold text-court-700">{s.ownerName}</div>
                 <div className="flex items-baseline flex-wrap gap-x-6 gap-y-2">
                   <div>
-                    <div className="text-2xl font-bold text-slate-900">{s.dealCount}</div>
+                    <div className="text-2xl font-bold text-slate-900 font-mono">{s.dealCount}</div>
                     <div className="text-xs text-slate-500">deals created</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-slate-900">{fmtInr(s.totalValue)}</div>
+                    <div className="text-2xl font-bold text-slate-900 font-mono">{fmtInr(s.totalValue)}</div>
                     <div className="text-xs text-slate-500">total deal value</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-slate-900">{s.winRate != null ? `${Math.round(s.winRate * 100)}%` : "—"}</div>
+                    <div className="text-2xl font-bold text-slate-900 font-mono">{s.winRate != null ? `${Math.round(s.winRate * 100)}%` : "—"}</div>
                     <div className="text-xs text-slate-500">win rate{s.closed > 0 ? ` · ${s.won}/${s.closed}` : ""}</div>
                   </div>
                 </div>
@@ -357,7 +357,7 @@ export default function DealsDrilldownClient({
                       {s.stages.map((st) => (
                         <li key={st.stageName} className="flex justify-between">
                           <span>{st.stageName}</span>
-                          <span className="font-semibold text-slate-900">{st.count}</span>
+                          <span className="font-semibold text-slate-900 font-mono">{st.count}</span>
                         </li>
                       ))}
                     </ul>

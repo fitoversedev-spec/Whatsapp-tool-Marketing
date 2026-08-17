@@ -239,7 +239,7 @@ export default function AccountContactsClient({
         action={
           <button
             onClick={() => setShowNew(true)}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
+            className="btn btn-primary"
           >
             + New Contact
           </button>
@@ -252,7 +252,7 @@ export default function AccountContactsClient({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search by name or company..."
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="input w-full max-w-xs text-sm"
           />
           <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
           {dateRange && (
@@ -264,7 +264,7 @@ export default function AccountContactsClient({
             <select
               value={repFilter}
               onChange={(e) => applyRepFilter(e.target.value)}
-              className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+              className="input w-auto text-sm"
             >
               <option value="">All reps</option>
               {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -272,19 +272,19 @@ export default function AccountContactsClient({
           )}
           {knownFieldKeys.length > 0 && (
             <>
-              <select value={filterField} onChange={(e) => setFilterField(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+              <select value={filterField} onChange={(e) => setFilterField(e.target.value)} className="input w-auto text-sm">
                 <option value="">Filter by custom field...</option>
                 {knownFieldKeys.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
               {filterField && (
                 <>
-                  <select value={filterCondition} onChange={(e) => setFilterCondition(e.target.value as typeof filterCondition)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+                  <select value={filterCondition} onChange={(e) => setFilterCondition(e.target.value as typeof filterCondition)} className="input w-auto text-sm">
                     <option value="contains">contains</option>
                     <option value="equals">equals</option>
                     <option value="not_empty">is set</option>
                   </select>
                   {filterCondition !== "not_empty" && (
-                    <input value={filterValue} onChange={(e) => setFilterValue(e.target.value)} placeholder="Value" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-32 focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                    <input value={filterValue} onChange={(e) => setFilterValue(e.target.value)} placeholder="Value" className="input w-32 text-sm" />
                   )}
                 </>
               )}
@@ -292,21 +292,21 @@ export default function AccountContactsClient({
           )}
         </div>
         {selected.size > 0 && (
-          <div className="flex items-center gap-2 bg-wa-green/10 border border-wa-green/30 rounded-lg px-3 py-1.5 flex-wrap">
-            <span className="text-sm font-medium text-wa-dark">{selected.size} selected</span>
+          <div className="flex items-center gap-2 bg-court-50 border border-court-200 rounded px-3 py-1.5 flex-wrap">
+            <span className="text-sm font-medium text-court-700"><span className="font-mono">{selected.size}</span> selected</span>
             <button
               onClick={syncSelected}
               disabled={bulkSyncing}
-              className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-3 py-1 rounded-md text-xs disabled:opacity-50"
+              className="btn btn-primary !px-3 !py-1 !text-xs"
             >
               {bulkSyncing ? "Syncing..." : `Sync ${selected.size} to WhatsApp Marketing`}
             </button>
             {isAdmin && (
-              <div className="flex items-center gap-1.5 border-l border-wa-green/30 pl-2">
+              <div className="flex items-center gap-1.5 border-l border-court-200 pl-2">
                 <select
                   value={reassignTo}
                   onChange={(e) => setReassignTo(e.target.value)}
-                  className="border border-slate-300 rounded-md px-2 py-1 text-xs bg-white"
+                  className="input w-auto !py-1 text-xs"
                 >
                   <option value="">Reassign owner to...</option>
                   {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -314,7 +314,7 @@ export default function AccountContactsClient({
                 <button
                   onClick={reassignSelected}
                   disabled={reassigning || !reassignTo}
-                  className="bg-slate-900 hover:bg-slate-800 text-white font-medium px-3 py-1 rounded-md text-xs disabled:opacity-50"
+                  className="btn btn-secondary !px-3 !py-1 !text-xs"
                 >
                   {reassigning ? "Reassigning..." : "Apply"}
                 </button>
@@ -323,14 +323,14 @@ export default function AccountContactsClient({
             <button
               onClick={moveSelectedToLeads}
               disabled={movingToLeads}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-medium px-3 py-1 rounded-md text-xs disabled:opacity-50 border-l border-wa-green/30 pl-2 ml-1"
+              className="btn btn-secondary !px-3 !py-1 !text-xs border-l border-court-200 ml-1"
             >
               {movingToLeads ? "Moving..." : `Move ${selected.size} to Leads`}
             </button>
             <button
               onClick={deleteSelected}
               disabled={bulkDeleting}
-              className="bg-red-600 hover:bg-red-700 text-white font-medium px-3 py-1 rounded-md text-xs disabled:opacity-50 border-l border-wa-green/30 pl-2 ml-1"
+              className="btn btn-danger !px-3 !py-1 !text-xs ml-1"
             >
               {bulkDeleting ? "Deleting..." : `Delete ${selected.size}`}
             </button>
@@ -341,46 +341,46 @@ export default function AccountContactsClient({
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="card overflow-x-auto">
+        <table className="data-table">
           <thead>
-            <tr className="text-left border-b border-slate-200">
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 w-8">
+            <tr>
+              <th className="w-8">
                 <SelectAllCheckbox ids={visible.map((c) => c.id)} selected={selected} onChange={setSelected} />
               </th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Name</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Company</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Designation</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Phone</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Email</th>
-              {isAdmin && <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Owner</th>}
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 w-8"><span className="sr-only">Actions</span></th>
+              <th>Name</th>
+              <th>Company</th>
+              <th>Designation</th>
+              <th>Phone</th>
+              <th>Email</th>
+              {isAdmin && <th>Owner</th>}
+              <th className="w-8 !text-right"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {visible.map((c) => (
-              <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                <td className="px-4 py-2.5">
+              <tr key={c.id}>
+                <td>
                   <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleOne(c.id)} className="rounded" aria-label={`Select ${c.name}`} />
                 </td>
-                <td className="px-4 py-2.5">
-                  <Link href={`/crm/contacts/${c.id}`} className="font-medium text-wa-dark hover:underline">
+                <td>
+                  <Link href={`/crm/contacts/${c.id}`} className="font-medium text-court-700 hover:underline">
                     {c.name}
                   </Link>
-                  {c.isPrimary && <span className="text-[10px] font-semibold text-wa-dark bg-wa-green/10 px-1.5 py-0.5 rounded ml-1.5">PRIMARY</span>}
+                  {c.isPrimary && <span className="badge bg-court-100 text-court-700 ml-1.5">Primary</span>}
                 </td>
-                <td className="px-4 py-2.5">
+                <td>
                   <Link href={`/crm/companies/${c.accountId}`} className="text-slate-600 hover:underline">{c.accountName}</Link>
                 </td>
-                <td className="px-4 py-2.5 text-slate-600">{c.designation ?? "—"}</td>
-                <td className="px-4 py-2.5 text-slate-600">{c.phone ?? "—"}</td>
-                <td className="px-4 py-2.5 text-slate-600">{c.email ?? "—"}</td>
+                <td className="text-slate-600">{c.designation ?? "—"}</td>
+                <td className="text-slate-600 font-mono">{c.phone ?? "—"}</td>
+                <td className="text-slate-600">{c.email ?? "—"}</td>
                 {isAdmin && (
-                  <td className="px-4 py-2.5 text-slate-600">
+                  <td className="text-slate-600">
                     {users.find((u) => u.id === c.accountOwnerUserId)?.name ?? "—"}
                   </td>
                 )}
-                <td className="px-4 py-2.5 text-right">
+                <td className="!text-right">
                   <button
                     onClick={() => deleteOne(c.id, c.name)}
                     disabled={deletingId === c.id}
@@ -395,7 +395,7 @@ export default function AccountContactsClient({
             ))}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-slate-400">No contacts found.</td>
+                <td colSpan={isAdmin ? 8 : 7} className="py-8 text-center text-slate-400">No contacts found.</td>
               </tr>
             )}
           </tbody>
@@ -556,22 +556,22 @@ function NewContactModal({
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Contact details</h3>
                 <div><label className="text-xs font-medium text-slate-600">Name</label>
-                  <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                  <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 input text-sm" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="text-xs font-medium text-slate-600">Phone</label>
-                    <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                    <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 input text-sm" />
                   </div>
                   <div><label className="text-xs font-medium text-slate-600">Email</label>
-                    <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                    <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 input text-sm" />
                   </div>
                 </div>
                 <div><label className="text-xs font-medium text-slate-600">Designation</label>
-                  <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+                  <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 input text-sm">
                     {DESIGNATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                   {designation === "Other" && (
-                    <input value={designationOther} onChange={(e) => setDesignationOther(e.target.value)} placeholder="Enter designation" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                    <input value={designationOther} onChange={(e) => setDesignationOther(e.target.value)} placeholder="Enter designation" className="mt-1.5 input text-sm" />
                   )}
                 </div>
               </div>
@@ -579,10 +579,10 @@ function NewContactModal({
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Location &amp; organization</h3>
                 <div><label className="text-xs font-medium text-slate-600">Location</label>
-                  <input value={siteCity} onChange={(e) => setSiteCity(e.target.value)} placeholder="City / site location" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                  <input value={siteCity} onChange={(e) => setSiteCity(e.target.value)} placeholder="City / site location" className="mt-1 input text-sm" />
                 </div>
                 {!showOrgPicker ? (
-                  <button type="button" onClick={() => setShowOrgPicker(true)} className="text-xs font-medium text-wa-dark hover:underline">
+                  <button type="button" onClick={() => setShowOrgPicker(true)} className="text-xs font-medium text-court-700 hover:underline">
                     + This is part of an existing organization
                   </button>
                 ) : (
@@ -594,19 +594,19 @@ function NewContactModal({
                       </button>
                     </div>
                     <div className="flex gap-2 mt-1 mb-1.5">
-                      <button type="button" onClick={() => setCompanyMode("existing")} className={`text-xs px-2.5 py-1 rounded-lg border ${companyMode === "existing" ? "bg-wa-green/10 border-wa-green text-wa-dark font-medium" : "border-slate-200 text-slate-500"}`} disabled={accounts.length === 0}>
+                      <button type="button" onClick={() => setCompanyMode("existing")} className={`text-xs px-2.5 py-1 rounded border ${companyMode === "existing" ? "bg-court-50 border-court-500 text-court-700 font-medium" : "border-slate-200 text-slate-500"}`} disabled={accounts.length === 0}>
                         Existing
                       </button>
-                      <button type="button" onClick={() => setCompanyMode("new")} className={`text-xs px-2.5 py-1 rounded-lg border ${companyMode === "new" ? "bg-wa-green/10 border-wa-green text-wa-dark font-medium" : "border-slate-200 text-slate-500"}`}>
+                      <button type="button" onClick={() => setCompanyMode("new")} className={`text-xs px-2.5 py-1 rounded border ${companyMode === "new" ? "bg-court-50 border-court-500 text-court-700 font-medium" : "border-slate-200 text-slate-500"}`}>
                         New organization
                       </button>
                     </div>
                     {companyMode === "existing" ? (
-                      <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+                      <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="input text-sm">
                         {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                       </select>
                     ) : (
-                      <input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Organization name" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                      <input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Organization name" className="input text-sm" />
                     )}
                   </div>
                 )}
@@ -616,16 +616,16 @@ function NewContactModal({
                 <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Classification</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="text-xs font-medium text-slate-600">Customer segment</label>
-                    <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+                    <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 input text-sm">
                       <option value="">Unspecified</option>
                       {customerProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                     {isCustomerTypeOther && (
-                      <input value={customerTypeOther} onChange={(e) => setCustomerTypeOther(e.target.value)} placeholder="Describe the customer segment" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                      <input value={customerTypeOther} onChange={(e) => setCustomerTypeOther(e.target.value)} placeholder="Describe the customer segment" className="mt-1.5 input text-sm" />
                     )}
                   </div>
                   <div><label className="text-xs font-medium text-slate-600">Business type</label>
-                    <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+                    <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 input text-sm">
                       <option value="">Unspecified</option>
                       <option value="B2B">B2B</option>
                       <option value="B2C">B2C</option>
@@ -633,7 +633,7 @@ function NewContactModal({
                       <option value="Other">Other</option>
                     </select>
                     {isBusinessTypeOther && (
-                      <input value={businessTypeOther} onChange={(e) => setBusinessTypeOther(e.target.value)} placeholder="Describe the business type" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                      <input value={businessTypeOther} onChange={(e) => setBusinessTypeOther(e.target.value)} placeholder="Describe the business type" className="mt-1.5 input text-sm" />
                     )}
                   </div>
                 </div>
@@ -642,14 +642,14 @@ function NewContactModal({
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Lead source &amp; pipeline</h3>
                 <div><label className="text-xs font-medium text-slate-600">Lead source</label>
-                  <select value={leadSourceId} onChange={(e) => setLeadSourceId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+                  <select value={leadSourceId} onChange={(e) => setLeadSourceId(e.target.value)} className="mt-1 input text-sm">
                     <option value="">Unspecified</option>
                     {leadSources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
-                  <input value={sourceDetail} onChange={(e) => setSourceDetail(e.target.value)} placeholder="Campaign / referrer name (optional)" className="mt-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                  <input value={sourceDetail} onChange={(e) => setSourceDetail(e.target.value)} placeholder="Campaign / referrer name (optional)" className="mt-1.5 input text-sm" />
                 </div>
                 <div><label className="text-xs font-medium text-slate-600">Lead stage</label>
-                  <select value={dealStageId} onChange={(e) => setDealStageId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+                  <select value={dealStageId} onChange={(e) => setDealStageId(e.target.value)} className="mt-1 input text-sm">
                     <option value="">Don't create a deal yet</option>
                     {funnelStages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
@@ -662,7 +662,7 @@ function NewContactModal({
               <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Notes</h3>
               <div className="max-w-2xl">
                 <label className="text-xs font-medium text-slate-600">What does this lead want?</label>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="e.g. Wants a football turf, ~10,000 sqft, budget around 8L" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="e.g. Wants a football turf, ~10,000 sqft, budget around 8L" className="mt-1 input text-sm" />
               </div>
             </div>
 
@@ -675,7 +675,7 @@ function NewContactModal({
                     <input
                       value={fields[k] ?? ""}
                       onChange={(e) => setFields((prev) => ({ ...prev, [k]: e.target.value }))}
-                      className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                      className="input flex-1 text-sm"
                     />
                     <button type="button" onClick={() => removeField(k)} aria-label={`Remove ${k}`} className="text-slate-400 hover:text-red-600 text-xs shrink-0 px-1">
                       ✕
@@ -687,7 +687,7 @@ function NewContactModal({
                     value={newFieldKey}
                     onChange={(e) => setNewFieldKey(e.target.value)}
                     placeholder="New field name (e.g. Sports requested)"
-                    className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                    className="input flex-1 text-sm"
                   />
                   <button type="button" onClick={addField} className="px-2.5 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 rounded-lg font-medium text-slate-700 shrink-0">
                     + Field
@@ -711,8 +711,8 @@ function NewContactModal({
 
         <div className="shrink-0 border-t border-slate-200 px-4 sm:px-6 py-3">
           <div className="max-w-6xl mx-auto flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl text-sm font-medium text-slate-700">Cancel</button>
-            <button type="submit" disabled={submitting} className="px-5 py-2 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl text-sm font-semibold disabled:opacity-50">
+            <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+            <button type="submit" disabled={submitting} className="btn btn-primary">
               {submitting ? "Creating..." : "Create"}
             </button>
           </div>

@@ -1885,9 +1885,10 @@ function drawCoverPage(
   centerText("Seelanaickenpatti, Salem, Tamil Nadu, 636201", 491, 10, ctx.font, COL.textSoft);
   centerText("Phone: 9894570997, 9597766524", 504, 10, ctx.font, COL.textSoft);
 
-  // "Quoted On" label + the date, centered lower.
-  centerText("Quoted On", 554, 10, ctx.bold, COL.muted);
-  centerText(quoteDate, 570, 15, ctx.bold, COL.text);
+  // "Quoted On" section — styled to match the "From" title above (bold dark
+  // title with its value directly below).
+  centerText("Quoted On", 552, 13, ctx.bold, COL.text);
+  centerText(quoteDate, 570, 14, ctx.bold, COL.text);
 }
 
 export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer> {

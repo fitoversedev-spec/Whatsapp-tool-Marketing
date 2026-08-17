@@ -125,9 +125,9 @@ export default function CatalogueUploadsPanel({
   if (!isAdmin) return null;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+    <div className="card p-4 space-y-3">
       <div>
-        <div className="text-sm font-semibold text-slate-900">Sport catalogues</div>
+        <div className="heading text-sm text-slate-900">Sport catalogues</div>
         <div className="text-xs text-slate-500">
           Upload a polished PDF per sport (max {MAX_MB}MB — WhatsApp's document limit) to
           replace the auto-generated catalogue attached to quotes and combined designs. Used
@@ -138,7 +138,7 @@ export default function CatalogueUploadsPanel({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
         {rows.map((r) => (
-          <div key={r.sport} className="border border-slate-200 rounded-lg p-2.5 space-y-1.5">
+          <div key={r.sport} className="card p-2.5 space-y-1.5">
             <div className="text-xs font-medium text-slate-800">{r.label}</div>
             <div className="text-[10px] text-slate-500">
               {r.url ? (
@@ -146,7 +146,7 @@ export default function CatalogueUploadsPanel({
                   href={r.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-wa-green hover:underline"
+                  className="text-court-700 hover:underline"
                 >
                   View current PDF
                 </a>
@@ -159,7 +159,7 @@ export default function CatalogueUploadsPanel({
                 type="button"
                 onClick={() => fileInputs.current[r.sport]?.click()}
                 disabled={busySport === r.sport}
-                className="flex-1 text-[10px] font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded px-2 py-1 disabled:opacity-50"
+                className="btn btn-secondary flex-1 !px-2 !py-1 !text-[10px]"
               >
                 {busySport === r.sport ? "Working…" : r.url ? "Replace" : "Upload"}
               </button>
@@ -196,13 +196,13 @@ export default function CatalogueUploadsPanel({
                     setDriveLinkDrafts((prev) => ({ ...prev, [r.sport]: e.target.value }))
                   }
                   placeholder="https://drive.google.com/…"
-                  className="flex-1 min-w-0 text-[10px] px-1.5 py-1 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-wa-green/40"
+                  className="input flex-1 min-w-0 text-[10px] !px-1.5 !py-1"
                 />
                 <button
                   type="button"
                   onClick={() => saveDriveLink(r.sport)}
                   disabled={savingLink === r.sport}
-                  className="text-[10px] font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded px-2 py-1 disabled:opacity-50"
+                  className="btn btn-secondary !px-2 !py-1 !text-[10px]"
                 >
                   {savingLink === r.sport ? "…" : "Save"}
                 </button>

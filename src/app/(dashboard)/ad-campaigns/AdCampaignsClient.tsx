@@ -28,7 +28,7 @@ function KpiTile({ label, value, sub }: { label: string; value: string; sub?: st
   return (
     <div className="bg-slate-50 rounded-lg p-4">
       <div className="text-sm text-slate-600">{label}</div>
-      <div className="text-xl font-semibold mt-1">{value}</div>
+      <div className="text-xl font-semibold mt-1 font-mono">{value}</div>
       {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
     </div>
   );
@@ -127,16 +127,11 @@ export default function AdCampaignsClient({
                 <ExportButtons filename="ad-campaigns" headers={campaignHeaders} rows={campaignRows} />
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="data-table">
                   <thead>
-                    <tr className="text-left border-b border-slate-200">
+                    <tr>
                       {["Campaign", "Status", "Spend", "Insight leads", "Captured leads", "Cost / lead"].map((h, i) => (
-                        <th
-                          key={i}
-                          className={`px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap ${
-                            i >= 2 ? "text-right" : ""
-                          }`}
-                        >
+                        <th key={i} className={`whitespace-nowrap ${i >= 2 ? "!text-right" : ""}`}>
                           {h}
                         </th>
                       ))}
@@ -144,20 +139,20 @@ export default function AdCampaignsClient({
                   </thead>
                   <tbody>
                     {campaigns.map((c) => (
-                      <tr key={c.metaId} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                        <td className="px-2 py-2 font-medium">
-                          <Link href={`/ad-campaigns/${c.metaId}`} className="text-wa-dark hover:underline">
+                      <tr key={c.metaId}>
+                        <td className="font-medium">
+                          <Link href={`/ad-campaigns/${c.metaId}`} className="text-court-700 hover:underline">
                             {c.name}
                           </Link>
                           {c.objective && <div className="text-xs text-slate-400 font-normal">{c.objective}</div>}
                         </td>
-                        <td className="px-2 py-2 whitespace-nowrap">
+                        <td className="whitespace-nowrap">
                           <StatusBadge status={c.status} />
                         </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-700">{fmtInr(c.spend)}</td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-700">{fmtInt(c.insightLeads)}</td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-700">{fmtInt(c.capturedLeads)}</td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-700">{fmtCpl(c.cpl)}</td>
+                        <td className="whitespace-nowrap !text-right font-mono text-slate-700">{fmtInr(c.spend)}</td>
+                        <td className="whitespace-nowrap !text-right font-mono text-slate-700">{fmtInt(c.insightLeads)}</td>
+                        <td className="whitespace-nowrap !text-right font-mono text-slate-700">{fmtInt(c.capturedLeads)}</td>
+                        <td className="whitespace-nowrap !text-right font-mono text-slate-700">{fmtCpl(c.cpl)}</td>
                       </tr>
                     ))}
                   </tbody>

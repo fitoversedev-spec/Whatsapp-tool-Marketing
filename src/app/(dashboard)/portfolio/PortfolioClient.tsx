@@ -134,7 +134,7 @@ export default function PortfolioClient({
                 setEditing(null);
                 setShowModal(true);
               }}
-              className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
+              className="btn btn-primary"
             >
               + Add project
             </button>
@@ -150,12 +150,12 @@ export default function PortfolioClient({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search customer, location, tags…"
-            className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="input flex-1 min-w-[200px] text-sm"
           />
           <select
             value={sportFilter}
             onChange={(e) => setSportFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white capitalize focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="input w-auto capitalize text-sm"
           >
             <option value="all">All sports</option>
             {SPORT_OPTIONS.map((s) => (
@@ -169,14 +169,14 @@ export default function PortfolioClient({
               type="checkbox"
               checked={featuredOnly}
               onChange={(e) => setFeaturedOnly(e.target.checked)}
-              className="accent-wa-green"
+              className="accent-court-600"
             />
             Featured only
           </label>
         </div>
 
         {filtered.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
+          <div className="card p-12 text-center">
             <div className="text-4xl mb-3">📂</div>
             <div className="text-sm font-semibold text-slate-900 mb-1">
               {rows.length === 0 ? "No portfolio projects yet" : "No matches"}
@@ -192,7 +192,7 @@ export default function PortfolioClient({
                   setEditing(null);
                   setShowModal(true);
                 }}
-                className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
+                className="btn btn-primary"
               >
                 + Add your first project
               </button>
@@ -203,7 +203,7 @@ export default function PortfolioClient({
             {filtered.map((p) => (
               <div
                 key={p.id}
-                className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 transition group"
+                className="card overflow-hidden hover:border-slate-300 transition group"
               >
                 <button
                   type="button"
@@ -236,11 +236,11 @@ export default function PortfolioClient({
                 </button>
                 <div className="p-3 space-y-1.5">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded capitalize">
+                    <span className="badge bg-slate-100 text-slate-700">
                       {p.sport}
                     </span>
                     {p.surfaceGrade && (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded">
+                      <span className="badge bg-court-50 text-court-700">
                         {p.surfaceGrade}
                       </span>
                     )}
@@ -254,7 +254,7 @@ export default function PortfolioClient({
                     </div>
                   )}
                   {(p.plotLengthFt || p.plotWidthFt) && (
-                    <div className="text-[11px] text-slate-500">
+                    <div className="text-[11px] text-slate-500 font-mono">
                       {p.plotLengthFt} × {p.plotWidthFt} ft
                     </div>
                   )}

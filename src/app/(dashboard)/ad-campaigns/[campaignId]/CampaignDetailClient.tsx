@@ -33,7 +33,7 @@ function KpiTile({ label, value, sub }: { label: string; value: string; sub?: st
   return (
     <div className="bg-slate-50 rounded-lg p-4">
       <div className="text-sm text-slate-600">{label}</div>
-      <div className="text-xl font-semibold mt-1">{value}</div>
+      <div className="text-xl font-semibold mt-1 font-mono">{value}</div>
       {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
     </div>
   );
@@ -49,29 +49,29 @@ function AdBreakdown({ rows }: { rows: AdLeadBreakdownRow[] }) {
   return (
     <div className="space-y-2">
       {rows.map((r, i) => (
-        <div key={r.adId ?? `none-${i}`} className="border border-slate-200 rounded-lg p-3">
+        <div key={r.adId ?? `none-${i}`} className="card p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="font-medium text-slate-900 break-words">
-                <span className="text-slate-400 tabular-nums mr-1.5">{i + 1}.</span>
+                <span className="text-slate-400 font-mono mr-1.5">{i + 1}.</span>
                 {r.adName}
               </div>
             </div>
             <div className="shrink-0 text-right leading-tight">
-              <div className="text-lg font-semibold text-slate-900 tabular-nums">{fmtInt(r.leadCount)}</div>
+              <div className="text-lg font-semibold text-slate-900 font-mono">{fmtInt(r.leadCount)}</div>
               <div className="text-[11px] text-slate-400">leads</div>
             </div>
           </div>
           <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-wa-green rounded-full"
+              className="h-full bg-court-600 rounded-full"
               style={{ width: `${Math.max(3, Math.round((r.leadCount / max) * 100))}%` }}
             />
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {r.cities.map((c) => (
-              <span key={c.city} className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                {c.city} <span className="text-slate-400 tabular-nums">{c.count}</span>
+              <span key={c.city} className="chip">
+                {c.city} <span className="text-slate-400 font-mono">{c.count}</span>
               </span>
             ))}
           </div>
@@ -81,8 +81,8 @@ function AdBreakdown({ rows }: { rows: AdLeadBreakdownRow[] }) {
   );
 }
 
-const SPEND_COLOR = "#159341"; // brand green — daily spend bars
-const LEADS_COLOR = "#0ea5e9"; // sky — daily captured-insight lead bars
+const SPEND_COLOR = "#1C6E8C"; // court — daily spend bars
+const LEADS_COLOR = "#2E7D4F"; // turf — daily captured-insight lead bars
 
 export default function CampaignDetailClient({
   detail,
@@ -160,7 +160,7 @@ export default function CampaignDetailClient({
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Spend / day</div>
+                <div className="heading text-xs tracking-wide text-slate-500 mb-2">Spend / day</div>
                 <StackedBarChart
                   data={trend}
                   dataKey="date"
@@ -171,7 +171,7 @@ export default function CampaignDetailClient({
                 />
               </div>
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Leads / day</div>
+                <div className="heading text-xs tracking-wide text-slate-500 mb-2">Leads / day</div>
                 <StackedBarChart
                   data={trend}
                   dataKey="date"

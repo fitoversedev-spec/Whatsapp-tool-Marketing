@@ -36,7 +36,7 @@ function fmtDate(iso: string): string {
 // into "Other" — copied verbatim from CrmAnalyticsClient's shared pivot so the
 // city×sport stacked bar stacks and colours exactly like the CRM geography/
 // products charts.
-const STACK_PALETTE = ["#25D366", "#73caf0", "#fbbf24", "#c81124", "#a78bfa", "#34d399", "#f472b6"];
+const STACK_PALETTE = ["#1C6E8C", "#2E7D4F", "#D9822B", "#7FD3A6", "#61A6BF", "#B33A26", "#566268"];
 type StackRow = { x: string; [k: string]: string | number };
 function stackedSeries(rows: { x: string; group: string; value: number }[], topN: number) {
   const totals = new Map<string, number>();
@@ -62,7 +62,7 @@ function KpiTile({ label, value, sub }: { label: string; value: string; sub?: st
   return (
     <div className="bg-slate-50 rounded-lg p-4">
       <div className="text-sm text-slate-600">{label}</div>
-      <div className="text-xl font-semibold mt-1">{value}</div>
+      <div className="text-xl font-semibold mt-1 font-mono">{value}</div>
       {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
     </div>
   );
@@ -91,7 +91,7 @@ function FilterCombo({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Type or choose…"
-        className="w-44 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30"
+        className="input w-44 text-sm"
       />
       <datalist id={id}>
         {options.map((o) => (
@@ -323,7 +323,7 @@ export default function LeadAnalyticsClient({
               <div className="flex flex-wrap items-end gap-3">
                 <FilterCombo id="la-city" label="City" value={cityFilter} onChange={setCityFilter} options={byCity.map((r) => r.city)} />
                 <div className="text-xs text-slate-500 pb-1.5">
-                  Showing <b className="text-slate-800">{byCityF.length}</b> of {byCity.length} cities
+                  Showing <b className="text-slate-800 font-mono">{byCityF.length}</b> of {byCity.length} cities
                   {cq && <span className="text-slate-400"> (filtered)</span>}
                 </div>
                 {cityFilter && (
@@ -338,18 +338,18 @@ export default function LeadAnalyticsClient({
                 <>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Top cities</div>
+                      <div className="heading text-xs tracking-wide text-slate-500 mb-2">Top cities</div>
                       <HorizontalBarChart
                         data={cityBars}
                         dataKey="count"
                         labelKey="city"
                         height={Math.max(140, cityBars.length * 34)}
-                        colorFor={() => "#159341"}
+                        colorFor={() => "#1C6E8C"}
                         tooltipFormatter={(d) => `${d.city}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
                       />
                     </div>
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Share of leads</div>
+                      <div className="heading text-xs tracking-wide text-slate-500 mb-2">Share of leads</div>
                       <DonutChart
                         data={cityDonut}
                         dataKey="count"
@@ -362,7 +362,7 @@ export default function LeadAnalyticsClient({
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <button type="button" onClick={() => setCityExpanded((v) => !v)} className="text-sm font-medium text-wa-dark hover:underline">
+                    <button type="button" onClick={() => setCityExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
                       {cityExpanded ? "Show less ▲" : `Show full list (${cityRows.length}) ▼`}
                     </button>
                     <ExportButtons filename="leads-by-city" headers={cityHeaders} rows={cityRows} />
@@ -388,7 +388,7 @@ export default function LeadAnalyticsClient({
                 <FilterCombo id="la-sport-city" label="City" value={sportCityFilter} onChange={setSportCityFilter} options={citySportCities} />
                 <FilterCombo id="la-sport-sport" label="Sport" value={sportSportFilter} onChange={setSportSportFilter} options={citySportSports} />
                 <div className="text-xs text-slate-500 pb-1.5">
-                  <b className="text-slate-800">{sportCellsF.reduce((a, c) => a + c.count, 0)}</b> leads
+                  <b className="text-slate-800 font-mono">{sportCellsF.reduce((a, c) => a + c.count, 0)}</b> leads
                   {(scq || ssq) && <span className="text-slate-400"> (filtered)</span>}
                 </div>
                 {(sportCityFilter || sportSportFilter) && (
@@ -422,7 +422,7 @@ export default function LeadAnalyticsClient({
                     }
                   />
                   <div className="flex items-center justify-between gap-3">
-                    <button type="button" onClick={() => setSportExpanded((v) => !v)} className="text-sm font-medium text-wa-dark hover:underline">
+                    <button type="button" onClick={() => setSportExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
                       {sportExpanded ? "Show less ▲" : `Show full list (${sportRows.length}) ▼`}
                     </button>
                     <ExportButtons filename="sport-by-city" headers={sportHeaders} rows={sportRows} />
@@ -447,7 +447,7 @@ export default function LeadAnalyticsClient({
                 <FilterCombo id="la-area-city" label="City" value={areaCityFilter} onChange={setAreaCityFilter} options={areaCityOptions} />
                 <FilterCombo id="la-area" label="Area" value={areaFilter} onChange={setAreaFilter} options={areaOptions} />
                 <div className="text-xs text-slate-500 pb-1.5">
-                  <b className="text-slate-800">{areaLeadTotal}</b> leads
+                  <b className="text-slate-800 font-mono">{areaLeadTotal}</b> leads
                   {(aq || acq) && <span className="text-slate-400"> (filtered)</span>}
                 </div>
                 {(areaFilter || areaCityFilter) && (
@@ -468,7 +468,7 @@ export default function LeadAnalyticsClient({
               ) : (
                 <>
                   <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                    <div className="heading text-xs tracking-wide text-slate-500 mb-2">
                       {areaFilter
                         ? "Cities requesting this area (most to least)"
                         : areaCityFilter
@@ -480,12 +480,12 @@ export default function LeadAnalyticsClient({
                       dataKey="count"
                       labelKey="label"
                       height={Math.max(140, areaBars.length * 34)}
-                      colorFor={() => "#159341"}
+                      colorFor={() => "#1C6E8C"}
                       tooltipFormatter={(d) => `${d.label}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
                     />
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <button type="button" onClick={() => setAreaExpanded((v) => !v)} className="text-sm font-medium text-wa-dark hover:underline">
+                    <button type="button" onClick={() => setAreaExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
                       {areaExpanded ? "Show less ▲" : `Show full list (${areaRows.length}) ▼`}
                     </button>
                     <ExportButtons filename="area-by-city" headers={areaHeaders} rows={areaRows} />
@@ -511,7 +511,7 @@ export default function LeadAnalyticsClient({
                 <FilterCombo id="la-job-city" label="City" value={jobCityFilter} onChange={setJobCityFilter} options={jobCityOptions} />
                 <FilterCombo id="la-job-sport" label="Sport" value={jobSportFilter} onChange={setJobSportFilter} options={jobSportOptions} />
                 <div className="text-xs text-slate-500 pb-1.5">
-                  <b className="text-slate-800">{jobLeadTotal}</b> leads · {jobGroups.length} job{jobGroups.length === 1 ? "" : "s"}
+                  <b className="text-slate-800 font-mono">{jobLeadTotal}</b> leads · {jobGroups.length} job{jobGroups.length === 1 ? "" : "s"}
                   {(jq || jcq || jsq) && <span className="text-slate-400"> (filtered)</span>}
                 </div>
                 {(jobFilter || jobCityFilter || jobSportFilter) && (
@@ -534,30 +534,30 @@ export default function LeadAnalyticsClient({
                 <>
                   <div className="space-y-2">
                     {(jobsExpanded ? jobGroups : jobGroups.slice(0, JOBS_PREVIEW)).map((g, i) => (
-                      <div key={g.job} className="border border-slate-200 rounded-lg p-3">
+                      <div key={g.job} className="card p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="font-medium text-slate-900 break-words">
-                            <span className="text-slate-400 tabular-nums mr-1.5">{i + 1}.</span>
+                            <span className="text-slate-400 font-mono mr-1.5">{i + 1}.</span>
                             {g.job}
                           </div>
                           <div className="shrink-0 text-right leading-tight">
-                            <div className="text-lg font-semibold text-slate-900 tabular-nums">{fmtInt(g.count)}</div>
+                            <div className="text-lg font-semibold text-slate-900 font-mono">{fmtInt(g.count)}</div>
                             <div className="text-xs text-slate-400">leads</div>
                           </div>
                         </div>
                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1">Cities</span>
+                          <span className="heading text-xs tracking-wide text-slate-400 mr-1">Cities</span>
                           {g.cities.map((c) => (
-                            <span key={c.city} className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                              {c.city} <span className="text-slate-400 tabular-nums">{c.count}</span>
+                            <span key={c.city} className="chip">
+                              {c.city} <span className="text-slate-400 font-mono">{c.count}</span>
                             </span>
                           ))}
                         </div>
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1">Sports</span>
+                          <span className="heading text-xs tracking-wide text-slate-400 mr-1">Sports</span>
                           {g.sports.map((s) => (
-                            <span key={s.sport} className="text-xs px-2 py-0.5 rounded-full bg-wa-green/10 text-wa-dark">
-                              {s.sport} <span className="text-slate-500 tabular-nums">{s.count}</span>
+                            <span key={s.sport} className="chip bg-court-50 border-court-200 text-court-700">
+                              {s.sport} <span className="text-court-500 font-mono">{s.count}</span>
                             </span>
                           ))}
                         </div>
@@ -565,7 +565,7 @@ export default function LeadAnalyticsClient({
                     ))}
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <button type="button" onClick={() => setJobsExpanded((v) => !v)} className="text-sm font-medium text-wa-dark hover:underline">
+                    <button type="button" onClick={() => setJobsExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
                       {jobsExpanded ? "Show less ▲" : `Show all ${jobGroups.length} jobs ▼`}
                     </button>
                     <ExportButtons filename="leads-by-job" headers={jobHeaders} rows={jobRows} />
@@ -592,7 +592,7 @@ export default function LeadAnalyticsClient({
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <button type="button" onClick={() => setRepeatExpanded((v) => !v)} className="text-sm font-medium text-wa-dark hover:underline">
+                <button type="button" onClick={() => setRepeatExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
                   {repeatExpanded ? "Show less ▲" : `Show all ${repeatRows.length} ▼`}
                 </button>
                 <ExportButtons filename="repeat-leads" headers={repeatHeaders} rows={repeatRows} />

@@ -165,7 +165,7 @@ export default function PortfolioProjectModal({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <div className="font-semibold text-slate-900">
+            <div className="heading text-slate-900">
               {editing ? "Edit project" : "Add portfolio project"}
             </div>
             {editing && (
@@ -298,12 +298,12 @@ export default function PortfolioProjectModal({
           <section className="border-t border-slate-200 pt-4 space-y-2">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-semibold text-slate-900">Photos</div>
+                <div className="heading text-sm text-slate-900">Photos</div>
                 <div className="text-[11px] text-slate-500">
                   First-uploaded photo becomes the catalogue hero by default.
                 </div>
               </div>
-              <label className="text-xs font-medium bg-wa-green hover:bg-wa-green/90 text-white px-3 py-1.5 rounded-md cursor-pointer">
+              <label className="btn btn-primary !px-3 !py-1.5 !text-xs cursor-pointer">
                 {uploadingPhoto ? "Uploading…" : "+ Add photo"}
                 <input
                   type="file"
@@ -327,7 +327,7 @@ export default function PortfolioProjectModal({
                   <div
                     key={p.url}
                     className={`relative aspect-square rounded-md overflow-hidden border-2 ${
-                      heroPhotoUrl === p.url ? "border-wa-green" : "border-slate-200"
+                      heroPhotoUrl === p.url ? "border-court-500" : "border-slate-200"
                     }`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -337,7 +337,7 @@ export default function PortfolioProjectModal({
                       onClick={() => setHeroPhotoUrl(p.url)}
                       className={`absolute top-1 left-1 text-[9px] px-1.5 py-0.5 rounded ${
                         heroPhotoUrl === p.url
-                          ? "bg-wa-green text-white"
+                          ? "bg-court-600 text-white"
                           : "bg-white/90 text-slate-700"
                       }`}
                     >
@@ -386,7 +386,7 @@ export default function PortfolioProjectModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-sm text-slate-600 hover:text-slate-900 px-3 py-1.5"
+            className="btn btn-ghost"
           >
             Cancel
           </button>
@@ -394,7 +394,7 @@ export default function PortfolioProjectModal({
             type="button"
             onClick={submit}
             disabled={submitting}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-5 py-2 rounded-xl text-sm disabled:opacity-50"
+            className="btn btn-primary"
           >
             {submitting ? "Saving…" : editing ? "Save changes" : "Add project"}
           </button>
@@ -407,7 +407,7 @@ export default function PortfolioProjectModal({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[11px] text-slate-500 uppercase tracking-wide">
+      <span className="heading text-[11px] text-slate-500 tracking-wide">
         {label}
       </span>
       <div className="mt-1">{children}</div>
@@ -415,5 +415,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inputClass =
-  "w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green";
+const inputClass = "input text-sm";

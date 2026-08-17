@@ -191,7 +191,7 @@ export default function CourtImagesClient({
         action={
           <button
             onClick={openNew}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
+            className="btn btn-primary"
           >
             + New design
           </button>
@@ -204,12 +204,12 @@ export default function CourtImagesClient({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by customer, number, phone…"
-            className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="input flex-1 min-w-[200px] text-sm"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="input w-auto text-sm"
           >
             <option value="all">All status</option>
             <option value="draft">Drafts</option>
@@ -245,7 +245,7 @@ export default function CourtImagesClient({
         )}
 
         {filtered.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
+          <div className="card p-12 text-center">
             <div className="text-4xl mb-3">🎨</div>
             <div className="text-sm font-semibold text-slate-900 mb-1">
               {rows.length === 0 ? "No designs yet" : "No matches"}
@@ -258,7 +258,7 @@ export default function CourtImagesClient({
             {rows.length === 0 && (
               <button
                 onClick={openNew}
-                className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
+                className="btn btn-primary"
               >
                 + Build your first design
               </button>
@@ -269,8 +269,8 @@ export default function CourtImagesClient({
             {filtered.map((r) => (
               <div
                 key={r.id}
-                className={`relative bg-white border rounded-xl overflow-hidden hover:border-slate-300 transition group ${
-                  selected.has(r.id) ? "border-red-300 ring-2 ring-red-200" : "border-slate-200"
+                className={`card relative overflow-hidden hover:border-slate-300 transition group ${
+                  selected.has(r.id) ? "!border-red-300 ring-2 ring-red-200" : ""
                 }`}
               >
                 {isAdmin && (
@@ -304,9 +304,7 @@ export default function CourtImagesClient({
                   <div className="flex items-center justify-between">
                     <div className="text-[10px] font-mono text-slate-500">{r.number}</div>
                     <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
-                        STATUS_COLORS[r.status] ?? "bg-slate-100 text-slate-600"
-                      }`}
+                      className={`badge ${STATUS_COLORS[r.status] ?? "bg-slate-100 text-slate-600"}`}
                     >
                       {r.status}
                     </span>
@@ -319,7 +317,7 @@ export default function CourtImagesClient({
                       {r.sports.map((s) => (
                         <span
                           key={s}
-                          className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded capitalize"
+                          className="badge bg-slate-100 text-slate-600"
                         >
                           {s}
                         </span>
@@ -335,7 +333,7 @@ export default function CourtImagesClient({
                         <button
                           type="button"
                           onClick={() => openEdit(r.id)}
-                          className="flex-1 text-xs text-slate-700 border border-slate-300 hover:border-slate-400 rounded px-2 py-1"
+                          className="btn btn-secondary flex-1 !px-2 !py-1 !text-xs"
                         >
                           Edit
                         </button>
@@ -358,7 +356,7 @@ export default function CourtImagesClient({
                             href={r.imageUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 text-xs text-slate-700 border border-slate-300 hover:border-slate-400 rounded px-2 py-1 text-center"
+                            className="btn btn-secondary flex-1 !px-2 !py-1 !text-xs text-center"
                           >
                             View image
                           </a>
@@ -366,7 +364,7 @@ export default function CourtImagesClient({
                         <button
                           type="button"
                           onClick={() => resend(r.id)}
-                          className="text-xs text-wa-dark hover:bg-wa-green/10 border border-wa-green/30 rounded px-2 py-1"
+                          className="text-xs text-court-700 hover:bg-court-50 border border-court-300 rounded px-2 py-1"
                           title="Re-send"
                         >
                           ↗ Re-send

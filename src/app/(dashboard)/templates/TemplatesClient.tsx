@@ -153,7 +153,7 @@ export default function TemplatesClient({
               <button
                 onClick={syncFromMeta}
                 disabled={syncing}
-                className="bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-700 font-medium px-4 py-2 rounded-lg transition"
+                className="btn btn-secondary"
                 title="Pull live status from Meta and update local DB"
               >
                 {syncing ? "Syncing…" : "↻ Sync from Meta"}
@@ -161,7 +161,7 @@ export default function TemplatesClient({
             )}
             <button
               onClick={() => setShowDraft(true)}
-              className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg transition"
+              className="btn btn-primary"
             >
               + New template
             </button>
@@ -177,7 +177,7 @@ export default function TemplatesClient({
               onClick={() => setFilter(s)}
               className={`shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                 filter === s
-                  ? "bg-slate-900 text-white"
+                  ? "bg-court-600 text-white"
                   : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
               }`}
             >
@@ -200,7 +200,7 @@ export default function TemplatesClient({
         </div>
 
         {filtered.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-center text-slate-500">
+          <div className="card p-8 sm:p-12 text-center text-slate-500">
             No templates. Click <strong>New template</strong> to create one.
           </div>
         ) : (
@@ -223,14 +223,14 @@ export default function TemplatesClient({
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span
-                      className={`inline-block px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap ${
-                        STATUS_COLORS[t.status] ?? "bg-slate-100"
+                      className={`badge ${
+                        STATUS_COLORS[t.status] ?? "bg-slate-100 text-slate-700"
                       }`}
                     >
                       {t.status.replace("_", " ")}
                     </span>
                     {t.deletedAt && (
-                      <span className="inline-block px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap bg-slate-700 text-white">
+                      <span className="badge bg-slate-700 text-white">
                         Deleted
                       </span>
                     )}
@@ -483,8 +483,8 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
               only; a human reviews and submits to Meta. */}
           <div className="rounded-xl border border-wa-green/30 bg-wa-green/5 p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-sm font-semibold text-slate-900">Draft with AI</div>
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-wa-green bg-wa-green/10 px-2 py-0.5 rounded-md">
+              <div className="heading text-sm text-slate-900">Draft with AI</div>
+              <span className="badge text-wa-green bg-wa-green/10">
                 Assist
               </span>
             </div>
@@ -505,7 +505,7 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
                 type="button"
                 onClick={() => runDraft()}
                 disabled={drafting}
-                className="bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-4 py-2.5 rounded-lg whitespace-nowrap"
+                className="btn btn-primary whitespace-nowrap"
               >
                 {drafting ? "Drafting…" : "✨ Draft with AI"}
               </button>
@@ -675,14 +675,14 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           <button
             type="button"
             onClick={onClose}
-            className="order-2 sm:order-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg"
+            className="order-2 sm:order-1 btn btn-ghost"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="order-1 sm:order-2 bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-5 py-2.5 rounded-lg"
+            className="order-1 sm:order-2 btn btn-primary"
           >
             {saving ? "Saving…" : "Save draft"}
           </button>
@@ -692,7 +692,7 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         :global(.input) {
           width: 100%;
           padding: 0.625rem 0.75rem;
-          border-radius: 0.5rem;
+          border-radius: 3px;
           border: 1px solid #cbd5e1;
           outline: none;
           font-size: 16px;
@@ -703,8 +703,8 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           }
         }
         :global(.input:focus) {
-          border-color: #159341;
-          box-shadow: 0 0 0 3px rgba(21, 147, 65, 0.2);
+          border-color: #1c6e8c;
+          box-shadow: 0 0 0 3px rgba(28, 110, 140, 0.25);
         }
       `}</style>
     </div>

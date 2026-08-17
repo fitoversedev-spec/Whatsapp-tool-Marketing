@@ -63,11 +63,11 @@ export default function RecipientsTable({ recipients }: { recipients: Recipient[
               onClick={() => setFilter(s)}
               className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                 filter === s
-                  ? "bg-slate-900 text-white"
+                  ? "bg-court-600 text-white"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
-              {s} {counts[s] !== undefined && <span className="opacity-70 ml-1">({counts[s]})</span>}
+              {s} {counts[s] !== undefined && <span className="opacity-70 ml-1 font-mono">({counts[s]})</span>}
             </button>
           ))}
         </div>
@@ -76,7 +76,7 @@ export default function RecipientsTable({ recipients }: { recipients: Recipient[
           placeholder="Search by phone, name, or error…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none text-sm"
+          className="input text-sm"
         />
       </div>
 
@@ -90,8 +90,8 @@ export default function RecipientsTable({ recipients }: { recipients: Recipient[
                 <div className="text-xs text-slate-500 font-mono">+{r.phoneE164}</div>
               </div>
               <span
-                className={`shrink-0 inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                  STATUS_COLORS[r.status] ?? "bg-slate-100"
+                className={`shrink-0 badge ${
+                  STATUS_COLORS[r.status] ?? "bg-slate-100 text-slate-700"
                 }`}
               >
                 {r.status}
@@ -104,7 +104,7 @@ export default function RecipientsTable({ recipients }: { recipients: Recipient[
               </div>
             )}
             {(r.sentAt || r.deliveredAt || r.readAt) && (
-              <div className="text-[10px] text-slate-400 mt-2 space-y-0.5">
+              <div className="text-[10px] text-slate-400 mt-2 space-y-0.5 font-mono">
                 {r.sentAt && <div>Sent: {new Date(r.sentAt).toLocaleString()}</div>}
                 {r.deliveredAt && <div>Delivered: {new Date(r.deliveredAt).toLocaleString()}</div>}
                 {r.readAt && <div>Read: {new Date(r.readAt).toLocaleString()}</div>}
@@ -116,42 +116,42 @@ export default function RecipientsTable({ recipients }: { recipients: Recipient[
 
       {/* Desktop table */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+        <table className="data-table">
+          <thead>
             <tr>
-              <th className="px-4 py-3 text-left">Name</th>
-              <th className="px-4 py-3 text-left">Phone</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3 text-left">Sent</th>
-              <th className="px-4 py-3 text-left">Delivered</th>
-              <th className="px-4 py-3 text-left">Read</th>
-              <th className="px-4 py-3 text-left">Error</th>
+              <th className="text-left">Name</th>
+              <th className="text-left">Phone</th>
+              <th className="text-left">Status</th>
+              <th className="text-left">Sent</th>
+              <th className="text-left">Delivered</th>
+              <th className="text-left">Read</th>
+              <th className="text-left">Error</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {filtered.map((r) => (
-              <tr key={r.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2.5 text-slate-900">{r.name ?? "—"}</td>
-                <td className="px-4 py-2.5 text-slate-600 font-mono text-xs">+{r.phoneE164}</td>
-                <td className="px-4 py-2.5">
+              <tr key={r.id}>
+                <td className="text-slate-900">{r.name ?? "—"}</td>
+                <td className="text-slate-600 font-mono text-xs">+{r.phoneE164}</td>
+                <td>
                   <span
-                    className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                      STATUS_COLORS[r.status] ?? "bg-slate-100"
+                    className={`badge ${
+                      STATUS_COLORS[r.status] ?? "bg-slate-100 text-slate-700"
                     }`}
                   >
                     {r.status}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-xs text-slate-500">
+                <td className="text-xs text-slate-500 font-mono">
                   {r.sentAt ? new Date(r.sentAt).toLocaleString() : "—"}
                 </td>
-                <td className="px-4 py-2.5 text-xs text-slate-500">
+                <td className="text-xs text-slate-500 font-mono">
                   {r.deliveredAt ? new Date(r.deliveredAt).toLocaleString() : "—"}
                 </td>
-                <td className="px-4 py-2.5 text-xs text-slate-500">
+                <td className="text-xs text-slate-500 font-mono">
                   {r.readAt ? new Date(r.readAt).toLocaleString() : "—"}
                 </td>
-                <td className="px-4 py-2.5 text-xs">
+                <td className="text-xs">
                   {r.errorMessage ? (
                     <div className="text-red-700">
                       {r.errorCode && <span className="font-mono mr-1">[{r.errorCode}]</span>}

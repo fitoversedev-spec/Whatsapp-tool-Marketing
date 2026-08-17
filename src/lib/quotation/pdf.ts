@@ -1289,7 +1289,6 @@ function drawParticularsTable(
   };
   const rightEdge = MARGIN + CONTENT_W;
   const PAD = 5;
-  const headerH = 20;
   // Table grid: outer left/right borders on every band + inner column
   // separators on data rows. Drawn per-band (using each band's own top/height)
   // so the grid survives page breaks. `inner` adds the column dividers.
@@ -1320,11 +1319,48 @@ function drawParticularsTable(
     const w = safeWidth(font, t, size);
     safeDraw(ctx.page, t, { x: cx0 + cw - w - PAD, y, size, font, color });
   };
-  const HEAD_SIZE = 8.5;
+  // Group rows by scope section (stable sort preserves within-section order).
+  const ordered = [...items].sort((a, b) => sectionOrder(a.section) - sectionOrder(b.section));
+  const inc = ordered.filter((i) => i.included);
+
+  // ── Auto-fit: a short quote (<= 10 rows) is shrunk so the WHOLE table PLUS the
+  // totals block (finalReserve) fits on the page it starts on. Descriptions are
+  // re-wrapped at the trial size, so shrinking cuts both line-height AND line
+  // count. Longer quotes keep flowing across pages at full size, as before.
+  const B = { head: 8.5, name: 9, nameLH: 11, opt: 8, optLH: 10, desc: 8.5, descLH: 10.5, sec: 9.5, secLH: 11, headerH: 20, padTop: 3, padBot: 4 };
+  const measureTable = (s: number): number => {
+    let h = B.headerH * s;
+    let seen: string | null = null;
+    for (const item of inc) {
+      const sec = item.section ?? null;
+      const isNew = !!sec && sec !== seen;
+      const secLines = isNew ? wordWrap(ctx.bold, sec as string, B.sec * s, cols.item - PAD * 2) : [];
+      const nameLines = wordWrap(ctx.bold, item.name, B.name * s, cols.desc - PAD * 2);
+      const descLines = wordWrap(ctx.font, item.description, B.desc * s, cols.desc - PAD * 2);
+      const itemColH = secLines.length * B.secLH * s;
+      const descColH = nameLines.length * B.nameLH * s + (item.optionTag ? B.optLH * s : 0) + descLines.length * B.descLH * s;
+      h += B.padTop * s + Math.max(itemColH, descColH, B.nameLH * s) + B.padBot * s;
+      if (sec) seen = sec;
+    }
+    return h + finalReserve;
+  };
+  const available = PAGE_H - MARGIN - FOOTER_RESERVE - ctx.y;
+  let s = 1;
+  if (inc.length > 0 && inc.length <= 10) {
+    while (s > 0.6 && measureTable(s) > available) s -= 0.03;
+  }
+  const headerH = B.headerH * s;
+  const HEAD_SIZE = B.head * s;
+  const NAME_SIZE = B.name * s, NAME_LH = B.nameLH * s;
+  const OPT_SIZE = B.opt * s, OPT_LH = B.optLH * s;
+  const DESC_SIZE = B.desc * s, DESC_LH = B.descLH * s;
+  const SEC_SIZE = B.sec * s, SEC_LH = B.secLH * s;
+  const PAD_TOP = B.padTop * s, PAD_BOT = B.padBot * s;
+
   const drawHead = () => {
     ensureSpace(ctx, headerH);
     drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.tableHead });
-    const hy = yFromTop(ctx.y + 13.5);
+    const hy = yFromTop(ctx.y + headerH * 0.68);
     centerAt("S.NO", x.sno, cols.sno, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("ITEM", x.item, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("DESCRIPTION", x.desc, HEAD_SIZE, ctx.bold, COL.text, hy);
@@ -1339,19 +1375,8 @@ function drawParticularsTable(
     ctx.y += headerH;
   };
   drawHead();
-  const NAME_SIZE = 9;
-  const NAME_LH = 11;
-  const OPT_SIZE = 8;
-  const OPT_LH = 10;
-  const DESC_SIZE = 8.5;
-  const DESC_LH = 10.5;
-  const SEC_SIZE = 9.5;
-  const SEC_LH = 11;
   let lastSection: string | null = null;
   let serial = 0;
-  // Group rows by scope section (stable sort preserves within-section order).
-  const ordered = [...items].sort((a, b) => sectionOrder(a.section) - sectionOrder(b.section));
-  const inc = ordered.filter((i) => i.included);
   for (let idx = 0; idx < inc.length; idx++) {
     const item = inc[idx];
     const sec = item.section ?? null;
@@ -1364,7 +1389,7 @@ function drawParticularsTable(
     const hasOpt = !!item.optionTag;
     const itemColH = secLines.length * SEC_LH;
     const descColH = nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0) + descLines.length * DESC_LH;
-    const rowH = 3 + Math.max(itemColH, descColH, NAME_LH) + 4;
+    const rowH = PAD_TOP + Math.max(itemColH, descColH, NAME_LH) + PAD_BOT;
     // Only the truly last row drags the totals block's reserve along with it.
     const reserve = idx === inc.length - 1 ? finalReserve : 0;
 
@@ -1374,7 +1399,7 @@ function drawParticularsTable(
 
     serial++;
     if (serial % 2 === 0) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
-    const sy = ctx.y + 3;
+    const sy = ctx.y + PAD_TOP;
     const line0 = sy + NAME_SIZE; // first-line baseline (distance from row top)
     const numY = yFromTop(line0);
     // S.NO

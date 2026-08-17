@@ -241,7 +241,7 @@ export default function PipelineClient({
           placeholder="Search name, phone, or message…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-[200px] max-w-md text-sm px-3 py-1.5 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+          className="input flex-1 min-w-[200px] max-w-md text-sm"
         />
         <OwnerSelect
           value={owner}
@@ -355,7 +355,7 @@ function OwnerSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="text-sm px-3 py-1.5 border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+      className="input w-auto text-sm"
     >
       {currentUser.role === "admin" && <option value="all">All owners</option>}
       <option value="me">Mine</option>
@@ -384,7 +384,7 @@ function AssignedRosterPanel({
       <div className="rounded-xl border border-slate-200 bg-slate-50">
         <div className="px-3 py-2.5 rounded-t-xl bg-slate-100 flex items-center justify-between">
           <span className="text-sm font-semibold text-slate-700">👥 Assigned to you</span>
-          <span className="text-xs text-slate-500">{cards.length}</span>
+          <span className="text-xs text-slate-500 font-mono">{cards.length}</span>
         </div>
         <p className="px-3 pt-2 text-[11px] text-slate-400 leading-snug">
           Drag anyone straight into a stage — no need to hunt through the columns for them.
@@ -435,7 +435,7 @@ function KanbanColumn({
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: v.hex }} />
             <span className="text-sm font-semibold" style={{ color: v.hex }}>{stage.label}</span>
           </div>
-          <div className="text-xs" style={{ color: v.hex }}>
+          <div className="text-xs font-mono" style={{ color: v.hex }}>
             {totals.count} · {formatINRShort(totals.value)}
           </div>
         </div>
@@ -497,19 +497,19 @@ function DraggableCard({
         e.stopPropagation();
         onClick?.();
       }}
-      className={`bg-white rounded-lg border border-slate-200 p-3 shadow-sm cursor-grab active:cursor-grabbing select-none ${
+      className={`card p-3 shadow-sm cursor-grab active:cursor-grabbing select-none ${
         isDragging && !dragging ? "opacity-30" : ""
-      } ${dragging ? "shadow-lg ring-2 ring-wa-green/40" : "hover:border-slate-300 hover:shadow"}`}
+      } ${dragging ? "shadow-lg ring-2 ring-court-500/40" : "hover:border-slate-300 hover:shadow"}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="font-medium text-sm text-slate-900 truncate">
             {card.contactName || card.contactPhone || card.dealCode}
           </div>
-          <div className="text-xs text-slate-500 truncate">{card.contactPhone || card.dealCode}</div>
+          <div className="text-xs text-slate-500 truncate font-mono">{card.contactPhone || card.dealCode}</div>
         </div>
         {card.dealValue && (
-          <div className="text-xs font-semibold text-slate-700 shrink-0">
+          <div className="text-xs font-semibold text-slate-700 shrink-0 font-mono">
             {formatINRShort(Number(card.dealValue))}
           </div>
         )}
@@ -521,7 +521,7 @@ function DraggableCard({
         </div>
       )}
       <div className="mt-2 flex items-center justify-between text-[10px]">
-        <span className={daysColor}>{days}d in stage</span>
+        <span className={`font-mono ${daysColor}`}>{days}d in stage</span>
         <div className="flex items-center gap-2">
           {card.assignedToName && (
             <span className="text-slate-500 truncate max-w-[80px]">
@@ -564,16 +564,16 @@ function FunnelView({
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
           <div className="text-xs text-emerald-700 uppercase tracking-wide font-medium">Won</div>
-          <div className="text-2xl font-bold text-emerald-700 mt-1">{wonTotal}</div>
-          <div className="text-xs text-emerald-600">{formatINR(wonValue)}</div>
+          <div className="text-2xl font-bold text-emerald-700 mt-1 font-mono">{wonTotal}</div>
+          <div className="text-xs text-emerald-600 font-mono">{formatINR(wonValue)}</div>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
           <div className="text-xs text-red-700 uppercase tracking-wide font-medium">Lost</div>
-          <div className="text-2xl font-bold text-red-700 mt-1">{lostTotal}</div>
+          <div className="text-2xl font-bold text-red-700 mt-1 font-mono">{lostTotal}</div>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
           <div className="text-xs text-blue-700 uppercase tracking-wide font-medium">Win rate</div>
-          <div className="text-2xl font-bold text-blue-700 mt-1">
+          <div className="text-2xl font-bold text-blue-700 mt-1 font-mono">
             {wonTotal + lostTotal > 0
               ? `${Math.round((wonTotal / (wonTotal + lostTotal)) * 100)}%`
               : "—"}
@@ -591,17 +591,17 @@ function FunnelView({
           <div key={s.id} className="flex items-center gap-3">
             <div className="w-32 text-right shrink-0">
               <div className="text-sm font-medium text-slate-900">{s.label}</div>
-              <div className="text-xs text-slate-500">{stageData.count} · {formatINRShort(stageData.value)}</div>
+              <div className="text-xs text-slate-500 font-mono">{stageData.count} · {formatINRShort(stageData.value)}</div>
             </div>
             <div className="flex-1">
               <div
                 className="h-12 rounded-r-md flex items-center justify-end px-3 transition-all"
                 style={{ width: `${widthPct}%`, background: v.strong }}
               >
-                <span className="text-xs font-semibold" style={{ color: v.hex }}>{stageData.count}</span>
+                <span className="text-xs font-semibold font-mono" style={{ color: v.hex }}>{stageData.count}</span>
               </div>
             </div>
-            <div className="w-16 text-xs text-slate-500 shrink-0">
+            <div className="w-16 text-xs text-slate-500 shrink-0 font-mono">
               {idx > 0 && top > 0 && `${Math.round(conv)}%`}
             </div>
           </div>
@@ -662,7 +662,7 @@ function CloseoutModal({
               value={dealValue}
               onChange={(e) => setDealValue(e.target.value)}
               placeholder="e.g. 500000"
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+              className="input"
             />
           </div>
         ) : (
@@ -675,7 +675,7 @@ function CloseoutModal({
                 autoFocus
                 value={lossReasonId}
                 onChange={(e) => setLossReasonId(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                className="input"
               >
                 <option value="">—</option>
                 {lossReasons.map((r) => (
@@ -692,7 +692,7 @@ function CloseoutModal({
                 onChange={(e) => setLostReason(e.target.value)}
                 rows={3}
                 placeholder="Budget too high, went with competitor, no longer needed..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green resize-none"
+                className="input resize-none"
               />
             </div>
           </div>
@@ -701,7 +701,7 @@ function CloseoutModal({
           <button
             onClick={onCancel}
             disabled={submitting}
-            className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900"
+            className="btn btn-ghost"
           >
             Cancel
           </button>
@@ -712,9 +712,7 @@ function CloseoutModal({
               (prompt.type === "won" && (!dealValue || Number(dealValue) <= 0)) ||
               (prompt.type === "lost" && !lostReason.trim() && !lossReasonId)
             }
-            className={`px-4 py-2 text-sm font-medium text-white rounded-md disabled:opacity-50 ${
-              prompt.type === "won" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"
-            }`}
+            className={`btn ${prompt.type === "won" ? "btn-turf" : "btn-danger"}`}
           >
             {submitting ? "Saving…" : prompt.type === "won" ? "Mark Won" : "Mark Lost"}
           </button>

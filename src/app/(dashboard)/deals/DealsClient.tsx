@@ -52,7 +52,7 @@ function StageBadge({ name, colorHex }: { name: string; colorHex: string | null 
 function ChannelBadge({ channel }: { channel: string }) {
   const isWhatsapp = channel === "whatsapp";
   return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${isWhatsapp ? "bg-wa-green/10 text-wa-dark" : "bg-blue-50 text-blue-700"}`}>
+    <span className={`badge ${isWhatsapp ? "bg-green-100 text-green-700" : "bg-court-100 text-court-700"}`}>
       {isWhatsapp ? "WhatsApp" : "CRM"}
     </span>
   );
@@ -131,7 +131,7 @@ export default function DealsClient({
         action={
           <button
             onClick={() => setShowNew(true)}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
+            className="btn btn-primary"
           >
             + New Deal
           </button>
@@ -142,7 +142,7 @@ export default function DealsClient({
         <select
           value={channelFilter}
           onChange={(e) => setChannelFilter(e.target.value as typeof channelFilter)}
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+          className="input w-auto text-sm"
         >
           <option value="all">All deals</option>
           <option value="whatsapp">WhatsApp deals</option>
@@ -152,7 +152,7 @@ export default function DealsClient({
           <select
             value={ownerFilter}
             onChange={(e) => setOwnerFilter(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="input w-auto text-sm"
           >
             <option value="all">All owners</option>
             {users.map((u) => (
@@ -168,46 +168,46 @@ export default function DealsClient({
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="card overflow-x-auto">
+        <table className="data-table">
           <thead>
-            <tr className="text-left border-b border-slate-200">
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Deal</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Account</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Channel</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Stage</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Owner</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 text-right">Value</th>
+            <tr>
+              <th className="text-left">Deal</th>
+              <th className="text-left">Account</th>
+              <th className="text-left">Channel</th>
+              <th className="text-left">Stage</th>
+              <th className="text-left">Owner</th>
+              <th className="!text-right">Value</th>
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={6} className="py-10 text-center text-slate-400">
                   No deals yet — click "New Deal" to create one.
                 </td>
               </tr>
             )}
             {visible.map((d) => (
-              <tr key={d.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                <td className="px-4 py-3">
-                  <Link href={`/deals/${d.id}`} className="text-base font-medium text-slate-900 hover:text-wa-green hover:underline">
+              <tr key={d.id}>
+                <td>
+                  <Link href={`/deals/${d.id}`} className="text-base font-medium text-slate-900 hover:text-court-700 hover:underline">
                     {d.title}
                   </Link>
-                  <div className="text-xs text-slate-500">{d.code}</div>
+                  <div className="text-xs text-slate-500 font-mono">{d.code}</div>
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <div className="text-slate-700">{d.accountName}</div>
                   {d.accountCity && <div className="text-xs text-slate-500">{d.accountCity}</div>}
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <ChannelBadge channel={d.dealChannel} />
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <select
                     value={d.stageId}
                     onChange={(e) => onStagePick(d, e.target.value)}
-                    className="text-xs border border-slate-200 rounded-md px-1.5 py-1 bg-white"
+                    className="input w-auto text-xs !px-1.5 !py-1"
                   >
                     {stages.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
@@ -215,8 +215,8 @@ export default function DealsClient({
                   </select>
                   <div className="mt-1"><StageBadge name={d.stageName} colorHex={d.stageColorHex} /></div>
                 </td>
-                <td className="px-4 py-3 text-slate-600">{d.ownerName ?? "—"}</td>
-                <td className="px-4 py-3 text-right font-medium text-slate-900">
+                <td className="text-slate-600">{d.ownerName ?? "—"}</td>
+                <td className="!text-right font-medium text-slate-900 font-mono">
                   {fmtInr(d.wonValue ?? d.quotedValue ?? d.estimatedValue)}
                 </td>
               </tr>
@@ -293,14 +293,14 @@ function ModalActions({
 }) {
   return (
     <div className="pt-4 border-t border-slate-200 -mx-5 sm:-mx-6 px-5 sm:px-6 flex flex-col sm:flex-row sm:justify-end gap-2">
-      <button type="button" onClick={onClose} className="order-2 sm:order-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg">
+      <button type="button" onClick={onClose} className="order-2 sm:order-1 btn btn-ghost">
         Cancel
       </button>
       <button
         type="button"
         onClick={onConfirm}
         disabled={confirmDisabled}
-        className="order-1 sm:order-2 bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium px-5 py-2.5 rounded-lg"
+        className="order-1 sm:order-2 btn btn-primary"
       >
         {confirmLabel}
       </button>
@@ -420,11 +420,11 @@ function NewDealModal({
             type="button"
             onClick={() => submit(true)}
             disabled={saving}
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
+            className="btn btn-secondary w-full"
           >
             No — create a new account anyway
           </button>
-          <button type="button" onClick={onClose} className="w-full px-4 py-2.5 text-slate-500 hover:bg-slate-50 rounded-lg">
+          <button type="button" onClick={onClose} className="btn btn-ghost w-full">
             Cancel and use the existing account instead
           </button>
         </div>
@@ -453,14 +453,14 @@ function NewDealModal({
             <button
               type="button"
               onClick={() => setDealChannel("crm")}
-              className={`px-3 py-1 text-xs font-medium rounded-full ${dealChannel === "crm" ? "bg-wa-green text-white" : "bg-slate-100 text-slate-600"}`}
+              className={`px-3 py-1 text-xs font-medium rounded-full ${dealChannel === "crm" ? "bg-court-600 text-white" : "bg-slate-100 text-slate-600"}`}
             >
               CRM deal
             </button>
             <button
               type="button"
               onClick={() => setDealChannel("whatsapp")}
-              className={`px-3 py-1 text-xs font-medium rounded-full ${dealChannel === "whatsapp" ? "bg-wa-green text-white" : "bg-slate-100 text-slate-600"}`}
+              className={`px-3 py-1 text-xs font-medium rounded-full ${dealChannel === "whatsapp" ? "bg-court-600 text-white" : "bg-slate-100 text-slate-600"}`}
             >
               WhatsApp deal
             </button>
@@ -471,14 +471,14 @@ function NewDealModal({
             <button
               type="button"
               onClick={() => { setAccountMode("new"); setSelectedAccount(null); }}
-              className={`px-3 py-1 text-xs font-medium rounded-full ${accountMode === "new" ? "bg-wa-green text-white" : "bg-slate-100 text-slate-600"}`}
+              className={`px-3 py-1 text-xs font-medium rounded-full ${accountMode === "new" ? "bg-court-600 text-white" : "bg-slate-100 text-slate-600"}`}
             >
               New account
             </button>
             <button
               type="button"
               onClick={() => setAccountMode("existing")}
-              className={`px-3 py-1 text-xs font-medium rounded-full ${accountMode === "existing" ? "bg-wa-green text-white" : "bg-slate-100 text-slate-600"}`}
+              className={`px-3 py-1 text-xs font-medium rounded-full ${accountMode === "existing" ? "bg-court-600 text-white" : "bg-slate-100 text-slate-600"}`}
             >
               Existing account
             </button>

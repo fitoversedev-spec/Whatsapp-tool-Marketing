@@ -1289,7 +1289,7 @@ function drawParticularsTable(
   };
   const rightEdge = MARGIN + CONTENT_W;
   const PAD = 5;
-  const headerH = 28;
+  const headerH = 22;
   // Table grid: outer left/right borders on every band + inner column
   // separators on data rows. Drawn per-band (using each band's own top/height)
   // so the grid survives page breaks. `inner` adds the column dividers.
@@ -1320,11 +1320,11 @@ function drawParticularsTable(
     const w = safeWidth(font, t, size);
     safeDraw(ctx.page, t, { x: cx0 + cw - w - PAD, y, size, font, color });
   };
-  const HEAD_SIZE = 11;
+  const HEAD_SIZE = 9;
   const drawHead = () => {
     ensureSpace(ctx, headerH);
     drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.tableHead });
-    const hy = yFromTop(ctx.y + 18.5);
+    const hy = yFromTop(ctx.y + 14.5);
     centerAt("S.NO", x.sno, cols.sno, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("ITEM", x.item, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("DESCRIPTION", x.desc, HEAD_SIZE, ctx.bold, COL.text, hy);
@@ -1339,14 +1339,14 @@ function drawParticularsTable(
     ctx.y += headerH;
   };
   drawHead();
-  const NAME_SIZE = 11.5;
-  const NAME_LH = 15;
-  const OPT_SIZE = 10.5;
-  const OPT_LH = 14;
-  const DESC_SIZE = 11;
-  const DESC_LH = 14.5;
-  const SEC_SIZE = 12;
-  const SEC_LH = 15;
+  const NAME_SIZE = 9.5;
+  const NAME_LH = 12;
+  const OPT_SIZE = 8.5;
+  const OPT_LH = 11;
+  const DESC_SIZE = 9;
+  const DESC_LH = 11.5;
+  const SEC_SIZE = 10;
+  const SEC_LH = 12;
   let lastSection: string | null = null;
   let serial = 0;
   // Group rows by scope section (stable sort preserves within-section order).
@@ -1364,7 +1364,7 @@ function drawParticularsTable(
     const hasOpt = !!item.optionTag;
     const itemColH = secLines.length * SEC_LH;
     const descColH = nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0) + descLines.length * DESC_LH;
-    const rowH = 6 + Math.max(itemColH, descColH, NAME_LH) + 6;
+    const rowH = 4 + Math.max(itemColH, descColH, NAME_LH) + 5;
     // Only the truly last row drags the totals block's reserve along with it.
     const reserve = idx === inc.length - 1 ? finalReserve : 0;
 
@@ -1374,7 +1374,7 @@ function drawParticularsTable(
 
     serial++;
     if (serial % 2 === 0) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
-    const sy = ctx.y + 6;
+    const sy = ctx.y + 4;
     const line0 = sy + NAME_SIZE; // first-line baseline (distance from row top)
     const numY = yFromTop(line0);
     // S.NO
@@ -1747,7 +1747,7 @@ function drawShowcaseSection(
 }
 
 // ── Phase G: "Connect With Us" — shares the final page with Our Portfolio ──
-function drawConnectPage(ctx: Ctx) {
+function drawConnectPage(ctx: Ctx, driveLink: string | null = null) {
   space(ctx, 10);
   drawCentered(ctx, "Connect With Us", MARGIN, CONTENT_W, ctx.y, 18, ctx.bold, COL.text);
   ctx.y += 26;
@@ -1755,6 +1755,7 @@ function drawConnectPage(ctx: Ctx) {
   ctx.y += 28;
   const rows: Array<[string, string, string | null]> = [
     ["Phone", "+91 63815 02055   ·   +91 93638 63382", null],
+    ["Portfolio", "View our projects", driveLink || "https://fitoverse.com/"],
     ["Website", "fitoverse.com", "https://fitoverse.com/"],
     ["Instagram", "fito.verse", "https://www.instagram.com/fito.verse/"],
     ["LinkedIn", "Fitoverse", "https://www.linkedin.com/company/fitoverse/"],
@@ -1877,15 +1878,16 @@ function drawCoverPage(
     const wb = safeWidth(ctx.bold, b, 14);
     const startX = MARGIN + (CONTENT_W - (wa + wb)) / 2;
     const fy = yFromTop(456 + 14);
-    safeDraw(ctx.page, a, { x: startX, y: fy, size: 14, font: ctx.bold, color: BLUE });
+    safeDraw(ctx.page, a, { x: startX, y: fy, size: 14, font: ctx.bold, color: COL.text });
     safeDraw(ctx.page, b, { x: startX + wa, y: fy, size: 14, font: ctx.bold, color: COL.text });
   }
   centerText("Plot no 96, Samiyappa Nagar 3rd cross west street,", 478, 10, ctx.font, COL.textSoft);
   centerText("Seelanaickenpatti, Salem, Tamil Nadu, 636201", 491, 10, ctx.font, COL.textSoft);
   centerText("Phone: 9894570997, 9597766524", 504, 10, ctx.font, COL.textSoft);
 
-  // Date, centered lower.
-  centerText(quoteDate, 568, 14, ctx.bold, COL.text);
+  // "Quoted On" label + the date, centered lower.
+  centerText("Quoted On", 554, 10, ctx.bold, COL.muted);
+  centerText(quoteDate, 570, 15, ctx.bold, COL.text);
 }
 
 export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer> {
@@ -2057,16 +2059,9 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   //    shows for sports that have one; Connect always renders below it. ──
   drawFooter(ctx);
   newPage(ctx);
-  const showcaseBytes = SHOWCASE_PHOTO_BYTES[data.sport];
-  if (showcaseBytes) {
-    try {
-      const showcaseImage = await doc.embedJpg(showcaseBytes);
-      drawShowcaseSection(ctx, showcaseImage, data.driveLink ?? null);
-    } catch (e) {
-      console.error("[quotation pdf] showcase photo embed failed", e);
-    }
-  }
-  drawConnectPage(ctx);
+  // "Our Portfolio" photo section removed (user request) — the per-project
+  // portfolio link now lives in the Connect With Us panel below.
+  drawConnectPage(ctx, data.driveLink ?? null);
 
   drawFooter(ctx);
   const bytes = await doc.save();

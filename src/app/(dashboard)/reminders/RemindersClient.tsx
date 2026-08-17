@@ -68,16 +68,13 @@ export default function RemindersClient({
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {totalActive === 0 && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+          <div className="card p-10 text-center">
             <div className="text-4xl mb-2">🎉</div>
             <h3 className="font-semibold text-slate-900">All caught up</h3>
             <p className="text-sm text-slate-500 mt-1">
               Set follow-up reminders from any conversation in the Inbox.
             </p>
-            <Link
-              href="/inbox"
-              className="inline-block mt-4 px-4 py-2 text-sm font-semibold bg-wa-green text-white rounded-xl hover:bg-wa-green/90"
-            >
+            <Link href="/inbox" className="btn btn-primary mt-4">
               Go to Inbox
             </Link>
           </div>
@@ -146,10 +143,10 @@ function Section({
     emerald: "bg-emerald-50 border-emerald-200 text-emerald-800",
   }[tone];
   return (
-    <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+    <section className="card overflow-hidden">
       <div className={`px-5 py-3 border-b ${headBg} flex items-center justify-between`}>
         <h2 className="text-sm font-semibold">{title}</h2>
-        <span className="text-xs font-medium">{count}</span>
+        <span className="text-xs font-medium font-mono">{count}</span>
       </div>
       <ul className="divide-y divide-slate-100">{children}</ul>
     </section>
@@ -183,7 +180,7 @@ function Row({
           {reminder.message}
         </div>
         <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
-          <span>
+          <span className="font-mono">
             {due.toLocaleString("en-IN", {
               day: "numeric",
               month: "short",

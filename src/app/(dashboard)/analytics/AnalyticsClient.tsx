@@ -79,13 +79,15 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "bg-red-100 text-red-800",
 };
 
+// Categorical hues for the failure breakdown, drawn from the Fitoverse palette
+// (track danger → amber warning → court → turf → mint accent → slate neutral).
 const FAILURE_PALETTE = [
-  "#ef4444",
-  "#f97316",
-  "#eab308",
-  "#a855f7",
-  "#0ea5e9",
-  "#64748b",
+  "#B33A26", // track
+  "#D9822B", // amber
+  "#1C6E8C", // court
+  "#2E7D4F", // turf
+  "#7FD3A6", // mint
+  "#566268", // slate-500
 ];
 
 export default function AnalyticsClient({
@@ -150,7 +152,7 @@ export default function AnalyticsClient({
         </div>
 
         {/* Timeline chart */}
-        <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5">
+        <section className="card p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-semibold text-slate-900">Delivery over time</h2>
@@ -163,18 +165,18 @@ export default function AnalyticsClient({
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={timeline} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#D5E0E3" />
                   <XAxis
                     dataKey="date"
-                    stroke="#64748b"
+                    stroke="#566268"
                     fontSize={11}
                     tickFormatter={shortDate}
                   />
-                  <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
+                  <YAxis stroke="#566268" fontSize={11} allowDecimals={false} />
                   <Tooltip
                     contentStyle={{
-                      borderRadius: 8,
-                      border: "1px solid #e2e8f0",
+                      borderRadius: 3,
+                      border: "1px solid #D5E0E3",
                       fontSize: 12,
                     }}
                     labelFormatter={(label) => `Date: ${label}`}
@@ -185,8 +187,8 @@ export default function AnalyticsClient({
                     dataKey="sent"
                     name="Sent"
                     stackId="0"
-                    stroke="#64748b"
-                    fill="#cbd5e1"
+                    stroke="#566268"
+                    fill="#B8C7CC"
                     fillOpacity={0.4}
                   />
                   <Area
@@ -194,8 +196,8 @@ export default function AnalyticsClient({
                     dataKey="delivered"
                     name="Delivered"
                     stackId="1"
-                    stroke="#10b981"
-                    fill="#34d399"
+                    stroke="#2E7D4F"
+                    fill="#74BE96"
                     fillOpacity={0.5}
                   />
                   <Area
@@ -203,8 +205,8 @@ export default function AnalyticsClient({
                     dataKey="read"
                     name="Read"
                     stackId="2"
-                    stroke="#8b5cf6"
-                    fill="#a78bfa"
+                    stroke="#1C6E8C"
+                    fill="#61A6BF"
                     fillOpacity={0.5}
                   />
                   <Area
@@ -212,8 +214,8 @@ export default function AnalyticsClient({
                     dataKey="failed"
                     name="Failed"
                     stackId="3"
-                    stroke="#ef4444"
-                    fill="#fca5a5"
+                    stroke="#B33A26"
+                    fill="#DF7C69"
                     fillOpacity={0.5}
                   />
                 </AreaChart>
@@ -224,7 +226,7 @@ export default function AnalyticsClient({
 
         {/* Two-column: templates + failures */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <section className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <section className="lg:col-span-2 card overflow-hidden">
             <div className="p-5 border-b border-slate-200">
               <h2 className="text-sm font-semibold text-slate-900">Template performance</h2>
               <p className="text-xs text-slate-500 mt-0.5">Sorted by most messages sent</p>
@@ -233,37 +235,37 @@ export default function AnalyticsClient({
               <EmptyState message="No template stats for this range." />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <table className="data-table">
+                  <thead>
                     <tr>
-                      <th className="text-left px-4 py-2.5 font-medium">Template</th>
-                      <th className="text-right px-3 py-2.5 font-medium">Used</th>
-                      <th className="text-right px-3 py-2.5 font-medium">Sent</th>
-                      <th className="text-right px-3 py-2.5 font-medium">Deliv %</th>
-                      <th className="text-right px-3 py-2.5 font-medium">Read %</th>
-                      <th className="text-right px-4 py-2.5 font-medium">Fail %</th>
+                      <th className="text-left">Template</th>
+                      <th className="!text-right">Used</th>
+                      <th className="!text-right">Sent</th>
+                      <th className="!text-right">Deliv %</th>
+                      <th className="!text-right">Read %</th>
+                      <th className="!text-right">Fail %</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {templates.map((t) => {
                       const dRate = t.sent > 0 ? t.delivered / t.sent : 0;
                       const rRate = t.delivered > 0 ? t.read / t.delivered : 0;
                       const fRate = t.sent > 0 ? t.failed / t.sent : 0;
                       return (
-                        <tr key={t.templateName} className="hover:bg-slate-50">
-                          <td className="px-4 py-3">
+                        <tr key={t.templateName}>
+                          <td>
                             <div className="font-medium text-slate-900">{t.templateName}</div>
                             <div className="text-xs text-slate-500">{t.category}</div>
                           </td>
-                          <td className="text-right px-3 py-3 text-slate-700">{t.broadcasts}</td>
-                          <td className="text-right px-3 py-3 text-slate-700">{formatNumber(t.sent)}</td>
-                          <td className="text-right px-3 py-3">
+                          <td className="!text-right font-mono text-slate-700">{t.broadcasts}</td>
+                          <td className="!text-right font-mono text-slate-700">{formatNumber(t.sent)}</td>
+                          <td className="!text-right font-mono">
                             <span className={rateColor(dRate, "deliv")}>{formatPct(dRate)}</span>
                           </td>
-                          <td className="text-right px-3 py-3">
+                          <td className="!text-right font-mono">
                             <span className={rateColor(rRate, "read")}>{formatPct(rRate)}</span>
                           </td>
-                          <td className="text-right px-4 py-3">
+                          <td className="!text-right font-mono">
                             <span className={fRate > 0 ? "text-red-600" : "text-slate-400"}>
                               {formatPct(fRate)}
                             </span>
@@ -277,7 +279,7 @@ export default function AnalyticsClient({
             )}
           </section>
 
-          <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <section className="card overflow-hidden">
             <div className="p-5 border-b border-slate-200">
               <h2 className="text-sm font-semibold text-slate-900">Failure breakdown</h2>
               <p className="text-xs text-slate-500 mt-0.5">By Meta error code</p>
@@ -319,8 +321,8 @@ export default function AnalyticsClient({
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-2">
-                          <span className="font-semibold text-slate-900">[{f.code}]</span>
-                          <span className="text-xs text-slate-500">{f.count}×</span>
+                          <span className="font-semibold font-mono text-slate-900">[{f.code}]</span>
+                          <span className="text-xs text-slate-500 font-mono">{f.count}×</span>
                         </div>
                         {f.sample && (
                           <div className="text-xs text-slate-600 mt-0.5 line-clamp-2">
@@ -337,7 +339,7 @@ export default function AnalyticsClient({
         </div>
 
         {/* Per-broadcast table */}
-        <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <section className="card overflow-hidden">
           <div className="p-5 border-b border-slate-200">
             <h2 className="text-sm font-semibold text-slate-900">Broadcasts in range</h2>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -348,24 +350,24 @@ export default function AnalyticsClient({
             <EmptyState message="No broadcasts in this range." />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <th className="text-left px-4 py-2.5 font-medium">Name</th>
-                    <th className="text-left px-3 py-2.5 font-medium">Template</th>
-                    <th className="text-left px-3 py-2.5 font-medium">Status</th>
-                    <th className="text-right px-3 py-2.5 font-medium">Sent</th>
-                    <th className="text-right px-3 py-2.5 font-medium">Deliv</th>
-                    <th className="text-right px-3 py-2.5 font-medium">Read</th>
-                    <th className="text-right px-3 py-2.5 font-medium">Fail</th>
-                    <th className="text-right px-3 py-2.5 font-medium">Cost</th>
-                    <th className="text-left px-4 py-2.5 font-medium">When</th>
+                    <th className="text-left">Name</th>
+                    <th className="text-left">Template</th>
+                    <th className="text-left">Status</th>
+                    <th className="!text-right">Sent</th>
+                    <th className="!text-right">Deliv</th>
+                    <th className="!text-right">Read</th>
+                    <th className="!text-right">Fail</th>
+                    <th className="!text-right">Cost</th>
+                    <th className="text-left">When</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {broadcasts.map((b) => (
-                    <tr key={b.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3">
+                    <tr key={b.id}>
+                      <td>
                         <Link
                           href={`/broadcasts/${b.id}`}
                           className="font-medium text-slate-900 hover:text-wa-dark"
@@ -374,26 +376,22 @@ export default function AnalyticsClient({
                         </Link>
                         <div className="text-xs text-slate-500">by {b.createdByName}</div>
                       </td>
-                      <td className="px-3 py-3 text-slate-700">{b.templateName}</td>
-                      <td className="px-3 py-3">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
-                            STATUS_COLORS[b.status] ?? "bg-slate-100"
-                          }`}
-                        >
+                      <td className="text-slate-700">{b.templateName}</td>
+                      <td>
+                        <span className={`badge ${STATUS_COLORS[b.status] ?? "bg-slate-100 text-slate-700"}`}>
                           {b.status}
                         </span>
                       </td>
-                      <td className="text-right px-3 py-3 text-slate-700">{b.sent}</td>
-                      <td className="text-right px-3 py-3 text-emerald-700">{b.delivered}</td>
-                      <td className="text-right px-3 py-3 text-purple-700">{b.read}</td>
-                      <td className="text-right px-3 py-3">
+                      <td className="!text-right font-mono text-slate-700">{b.sent}</td>
+                      <td className="!text-right font-mono text-emerald-700">{b.delivered}</td>
+                      <td className="!text-right font-mono text-court-700">{b.read}</td>
+                      <td className="!text-right font-mono">
                         <span className={b.failed > 0 ? "text-red-600" : "text-slate-400"}>
                           {b.failed}
                         </span>
                       </td>
-                      <td className="text-right px-3 py-3 text-slate-700">{formatINR(b.cost)}</td>
-                      <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                      <td className="!text-right font-mono text-slate-700">{formatINR(b.cost)}</td>
+                      <td className="text-xs text-slate-500 whitespace-nowrap font-mono">
                         {new Date(b.createdAt).toLocaleDateString("en-IN", {
                           day: "2-digit",
                           month: "short",
@@ -469,9 +467,9 @@ function KpiCard({
           ? "text-red-700"
           : "text-slate-900";
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5">
+    <div className="card p-4 sm:p-5">
       <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</div>
-      <div className={`text-2xl sm:text-3xl font-bold ${valueColor} mt-2`}>{value}</div>
+      <div className={`text-2xl sm:text-3xl font-bold font-mono ${valueColor} mt-2`}>{value}</div>
       {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
     </div>
   );

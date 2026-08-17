@@ -1289,7 +1289,7 @@ function drawParticularsTable(
   };
   const rightEdge = MARGIN + CONTENT_W;
   const PAD = 5;
-  const headerH = 22;
+  const headerH = 20;
   // Table grid: outer left/right borders on every band + inner column
   // separators on data rows. Drawn per-band (using each band's own top/height)
   // so the grid survives page breaks. `inner` adds the column dividers.
@@ -1320,11 +1320,11 @@ function drawParticularsTable(
     const w = safeWidth(font, t, size);
     safeDraw(ctx.page, t, { x: cx0 + cw - w - PAD, y, size, font, color });
   };
-  const HEAD_SIZE = 9;
+  const HEAD_SIZE = 8.5;
   const drawHead = () => {
     ensureSpace(ctx, headerH);
     drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.tableHead });
-    const hy = yFromTop(ctx.y + 14.5);
+    const hy = yFromTop(ctx.y + 13.5);
     centerAt("S.NO", x.sno, cols.sno, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("ITEM", x.item, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("DESCRIPTION", x.desc, HEAD_SIZE, ctx.bold, COL.text, hy);
@@ -1339,14 +1339,14 @@ function drawParticularsTable(
     ctx.y += headerH;
   };
   drawHead();
-  const NAME_SIZE = 9.5;
-  const NAME_LH = 12;
-  const OPT_SIZE = 8.5;
-  const OPT_LH = 11;
-  const DESC_SIZE = 9;
-  const DESC_LH = 11.5;
-  const SEC_SIZE = 10;
-  const SEC_LH = 12;
+  const NAME_SIZE = 9;
+  const NAME_LH = 11;
+  const OPT_SIZE = 8;
+  const OPT_LH = 10;
+  const DESC_SIZE = 8.5;
+  const DESC_LH = 10.5;
+  const SEC_SIZE = 9.5;
+  const SEC_LH = 11;
   let lastSection: string | null = null;
   let serial = 0;
   // Group rows by scope section (stable sort preserves within-section order).
@@ -1364,7 +1364,7 @@ function drawParticularsTable(
     const hasOpt = !!item.optionTag;
     const itemColH = secLines.length * SEC_LH;
     const descColH = nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0) + descLines.length * DESC_LH;
-    const rowH = 4 + Math.max(itemColH, descColH, NAME_LH) + 5;
+    const rowH = 3 + Math.max(itemColH, descColH, NAME_LH) + 4;
     // Only the truly last row drags the totals block's reserve along with it.
     const reserve = idx === inc.length - 1 ? finalReserve : 0;
 
@@ -1374,7 +1374,7 @@ function drawParticularsTable(
 
     serial++;
     if (serial % 2 === 0) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
-    const sy = ctx.y + 4;
+    const sy = ctx.y + 3;
     const line0 = sy + NAME_SIZE; // first-line baseline (distance from row top)
     const numY = yFromTop(line0);
     // S.NO

@@ -38,6 +38,24 @@ function extractJob(fieldDataJson: string | null): string | null {
   return contains;
 }
 
+// Area (in sq.ft) isn't a MetaLead column either - it lives in the form answers
+// as a bracket like "5k-10k_sq.ft". Match the "...area (in sq.ft)...?" question
+// (name contains both "area" and "sq", which excludes the free-text "dimensions"
+// questions and the locality "area"), and tidy the value for display.
+const cleanArea = (v: string): string =>
+  v.replace(/_/g, " ").replace(/(\d)(sq)/gi, "$1 $2").replace(/\s+/g, " ").trim();
+function extractArea(fieldDataJson: string | null): string | null {
+  for (const f of parseFieldDataJson(fieldDataJson)) {
+    const name = (f.name ?? "").toLowerCase().trim();
+    if (!name) continue;
+    if (name.includes("area") && name.includes("sq")) {
+      const v = f.value?.trim();
+      if (v) return cleanArea(v);
+    }
+  }
+  return null;
+}
+
 function leadWindowWhere({ from, to }: Range) {
   return {
     OR: [
@@ -120,6 +138,28 @@ export async function jobAnalytics({ from, to }: Range): Promise<JobCityCell[]> 
   }
 
   return [...map.values()].sort((a, b) => b.count - a.count || a.job.localeCompare(b.job));
+}
+
+// Flat area x city cross-tab (one cell per combination). The UI ranks areas
+// within a chosen city, or cities within a chosen area (and vice versa). Leads
+// with no area answer are excluded; blank city -> "Unknown". Sorted count desc.
+export type AreaCityCell = { area: string; city: string; count: number };
+export async function areaAnalytics({ from, to }: Range): Promise<AreaCityCell[]> {
+  const leads = await prisma.metaLead.findMany({
+    where: leadWindowWhere({ from, to }),
+    select: { city: true, fieldData: true },
+  });
+  const map = new Map<string, AreaCityCell>();
+  for (const l of leads) {
+    const area = extractArea(l.fieldData);
+    if (!area) continue;
+    const city = normalizeLabel(l.city) ?? UNKNOWN;
+    const key = `${area}||${city}`;
+    const e = map.get(key) ?? { area, city, count: 0 };
+    e.count += 1;
+    map.set(key, e);
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count || a.area.localeCompare(b.area));
 }
 
 export type RepeatLeadCapture = { campaignName: string | null; capturedAt: string }; // ISO

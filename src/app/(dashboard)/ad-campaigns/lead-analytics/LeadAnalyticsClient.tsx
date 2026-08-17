@@ -21,7 +21,7 @@ import { DataTable } from "@/components/analytics/DataTable";
 import { ExportButtons } from "@/components/analytics/ExportButtons";
 import { HorizontalBarChart, StackedBarChart, DonutChart, DONUT_PALETTE } from "@/components/analytics/charts";
 import MetaAiSummary from "@/components/MetaAiSummary";
-import type { LeadCityRow, SportCityCell, RepeatLeadRow, JobCityCell } from "@/lib/meta-ads/leadAnalytics";
+import type { LeadCityRow, SportCityCell, RepeatLeadRow, JobCityCell, AreaCityCell } from "@/lib/meta-ads/leadAnalytics";
 
 function fmtInt(n: number): string {
   return n.toLocaleString("en-IN");
@@ -107,12 +107,14 @@ export default function LeadAnalyticsClient({
   sportByCity,
   repeats,
   jobs,
+  areas,
   range,
 }: {
   byCity: LeadCityRow[];
   sportByCity: SportCityCell[];
   repeats: RepeatLeadRow[];
   jobs: JobCityCell[];
+  areas: AreaCityCell[];
   range: DateRange;
 }) {
   const router = useRouter();
@@ -138,11 +140,14 @@ export default function LeadAnalyticsClient({
   const [jobFilter, setJobFilter] = useState("");
   const [jobCityFilter, setJobCityFilter] = useState("");
   const [jobSportFilter, setJobSportFilter] = useState("");
+  const [areaFilter, setAreaFilter] = useState("");
+  const [areaCityFilter, setAreaCityFilter] = useState("");
   // Each data card shows only its chart/top rows by default; the full itemised
   // list (table, and the rest of the job cards) reveals on "expand".
   const [cityExpanded, setCityExpanded] = useState(false);
   const [sportExpanded, setSportExpanded] = useState(false);
   const [jobsExpanded, setJobsExpanded] = useState(false);
+  const [areaExpanded, setAreaExpanded] = useState(false);
   const [repeatExpanded, setRepeatExpanded] = useState(false);
   const JOBS_PREVIEW = 5;
 
@@ -229,6 +234,31 @@ export default function LeadAnalyticsClient({
   const jobOptions = [...new Set(jobs.map((c) => c.job))];
   const jobCityOptions = [...new Set(jobs.map((c) => c.city))];
   const jobSportOptions = [...new Set(jobs.map((c) => c.sport))];
+
+  // --- Area demand (area × city): rank areas within a city, or cities within
+  // an area (and vice versa). Choosing an Area flips the ranking to cities. ---
+  const aq = areaFilter.trim().toLowerCase();
+  const acq = areaCityFilter.trim().toLowerCase();
+  const areaCellsF = areas.filter(
+    (c) => (!aq || c.area.toLowerCase().includes(aq)) && (!acq || c.city.toLowerCase().includes(acq)),
+  );
+  const areaGroupBy: "city" | "area" = areaFilter ? "city" : "area";
+  const areaRanking = (() => {
+    const m = new Map<string, number>();
+    for (const c of areaCellsF) m.set(c[areaGroupBy], (m.get(c[areaGroupBy]) ?? 0) + c.count);
+    return [...m.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  })();
+  const areaBars = areaRanking.slice(0, 12);
+  const areaLeadTotal = areaCellsF.reduce((a, c) => a + c.count, 0);
+  const areaHeaders = ["Area", "City", "Leads"];
+  const areaRows: (string | number)[][] = areaCellsF
+    .slice()
+    .sort((a, b) => b.count - a.count)
+    .map((c) => [c.area, c.city, c.count]);
+  const areaOptions = [...new Set(areas.map((c) => c.area))];
+  const areaCityOptions = [...new Set(areas.map((c) => c.city))];
 
   // --- Repeat submitters ---
   const repeatHeaders = ["Person", "Phone", "Campaigns", "Which campaigns", "First seen", "Last seen"];
@@ -398,6 +428,69 @@ export default function LeadAnalyticsClient({
                     <ExportButtons filename="sport-by-city" headers={sportHeaders} rows={sportRows} />
                   </div>
                   {sportExpanded && <DataTable headers={sportHeaders} rows={sportRows} />}
+                </>
+              )}
+            </div>
+          )}
+        </AnalyticsCard>
+
+        {/* Area demand (area × city) — rank areas in a city, or cities for an area */}
+        <AnalyticsCard
+          title="Area demand by city"
+          description="How much space leads are asking for (the form's area-in-sq.ft answer). Pick a city to rank its area sizes most-to-least, or pick an area to see which cities want it most — and vice versa."
+        >
+          {areas.length === 0 ? (
+            <p className="text-sm text-slate-400">No area-size data in this range yet.</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <FilterCombo id="la-area-city" label="City" value={areaCityFilter} onChange={setAreaCityFilter} options={areaCityOptions} />
+                <FilterCombo id="la-area" label="Area" value={areaFilter} onChange={setAreaFilter} options={areaOptions} />
+                <div className="text-xs text-slate-500 pb-1.5">
+                  <b className="text-slate-800">{areaLeadTotal}</b> leads
+                  {(aq || acq) && <span className="text-slate-400"> (filtered)</span>}
+                </div>
+                {(areaFilter || areaCityFilter) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAreaFilter("");
+                      setAreaCityFilter("");
+                    }}
+                    className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {areaRanking.length === 0 ? (
+                <p className="text-sm text-slate-400">No leads match the current filters.</p>
+              ) : (
+                <>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                      {areaFilter
+                        ? "Cities requesting this area (most to least)"
+                        : areaCityFilter
+                          ? "Area sizes requested in this city (most to least)"
+                          : "Area sizes requested (most to least)"}
+                    </div>
+                    <HorizontalBarChart
+                      data={areaBars}
+                      dataKey="count"
+                      labelKey="label"
+                      height={Math.max(140, areaBars.length * 34)}
+                      colorFor={() => "#159341"}
+                      tooltipFormatter={(d) => `${d.label}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <button type="button" onClick={() => setAreaExpanded((v) => !v)} className="text-sm font-medium text-wa-dark hover:underline">
+                      {areaExpanded ? "Show less ▲" : `Show full list (${areaRows.length}) ▼`}
+                    </button>
+                    <ExportButtons filename="area-by-city" headers={areaHeaders} rows={areaRows} />
+                  </div>
+                  {areaExpanded && <DataTable headers={areaHeaders} rows={areaRows} />}
                 </>
               )}
             </div>

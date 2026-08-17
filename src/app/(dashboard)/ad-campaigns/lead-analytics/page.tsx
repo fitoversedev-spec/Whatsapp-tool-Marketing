@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { leadsByCity, sportByCity, repeatLeads, jobAnalytics } from "@/lib/meta-ads/leadAnalytics";
+import { leadsByCity, sportByCity, repeatLeads, jobAnalytics, areaAnalytics } from "@/lib/meta-ads/leadAnalytics";
 import LeadAnalyticsClient from "./LeadAnalyticsClient";
 
 // Open to all approved reps — requireUser redirects a logged-out visitor who
@@ -32,11 +32,12 @@ export default async function LeadAnalyticsPage({
     return Number.isNaN(d.getTime()) ? new Date() : d;
   })();
 
-  const [byCity, sportCity, repeats, jobs] = await Promise.all([
+  const [byCity, sportCity, repeats, jobs, areas] = await Promise.all([
     leadsByCity({ from, to }),
     sportByCity({ from, to }),
     repeatLeads({ from, to }),
     jobAnalytics({ from, to }),
+    areaAnalytics({ from, to }),
   ]);
 
   return (
@@ -45,6 +46,7 @@ export default async function LeadAnalyticsPage({
       sportByCity={sportCity}
       repeats={repeats}
       jobs={jobs}
+      areas={areas}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}
     />
   );

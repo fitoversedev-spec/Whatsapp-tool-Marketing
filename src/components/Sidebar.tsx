@@ -166,10 +166,10 @@ export default function Sidebar({
           </svg>
         </button>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-slate-900 truncate">{currentLabel}</div>
+          <div className="font-heading font-bold uppercase tracking-tight text-slate-900 truncate">{currentLabel}</div>
           <div className="mt-0.5"><SectionBadge /></div>
         </div>
-        <div className="w-8 h-8 rounded-lg bg-wa-green text-white flex items-center justify-center font-bold text-sm">
+        <div className="w-8 h-8 rounded bg-wa-green text-white flex items-center justify-center font-heading font-bold text-sm">
           W
         </div>
       </header>
@@ -284,6 +284,12 @@ export default function Sidebar({
                     : "text-slate-700 hover:bg-white/60 hover:text-slate-900 active:bg-white/80"
                 }`}
               >
+                {active && (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-mint-300"
+                  />
+                )}
                 <span className="text-base shrink-0 relative">
                   {item.icon}
                   {/* When collapsed, badge becomes a small dot overlay on the icon */}
@@ -294,10 +300,10 @@ export default function Sidebar({
                     />
                   )}
                 </span>
-                <span className={`flex-1 ${collapsed ? "lg:hidden" : ""}`}>{item.label}</span>
+                <span className={`flex-1 font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>{item.label}</span>
                 {!collapsed && badge > 0 && (
                   <span
-                    className={`inline-block ${badgeColor} text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none`}
+                    className={`inline-block ${badgeColor} text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none`}
                   >
                     {badge > 99 ? "99+" : badge}
                   </span>
@@ -305,7 +311,7 @@ export default function Sidebar({
                 {/* Mobile drawer always shows badge as bubble (mobile never collapses) */}
                 {collapsed && badge > 0 && (
                   <span
-                    className={`lg:hidden inline-block ${badgeColor} text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none ml-auto`}
+                    className={`lg:hidden inline-block ${badgeColor} text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none ml-auto`}
                   >
                     {badge > 99 ? "99+" : badge}
                   </span>
@@ -337,9 +343,9 @@ export default function Sidebar({
                 <span className="hidden lg:block absolute -top-1 -right-1 bg-amber-500 w-2.5 h-2.5 rounded-full ring-2 ring-white" />
               )}
             </span>
-            <span className={`flex-1 text-left ${collapsed ? "lg:hidden" : ""}`}>All Tools</span>
+            <span className={`flex-1 text-left font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>All Tools</span>
             {!collapsed && pendingCount > 0 && user.role === "admin" && (
-              <span className="inline-block bg-amber-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
+              <span className="inline-block bg-amber-500 text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
                 {pendingCount}
               </span>
             )}
@@ -374,7 +380,7 @@ export default function Sidebar({
           >
             <span className="text-base shrink-0">🔑</span>
             <div className={collapsed ? "lg:hidden" : ""}>
-              <div className="text-xs font-bold text-red-800 leading-tight">Token Expired</div>
+              <div className="text-xs font-heading font-bold uppercase tracking-wide text-red-800 leading-tight">Token Expired</div>
               <div className="text-[10px] text-red-700 mt-0.5 leading-tight">Messages cannot be sent. Click to fix →</div>
             </div>
           </Link>
@@ -410,7 +416,7 @@ export default function Sidebar({
                   <div className="text-xs text-slate-500 truncate">{user.email}</div>
                   <div className="text-xs mt-0.5">
                     <span
-                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
+                      className={`badge ${
                         user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
                       }`}
                     >
@@ -425,7 +431,7 @@ export default function Sidebar({
                 <div className="text-xs text-slate-500 truncate">{user.email}</div>
                 <div className="text-xs mt-0.5">
                   <span
-                    className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
+                    className={`badge ${
                       user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
                     }`}
                   >
@@ -443,7 +449,7 @@ export default function Sidebar({
             }`}
           >
             <span className={collapsed ? "lg:inline hidden text-base" : "hidden"}>⏻</span>
-            <span className={collapsed ? "lg:hidden" : ""}>Sign out</span>
+            <span className={`font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>Sign out</span>
           </button>
           {/* Theme toggle — hide on collapsed desktop to save vertical space */}
           <div className={`px-1 pt-2 ${collapsed ? "lg:hidden" : ""}`}>

@@ -306,7 +306,7 @@ export default function AllToolsPanel({
         }}
         className={`
           font-sans
-          fixed z-[60] bg-white shadow-2xl border border-slate-200
+          fixed z-[60] bg-white shadow-2xl border border-slate-300
           inset-x-4 top-20 bottom-4 max-h-[80vh] overflow-y-auto rounded-2xl
           lg:inset-auto lg:top-4 lg:bottom-4 lg:left-[var(--all-tools-left)] lg:w-[760px] lg:max-w-[calc(100vw-var(--all-tools-left)-1rem)] lg:max-h-[calc(100vh-2rem)]
         `}
@@ -359,10 +359,10 @@ export default function AllToolsPanel({
                       >
                         <span className="text-xl shrink-0">{item.icon}</span>
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium leading-tight flex items-center gap-1.5">
+                          <div className="text-sm font-heading font-semibold uppercase tracking-wide leading-tight flex items-center gap-1.5">
                             {item.label}
                             {item.href === "/users" && pendingCount > 0 && (
-                              <span className="inline-block bg-amber-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+                              <span className="inline-block bg-amber-500 text-white text-[9px] font-bold font-mono rounded-full px-1.5 py-0.5 leading-none">
                                 {pendingCount}
                               </span>
                             )}

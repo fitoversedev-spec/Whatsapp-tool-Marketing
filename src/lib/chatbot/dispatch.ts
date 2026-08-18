@@ -41,10 +41,16 @@ const PRODUCTS_TO_SHOW = 5;
 // so the *name* line + description + product page URL all fit.
 const PRODUCT_SHORT_DESC_LIMIT = 500;
 
-// When the customer taps "Read more" we send the full description
-// as one or more text messages. WhatsApp text bodies cap at 4096
-// chars; we chunk on paragraph boundaries below.
+// When the customer taps "View" we reply with a link to the hosted
+// product page. The full description below stays chunked (WhatsApp text
+// bodies cap at 4096 chars) for the short summary we send alongside it.
 const PRODUCT_FULL_DESC_CHUNK = 3800;
+
+// Absolute base URL for customer-facing on-domain links. Same convention
+// as staffCommands.ts / the quotation + court-image send routes, which
+// build `${APP_URL}/q/<id>` etc. — reused here for `${APP_URL}/p/<id>`.
+const APP_URL =
+  process.env.APP_URL ?? "https://whatsapp-tool-marketing.vercel.app";
 
 // 4-hour inactivity timeout: after that, next inbound restarts fresh.
 const FLOW_TIMEOUT_MS = 4 * 60 * 60 * 1000;
@@ -382,7 +388,7 @@ async function sendProductListing(
     return r.waMessageId;
   }
 
-  const intro = `Here are ${Math.min(PRODUCTS_TO_SHOW, products.length)} of our ${sportLabel} products. Tap *Read more* under any card for full specs, or *Interested* to have our team follow up.`;
+  const intro = `Here are ${Math.min(PRODUCTS_TO_SHOW, products.length)} of our ${sportLabel} products. Tap *View* under any card for the full gallery and specs, or *Interested* to have our team follow up.`;
   const introRes = await sendText({ to: contactPhone, body: intro }).catch(
     (err) => {
       console.error("[chatbot] product intro failed", err);
@@ -411,14 +417,14 @@ async function sendProductListing(
     const body = `*${i + 1}. ${p.name.trim()}*\n\n${short}`.trim();
     // What the inbox thread mirrors — same body + the button labels so
     // sales can see the exact card the customer saw.
-    const mirrorBody = `${body}\n\nOptions: [Read more] [Interested]`;
+    const mirrorBody = `${body}\n\nOptions: [View] [Interested]`;
     try {
       const r = await sendImageButtons({
         to: contactPhone,
         imageUrl: p.heroImageUrl,
         body,
         buttons: [
-          { id: `product_more:${p.id}`, title: "Read more" },
+          { id: `product_more:${p.id}`, title: "View" },
           { id: `product_interested:${p.id}`, title: "Interested" },
         ],
       });
@@ -661,11 +667,13 @@ async function finaliseFlow(
 // Very lenient — most customer date/time replies are natural language
 // ("Tomorrow 4pm"). We store the raw string in preferredDateTime as
 // text; this only fills the DateTime column if the string parses.
-// Customer tapped "Read more" on a product card. Fetch the full record
-// from MVPv2 and send the description as text — WhatsApp text bodies
-// cap at 4096 chars so we chunk on paragraph boundaries if needed.
-// The MVPv2 web page URL is appended at the end for the full spec
-// table + gallery view.
+// Customer tapped "View" on a product card. Reply with the hosted
+// product page link (`${APP_URL}/p/<id>` — built exactly the way the
+// quotation `/q/<id>` links are) as the primary response: that page has
+// the full image gallery, spec table and description. We include a short
+// spec/price summary in the same message so the customer sees the gist
+// without leaving the chat. The link is the point; the summary is chunked
+// only in the unlikely case it exceeds WhatsApp's 4096-char text limit.
 async function sendProductDetails(
   contactPhone: string,
   productId: string,
@@ -686,12 +694,13 @@ async function sendProductDetails(
     return;
   }
   const specs = specsToWhatsappBlock(p.specs);
-  const fullDesc = htmlToWhatsappText(p.description);
+  const productUrl = `${APP_URL}/p/${p.id}`;
 
   const header = `*${p.name.trim()}*`;
+  const intro =
+    "Here's the full page — photos, gallery and specs:";
 
-  const bodyParts: string[] = [header];
-  if (fullDesc) bodyParts.push(fullDesc);
+  const bodyParts: string[] = [header, `${intro}\n${productUrl}`];
   if (specs) bodyParts.push(specs);
   if (p.priceInr != null) {
     bodyParts.push(

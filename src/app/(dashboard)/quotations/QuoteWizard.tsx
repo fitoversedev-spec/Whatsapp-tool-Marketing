@@ -55,7 +55,167 @@ type LineItem = {
   specs?: Array<{ label: string; value: string }> | null;
   // Which catalogue Product this line came from — see lineItemsForSubmit().
   productId?: string | null;
+  // Word-level highlight marks for the PDF (word index → colour hex), per
+  // field. A whole cell/box = every word index set. See ItemHighlighter.
+  highlights?: {
+    name?: Record<string, string>;
+    description?: Record<string, string>;
+  } | null;
 };
+
+// ── Highlighting (feature #5) ───────────────────────────────────────────────
+// Paint individual words (or a whole cell) in a line's name/description with a
+// colour; stored as word-index → hex maps and rendered as a coloured background
+// in the quotation PDF. Word indices are whitespace-split positions, matching
+// the PDF renderer's own split so the two agree.
+const HIGHLIGHT_COLORS: { name: string; hex: string }[] = [
+  { name: "Yellow", hex: "#fff3bf" },
+  { name: "Green", hex: "#d3f9d8" },
+  { name: "Pink", hex: "#ffdeeb" },
+  { name: "Blue", hex: "#d0ebff" },
+  { name: "Orange", hex: "#ffe8cc" },
+];
+
+function WordChips({
+  label,
+  text,
+  map,
+  onWord,
+  onAll,
+}: {
+  label: string;
+  text: string;
+  map: Record<string, string> | undefined;
+  onWord: (index: number) => void;
+  onAll: () => void;
+}) {
+  const words = text.split(/\s+/);
+  const empty = words.length === 1 && words[0] === "";
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-[10px] uppercase tracking-wide text-slate-500">{label}</span>
+        {!empty && (
+          <button type="button" onClick={onAll} className="text-[10px] text-court-600 hover:underline">
+            whole box
+          </button>
+        )}
+      </div>
+      {empty ? (
+        <span className="text-[10px] text-slate-400 italic">— empty —</span>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {words.map((w, i) =>
+            w === "" ? null : (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onWord(i)}
+                className="text-xs leading-tight px-1 py-0.5 rounded border border-transparent hover:border-slate-300"
+                style={{ background: map?.[String(i)] ?? "transparent" }}
+              >
+                {w}
+              </button>
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ItemHighlighter({
+  name,
+  description,
+  value,
+  onChange,
+}: {
+  name: string;
+  description: string;
+  value: LineItem["highlights"];
+  onChange: (next: LineItem["highlights"]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [armed, setArmed] = useState<string | null>(HIGHLIGHT_COLORS[0].hex);
+
+  const clean = (h: {
+    name?: Record<string, string>;
+    description?: Record<string, string>;
+  }): LineItem["highlights"] => {
+    const out: { name?: Record<string, string>; description?: Record<string, string> } = {};
+    if (h.name && Object.keys(h.name).length) out.name = h.name;
+    if (h.description && Object.keys(h.description).length) out.description = h.description;
+    return Object.keys(out).length ? out : null;
+  };
+
+  const paint = (field: "name" | "description", index: number) => {
+    const cur = { ...(value?.[field] ?? {}) };
+    const key = String(index);
+    if (armed === null || cur[key] === armed) delete cur[key];
+    else cur[key] = armed;
+    onChange(clean({ ...value, [field]: cur }));
+  };
+
+  const paintAll = (field: "name" | "description", text: string) => {
+    const next: Record<string, string> = {};
+    if (armed !== null) text.split(/\s+/).forEach((w, i) => { if (w) next[String(i)] = armed; });
+    onChange(clean({ ...value, [field]: next }));
+  };
+
+  const hasAny =
+    (value?.name && Object.keys(value.name).length) ||
+    (value?.description && Object.keys(value.description).length);
+
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-[11px] text-slate-500 hover:text-court-700 inline-flex items-center gap-1"
+      >
+        <span>🖍 Highlight</span>
+        {hasAny ? <span className="text-court-600 font-medium">• on</span> : null}
+        <span className="text-slate-400">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] text-slate-500">Colour:</span>
+            {HIGHLIGHT_COLORS.map((c) => (
+              <button
+                key={c.hex}
+                type="button"
+                title={c.name}
+                onClick={() => setArmed(c.hex)}
+                className={`w-5 h-5 rounded border ${armed === c.hex ? "ring-2 ring-court-500 border-court-500" : "border-slate-300"}`}
+                style={{ background: c.hex }}
+              />
+            ))}
+            <button
+              type="button"
+              title="Eraser"
+              onClick={() => setArmed(null)}
+              className={`w-5 h-5 rounded border bg-white text-[10px] flex items-center justify-center ${armed === null ? "ring-2 ring-court-500 border-court-500" : "border-slate-300"}`}
+            >
+              ⌫
+            </button>
+            <span className="text-[10px] text-slate-400 ml-1">
+              tap a word to {armed === null ? "clear" : "paint"}
+            </span>
+          </div>
+          <WordChips label="Name" text={name} map={value?.name} onWord={(i) => paint("name", i)} onAll={() => paintAll("name", name)} />
+          <WordChips
+            label="Description"
+            text={description}
+            map={value?.description}
+            onWord={(i) => paint("description", i)}
+            onAll={() => paintAll("description", description)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Catalogue product row (subset of ProductDTO) shown in the Products step.
 type ProductRow = {
@@ -1202,6 +1362,12 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                   onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
                                   rows={5}
                                   className="input mt-1.5 text-sm text-slate-600 bg-slate-50 resize-y leading-relaxed min-h-[6rem]"
+                                />
+                                <ItemHighlighter
+                                  name={item.name}
+                                  description={item.description}
+                                  value={item.highlights}
+                                  onChange={(next) => updateLineItem(item.id, "highlights", next)}
                                 />
                                 <div className="grid grid-cols-5 gap-2 mt-2">
                                   <div>

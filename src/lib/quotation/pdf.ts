@@ -1201,6 +1201,65 @@ function wordWrap(font: PDFFont, rawText: string, size: number, maxWidth: number
   return lines;
 }
 
+// User-picked highlight colour hex → pdf-lib rgb.
+function hexToPdfRgb(hex: string): ReturnType<typeof rgb> {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  return rgb(
+    Number.isFinite(r) ? r : 1,
+    Number.isFinite(g) ? g : 0.95,
+    Number.isFinite(b) ? b : 0.75,
+  );
+}
+
+type HRun = { text: string; hex: string | null };
+
+// Same greedy width-wrap as wordWrap (identical line COUNT — the 2-page fit
+// simulation relies on that), but each returned line is a list of colour runs
+// so user-highlighted words render with a coloured background. `wordColors`
+// maps a whitespace-split word index → colour hex.
+function wrapWithHighlights(
+  font: PDFFont,
+  rawText: string,
+  size: number,
+  maxWidth: number,
+  wordColors?: Record<string, string>,
+): HRun[][] {
+  const text = sanitize(rawText);
+  const words = text.split(/\s+/);
+  const lines: HRun[][] = [];
+  let lineStart = 0;
+  let current = "";
+  const flush = (endExclusive: number) => {
+    const runs: HRun[] = [];
+    for (let i = lineStart; i < endExclusive; i++) {
+      const hex = wordColors?.[String(i)] ?? null;
+      const prev = runs[runs.length - 1];
+      if (prev && prev.hex === hex) prev.text += " " + words[i];
+      else runs.push({ text: words[i], hex });
+    }
+    lines.push(runs);
+  };
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const trial = current ? `${current} ${w}` : w;
+    if (font.widthOfTextAtSize(trial, size) > maxWidth) {
+      if (current) {
+        flush(i);
+        lineStart = i;
+      }
+      current = w;
+    } else {
+      current = trial;
+    }
+  }
+  if (current) flush(words.length);
+  if (lines.length === 0) lines.push([{ text: "", hex: null }]);
+  return lines;
+}
+
 // Direct page.drawText() callers below also need sanitize() — the helper
 // drawText/wordWrap functions above handle their inputs, but the imperative
 // page.drawText() spots in drawHeader/drawInfoGrid/drawItemsTable/etc don't
@@ -1318,6 +1377,21 @@ function drawParticularsTable(
   const rightAt = (t: string, cx0: number, cw: number, size: number, font: PDFFont, color: ReturnType<typeof rgb>, y: number) => {
     const w = safeWidth(font, t, size);
     safeDraw(ctx.page, t, { x: cx0 + cw - w - PAD, y, size, font, color });
+  };
+  // Draw a wrapped line as colour runs: a highlight rect behind any run the
+  // user marked, then the text (always ink) on top. `baselineTop` is the text
+  // baseline as a distance from the page top.
+  const drawRuns = (runs: HRun[], x0: number, baselineTop: number, size: number, font: PDFFont) => {
+    let cx = x0;
+    const spaceW = font.widthOfTextAtSize(" ", size);
+    for (const run of runs) {
+      const w = safeWidth(font, run.text, size);
+      if (run.hex) {
+        drawRect(ctx, cx - 1, baselineTop - size, w + 2, size + 2.5, { fill: hexToPdfRgb(run.hex) });
+      }
+      safeDraw(ctx.page, run.text, { x: cx, y: yFromTop(baselineTop), size, font, color: COL.text });
+      cx += w + spaceW;
+    }
   };
   // ── Readable base type sizes (pt). The whole table renders at one `scale`
   // (<=1) chosen below so the particulars rows PLUS the totals block always end
@@ -1450,16 +1524,16 @@ function drawParticularsTable(
       safeDraw(ctx.page, ln, { x: x.item + PAD, y: yFromTop(sy + SEC_SIZE + i * SEC_LH), size: SEC_SIZE, font: ctx.bold, color: COL.text });
     });
     // DESCRIPTION = item name (bold) + option + description, stacked.
-    nameLines.forEach((ln, i) => {
-      safeDraw(ctx.page, ln, { x: x.desc + PAD, y: yFromTop(line0 + i * NAME_LH), size: NAME_SIZE, font: ctx.bold, color: COL.text });
+    wrapWithHighlights(ctx.bold, item.name, NAME_SIZE, cols.desc - PAD * 2, item.highlights?.name).forEach((runs, i) => {
+      drawRuns(runs, x.desc + PAD, line0 + i * NAME_LH, NAME_SIZE, ctx.bold);
     });
     let below = sy + nameLines.length * NAME_LH; // top of the next stacked element
     if (hasOpt) {
       safeDraw(ctx.page, `Option ${item.optionTag}`, { x: x.desc + PAD, y: yFromTop(below + OPT_SIZE), size: OPT_SIZE, font: ctx.font, color: COL.muted });
       below += OPT_LH;
     }
-    descLines.forEach((ln, i) => {
-      safeDraw(ctx.page, ln, { x: x.desc + PAD, y: yFromTop(below + DESC_SIZE + i * DESC_LH), size: DESC_SIZE, font: ctx.font, color: COL.text });
+    wrapWithHighlights(ctx.font, item.description, DESC_SIZE, cols.desc - PAD * 2, item.highlights?.description).forEach((runs, i) => {
+      drawRuns(runs, x.desc + PAD, below + DESC_SIZE + i * DESC_LH, DESC_SIZE, ctx.font);
     });
     // Numeric cells, aligned to the first line.
     const amt = item.areaSqFt * item.ratePerSqFt;

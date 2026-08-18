@@ -1289,7 +1289,6 @@ function drawParticularsTable(
   };
   const rightEdge = MARGIN + CONTENT_W;
   const PAD = 5;
-  const headerH = 20;
   // Table grid: outer left/right borders on every band + inner column
   // separators on data rows. Drawn per-band (using each band's own top/height)
   // so the grid survives page breaks. `inner` adds the column dividers.
@@ -1320,11 +1319,89 @@ function drawParticularsTable(
     const w = safeWidth(font, t, size);
     safeDraw(ctx.page, t, { x: cx0 + cw - w - PAD, y, size, font, color });
   };
-  const HEAD_SIZE = 8.5;
+  // ── Readable base type sizes (pt). The whole table renders at one `scale`
+  // (<=1) chosen below so the particulars rows PLUS the totals block always end
+  // within 2 pages — never a 3rd — while staying as large/readable as possible.
+  // 5–10 long-description items is the target; short quotes stay at 1.0 and
+  // simply finish early (we never pad to fill the second page).
+  const B = {
+    head: 10,
+    name: 10.5, nameLH: 13,
+    opt: 9, optLH: 11.5,
+    desc: 10, descLH: 12.5,
+    sec: 11, secLH: 13.5,
+    headerH: 24,
+    padTop: 4, padBot: 4,
+  };
+  const FLOOR = 0.85; // description never shrinks below ~8.5pt (the prior size)
+  const BOTTOM = PAGE_H - MARGIN - FOOTER_RESERVE; // same limit ensureSpace uses
+  // Continuation pages restart below the top-left logo (newPage adds MARGIN +
+  // logo height (<=34) + 14). Use the max height so the estimate never predicts
+  // fewer pages than the real render.
+  const CONT_START = MARGIN + 34 + 14;
+
+  // Group rows by scope section (stable sort preserves within-section order).
+  const ordered = [...items].sort((a, b) => sectionOrder(a.section) - sectionOrder(b.section));
+  const inc = ordered.filter((i) => i.included);
+
+  // Measure each row's height at a candidate scale WITHOUT drawing — larger
+  // fonts wrap to more lines, so wrapping is re-run per scale. MUST mirror the
+  // draw loop's height math exactly, or the page prediction drifts.
+  const measureRows = (s: number): number[] => {
+    let lastSec: string | null = null;
+    return inc.map((item) => {
+      const sec = item.section ?? null;
+      const isNew = !!sec && sec !== lastSec;
+      const secLines = isNew ? wordWrap(ctx.bold, sec as string, B.sec * s, cols.item - PAD * 2) : [];
+      const nameLines = wordWrap(ctx.bold, item.name, B.name * s, cols.desc - PAD * 2);
+      const descLines = wordWrap(ctx.font, item.description, B.desc * s, cols.desc - PAD * 2);
+      const itemColH = secLines.length * B.secLH * s;
+      const descColH =
+        nameLines.length * B.nameLH * s + (item.optionTag ? B.optLH * s : 0) + descLines.length * B.descLH * s;
+      if (sec) lastSec = sec;
+      return B.padTop * s + Math.max(itemColH, descColH, B.nameLH * s) + B.padBot * s;
+    });
+  };
+
+  // Page count at a scale, mirroring ensureSpace's break math (header re-emitted
+  // on each page; the totals reserve rides the final row).
+  const simulatePages = (s: number): number => {
+    const rows = measureRows(s);
+    const headH = B.headerH * s;
+    let page = 1;
+    let yy = ctx.y + headH; // header consumed on the table's first page
+    for (let i = 0; i < rows.length; i++) {
+      const reserve = i === rows.length - 1 ? finalReserve : 0;
+      if (yy + rows[i] + reserve > BOTTOM) {
+        page += 1;
+        yy = CONT_START + headH;
+      }
+      yy += rows[i];
+    }
+    return page;
+  };
+
+  // Largest readable scale whose table (incl. totals reserve) ends by page 2.
+  let scale = 1;
+  while (scale > FLOOR && simulatePages(scale) > 2) scale -= 0.02;
+
+  const HEAD_SIZE = B.head * scale;
+  const headerH = B.headerH * scale;
+  const NAME_SIZE = B.name * scale;
+  const NAME_LH = B.nameLH * scale;
+  const OPT_SIZE = B.opt * scale;
+  const OPT_LH = B.optLH * scale;
+  const DESC_SIZE = B.desc * scale;
+  const DESC_LH = B.descLH * scale;
+  const SEC_SIZE = B.sec * scale;
+  const SEC_LH = B.secLH * scale;
+  const PADTOP = B.padTop * scale;
+  const PADBOT = B.padBot * scale;
+
   const drawHead = () => {
     ensureSpace(ctx, headerH);
     drawRect(ctx, MARGIN, ctx.y, CONTENT_W, headerH, { fill: COL.tableHead });
-    const hy = yFromTop(ctx.y + 13.5);
+    const hy = yFromTop(ctx.y + headerH * 0.68);
     centerAt("S.NO", x.sno, cols.sno, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("ITEM", x.item, HEAD_SIZE, ctx.bold, COL.text, hy);
     leftAt("DESCRIPTION", x.desc, HEAD_SIZE, ctx.bold, COL.text, hy);
@@ -1339,19 +1416,8 @@ function drawParticularsTable(
     ctx.y += headerH;
   };
   drawHead();
-  const NAME_SIZE = 9;
-  const NAME_LH = 11;
-  const OPT_SIZE = 8;
-  const OPT_LH = 10;
-  const DESC_SIZE = 8.5;
-  const DESC_LH = 10.5;
-  const SEC_SIZE = 9.5;
-  const SEC_LH = 11;
   let lastSection: string | null = null;
   let serial = 0;
-  // Group rows by scope section (stable sort preserves within-section order).
-  const ordered = [...items].sort((a, b) => sectionOrder(a.section) - sectionOrder(b.section));
-  const inc = ordered.filter((i) => i.included);
   for (let idx = 0; idx < inc.length; idx++) {
     const item = inc[idx];
     const sec = item.section ?? null;
@@ -1364,7 +1430,7 @@ function drawParticularsTable(
     const hasOpt = !!item.optionTag;
     const itemColH = secLines.length * SEC_LH;
     const descColH = nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0) + descLines.length * DESC_LH;
-    const rowH = 3 + Math.max(itemColH, descColH, NAME_LH) + 4;
+    const rowH = PADTOP + Math.max(itemColH, descColH, NAME_LH) + PADBOT;
     // Only the truly last row drags the totals block's reserve along with it.
     const reserve = idx === inc.length - 1 ? finalReserve : 0;
 
@@ -1374,7 +1440,7 @@ function drawParticularsTable(
 
     serial++;
     if (serial % 2 === 0) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
-    const sy = ctx.y + 3;
+    const sy = ctx.y + PADTOP;
     const line0 = sy + NAME_SIZE; // first-line baseline (distance from row top)
     const numY = yFromTop(line0);
     // S.NO

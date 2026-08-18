@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
-import { getMyDay } from "@/lib/crm/myDay";
+import { getMyDay, getUpcomingSchedule } from "@/lib/crm/myDay";
 import { overview } from "@/lib/analytics/overview";
 import PageHeader from "@/components/PageHeader";
+import UpcomingSchedule from "./UpcomingSchedule";
 
 function fmtInr(n: number): string {
   return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
@@ -19,7 +20,7 @@ export default async function CrmDashboardPage() {
   const user = await requireUser();
 
   if (isAdmin(user.role)) {
-    const { thisMonth, lastMonth, topMovers } = await overview();
+    const [{ thisMonth, lastMonth, topMovers }, upcoming] = await Promise.all([overview(), getUpcomingSchedule()]);
     const delta = (curr: number, prev: number) => (prev === 0 ? null : Math.round(((curr - prev) / prev) * 100));
 
     return (
@@ -66,6 +67,8 @@ export default async function CrmDashboardPage() {
             )}
           </div>
 
+          <UpcomingSchedule data={upcoming} showOwner />
+
           <div className="flex gap-3 text-sm">
             <Link href="/crm/analytics" className="text-court-700 hover:underline font-medium">Full CRM Analytics →</Link>
           </div>
@@ -74,7 +77,7 @@ export default async function CrmDashboardPage() {
     );
   }
 
-  const myDay = await getMyDay(user.id);
+  const [myDay, upcoming] = await Promise.all([getMyDay(user.id), getUpcomingSchedule({ ownerUserId: user.id })]);
 
   return (
     <>
@@ -136,6 +139,8 @@ export default async function CrmDashboardPage() {
             )}
           </div>
         </div>
+
+        <UpcomingSchedule data={upcoming} />
 
         {myDay.stuckDeals.length > 0 && (
           <div className="rounded-md border border-red-200 bg-white p-4">

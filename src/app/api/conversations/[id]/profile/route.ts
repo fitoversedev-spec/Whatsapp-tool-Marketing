@@ -28,7 +28,6 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   // Sales role check — matches inbox visibility rules
   if (
     user.role !== "admin" &&
-    convo.assignedToUserId !== null &&
     convo.assignedToUserId !== user.id
   ) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

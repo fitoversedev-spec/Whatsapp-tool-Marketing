@@ -34,7 +34,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Permission: admin or assigned-to (or anyone if unassigned and role is sales)
   if (
     user.role !== "admin" &&
-    convo.assignedToUserId !== null &&
     convo.assignedToUserId !== user.id
   ) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

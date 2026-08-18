@@ -360,7 +360,7 @@ export default function InboxClient({
           <div>
             <h2 className="font-semibold text-slate-900">Conversations</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              {currentUser.role === "admin" ? "Showing all" : "Your assigned + unassigned"}
+              {currentUser.role === "admin" ? "Showing all" : "Your assigned"}
             </p>
           </div>
           <input

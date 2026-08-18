@@ -26,7 +26,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
   if (
     user.role !== "admin" &&
-    convo.assignedToUserId !== null &&
     convo.assignedToUserId !== user.id
   ) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

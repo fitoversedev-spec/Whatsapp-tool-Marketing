@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   // Permission check
   const sales = me.role !== "admin";
-  if (sales && convo.assignedToUserId && convo.assignedToUserId !== me.id) {
+  if (sales && convo.assignedToUserId !== me.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

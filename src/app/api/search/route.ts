@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   const convoScope =
     user.role === "admin"
       ? {}
-      : { OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }] };
+      : { assignedToUserId: user.id };
 
   // Same owner-or-admin idiom used by GET /api/deals and friends.
   const dealScope = isAdmin(user.role) ? {} : { ownerUserId: user.id };

@@ -34,13 +34,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isAdminUser = user.role === "admin";
 
   // Unread conversation count — scoped to user's visible conversations.
-  // Admin sees all; sales sees own + unassigned (matches inbox filter).
+  // Admin sees all; a rep sees ONLY conversations assigned to them (matches
+  // the inbox filter — unassigned conversations are admin-only).
   const unreadWhere =
     isAdminUser
       ? { unreadCount: { gt: 0 } }
       : {
           unreadCount: { gt: 0 },
-          OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }],
+          assignedToUserId: user.id,
         };
 
   // These are all independent — run them in one parallel batch instead of

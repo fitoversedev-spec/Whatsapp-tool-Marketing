@@ -15,10 +15,12 @@ export default async function InboxPage({
 }) {
   const user = await requireUser();
 
+  // Reps see ONLY conversations assigned to them; unassigned (new inbound)
+  // conversations are admin-only until an admin routes them.
   const where =
     user.role === "admin"
       ? {}
-      : { OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }] };
+      : { assignedToUserId: user.id };
 
   const conversations = await prisma.conversation.findMany({
     where,

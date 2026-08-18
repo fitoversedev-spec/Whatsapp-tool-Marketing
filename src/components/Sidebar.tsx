@@ -44,6 +44,7 @@ export default function Sidebar({
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(unreadInitial);
   const [reminderCount, setReminderCount] = useState(reminderInitial);
+  const [pendingTemplates, setPendingTemplates] = useState(0);
   const [allToolsOpen, setAllToolsOpen] = useState(false);
   // Collapsed sidebar (desktop only — mobile already uses a drawer).
   // Persisted in localStorage so the user's preference survives reloads.
@@ -90,6 +91,7 @@ export default function Sidebar({
         if (cancelled) return;
         setUnreadCount(data.unread ?? 0);
         setReminderCount(data.reminders ?? 0);
+        setPendingTemplates(data.pendingTemplates ?? 0);
       } catch {
         // ignore transient network errors
       }
@@ -339,14 +341,14 @@ export default function Sidebar({
           >
             <span className="text-base shrink-0 relative">
               🔲
-              {collapsed && pendingCount > 0 && user.role === "admin" && (
+              {collapsed && pendingCount + pendingTemplates > 0 && user.role === "admin" && (
                 <span className="hidden lg:block absolute -top-1 -right-1 bg-amber-500 w-2.5 h-2.5 rounded-full ring-2 ring-white" />
               )}
             </span>
             <span className={`flex-1 text-left font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>All Tools</span>
-            {!collapsed && pendingCount > 0 && user.role === "admin" && (
+            {!collapsed && pendingCount + pendingTemplates > 0 && user.role === "admin" && (
               <span className="inline-block bg-amber-500 text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
-                {pendingCount}
+                {pendingCount + pendingTemplates}
               </span>
             )}
             {!collapsed && (
@@ -463,6 +465,7 @@ export default function Sidebar({
         onClose={() => setAllToolsOpen(false)}
         userRole={user.role}
         pendingCount={pendingCount}
+        pendingTemplates={pendingTemplates}
         anchorOffset={collapsed ? 76 : 252}
       />
     </>

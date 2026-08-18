@@ -24,10 +24,10 @@ export async function GET() {
       ? { unreadCount: { gt: 0 } }
       : {
           unreadCount: { gt: 0 },
-          OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }],
+          assignedToUserId: user.id,
         };
 
-  const [unreadAgg, reminderCount, chatAgg, chatMentions, chatRequests] = await Promise.all([
+  const [unreadAgg, reminderCount, chatAgg, chatMentions, chatRequests, pendingTemplates] = await Promise.all([
     prisma.conversation.aggregate({
       where: unreadWhere,
       _sum: { unreadCount: true },
@@ -55,6 +55,11 @@ export async function GET() {
           ? { OR: [{ toUserId: user.id, status: "REQUESTED" }, { kind: "TAKEOVER", status: "ACCEPTED" }] }
           : { toUserId: user.id, status: "REQUESTED" },
     }),
+    // Templates a rep has submitted that are awaiting admin review — admin-only,
+    // so a rep never sees a count. Drives the Templates badge in the sidebar.
+    user.role === "admin"
+      ? prisma.template.count({ where: { status: "pending_admin", deletedAt: null } })
+      : Promise.resolve(0),
   ]);
 
   await heartbeat.catch(() => {});
@@ -65,5 +70,6 @@ export async function GET() {
     chatUnread: chatAgg._sum.unreadCount ?? 0,
     chatMentions,
     chatRequests,
+    pendingTemplates,
   });
 }

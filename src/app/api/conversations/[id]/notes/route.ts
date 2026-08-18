@@ -14,7 +14,7 @@ async function assertCanAccess(conversationId: string, userId: string, role: str
     select: { id: true, assignedToUserId: true },
   });
   if (!convo) return { error: "not_found" as const, status: 404 };
-  if (role !== "admin" && convo.assignedToUserId !== null && convo.assignedToUserId !== userId) {
+  if (role !== "admin" && convo.assignedToUserId !== userId) {
     return { error: "forbidden" as const, status: 403 };
   }
   return { ok: true as const };

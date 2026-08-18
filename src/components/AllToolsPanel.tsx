@@ -239,6 +239,9 @@ type Props = {
   onClose: () => void;
   userRole: Role;
   pendingCount: number;
+  // Templates a rep has submitted awaiting admin review (admin-only). Badges
+  // the Templates entry so an admin sees pending submissions.
+  pendingTemplates?: number;
   // Pixel offset from the left edge of the viewport for desktop anchoring.
   // Tracks the current sidebar width (252 expanded, 76 collapsed) so the
   // popover stays flush against the sidebar regardless of collapsed state.
@@ -250,6 +253,7 @@ export default function AllToolsPanel({
   onClose,
   userRole,
   pendingCount,
+  pendingTemplates = 0,
   anchorOffset = 260,
 }: Props) {
   const pathname = usePathname();
@@ -364,6 +368,11 @@ export default function AllToolsPanel({
                             {item.href === "/users" && pendingCount > 0 && (
                               <span className="inline-block bg-amber-500 text-white text-[9px] font-bold font-mono rounded-full px-1.5 py-0.5 leading-none">
                                 {pendingCount}
+                              </span>
+                            )}
+                            {item.href === "/templates" && pendingTemplates > 0 && (
+                              <span className="inline-block bg-amber-500 text-white text-[9px] font-bold font-mono rounded-full px-1.5 py-0.5 leading-none">
+                                {pendingTemplates}
                               </span>
                             )}
                           </div>

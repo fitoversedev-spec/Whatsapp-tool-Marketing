@@ -86,7 +86,17 @@ export type CourtCanvasHandle = {
   // Exports the current canvas state to a PNG dataURL at the given pixel
   // ratio (1 = canvas pixels, 2 = retina, 3 = print-ready). Used by Step 3
   // to upload a high-DPI image to blob storage.
-  toDataURL: (pixelRatio?: number) => string | null;
+  //
+  // opts.includeDimensions — bake the on-canvas DIMENSIONS card into the export
+  // instead of hiding it. Used for the WhatsApp "Send design" 2D image so the
+  // customer's plan carries the measurements. Defaults to false (clean export),
+  // which the combined-PDF 2D page relies on (it prints its own dims table).
+  // When the design has dimensions turned OFF (style.showDimensions === false)
+  // there is no dim-panel node, so this flag has no effect — dims stay off.
+  toDataURL: (
+    pixelRatio?: number,
+    opts?: { includeDimensions?: boolean },
+  ) => string | null;
 };
 
 type Props = {
@@ -306,23 +316,27 @@ export default function CourtCanvas({
   useEffect(() => {
     if (!handleRef) return;
     handleRef.current = {
-      toDataURL(pixelRatio = 2) {
+      toDataURL(pixelRatio = 2, opts) {
         const stage = stageRef.current;
         if (!stage) return null;
         // Deselect briefly so the export doesn't include handle overlays.
         transformerRef.current?.nodes([]);
         transformerRef.current?.getLayer()?.batchDraw();
-        // Hide the editor-only dashed section-click overlays AND the DIMENSIONS
-        // card so the exported 2D diagram is clean — the dimensions render as a
-        // dedicated table in the combined PDF instead.
+        // Always hide the editor-only dashed section-click overlays. The
+        // DIMENSIONS card is hidden too for a clean export (the combined PDF
+        // draws its own dims table) UNLESS the caller asks to keep it — the
+        // WhatsApp "Send design" 2D image bakes the dims card in so the customer
+        // sees the measurements. When dims are turned off there's no dim-panel
+        // node, so keepDims has nothing to reveal and dims stay off.
+        const keepDims = opts?.includeDimensions === true;
         const overlays = stage.find(".section-overlay");
         const dimPanel = stage.find(".dim-panel");
         overlays.forEach((n) => n.hide());
-        dimPanel.forEach((n) => n.hide());
+        if (!keepDims) dimPanel.forEach((n) => n.hide());
         stage.batchDraw();
         const url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });
         overlays.forEach((n) => n.show());
-        dimPanel.forEach((n) => n.show());
+        if (!keepDims) dimPanel.forEach((n) => n.show());
         const sel = selectedIdRef.current;
         if (sel && shapeRefs.current[sel]) {
           transformerRef.current?.nodes([shapeRefs.current[sel]]);

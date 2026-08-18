@@ -822,15 +822,22 @@ export function isPvcSurface(surface: SurfaceFinish): boolean {
 // suggested roll count so sales can quote off both.
 export const PVC_ROLL_WIDTH_M = 1.8;
 export const PVC_ROLL_LENGTH_M = 20;
+// `opts` lets the caller override the standard roll size with the sales-editable
+// sizes persisted in the Setting table (see material-config.ts). Both fields
+// default to the module constants, so EVERY existing caller (no opts) computes
+// byte-identically. rollLengthM isn't used by this metre-based estimate but is
+// accepted for a symmetric override shape with turfRollMeters.
 export function pvcRollCount(
   plotLengthFt: number,
-  plotWidthFt: number
+  plotWidthFt: number,
+  opts?: { rollWidthM?: number; rollLengthM?: number }
 ): { totalSqM: number; rolls: number; runningMeters: number } {
+  const rollWidthM = opts?.rollWidthM ?? PVC_ROLL_WIDTH_M;
   const FT_PER_M = 3.281;
   const lengthM = plotLengthFt / FT_PER_M;
   const widthM = plotWidthFt / FT_PER_M;
   const totalSqM = Math.round(lengthM * widthM);
-  const rolls = Math.ceil(widthM / PVC_ROLL_WIDTH_M);
+  const rolls = Math.ceil(widthM / rollWidthM);
   const runningMeters = Math.round(rolls * lengthM);
   return { totalSqM, rolls, runningMeters };
 }
@@ -845,9 +852,13 @@ export const TURF_ROLL_LENGTH_M = 25;
 // Alternating light + dark stripes parallel to the field length. Each
 // stripe occupies one roll width (2 m). Half the stripes are light,
 // half dark — total meters per colour = (numStripes ÷ 2) × field length.
+// `opts` overrides the standard roll W×L with the sales-editable sizes persisted
+// in the Setting table (see material-config.ts). Both fields default to the
+// module constants, so EVERY existing caller (no opts) computes byte-identically.
 export function turfRollMeters(
   plotLengthFt: number,
-  plotWidthFt: number
+  plotWidthFt: number,
+  opts?: { rollWidthM?: number; rollLengthM?: number }
 ): {
   stripes: number;
   lightMeters: number;
@@ -856,10 +867,12 @@ export function turfRollMeters(
   lightRolls: number;
   darkRolls: number;
 } {
+  const rollWidthM = opts?.rollWidthM ?? TURF_ROLL_WIDTH_M;
+  const rollLengthM = opts?.rollLengthM ?? TURF_ROLL_LENGTH_M;
   const FT_PER_M = 3.281;
   const lengthM = plotLengthFt / FT_PER_M;
   const widthM = plotWidthFt / FT_PER_M;
-  const stripes = Math.ceil(widthM / TURF_ROLL_WIDTH_M);
+  const stripes = Math.ceil(widthM / rollWidthM);
   const lightStripes = Math.ceil(stripes / 2);
   const darkStripes = stripes - lightStripes;
   const lightMeters = Math.round(lightStripes * lengthM);
@@ -869,8 +882,8 @@ export function turfRollMeters(
     lightMeters,
     darkMeters,
     totalMeters: lightMeters + darkMeters,
-    lightRolls: Math.ceil(lightMeters / TURF_ROLL_LENGTH_M),
-    darkRolls: Math.ceil(darkMeters / TURF_ROLL_LENGTH_M),
+    lightRolls: Math.ceil(lightMeters / rollLengthM),
+    darkRolls: Math.ceil(darkMeters / rollLengthM),
   };
 }
 
@@ -893,13 +906,26 @@ export const PPE_TILE_FT = 0.984;
 
 // Ceil-based tile count for a plot at 30 cm tile size. Sales quotes
 // off this. Ceiling because partial edges need a full tile anyway.
+// `tileFt` overrides the standard 30 cm tile with the sales-editable tile size
+// persisted in the Setting table (see material-config.ts); it defaults to
+// PPE_TILE_FT so EVERY existing caller (no arg) computes byte-identically.
 export function ppeTileCount(
   plotLengthFt: number,
-  plotWidthFt: number
+  plotWidthFt: number,
+  tileFt: number = PPE_TILE_FT
 ): { perLength: number; perWidth: number; total: number } {
-  const perLength = Math.ceil(plotLengthFt / PPE_TILE_FT);
-  const perWidth = Math.ceil(plotWidthFt / PPE_TILE_FT);
+  const perLength = Math.ceil(plotLengthFt / tileFt);
+  const perWidth = Math.ceil(plotWidthFt / tileFt);
   return { perLength, perWidth, total: perLength * perWidth };
+}
+
+// Inflate a raw material quantity (rolls / tiles) by a wastage percentage and
+// round UP to whole units — the "you actually need to order N" figure sales
+// surfaces to the customer. wastagePct 10 = +10%. A 0 (or absent) pct returns
+// the ceil of the base count unchanged.
+export function withWastage(baseCount: number, wastagePct: number): number {
+  const pct = Number.isFinite(wastagePct) && wastagePct > 0 ? wastagePct : 0;
+  return Math.ceil(baseCount * (1 + pct / 100));
 }
 
 export type Style = {

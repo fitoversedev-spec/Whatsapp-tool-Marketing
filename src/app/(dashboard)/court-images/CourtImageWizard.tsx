@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import ElementInspector from "@/components/court-image/ElementInspector";
+import MaterialCalculator from "@/components/court-image/MaterialCalculator";
 import DesignAttachments, {
   type AttachmentTab,
   type Attachments,
@@ -56,12 +57,10 @@ import {
 } from "@/lib/court-image/schema";
 import { presetsForSports, type CourtPreset } from "@/lib/court-image/sport-standards";
 import {
-  ppeTileCount,
+  // Surface-family test still used to auto-toggle the 2D grid overlay. The
+  // roll/tile material math (ppeTileCount / turfRollMeters / pvcRollCount) now
+  // lives inside MaterialCalculator, which reads the sales-editable sizes.
   isTiledSurface,
-  isTurfSurface,
-  isPvcSurface,
-  turfRollMeters,
-  pvcRollCount,
 } from "@/lib/court-image/schema";
 import {
   TURF_SHAPES,
@@ -1138,6 +1137,11 @@ export default function CourtImageWizard({
   const [caption, setCaption] = useState("");
   const [contactPhone, setContactPhone] = useState(prefill?.contactPhone ?? "");
   const [pngDataUrl2D, setPngDataUrl2D] = useState<string | null>(null);
+  // Feature #8: a second 2D capture with the DIMENSIONS card baked in — used for
+  // the WhatsApp "Send design" image path so the customer's plan shows the
+  // measurements. pngDataUrl2D stays CLEAN (fed to the combined PDF, which draws
+  // its own dims table — no double dims there).
+  const [pngDataUrl2DSend, setPngDataUrl2DSend] = useState<string | null>(null);
   const [pngDataUrl3D, setPngDataUrl3D] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(editingId ?? null);
   const [pngBlobUrl, setPngBlobUrl] = useState<string | null>(null);
@@ -1489,12 +1493,20 @@ export default function CourtImageWizard({
   async function goStep3() {
     if (!layout) return;
     // Capture the 2D plan at 3x so it stays crisp when enlarged in the PDF.
+    // Two variants off the SAME live canvas: a CLEAN one (dims card hidden) for
+    // the combined PDF — which prints its own dimensions table — and a DIMS-baked
+    // one for the WhatsApp "Send design" image so the customer's plan carries the
+    // measurements. If the design has dimensions turned off there is no dim-panel
+    // node, so the dims variant comes back identical to the clean one.
     const dataUrl = canvasRef.current?.toDataURL(3);
     if (!dataUrl) {
       toast.error("Could not render preview — try again");
       return;
     }
+    const dataUrlWithDims =
+      canvasRef.current?.toDataURL(3, { includeDimensions: true }) ?? dataUrl;
     setPngDataUrl2D(dataUrl);
+    setPngDataUrl2DSend(dataUrlWithDims);
     setPngDataUrl3D(null);
     setVideoBlob(null);
     setVideoDataUrl(null);
@@ -2062,8 +2074,13 @@ export default function CourtImageWizard({
     const next: typeof uploadedUrls = { ...uploadedUrls };
 
     if (sendFormats["2d"] && !next["2d"]) {
-      if (!pngDataUrl2D) throw new Error("2D preview missing — re-open the wizard");
-      next["2d"] = await uploadPng(pngDataUrl2D);
+      // Feature #8: upload the DIMS-baked 2D so the customer's plan shows the
+      // measurements (falls back to the clean capture if the dims variant is
+      // somehow missing). The combined PDF path keeps using the clean
+      // pngDataUrl2D directly, so it never double-prints dimensions.
+      const twoD = pngDataUrl2DSend ?? pngDataUrl2D;
+      if (!twoD) throw new Error("2D preview missing — re-open the wizard");
+      next["2d"] = await uploadPng(twoD);
     }
     if (sendFormats["3d-image"]) {
       const data = capture3D() ?? pngDataUrl3D;
@@ -2829,26 +2846,6 @@ export default function CourtImageWizard({
                       />
                     ))}
                   </div>
-                  {isTiledSurface(layout.style.surface) && (
-                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
-                      {(() => {
-                        const c = ppeTileCount(
-                          layout.plot.lengthFt,
-                          layout.plot.widthFt
-                        );
-                        return (
-                          <>
-                            <div className="font-medium">
-                              {c.total.toLocaleString("en-IN")} tiles required
-                            </div>
-                            <div className="text-slate-500">
-                              {c.perLength} × {c.perWidth} at 30 × 30 cm each
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
                   {(layout.style.surface === "acrylic_blue" ||
                     layout.style.surface === "acrylic_green") && (
                     <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
@@ -2864,46 +2861,19 @@ export default function CourtImageWizard({
                       </div>
                     </div>
                   )}
-                  {isTurfSurface(layout.style.surface) && (
-                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
-                      {(() => {
-                        const r = turfRollMeters(
-                          layout.plot.lengthFt,
-                          layout.plot.widthFt
-                        );
-                        return (
-                          <>
-                            <div className="font-medium">
-                              {r.totalMeters.toLocaleString("en-IN")} m turf roll required
-                            </div>
-                            <div className="text-slate-500">
-                              Light {r.lightMeters.toLocaleString("en-IN")} m + Dark {r.darkMeters.toLocaleString("en-IN")} m · {r.stripes} stripes · 2 m rolls
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
-                  {isPvcSurface(layout.style.surface) && (
-                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
-                      {(() => {
-                        const p = pvcRollCount(
-                          layout.plot.lengthFt,
-                          layout.plot.widthFt
-                        );
-                        return (
-                          <>
-                            <div className="font-medium">
-                              {p.totalSqM.toLocaleString("en-IN")} m² PVC required
-                            </div>
-                            <div className="text-slate-500">
-                              {p.rolls} rolls · 1.8 m wide × 20 m long · {p.runningMeters.toLocaleString("en-IN")} running m
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
+                  {/* Feature #6: editable, PERSISTED roll/tile calculator.
+                      Replaces the former hardcoded read-only readouts for turf /
+                      PVC / PP-tile — it loads the sales-set standard roll/tile
+                      sizes + wastage % (Setting-backed), lets them be edited (and
+                      re-saved for next session), and surfaces the exact +
+                      wastage-inflated rolls/tiles-needed, total area and running
+                      length for THIS design's plot + active surface. Acrylic keeps
+                      its own note above (it's coated by sq.ft, not rolls/tiles). */}
+                  <MaterialCalculator
+                    plotLengthFt={layout.plot.lengthFt}
+                    plotWidthFt={layout.plot.widthFt}
+                    surface={layout.style.surface}
+                  />
                   </div>
 
                   {/* Ground finish control removed (V1) — the ground/earth is

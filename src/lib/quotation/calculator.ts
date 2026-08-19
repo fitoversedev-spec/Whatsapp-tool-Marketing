@@ -59,6 +59,9 @@ export type QuoteLineItem = {
   highlights?: {
     name?: Record<string, string>;
     description?: Record<string, string>;
+    // Whole-cell fill colour (hex) — highlights the ENTIRE description cell for
+    // this row (behind the name + description), vs the per-word maps above.
+    cell?: string;
   } | null;
 };
 
@@ -94,6 +97,7 @@ export const lineItemSchema = z.object({
     .object({
       name: z.record(z.string().regex(/^#[0-9a-fA-F]{6}$/)).optional(),
       description: z.record(z.string().regex(/^#[0-9a-fA-F]{6}$/)).optional(),
+      cell: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     })
     .nullable()
     .optional(),

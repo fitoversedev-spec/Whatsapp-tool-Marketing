@@ -1486,6 +1486,11 @@ function drawParticularsTable(
 
     serial++;
     if (serial % 2 === 0) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
+    // "Entire cell" highlight — fill the whole DESCRIPTION cell (behind the name
+    // + description) for this row with the user-picked colour.
+    if (item.highlights?.cell) {
+      drawRect(ctx, x.desc, ctx.y, cols.desc, rowH, { fill: hexToPdfRgb(item.highlights.cell) });
+    }
     const sy = ctx.y + PADTOP;
     const line0 = sy + NAME_SIZE; // first-line baseline (distance from row top)
     const numY = yFromTop(line0);

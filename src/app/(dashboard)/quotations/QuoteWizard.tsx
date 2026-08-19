@@ -61,6 +61,7 @@ type LineItem = {
   highlights?: {
     name?: Record<string, string>;
     description?: Record<string, string>;
+    cell?: string;
   } | null;
 };
 
@@ -82,13 +83,11 @@ function WordChips({
   text,
   map,
   onWord,
-  onAll,
 }: {
   label: string;
   text: string;
   map: Record<string, string> | undefined;
   onWord: (index: number) => void;
-  onAll: () => void;
 }) {
   // Split on sanitize(text) — the SAME basis the PDF renderer uses — so the
   // painted word indices line up with what gets highlighted in the PDF (a
@@ -97,14 +96,7 @@ function WordChips({
   const empty = words.length === 1 && words[0] === "";
   return (
     <div>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-[10px] uppercase tracking-wide text-slate-500">{label}</span>
-        {!empty && (
-          <button type="button" onClick={onAll} className="text-[10px] text-court-600 hover:underline">
-            whole box
-          </button>
-        )}
-      </div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">{label}</div>
       {empty ? (
         <span className="text-[10px] text-slate-400 italic">— empty —</span>
       ) : (
@@ -145,10 +137,12 @@ function ItemHighlighter({
   const clean = (h: {
     name?: Record<string, string>;
     description?: Record<string, string>;
+    cell?: string;
   }): LineItem["highlights"] => {
-    const out: { name?: Record<string, string>; description?: Record<string, string> } = {};
+    const out: { name?: Record<string, string>; description?: Record<string, string>; cell?: string } = {};
     if (h.name && Object.keys(h.name).length) out.name = h.name;
     if (h.description && Object.keys(h.description).length) out.description = h.description;
+    if (h.cell) out.cell = h.cell;
     return Object.keys(out).length ? out : null;
   };
 
@@ -160,15 +154,19 @@ function ItemHighlighter({
     onChange(clean({ ...value, [field]: cur }));
   };
 
-  const paintAll = (field: "name" | "description", text: string) => {
-    const next: Record<string, string> = {};
-    if (armed !== null) sanitize(text).split(/\s+/).forEach((w, i) => { if (w) next[String(i)] = armed; });
-    onChange(clean({ ...value, [field]: next }));
+  // "Entire cell" fill: one colour behind the whole description cell. The eraser
+  // (or clicking the already-set colour) clears it.
+  const fillCell = () => {
+    const next = armed === null || value?.cell === armed ? undefined : armed;
+    onChange(clean({ ...value, cell: next }));
   };
+
+  const clearAll = () => onChange(null);
 
   const hasAny =
     (value?.name && Object.keys(value.name).length) ||
-    (value?.description && Object.keys(value.description).length);
+    (value?.description && Object.keys(value.description).length) ||
+    !!value?.cell;
 
   return (
     <div className="mt-1.5">
@@ -203,18 +201,39 @@ function ItemHighlighter({
             >
               ⌫
             </button>
-            <span className="text-[10px] text-slate-400 ml-1">
-              tap a word to {armed === null ? "clear" : "paint"}
-            </span>
+            {hasAny && (
+              <button type="button" onClick={clearAll} className="text-[10px] text-track-600 hover:underline ml-auto">
+                clear all
+              </button>
+            )}
           </div>
-          <WordChips label="Name" text={name} map={value?.name} onWord={(i) => paint("name", i)} onAll={() => paintAll("name", name)} />
-          <WordChips
-            label="Description"
-            text={description}
-            map={value?.description}
-            onWord={(i) => paint("description", i)}
-            onAll={() => paintAll("description", description)}
-          />
+
+          {/* Mode 1 — entire-cell fill (solid colour behind the whole cell) */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={fillCell}
+              className="text-[11px] font-medium rounded border border-slate-300 px-2 py-1 hover:bg-white"
+              style={{ background: value?.cell ?? "#fff" }}
+            >
+              {value?.cell ? "Entire cell filled" : "Fill entire cell"}
+            </button>
+            <span className="text-[10px] text-slate-400">solid highlight</span>
+          </div>
+
+          {/* Mode 2 — tap individual words to highlight text */}
+          <div className="space-y-2">
+            <div className="text-[10px] text-slate-400">
+              …or tap words to {armed === null ? "clear" : "highlight"}:
+            </div>
+            <WordChips label="Name" text={name} map={value?.name} onWord={(i) => paint("name", i)} />
+            <WordChips
+              label="Description"
+              text={description}
+              map={value?.description}
+              onWord={(i) => paint("description", i)}
+            />
+          </div>
         </div>
       )}
     </div>

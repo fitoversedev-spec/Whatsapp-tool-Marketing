@@ -34,9 +34,9 @@ export default function CrmTabs({ isAdmin = false }: { isAdmin?: boolean }) {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`px-3 py-2.5 text-sm font-medium border-b-2 transition whitespace-nowrap ${
+              className={`px-3 py-2.5 text-sm font-heading font-bold uppercase tracking-wide border-b-2 transition whitespace-nowrap ${
                 active
-                  ? "border-wa-green text-wa-dark"
+                  ? "border-court-600 text-court-700"
                   : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
               }`}
             >

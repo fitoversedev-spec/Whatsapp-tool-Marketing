@@ -22,7 +22,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     select: { contactPhone: true, contactName: true, assignedToUserId: true },
   });
   if (!convo) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  if (user.role !== "admin" && convo.assignedToUserId !== null && convo.assignedToUserId !== user.id) {
+  if (user.role !== "admin" && convo.assignedToUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

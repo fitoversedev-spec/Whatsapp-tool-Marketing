@@ -11,20 +11,103 @@
 @font-face { font-family: "Manrope"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/manrope-700.woff2") format("woff2"); }
 @font-face { font-family: "Manrope"; font-style: normal; font-weight: 800; font-display: swap; src: url("/fonts/manrope-800.woff2") format("woff2"); }
 
+/* Self-hosted industrial type system (latin woff2 in /public/fonts — same
+   no-network pattern as Manrope above).
+     Archivo         → headings + CTAs (uppercase, tight tracking, 700/800)
+     Newsreader      → body copy (serif)
+     JetBrains Mono  → ALL numbers, ₹ amounts, rates, counts, dates, codes */
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/archivo-700.woff2") format("woff2"); }
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 800; font-display: swap; src: url("/fonts/archivo-800.woff2") format("woff2"); }
+@font-face { font-family: "Newsreader"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/newsreader-400.woff2") format("woff2"); }
+@font-face { font-family: "Newsreader"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/newsreader-500.woff2") format("woff2"); }
+@font-face { font-family: "Newsreader"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/newsreader-600.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/jetbrainsmono-400.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/jetbrainsmono-500.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/jetbrainsmono-600.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/jetbrainsmono-700.woff2") format("woff2"); }
+
 :root {
   color-scheme: light;
 }
 
 html, body {
-  background-color: #f4f8f6;
-  color: #10241a;
-  font-family: "Manrope", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  background-color: #f6f9fa; /* near-white, ink-neutral */
+  color: #0D2733;           /* ink — body text */
+  font-family: "Newsreader", "Iowan Old Style", "Georgia", "Cambria", "Times New Roman", serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 html {
   font-size: 17px;
+}
+
+/* ─── Industrial type system ────────────────────────────────────────────────
+ * Headings render in Archivo — UPPERCASE, tight tracking, heavy weight. Applied
+ * to the raw h1–h6 elements so every page title/section header inherits the
+ * look; any element can opt out with a `normal-case` / `font-serif` / `font-sans`
+ * utility (class specificity beats these element selectors). */
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Archivo", "Segoe UI", system-ui, Arial, sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+    line-height: 1.12;
+  }
+}
+
+@layer utilities {
+  /* ALL numeric glyphs are tabular by default wherever the mono token is used,
+     so figures line up in tables and KPI cards. */
+  .font-mono { font-variant-numeric: tabular-nums; }
+  /* Convenience: numbers / ₹ amounts / rates / counts / codes. */
+  .num {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+}
+
+/* ─── Shared primitive vocabulary ───────────────────────────────────────────
+ * Industrial primitives Phase-1 screens can adopt directly (and the shared
+ * components below already use). Low rounding, strong borders, mono numerals,
+ * Archivo-uppercase CTAs. These are additive utility classes — they change
+ * nothing until an element opts in. */
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded border font-heading font-bold uppercase text-sm px-4 py-2.5 transition select-none;
+    letter-spacing: 0.02em;
+  }
+  .btn:disabled { @apply opacity-50 pointer-events-none; }
+  .btn-primary { @apply bg-court-600 text-white border-court-700 hover:bg-court-700 active:bg-court-800; }
+  .btn-turf    { @apply bg-turf-600 text-white border-turf-700 hover:bg-turf-700 active:bg-turf-800; }
+  .btn-danger  { @apply bg-track-600 text-white border-track-700 hover:bg-track-700 active:bg-track-800; }
+  .btn-secondary { @apply bg-white text-slate-800 border-slate-300 hover:bg-slate-50 active:bg-slate-100; }
+  .btn-ghost   { @apply bg-transparent text-slate-700 border-transparent hover:bg-slate-100 active:bg-slate-200; }
+
+  /* Surface / card */
+  .card { @apply bg-white border border-slate-200 rounded-md; }
+
+  /* Text inputs, selects, textareas */
+  .input {
+    @apply w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400 transition;
+    @apply focus:outline-none focus:border-court-500 focus:ring-2 focus:ring-court-500/25;
+  }
+
+  /* Badges / chips / pills — Archivo uppercase micro-label */
+  .badge { @apply inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-xs font-heading font-bold uppercase tracking-wide whitespace-nowrap; }
+  .chip  { @apply inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold border border-slate-200 bg-white text-slate-700 whitespace-nowrap; }
+
+  /* Data tables */
+  .data-table { @apply w-full text-sm; }
+  .data-table th { @apply text-left font-heading uppercase tracking-wide text-xs font-bold text-slate-500 border-b border-slate-300 px-3 py-2; }
+  .data-table td { @apply border-b border-slate-100 px-3 py-2 text-slate-800 align-middle; }
+  .data-table tbody tr:hover { @apply bg-slate-50; }
+
+  /* Heading primitive (for non-h1–h6 elements that should read as a heading) */
+  .heading { @apply font-heading font-bold uppercase; letter-spacing: -0.01em; }
 }
 
 /* ─── Dark mode (neutral grey, eye-comfort) ─────────────────────────────────
@@ -63,7 +146,7 @@ html.dark .bg-orange-100 { background-color: #5a2810 !important; }
 html.dark .bg-pink-100 { background-color: #5a1e3b !important; }
 html.dark .text-pink-700 { color: #f9a8d4 !important; }
 html.dark .bg-pink-50 { background-color: #2a0c1b !important; }
-html.dark .bg-wa-light { background-color: #1b3a2a !important; }
+html.dark .bg-wa-light { background-color: #0f3040 !important; }
 
 /* Hover states */
 html.dark .hover\:bg-slate-50:hover { background-color: #1c2127 !important; }
@@ -164,13 +247,13 @@ html.dark pre, html.dark code {
 /* App sidebar — light-blue in light mode, neutral dark grey in dark. Driven by a
    class so it adapts to the theme (inline styles wouldn't). */
 .app-sidebar {
-  background: linear-gradient(180deg, #DBEEFB 0%, #A9D9F4 100%);
-  border-color: #93C6E7 !important;
+  background: linear-gradient(180deg, #E9F2F6 0%, #C9E1EA 100%);
+  border-color: #9CC1D0 !important;
 }
 html.dark .app-sidebar {
   background: linear-gradient(180deg, #1b2026 0%, #12161b 100%);
   border-color: #2a3038 !important;
 }
 /* Sidebar internal dividers pick up a matching tone */
-.app-sidebar .border-slate-200 { border-color: #BEDDF1; }
+.app-sidebar .border-slate-200 { border-color: #CDE0E8; }
 html.dark .app-sidebar .border-slate-200 { border-color: #2a3038 !important; }

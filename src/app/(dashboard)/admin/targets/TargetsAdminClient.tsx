@@ -160,6 +160,7 @@ export default function TargetsAdminClient() {
         ) : targets.length === 0 ? (
           <div className="p-8 text-center text-slate-400 text-sm">No targets set yet.</div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-500 border-b border-slate-200">
@@ -184,6 +185,7 @@ export default function TargetsAdminClient() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

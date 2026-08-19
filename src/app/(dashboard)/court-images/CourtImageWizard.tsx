@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import ElementInspector from "@/components/court-image/ElementInspector";
+import MaterialCalculator from "@/components/court-image/MaterialCalculator";
 import DesignAttachments, {
   type AttachmentTab,
   type Attachments,
@@ -56,12 +57,10 @@ import {
 } from "@/lib/court-image/schema";
 import { presetsForSports, type CourtPreset } from "@/lib/court-image/sport-standards";
 import {
-  ppeTileCount,
+  // Surface-family test still used to auto-toggle the 2D grid overlay. The
+  // roll/tile material math (ppeTileCount / turfRollMeters / pvcRollCount) now
+  // lives inside MaterialCalculator, which reads the sales-editable sizes.
   isTiledSurface,
-  isTurfSurface,
-  isPvcSurface,
-  turfRollMeters,
-  pvcRollCount,
 } from "@/lib/court-image/schema";
 import {
   TURF_SHAPES,
@@ -250,7 +249,7 @@ function MultiCourtBanner({
             onKeyDown={(e) => {
               if (e.key === "Enter") (e.target as HTMLInputElement).blur();
             }}
-            className="w-16 px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+            className="input w-16 text-xs !px-2 !py-1"
           />
           <span className="text-[10px] text-slate-400">Enter to apply</span>
         </div>
@@ -579,7 +578,7 @@ function ColorTextField({
   fallback,
   onCommit,
   swatchClassName = "w-8 h-8 rounded border border-slate-300 cursor-pointer bg-white shrink-0 p-0",
-  textClassName = "flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30",
+  textClassName = "input flex-1 min-w-0 text-xs !px-2 !py-1.5",
 }: {
   value: string | undefined;
   fallback: string;
@@ -711,7 +710,7 @@ function ColorPickerSection({
             onKeyDown={(e) => {
               if (e.key === "Enter") (e.target as HTMLInputElement).blur();
             }}
-            className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+            className="input flex-1 min-w-0 text-xs !px-2 !py-1.5"
           />
         </div>
         <div className="flex items-center gap-3">
@@ -845,7 +844,7 @@ function LineMarkingSection({
                     if (v) onSetCourt(c.id, v);
                   }}
                   swatchClassName="w-7 h-7 rounded border border-slate-300 cursor-pointer bg-white shrink-0 p-0"
-                  textClassName="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                  textClassName="input flex-1 min-w-0 text-xs !px-2 !py-1"
                 />
               </div>
             </div>
@@ -934,7 +933,7 @@ function CourtColourSection({
                     if (v) onSetCourt(c.id, v);
                   }}
                   swatchClassName="w-7 h-7 rounded border border-slate-300 cursor-pointer bg-white shrink-0 p-0"
-                  textClassName="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                  textClassName="input flex-1 min-w-0 text-xs !px-2 !py-1"
                 />
               </div>
             </div>
@@ -1138,6 +1137,11 @@ export default function CourtImageWizard({
   const [caption, setCaption] = useState("");
   const [contactPhone, setContactPhone] = useState(prefill?.contactPhone ?? "");
   const [pngDataUrl2D, setPngDataUrl2D] = useState<string | null>(null);
+  // Feature #8: a second 2D capture with the DIMENSIONS card baked in — used for
+  // the WhatsApp "Send design" image path so the customer's plan shows the
+  // measurements. pngDataUrl2D stays CLEAN (fed to the combined PDF, which draws
+  // its own dims table — no double dims there).
+  const [pngDataUrl2DSend, setPngDataUrl2DSend] = useState<string | null>(null);
   const [pngDataUrl3D, setPngDataUrl3D] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(editingId ?? null);
   const [pngBlobUrl, setPngBlobUrl] = useState<string | null>(null);
@@ -1489,12 +1493,20 @@ export default function CourtImageWizard({
   async function goStep3() {
     if (!layout) return;
     // Capture the 2D plan at 3x so it stays crisp when enlarged in the PDF.
+    // Two variants off the SAME live canvas: a CLEAN one (dims card hidden) for
+    // the combined PDF — which prints its own dimensions table — and a DIMS-baked
+    // one for the WhatsApp "Send design" image so the customer's plan carries the
+    // measurements. If the design has dimensions turned off there is no dim-panel
+    // node, so the dims variant comes back identical to the clean one.
     const dataUrl = canvasRef.current?.toDataURL(3);
     if (!dataUrl) {
       toast.error("Could not render preview — try again");
       return;
     }
+    const dataUrlWithDims =
+      canvasRef.current?.toDataURL(3, { includeDimensions: true }) ?? dataUrl;
     setPngDataUrl2D(dataUrl);
+    setPngDataUrl2DSend(dataUrlWithDims);
     setPngDataUrl3D(null);
     setVideoBlob(null);
     setVideoDataUrl(null);
@@ -2062,8 +2074,13 @@ export default function CourtImageWizard({
     const next: typeof uploadedUrls = { ...uploadedUrls };
 
     if (sendFormats["2d"] && !next["2d"]) {
-      if (!pngDataUrl2D) throw new Error("2D preview missing — re-open the wizard");
-      next["2d"] = await uploadPng(pngDataUrl2D);
+      // Feature #8: upload the DIMS-baked 2D so the customer's plan shows the
+      // measurements (falls back to the clean capture if the dims variant is
+      // somehow missing). The combined PDF path keeps using the clean
+      // pngDataUrl2D directly, so it never double-prints dimensions.
+      const twoD = pngDataUrl2DSend ?? pngDataUrl2D;
+      if (!twoD) throw new Error("2D preview missing — re-open the wizard");
+      next["2d"] = await uploadPng(twoD);
     }
     if (sendFormats["3d-image"]) {
       const data = capture3D() ?? pngDataUrl3D;
@@ -2245,7 +2262,7 @@ export default function CourtImageWizard({
               </svg>
               Back
             </button>
-            <div className="font-semibold text-slate-900">Court Designer</div>
+            <div className="heading text-slate-900">Court Designer</div>
             <StepDots current={step} />
           </div>
           <button
@@ -2331,7 +2348,7 @@ export default function CourtImageWizard({
                       onClick={() => setSidebarTab(t.id)}
                       className={`px-1 py-1.5 text-[11px] font-medium rounded-md transition ${
                         sidebarTab === t.id
-                          ? "bg-white text-slate-900 shadow-sm"
+                          ? "bg-court-600 text-white shadow-sm"
                           : "text-slate-500 hover:text-slate-800"
                       }`}
                     >
@@ -2829,26 +2846,6 @@ export default function CourtImageWizard({
                       />
                     ))}
                   </div>
-                  {isTiledSurface(layout.style.surface) && (
-                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
-                      {(() => {
-                        const c = ppeTileCount(
-                          layout.plot.lengthFt,
-                          layout.plot.widthFt
-                        );
-                        return (
-                          <>
-                            <div className="font-medium">
-                              {c.total.toLocaleString("en-IN")} tiles required
-                            </div>
-                            <div className="text-slate-500">
-                              {c.perLength} × {c.perWidth} at 30 × 30 cm each
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
                   {(layout.style.surface === "acrylic_blue" ||
                     layout.style.surface === "acrylic_green") && (
                     <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
@@ -2864,46 +2861,19 @@ export default function CourtImageWizard({
                       </div>
                     </div>
                   )}
-                  {isTurfSurface(layout.style.surface) && (
-                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
-                      {(() => {
-                        const r = turfRollMeters(
-                          layout.plot.lengthFt,
-                          layout.plot.widthFt
-                        );
-                        return (
-                          <>
-                            <div className="font-medium">
-                              {r.totalMeters.toLocaleString("en-IN")} m turf roll required
-                            </div>
-                            <div className="text-slate-500">
-                              Light {r.lightMeters.toLocaleString("en-IN")} m + Dark {r.darkMeters.toLocaleString("en-IN")} m · {r.stripes} stripes · 2 m rolls
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
-                  {isPvcSurface(layout.style.surface) && (
-                    <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2">
-                      {(() => {
-                        const p = pvcRollCount(
-                          layout.plot.lengthFt,
-                          layout.plot.widthFt
-                        );
-                        return (
-                          <>
-                            <div className="font-medium">
-                              {p.totalSqM.toLocaleString("en-IN")} m² PVC required
-                            </div>
-                            <div className="text-slate-500">
-                              {p.rolls} rolls · 1.8 m wide × 20 m long · {p.runningMeters.toLocaleString("en-IN")} running m
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
+                  {/* Feature #6: editable, PERSISTED roll/tile calculator.
+                      Replaces the former hardcoded read-only readouts for turf /
+                      PVC / PP-tile — it loads the sales-set standard roll/tile
+                      sizes + wastage % (Setting-backed), lets them be edited (and
+                      re-saved for next session), and surfaces the exact +
+                      wastage-inflated rolls/tiles-needed, total area and running
+                      length for THIS design's plot + active surface. Acrylic keeps
+                      its own note above (it's coated by sq.ft, not rolls/tiles). */}
+                  <MaterialCalculator
+                    plotLengthFt={layout.plot.lengthFt}
+                    plotWidthFt={layout.plot.widthFt}
+                    surface={layout.style.surface}
+                  />
                   </div>
 
                   {/* Ground finish control removed (V1) — the ground/earth is
@@ -2970,7 +2940,7 @@ export default function CourtImageWizard({
                               );
                             }}
                             placeholder="Auto (derived from surface)"
-                            className="flex-1 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                            className="input flex-1 text-xs !px-2 !py-1.5"
                           />
                           {layout.style.runOffColorOverride && (
                             <button
@@ -3072,7 +3042,7 @@ export default function CourtImageWizard({
                           };
                         });
                       }}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                      className="input text-sm"
                     >
                       {layout.sports.map((s) => (
                         <option key={s} value={s}>
@@ -3103,7 +3073,7 @@ export default function CourtImageWizard({
                       type="checkbox"
                       checked={!!layout.style.watermarkUrl}
                       onChange={toggleWatermark}
-                      className="accent-wa-green"
+                      className="accent-court-600"
                     />
                     <div className="flex-1">
                       <div className="font-medium">Fitoverse logo watermark</div>
@@ -3332,7 +3302,7 @@ export default function CourtImageWizard({
                 type="button"
                 onClick={goStep2}
                 disabled={!step1Valid}
-                className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-5 py-2 rounded-lg text-sm disabled:opacity-50"
+                className="btn btn-primary"
               >
                 Open canvas →
               </button>
@@ -3341,7 +3311,7 @@ export default function CourtImageWizard({
               <button
                 type="button"
                 onClick={goStep3}
-                className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-5 py-2 rounded-lg text-sm"
+                className="btn btn-primary"
               >
                 Quotation →
               </button>
@@ -3350,7 +3320,7 @@ export default function CourtImageWizard({
               <button
                 type="button"
                 onClick={() => setStep(4)}
-                className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-5 py-2 rounded-lg text-sm"
+                className="btn btn-primary"
               >
                 Preview & Send →
               </button>
@@ -3361,7 +3331,7 @@ export default function CourtImageWizard({
                   type="button"
                   onClick={handleSaveDraft}
                   disabled={savingDraft || sending}
-                  className="text-sm font-medium text-slate-700 hover:text-slate-900 border border-slate-300 hover:border-slate-400 px-4 py-2 rounded-lg disabled:opacity-50"
+                  className="btn btn-secondary"
                 >
                   {savingDraft ? "Saving…" : "Save draft"}
                 </button>
@@ -3375,7 +3345,7 @@ export default function CourtImageWizard({
                     selectedFormatCount(sendFormats) === 0 ||
                     (sendFormats["3d-video"] && !videoBlob)
                   }
-                  className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-5 py-2 rounded-lg text-sm disabled:opacity-50"
+                  className="btn btn-primary"
                 >
                   {sending
                     ? "Sending…"
@@ -3749,7 +3719,7 @@ function Step1(props: {
           value={customerName}
           onChange={(e) => setCustomerName(e.target.value)}
           placeholder="Customer or project name"
-          className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+          className="input text-sm"
         />
       </section>
 
@@ -3759,7 +3729,7 @@ function Step1(props: {
           value={siteCity}
           onChange={(e) => setSiteCity(e.target.value)}
           placeholder="e.g. Coimbatore"
-          className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+          className="input text-sm"
         />
         <p className="mt-1 text-xs text-slate-400">Where the court is being built — powers the Geography view in Team Performance.</p>
       </section>
@@ -3770,7 +3740,7 @@ function Step1(props: {
           <select
             value={leadSourceId}
             onChange={(e) => setLeadSourceId(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+            className="input text-sm"
           >
             <option value="">—</option>
             {leadSources.map((s) => (
@@ -3783,7 +3753,7 @@ function Step1(props: {
           <select
             value={customerProfileId}
             onChange={(e) => setCustomerProfileId(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+            className="input text-sm"
           >
             <option value="">—</option>
             {customerProfiles.map((c) => (
@@ -3796,7 +3766,7 @@ function Step1(props: {
           <select
             value={businessType}
             onChange={(e) => setBusinessType(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+            className="input text-sm"
           >
             <option value="">—</option>
             <option value="B2B">B2B</option>
@@ -3882,7 +3852,7 @@ function Step1(props: {
                 value={totalSqftInput}
                 onChange={(e) => applyTotalSqft(e.target.value)}
                 placeholder="e.g. 7500"
-                className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                className="input mt-1 text-sm"
               />
             </label>
             <div className="text-[11px] text-slate-500 mt-2">
@@ -3920,7 +3890,7 @@ function Step1(props: {
                     const raw = parseFloat(e.target.value) || 0;
                     setLengthFt(toFeet(raw, unit));
                   }}
-                  className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                  className="input mt-1 text-sm"
                 />
               </label>
               <label className="block">
@@ -3937,7 +3907,7 @@ function Step1(props: {
                     const raw = parseFloat(e.target.value) || 0;
                     setWidthFt(toFeet(raw, unit));
                   }}
-                  className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                  className="input mt-1 text-sm"
                 />
               </label>
             </div>
@@ -4429,7 +4399,7 @@ function ExistingQuotePicker({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="🔍  Search by customer name or quote no…"
             autoFocus
-            className="w-full text-xs px-3 py-2 mb-2 rounded-md border border-slate-300 bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-wa-green"
+            className="input text-xs mb-2"
           />
           <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white divide-y divide-slate-100">
           {loading ? (
@@ -4473,7 +4443,7 @@ function ExistingQuotePicker({
                     href={`/api/quotations/${q.id}/pdf`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[11px] font-medium text-slate-700 border border-slate-300 rounded px-2 py-1 hover:bg-white whitespace-nowrap"
+                    className="btn btn-secondary !px-2 !py-1 !text-[11px] whitespace-nowrap"
                   >
                     👁 View
                   </a>
@@ -4481,7 +4451,7 @@ function ExistingQuotePicker({
                     type="button"
                     disabled={loadingId === q.id}
                     onClick={() => pick(q.id, q.number)}
-                    className="text-[11px] font-medium text-white bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 rounded px-2.5 py-1"
+                    className="btn btn-primary !px-2.5 !py-1 !text-[11px]"
                   >
                     {loadingId === q.id ? "…" : "Attach"}
                   </button>
@@ -4600,7 +4570,7 @@ function StepQuotation({
               type="checkbox"
               checked={quoteEnabled}
               onChange={(e) => setQuoteEnabled(e.target.checked)}
-              className="accent-wa-green w-4 h-4"
+              className="accent-court-600 w-4 h-4"
             />
             Attach quote to PDF
           </label>
@@ -4630,7 +4600,7 @@ function StepQuotation({
                 <input
                   value={quoteNumber}
                   onChange={(e) => setQuoteNumber(e.target.value)}
-                  className="mt-1 w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                  className="input mt-1 text-sm !px-2.5 !py-1.5"
                 />
               </label>
               <label className="block">
@@ -4641,7 +4611,7 @@ function StepQuotation({
                   value={quoteTitle}
                   onChange={(e) => setQuoteTitle(e.target.value)}
                   placeholder="e.g. Salem 7-a-side turf"
-                  className="mt-1 w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                  className="input mt-1 text-sm !px-2.5 !py-1.5"
                 />
               </label>
             </div>
@@ -4654,7 +4624,7 @@ function StepQuotation({
                 onChange={(e) => setQuoteNotes(e.target.value)}
                 rows={2}
                 placeholder="Scope, inclusions, validity, payment terms…"
-                className="mt-1 w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                className="input mt-1 text-sm !px-2.5 !py-1.5 resize-none"
               />
             </label>
 
@@ -4713,7 +4683,7 @@ function StepQuotation({
                               onChange={(e) =>
                                 patch(it.id, { included: e.target.checked })
                               }
-                              className="accent-wa-green w-4 h-4 row-start-1"
+                              className="accent-court-600 w-4 h-4 row-start-1"
                               title="Include in quote"
                             />
                             <div className="col-span-2 sm:col-span-1 order-last sm:order-none">
@@ -4721,7 +4691,7 @@ function StepQuotation({
                                 value={it.name}
                                 onChange={(e) => patch(it.id, { name: e.target.value })}
                                 placeholder="Item name"
-                                className={`w-full px-3 py-2 text-base font-semibold border border-slate-300 rounded-md ${
+                                className={`input text-base font-semibold ${
                                   it.included ? "text-slate-900" : "text-slate-400"
                                 }`}
                               />
@@ -4730,7 +4700,7 @@ function StepQuotation({
                                 onChange={(e) => patch(it.id, { desc: e.target.value })}
                                 placeholder="Description (optional)"
                                 rows={6}
-                                className="mt-2 w-full px-3 py-2.5 text-sm text-slate-600 border border-slate-300 hover:border-slate-400 focus:border-slate-400 rounded-md resize-y leading-relaxed min-h-[7rem]"
+                                className="input mt-2 text-sm !py-2.5 text-slate-600 resize-y leading-relaxed min-h-[7rem]"
                               />
                             </div>
                             <input
@@ -4739,13 +4709,13 @@ function StepQuotation({
                               onChange={(e) =>
                                 patch(it.id, { qty: Number(e.target.value) || 0 })
                               }
-                              className="w-full px-2 py-1.5 text-sm text-right border border-slate-200 rounded"
+                              className="input text-sm text-right !px-2 !py-1.5 font-mono"
                             />
                             <input
                               list={UNIT_DATALIST_ID}
                               value={it.unit}
                               onChange={(e) => patch(it.id, { unit: e.target.value })}
-                              className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded"
+                              className="input text-sm !px-2 !py-1.5"
                             />
                             <input
                               type="number"
@@ -4753,9 +4723,9 @@ function StepQuotation({
                               onChange={(e) =>
                                 patch(it.id, { rate: Number(e.target.value) || 0 })
                               }
-                              className="w-full px-2 py-1.5 text-sm text-right border border-slate-200 rounded"
+                              className="input text-sm text-right !px-2 !py-1.5 font-mono"
                             />
-                            <span className="text-sm text-right text-slate-700 tabular-nums">
+                            <span className="text-sm text-right text-slate-700 font-mono">
                               ₹{amount.toLocaleString("en-IN")}
                             </span>
                             <button
@@ -5029,7 +4999,7 @@ function Step3({
               type="button"
               onClick={onGenerateVideo}
               disabled={generatingVideo}
-              className="bg-wa-green hover:bg-wa-green/90 text-white text-xs font-medium px-3 py-1.5 rounded-md disabled:opacity-50"
+              className="btn btn-primary !px-3 !py-1.5 !text-xs"
             >
               {generatingVideo
                 ? `Recording… ${Math.round(videoProgress * 100)}%`
@@ -5070,7 +5040,7 @@ function Step3({
               value={contactPhone}
               onChange={(e) => setContactPhone(e.target.value)}
               placeholder="+919876543210"
-              className="w-full mt-1 px-3 py-2 text-sm border border-slate-300 rounded-md"
+              className="input mt-1 text-sm"
             />
           </label>
         </div>
@@ -5149,7 +5119,7 @@ function Step3({
             onChange={(e) => setCaption(e.target.value)}
             rows={4}
             placeholder={`Here's the court design for ${customerName}.\n\nLet me know if anything needs to change.`}
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 resize-none"
+            className="input text-sm resize-none"
           />
           <div className="text-[11px] text-slate-500 mt-1">
             Caption is attached to the first item sent.
@@ -5513,7 +5483,7 @@ function CombinedPdfBlock({
           checked={alsoSendVideo && hasVideo}
           disabled={!hasVideo}
           onChange={(e) => setAlsoSendVideo(e.target.checked)}
-          className="accent-wa-green"
+          className="accent-court-600"
         />
         Also send the 3D spinning video {hasVideo ? "(ready ✓)" : ""}
       </label>
@@ -5586,7 +5556,7 @@ function CombinedPdfBlock({
           type="button"
           onClick={() => build("view")}
           disabled={!!busy || !pngDataUrl2D}
-          className="flex-1 min-w-0 text-xs font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded-md px-2 py-2 disabled:opacity-50"
+          className="btn btn-secondary flex-1 min-w-0 !px-2 !py-2 !text-xs"
         >
           {busy === "view" ? "Building…" : "👁 View PDF"}
         </button>
@@ -5594,7 +5564,7 @@ function CombinedPdfBlock({
           type="button"
           onClick={() => build("download")}
           disabled={!!busy || !pngDataUrl2D}
-          className="flex-1 min-w-0 text-xs font-medium border border-slate-300 hover:border-slate-400 text-slate-700 rounded-md px-2 py-2 disabled:opacity-50"
+          className="btn btn-secondary flex-1 min-w-0 !px-2 !py-2 !text-xs"
         >
           {busy === "download" ? "Building…" : "⬇ Download"}
         </button>
@@ -5603,7 +5573,7 @@ function CombinedPdfBlock({
         type="button"
         onClick={() => build("send")}
         disabled={!!busy || spinBusy || !pngDataUrl2D || !contactPhone}
-        className="w-full text-sm font-semibold bg-wa-green hover:bg-wa-green/90 text-white rounded-md px-3 py-2.5 disabled:opacity-50"
+        className="btn btn-primary w-full"
       >
         {busy === "send" ? "Sending…" : "📤 Send on WhatsApp"}
       </button>
@@ -5635,7 +5605,7 @@ function CombinedPdfBlock({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="customer@email.com"
-          className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+          className="input flex-1 min-w-0 text-xs !px-2 !py-1.5"
         />
         <button
           type="button"
@@ -5681,7 +5651,7 @@ function FormatCheckbox({
         checked={checked}
         onChange={() => !disabled && onChange()}
         disabled={disabled && !checked}
-        className="mt-0.5 accent-wa-green"
+        className="mt-0.5 accent-court-600"
       />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-slate-900 leading-tight">{label}</div>
@@ -5887,7 +5857,7 @@ function AddBtn({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="text-xs text-slate-700 bg-white border border-slate-300 rounded px-2 py-1.5 hover:bg-slate-50 hover:border-slate-400 text-left"
+      className="btn btn-secondary !px-2 !py-1.5 !text-xs !justify-start"
     >
       + {label}
     </button>

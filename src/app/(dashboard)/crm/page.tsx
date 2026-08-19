@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
-import { getMyDay } from "@/lib/crm/myDay";
+import { getMyDay, getUpcomingSchedule } from "@/lib/crm/myDay";
 import { overview } from "@/lib/analytics/overview";
 import PageHeader from "@/components/PageHeader";
+import UpcomingSchedule from "./UpcomingSchedule";
 
 function fmtInr(n: number): string {
   return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
@@ -19,7 +20,7 @@ export default async function CrmDashboardPage() {
   const user = await requireUser();
 
   if (isAdmin(user.role)) {
-    const { thisMonth, lastMonth, topMovers } = await overview();
+    const [{ thisMonth, lastMonth, topMovers }, upcoming] = await Promise.all([overview(), getUpcomingSchedule()]);
     const delta = (curr: number, prev: number) => (prev === 0 ? null : Math.round(((curr - prev) / prev) * 100));
 
     return (
@@ -35,11 +36,11 @@ export default async function CrmDashboardPage() {
             ].map((m) => {
               const d = delta(m.curr, m.prev);
               return (
-                <div key={m.label} className="bg-white rounded-xl border border-slate-200 p-4">
+                <div key={m.label} className="card p-4">
                   <div className="text-sm text-slate-600">{m.label}</div>
-                  <div className="text-xl font-semibold text-slate-900 mt-1">{m.fmt(m.curr)}</div>
+                  <div className="text-xl font-semibold text-slate-900 mt-1 font-mono">{m.fmt(m.curr)}</div>
                   {d !== null && (
-                    <div className={`text-xs font-medium mt-1 ${d >= 0 ? "text-green-700" : "text-red-600"}`}>
+                    <div className={`text-xs font-medium mt-1 font-mono ${d >= 0 ? "text-green-700" : "text-red-600"}`}>
                       {d >= 0 ? "▲" : "▼"} {Math.abs(d)}% vs last month
                     </div>
                   )}
@@ -48,7 +49,7 @@ export default async function CrmDashboardPage() {
             })}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="card p-4">
             <h3 className="text-base font-semibold text-slate-900 mb-3">Biggest movers this month</h3>
             {topMovers.length === 0 ? (
               <p className="text-sm text-slate-400">Nothing to compare yet.</p>
@@ -57,7 +58,7 @@ export default async function CrmDashboardPage() {
                 {topMovers.map((m) => (
                   <div key={m.ownerName} className="flex items-center justify-between text-sm">
                     <span className="text-slate-800">{m.ownerName}</span>
-                    <span className={`font-medium ${m.wonValueDelta >= 0 ? "text-green-700" : "text-red-600"}`}>
+                    <span className={`font-medium font-mono ${m.wonValueDelta >= 0 ? "text-green-700" : "text-red-600"}`}>
                       {m.wonValueDelta >= 0 ? "+" : ""}{fmtInr(m.wonValueDelta)}
                     </span>
                   </div>
@@ -66,70 +67,72 @@ export default async function CrmDashboardPage() {
             )}
           </div>
 
+          <UpcomingSchedule data={upcoming} showOwner />
+
           <div className="flex gap-3 text-sm">
-            <Link href="/crm/analytics" className="text-wa-dark hover:underline font-medium">Full CRM Analytics →</Link>
+            <Link href="/crm/analytics" className="text-court-700 hover:underline font-medium">Full CRM Analytics →</Link>
           </div>
         </div>
       </>
     );
   }
 
-  const myDay = await getMyDay(user.id);
+  const [myDay, upcoming] = await Promise.all([getMyDay(user.id), getUpcomingSchedule({ ownerUserId: user.id })]);
 
   return (
     <>
       <PageHeader large title="My Day" description={new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })} />
       <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-4">
         <div className="grid sm:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Due today <span className="text-slate-400 font-normal">{myDay.dueToday.length}</span></h3>
+          <div className="card p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Due today <span className="text-slate-400 font-normal font-mono">{myDay.dueToday.length}</span></h3>
             {myDay.dueToday.length === 0 ? (
               <p className="text-sm text-slate-400">Nothing due today.</p>
             ) : (
               <div className="space-y-2">
                 {myDay.dueToday.map((r) => (
-                  <div key={r.id} className="text-sm"><span className="text-slate-800">{r.message}</span><div className="text-xs text-slate-400">{fmtDateTime(r.dueAt)}</div></div>
+                  <div key={r.id} className="text-sm"><span className="text-slate-800">{r.message}</span><div className="text-xs text-slate-400 font-mono">{fmtDateTime(r.dueAt)}</div></div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-amber-200 bg-amber-50/40 p-4">
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Overdue <span className="text-slate-400 font-normal">{myDay.overdue.length}</span></h3>
+          <div className="rounded-md border border-amber-200 bg-amber-50/40 p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Overdue <span className="text-slate-400 font-normal font-mono">{myDay.overdue.length}</span></h3>
             {myDay.overdue.length === 0 ? (
               <p className="text-sm text-slate-400">Nothing overdue — you're caught up.</p>
             ) : (
               <div className="space-y-2">
                 {myDay.overdue.map((r) => (
-                  <div key={r.id} className="text-sm"><span className="text-slate-800">{r.message}</span><div className="text-xs text-red-600">{fmtDateTime(r.dueAt)}</div></div>
+                  <div key={r.id} className="text-sm"><span className="text-slate-800">{r.message}</span><div className="text-xs text-red-600 font-mono">{fmtDateTime(r.dueAt)}</div></div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Untouched 7+ days <span className="text-slate-400 font-normal">{myDay.noRecentActivityDeals.length}</span></h3>
+          <div className="card p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Untouched 7+ days <span className="text-slate-400 font-normal font-mono">{myDay.noRecentActivityDeals.length}</span></h3>
             {myDay.noRecentActivityDeals.length === 0 ? (
               <p className="text-sm text-slate-400">Every open deal has recent activity.</p>
             ) : (
               <div className="space-y-1.5">
                 {myDay.noRecentActivityDeals.map((d) => (
-                  <Link key={d.id} href={`/deals/${d.id}`} className="block text-sm text-wa-dark hover:underline">{d.code} — {d.title}</Link>
+                  <Link key={d.id} href={`/deals/${d.id}`} className="block text-sm text-court-700 hover:underline"><span className="font-mono">{d.code}</span> — {d.title}</Link>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Closing this week <span className="text-slate-400 font-normal">{myDay.closingThisWeek.length}</span></h3>
+          <div className="card p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Closing this week <span className="text-slate-400 font-normal font-mono">{myDay.closingThisWeek.length}</span></h3>
             {myDay.closingThisWeek.length === 0 ? (
               <p className="text-sm text-slate-400">No expected close dates in the next 7 days.</p>
             ) : (
               <div className="space-y-1.5">
                 {myDay.closingThisWeek.map((d) => (
-                  <Link key={d.id} href={`/deals/${d.id}`} className="flex items-center justify-between text-sm text-wa-dark hover:underline">
-                    <span>{d.code} — {d.title}</span>
-                    <span className="text-xs text-slate-400">{fmtDate(d.expectedCloseAt)}</span>
+                  <Link key={d.id} href={`/deals/${d.id}`} className="flex items-center justify-between text-sm text-court-700 hover:underline">
+                    <span><span className="font-mono">{d.code}</span> — {d.title}</span>
+                    <span className="text-xs text-slate-400 font-mono">{fmtDate(d.expectedCloseAt)}</span>
                   </Link>
                 ))}
               </div>
@@ -137,12 +140,14 @@ export default async function CrmDashboardPage() {
           </div>
         </div>
 
+        <UpcomingSchedule data={upcoming} />
+
         {myDay.stuckDeals.length > 0 && (
-          <div className="bg-white rounded-xl border border-red-200 p-4">
-            <h3 className="text-base font-semibold text-slate-900 mb-2">Stuck in stage <span className="text-slate-400 font-normal">{myDay.stuckDeals.length}</span></h3>
+          <div className="rounded-md border border-red-200 bg-white p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-2">Stuck in stage <span className="text-slate-400 font-normal font-mono">{myDay.stuckDeals.length}</span></h3>
             <div className="flex flex-wrap gap-2">
               {myDay.stuckDeals.map((d) => (
-                <Link key={d.id} href={`/deals/${d.id}`} className="text-xs font-medium bg-red-50 text-red-700 px-2 py-1 rounded-lg hover:bg-red-100">
+                <Link key={d.id} href={`/deals/${d.id}`} className="badge bg-red-100 text-red-700 hover:bg-red-200 font-mono">
                   {d.code}
                 </Link>
               ))}

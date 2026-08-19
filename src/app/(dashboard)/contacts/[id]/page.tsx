@@ -25,12 +25,12 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     },
   });
 
-  // Sales sees only their own / unassigned. If they pull up a contact whose
-  // conversation is owned by someone else, bounce them. Admin sees all.
+  // A rep sees only conversations ASSIGNED to them. If they pull up a contact
+  // whose conversation is unassigned or owned by someone else, bounce them.
+  // Admin sees all.
   if (
     user.role !== "admin" &&
     conversation &&
-    conversation.assignedToUserId !== null &&
     conversation.assignedToUserId !== user.id
   ) {
     redirect("/contacts");

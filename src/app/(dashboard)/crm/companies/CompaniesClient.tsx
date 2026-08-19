@@ -106,7 +106,7 @@ export default function CompaniesClient({
         action={
           <button
             onClick={() => setShowNew(true)}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
+            className="btn btn-primary"
           >
             + New Organization
           </button>
@@ -121,8 +121,8 @@ export default function CompaniesClient({
           <button
             key={d.key}
             onClick={() => selectDimension(d.key)}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
-              dimension === d.key ? "border-wa-green text-wa-dark" : "border-transparent text-slate-500 hover:text-slate-800"
+            className={`px-3 py-2 text-sm font-heading font-bold uppercase tracking-wide border-b-2 -mb-px whitespace-nowrap ${
+              dimension === d.key ? "border-court-600 text-court-700" : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             {d.label}
@@ -135,20 +135,20 @@ export default function CompaniesClient({
         <button
           onClick={() => setSelectedBucket(null)}
           className={`text-xs px-2.5 py-1 rounded-full border ${
-            !selectedBucket ? "bg-wa-dark text-white border-wa-dark" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+            !selectedBucket ? "bg-court-600 text-white border-court-600" : "border-slate-200 text-slate-600 hover:bg-slate-50"
           }`}
         >
-          All ({companies.length})
+          All (<span className="font-mono">{companies.length}</span>)
         </button>
         {buckets.map(([name, count]) => (
           <button
             key={name}
             onClick={() => setSelectedBucket(name)}
             className={`text-xs px-2.5 py-1 rounded-full border ${
-              selectedBucket === name ? "bg-wa-dark text-white border-wa-dark" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+              selectedBucket === name ? "bg-court-600 text-white border-court-600" : "border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
           >
-            {name} ({count})
+            {name} (<span className="font-mono">{count}</span>)
           </button>
         ))}
       </div>
@@ -158,7 +158,7 @@ export default function CompaniesClient({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by name..."
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-xs focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+          className="input w-full max-w-xs text-sm"
         />
         <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
         {dateRange && (
@@ -168,36 +168,36 @@ export default function CompaniesClient({
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="card overflow-x-auto">
+        <table className="data-table">
           <thead>
-            <tr className="text-left border-b border-slate-200">
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Name</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">City</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">{classificationLabel}</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Owner</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 text-right">Contacts</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 text-right">Deals</th>
+            <tr>
+              <th>Name</th>
+              <th>City</th>
+              <th>{classificationLabel}</th>
+              <th>Owner</th>
+              <th className="!text-right">Contacts</th>
+              <th className="!text-right">Deals</th>
             </tr>
           </thead>
           <tbody>
             {visible.map((c) => (
-              <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                <td className="px-4 py-2.5">
-                  <Link href={`/crm/companies/${c.id}`} className="font-medium text-wa-dark hover:underline">
+              <tr key={c.id}>
+                <td>
+                  <Link href={`/crm/companies/${c.id}`} className="font-medium text-court-700 hover:underline">
                     {c.name}
                   </Link>
                 </td>
-                <td className="px-4 py-2.5 text-slate-600">{c.city ?? "—"}</td>
-                <td className="px-4 py-2.5 text-slate-600">{classificationValue(c)}</td>
-                <td className="px-4 py-2.5 text-slate-600">{c.ownerName ?? "—"}</td>
-                <td className="px-4 py-2.5 text-right text-slate-600">{c.contactCount}</td>
-                <td className="px-4 py-2.5 text-right text-slate-600">{c.dealCount}</td>
+                <td className="text-slate-600">{c.city ?? "—"}</td>
+                <td className="text-slate-600">{classificationValue(c)}</td>
+                <td className="text-slate-600">{c.ownerName ?? "—"}</td>
+                <td className="!text-right text-slate-600 font-mono">{c.contactCount}</td>
+                <td className="!text-right text-slate-600 font-mono">{c.dealCount}</td>
               </tr>
             ))}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={6} className="py-8 text-center text-slate-400">
                   No records in this segment.
                 </td>
               </tr>
@@ -276,7 +276,7 @@ function NewCompanyModal({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+              className="input mt-1 text-sm"
               required
             />
           </div>
@@ -285,7 +285,7 @@ function NewCompanyModal({
             <input
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+              className="input mt-1 text-sm"
             />
           </div>
           <div>
@@ -293,7 +293,7 @@ function NewCompanyModal({
             <select
               value={customerProfileId}
               onChange={(e) => setCustomerProfileId(e.target.value)}
-              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+              className="input mt-1 text-sm"
             >
               <option value="">Unspecified</option>
               {customerProfiles.map((p) => (
@@ -328,14 +328,14 @@ function NewCompanyModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 border border-slate-300 bg-white rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="btn btn-secondary flex-1"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50"
+              className="btn btn-primary flex-1"
             >
               {submitting ? "Creating..." : "Create"}
             </button>

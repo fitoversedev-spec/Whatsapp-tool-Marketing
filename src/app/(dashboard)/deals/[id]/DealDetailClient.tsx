@@ -77,11 +77,11 @@ const STATUS_COLORS: Record<string, string> = {
   draft: "bg-slate-100 text-slate-600",
   sent: "bg-blue-100 text-blue-700",
   viewed: "bg-amber-100 text-amber-700",
-  accepted: "bg-wa-green/10 text-wa-dark",
+  accepted: "bg-green-100 text-green-700",
   expired: "bg-red-100 text-red-700",
 };
 function statusPill(status: string): string {
-  return `text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${STATUS_COLORS[status] ?? "bg-slate-100 text-slate-700"}`;
+  return `badge ${STATUS_COLORS[status] ?? "bg-slate-100 text-slate-700"}`;
 }
 
 function fmtDuration(seconds: number | null): string {
@@ -176,7 +176,7 @@ export default function DealDetailClient({
         <div className="mt-1 shrink-0 flex items-center gap-3">
           <button
             onClick={() => setShowEditDetails(true)}
-            className="text-xs font-medium text-wa-green hover:underline"
+            className="text-xs font-medium text-court-700 hover:underline"
           >
             Edit details
           </button>
@@ -194,20 +194,20 @@ export default function DealDetailClient({
 
       <div className="grid sm:grid-cols-3 gap-4 mt-4">
         <div className="sm:col-span-2 space-y-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="card p-4">
             <h3 className="text-base font-semibold text-slate-900 mb-3">Account</h3>
             <div className="text-base text-slate-700">{deal.accountName}</div>
             {deal.accountCity && <div className="text-xs text-slate-500">{deal.accountCity}</div>}
             {deal.accountOwnerName && <div className="text-xs text-slate-500">Owner: {deal.accountOwnerName}</div>}
             {deal.contacts.map((c) => (
               <div key={c.id} className="text-sm text-slate-600 mt-1">
-                {c.name} {c.phone && `· ${c.phone}`} {c.isPrimary && <span className="text-wa-green">(primary)</span>}
+                {c.name} {c.phone && <span className="font-mono">· {c.phone}</span>} {c.isPrimary && <span className="text-court-700">(primary)</span>}
               </div>
             ))}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Quotations sent <span className="text-slate-400 font-normal">{quotations.length}</span></h3>
+          <div className="card p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Quotations sent <span className="text-slate-400 font-normal font-mono">{quotations.length}</span></h3>
             {quotations.length === 0 ? (
               <p className="text-sm text-slate-400">No quotations sent for this customer yet.</p>
             ) : (
@@ -219,17 +219,17 @@ export default function DealDetailClient({
                         <span className="text-sm font-medium text-slate-900">{customerName}</span>
                         <span className={statusPill(q.status)}>{q.status}</span>
                       </div>
-                      <div className="text-xs text-slate-600"><span className="capitalize">{q.sport}</span> · {fmtInr(q.grandTotal)} · {fmtDate(q.date)}</div>
+                      <div className="text-xs text-slate-600"><span className="capitalize">{q.sport}</span> · <span className="font-mono">{fmtInr(q.grandTotal)}</span> · <span className="font-mono">{fmtDate(q.date)}</span></div>
                     </div>
-                    <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-wa-dark hover:underline shrink-0 ml-3">View PDF</a>
+                    <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-court-700 hover:underline shrink-0 ml-3">View PDF</a>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Court designs sent <span className="text-slate-400 font-normal">{courtImages.length}</span></h3>
+          <div className="card p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Court designs sent <span className="text-slate-400 font-normal font-mono">{courtImages.length}</span></h3>
             {courtImages.length === 0 ? (
               <p className="text-sm text-slate-400">No court designs sent for this customer yet.</p>
             ) : (
@@ -241,10 +241,10 @@ export default function DealDetailClient({
                         <span className="text-sm font-medium text-slate-900">{customerName}</span>
                         <span className={statusPill(c.status)}>{c.status}</span>
                       </div>
-                      <div className="text-xs text-slate-600"><span className="font-mono">{c.number}</span> · {fmtDate(c.date)}</div>
+                      <div className="text-xs text-slate-600"><span className="font-mono">{c.number}</span> · <span className="font-mono">{fmtDate(c.date)}</span></div>
                     </div>
                     {c.imageUrl && (
-                      <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-xs text-wa-dark hover:underline shrink-0 ml-3">View design</a>
+                      <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-xs text-court-700 hover:underline shrink-0 ml-3">View design</a>
                     )}
                   </div>
                 ))}
@@ -252,20 +252,20 @@ export default function DealDetailClient({
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Product interest <span className="text-slate-400 font-normal">{productInterests.length}</span></h3>
+          <div className="card p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Product interest <span className="text-slate-400 font-normal font-mono">{productInterests.length}</span></h3>
             {productInterests.length === 0 ? (
               <p className="text-sm text-slate-400">No products noted for this customer yet.</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {productInterests.map((p) => (
-                  <span key={p} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-lg">{p}</span>
+                  <span key={p} className="chip">{p}</span>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="card p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold text-slate-900">Timeline</h3>
               <div className="flex items-center gap-3">
@@ -274,7 +274,7 @@ export default function DealDetailClient({
                 </Link>
                 <button
                   onClick={() => setShowLogActivity(true)}
-                  className="text-xs font-medium text-wa-green hover:underline"
+                  className="text-xs font-medium text-court-700 hover:underline"
                 >
                   + Log activity
                 </button>
@@ -283,7 +283,7 @@ export default function DealDetailClient({
             <UnifiedTimeline entries={timeline} />
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="card p-4">
             <h3 className="text-base font-semibold text-slate-900 mb-3">Stage history</h3>
             {stageHistory.length === 0 ? (
               <p className="text-sm text-slate-400">No stage changes yet.</p>
@@ -297,8 +297,8 @@ export default function DealDetailClient({
                       <span className="font-medium text-slate-800">{h.toStageName}</span>
                     </div>
                     <div className="text-xs text-slate-500 text-right">
-                      {fmtDate(h.changedAt)}
-                      {h.durationInFromStageSeconds != null && <div>{fmtDuration(h.durationInFromStageSeconds)}</div>}
+                      <span className="font-mono">{fmtDate(h.changedAt)}</span>
+                      {h.durationInFromStageSeconds != null && <div className="font-mono">{fmtDuration(h.durationInFromStageSeconds)}</div>}
                     </div>
                   </div>
                 ))}
@@ -308,7 +308,7 @@ export default function DealDetailClient({
         </div>
 
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 text-sm">
+          <div className="card p-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-600">Stage</span>
               <span className="font-medium" style={{ color: deal.stageColorHex ?? undefined }}>{deal.stageName}</span>
@@ -355,16 +355,16 @@ export default function DealDetailClient({
             </div>
             <div className="flex justify-between">
               <span className="text-slate-600">Expected close</span>
-              <span className="text-slate-800">{deal.expectedCloseAt ? new Date(deal.expectedCloseAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
+              <span className="text-slate-800 font-mono">{deal.expectedCloseAt ? new Date(deal.expectedCloseAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
             </div>
             <div className="border-t border-slate-100 pt-2 flex justify-between">
               <span className="text-slate-600">Est. value</span>
-              <span className="text-slate-800">{fmtInr(deal.estimatedValue)}</span>
+              <span className="text-slate-800 font-mono">{fmtInr(deal.estimatedValue)}</span>
             </div>
             {deal.wonValue != null && (
               <div className="flex justify-between">
                 <span className="text-slate-600">Won value</span>
-                <span className="font-medium text-wa-green">{fmtInr(deal.wonValue)}</span>
+                <span className="font-medium text-turf-600 font-mono">{fmtInr(deal.wonValue)}</span>
               </div>
             )}
             {deal.outcome && (
@@ -378,31 +378,31 @@ export default function DealDetailClient({
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 text-sm">
+          <div className="card p-4 space-y-2 text-sm">
             <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Timeline</h3>
-            <div className="flex justify-between"><span className="text-slate-600">Enquiry</span><span>{fmtDate(deal.enquiryAt)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Site visit</span><span>{fmtDate(deal.siteVisitAt)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">First quoted</span><span>{fmtDate(deal.firstQuotedAt)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Closed</span><span>{fmtDate(deal.closedAt)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Enquiry</span><span className="font-mono">{fmtDate(deal.enquiryAt)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Site visit</span><span className="font-mono">{fmtDate(deal.siteVisitAt)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">First quoted</span><span className="font-mono">{fmtDate(deal.firstQuotedAt)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Closed</span><span className="font-mono">{fmtDate(deal.closedAt)}</span></div>
           </div>
 
           {deal.outcome === "WON" && (
-            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 text-sm">
+            <div className="card p-4 space-y-2 text-sm">
               <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Delivery</h3>
               <div className="flex justify-between">
                 <span className="text-slate-600">Execution started</span>
-                <span>{fmtDate(deal.executionStartedAt)}</span>
+                <span className="font-mono">{fmtDate(deal.executionStartedAt)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-600">Delivered</span>
-                <span>{fmtDate(deal.deliveryCompletedAt)}</span>
+                <span className="font-mono">{fmtDate(deal.deliveryCompletedAt)}</span>
               </div>
               <div className="pt-1 flex gap-2">
                 {deal.executionStatus == null && (
                   <button
                     onClick={() => handleSetExecutionStatus("IN_EXECUTION")}
                     disabled={executionSaving}
-                    className="text-xs font-medium bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg"
+                    className="btn btn-primary text-xs !px-3 !py-1.5"
                   >
                     Start execution
                   </button>
@@ -411,13 +411,13 @@ export default function DealDetailClient({
                   <button
                     onClick={() => handleSetExecutionStatus("COMPLETED")}
                     disabled={executionSaving}
-                    className="text-xs font-medium bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg"
+                    className="btn btn-turf text-xs !px-3 !py-1.5"
                   >
                     Mark delivered
                   </button>
                 )}
                 {deal.executionStatus === "COMPLETED" && (
-                  <span className="text-xs font-medium text-wa-green">Delivered</span>
+                  <span className="text-xs font-medium text-turf-600">Delivered</span>
                 )}
               </div>
             </div>
@@ -652,13 +652,13 @@ function EditDealDetailsModal({
             <input type="date" value={expectedCloseAt} onChange={(e) => setExpectedCloseAt(e.target.value)} className="modal-input" />
           </div>
           <div className="pt-4 border-t border-slate-200 -mx-5 sm:-mx-6 px-5 sm:px-6 flex flex-col sm:flex-row sm:justify-end gap-2">
-            <button type="button" onClick={onClose} className="order-2 sm:order-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg">
+            <button type="button" onClick={onClose} className="order-2 sm:order-1 btn btn-ghost">
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="order-1 sm:order-2 bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 text-white font-medium px-5 py-2.5 rounded-lg"
+              className="order-1 sm:order-2 btn btn-primary"
             >
               Save
             </button>
@@ -774,13 +774,13 @@ function LogActivityModal({
             </div>
           </div>
           <div className="pt-4 border-t border-slate-200 -mx-5 sm:-mx-6 px-5 sm:px-6 flex flex-col sm:flex-row sm:justify-end gap-2">
-            <button type="button" onClick={onClose} className="order-2 sm:order-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg">
+            <button type="button" onClick={onClose} className="order-2 sm:order-1 btn btn-ghost">
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || !subject || !activityTypeId}
-              className="order-1 sm:order-2 bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 text-white font-medium px-5 py-2.5 rounded-lg"
+              className="order-1 sm:order-2 btn btn-primary"
             >
               Log
             </button>

@@ -65,11 +65,11 @@ export default function RepDealsClient({
         action={
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <DateRangePicker value={dateRange} onApply={applyDateRange} />
-            <label className="flex items-center gap-1.5 text-sm text-slate-700 border border-slate-300 rounded-lg px-3 py-1.5 cursor-pointer">
-              <input type="checkbox" checked={wonOnly} onChange={(e) => setWonOnly(e.target.checked)} className="rounded border-slate-300" />
+            <label className="flex items-center gap-1.5 text-sm text-slate-700 border border-slate-300 rounded px-3 py-1.5 cursor-pointer">
+              <input type="checkbox" checked={wonOnly} onChange={(e) => setWonOnly(e.target.checked)} className="rounded border-slate-300 text-court-600 focus:ring-court-500" />
               Won only
             </label>
-            <button onClick={exportXlsx} className="bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium px-4 py-2 rounded-lg">
+            <button onClick={exportXlsx} className="btn btn-primary !px-4 !py-2 !text-sm">
               Export xlsx
             </button>
           </div>
@@ -78,26 +78,26 @@ export default function RepDealsClient({
 
       <StageVelocityCard rows={stageVelocity} />
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="card overflow-x-auto">
+        <table className="data-table">
           <thead>
-            <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
-              <th className="px-4 py-3 font-medium">Customer</th>
-              <th className="px-4 py-3 font-medium">Quote / design / product</th>
-              <th className="px-4 py-3 font-medium">Stage</th>
-              <th className="px-4 py-3 font-medium">Notes / upcoming</th>
+            <tr>
+              <th>Customer</th>
+              <th>Quote / design / product</th>
+              <th>Stage</th>
+              <th>Notes / upcoming</th>
             </tr>
           </thead>
           <tbody>
             {deals.map((d) => (
-              <tr key={d.dealId} className="border-b border-slate-100 last:border-0 align-top hover:bg-slate-50">
-                <td className="px-4 py-4">
-                  <Link href={`/deals/${d.dealId}`} className="text-base font-semibold text-wa-dark hover:underline">
+              <tr key={d.dealId} className="align-top">
+                <td>
+                  <Link href={`/deals/${d.dealId}`} className="text-base font-semibold text-court-700 hover:underline">
                     {d.customerName}
                   </Link>
-                  <div className="text-xs text-slate-500 mt-0.5">{d.dealCode}</div>
+                  <div className="text-xs text-slate-500 mt-0.5 font-mono">{d.dealCode}</div>
                 </td>
-                <td className="px-4 py-4 text-sm space-y-1.5">
+                <td className="text-sm space-y-1.5">
                   {d.quotations.length === 0 && d.courtImages.length === 0 && d.interestedProducts.length === 0 && (
                     <span className="text-slate-300">—</span>
                   )}
@@ -105,7 +105,7 @@ export default function RepDealsClient({
                       already its own column, so the label is sport + status. */}
                   {d.quotations.map((q) => (
                     <div key={q.id}>
-                      <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline font-medium">
+                      <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-court-700 hover:underline font-medium">
                         📄 {q.sport} quote · {q.status}
                       </a>
                     </div>
@@ -113,7 +113,7 @@ export default function RepDealsClient({
                   {d.courtImages.map((c) => (
                     <div key={c.id}>
                       {c.imageUrl ? (
-                        <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-wa-dark hover:underline font-medium">
+                        <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-court-700 hover:underline font-medium">
                           🎨 Design {c.number}
                         </a>
                       ) : (
@@ -126,7 +126,7 @@ export default function RepDealsClient({
                     <div className="text-slate-600">📦 {d.interestedProducts.join(", ")}</div>
                   )}
                 </td>
-                <td className="px-4 py-4">
+                <td>
                   <span
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
                     style={{ background: (d.stageColorHex ?? "#64748b") + "20", color: d.stageColorHex ?? "#475569" }}
@@ -139,12 +139,12 @@ export default function RepDealsClient({
                     line and cut off with an ellipsis, hiding everything
                     past it (see the screenshot this fixed). It now wraps
                     in full. */}
-                <td className="px-4 py-4 text-sm text-slate-600 space-y-1.5 max-w-sm">
+                <td className="text-sm text-slate-600 space-y-1.5 max-w-sm">
                   {d.latestNote ? (
                     <div>
                       <span className="font-semibold text-slate-900">{d.latestNote.subject}</span>
                       {d.latestNote.notes && <div className="text-slate-600 mt-0.5">{d.latestNote.notes}</div>}
-                      <div className="text-xs text-slate-400 mt-0.5">{fmtDate(d.latestNote.occurredAt)}</div>
+                      <div className="text-xs text-slate-400 mt-0.5 font-mono">{fmtDate(d.latestNote.occurredAt)}</div>
                     </div>
                   ) : (
                     <div className="text-slate-300">No notes yet</div>
@@ -159,7 +159,7 @@ export default function RepDealsClient({
             ))}
             {deals.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={4} className="py-8 text-center text-slate-400">
                   {wonOnly ? "No won deals for this rep in this range." : "No deals for this rep in this range."}
                 </td>
               </tr>

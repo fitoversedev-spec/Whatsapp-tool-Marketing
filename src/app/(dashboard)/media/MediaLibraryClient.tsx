@@ -141,7 +141,7 @@ export default function MediaLibraryClient({
         title="Media library"
         description={`${media.length} file${media.length === 1 ? "" : "s"} · ${humanSize(totalBytes)} total`}
         action={
-          <label className="inline-flex items-center gap-2 bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg cursor-pointer transition text-sm">
+          <label className="btn btn-primary cursor-pointer">
             {uploading ? "Uploading…" : "+ Upload"}
             <input type="file" className="hidden" onChange={handleFile} disabled={uploading} />
           </label>
@@ -162,7 +162,7 @@ export default function MediaLibraryClient({
                 }`}
               >
                 {c.label}
-                <span className="ml-1 text-slate-400">
+                <span className="ml-1 text-slate-400 font-mono">
                   ({c.id === "all" ? media.length : media.filter((m) => m.category === c.id).length})
                 </span>
               </button>
@@ -179,7 +179,7 @@ export default function MediaLibraryClient({
         {selected.size > 0 && (
           <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
             <span className="text-red-800 font-medium">
-              {selected.size} selected
+              <span className="font-mono">{selected.size}</span> selected
             </span>
             <button onClick={bulkDelete} className="text-red-700 hover:underline font-medium">
               Delete selected
@@ -194,7 +194,7 @@ export default function MediaLibraryClient({
         )}
 
         {filtered.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+          <div className="card p-10 text-center">
             <div className="text-4xl mb-2">📎</div>
             <h3 className="font-semibold text-slate-900">
               {category === "all" ? "No media yet" : `No ${category} files`}
@@ -236,13 +236,13 @@ export default function MediaLibraryClient({
                     {m.fileName}
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                    <span>{humanSize(m.size)}</span>
+                    <span className="font-mono">{humanSize(m.size)}</span>
                     <span>·</span>
                     <span className="capitalize">{m.category}</span>
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1 truncate">
                     By {m.uploadedByName} ·{" "}
-                    {new Date(m.createdAt).toLocaleDateString("en-IN")}
+                    <span className="font-mono">{new Date(m.createdAt).toLocaleDateString("en-IN")}</span>
                   </div>
                   {canDelete && (
                     <button

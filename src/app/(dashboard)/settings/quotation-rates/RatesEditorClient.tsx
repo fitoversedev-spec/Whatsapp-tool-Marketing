@@ -160,7 +160,7 @@ export default function RatesEditorClient({
           <button
             onClick={save}
             disabled={saving || loading}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+            className="btn btn-primary"
           >
             {saving ? "Saving…" : "Save changes"}
           </button>
@@ -216,12 +216,12 @@ export default function RatesEditorClient({
                   {secItems.map((item) => (
                     <div
                       key={item.id}
-                      className="bg-white border border-slate-200 rounded-xl p-4"
+                      className="card p-4"
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wide">
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wide font-mono">
                           {item.id.startsWith("custom_") ? (
-                            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-semibold">
+                            <span className="badge bg-court-100 text-court-700">
                               CUSTOM
                             </span>
                           ) : (
@@ -264,7 +264,7 @@ export default function RatesEditorClient({
                           <input
                             value={item.name}
                             onChange={(e) => update(item.id, "name", e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                            className="input text-sm"
                           />
                         </div>
                         <div className="sm:col-span-2">
@@ -276,7 +276,7 @@ export default function RatesEditorClient({
                             min={0}
                             value={item.defaultRate}
                             onChange={(e) => update(item.id, "defaultRate", parseFloat(e.target.value) || 0)}
-                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 text-right"
+                            className="input text-sm text-right font-mono"
                           />
                         </div>
                         <div className="sm:col-span-2">
@@ -289,7 +289,7 @@ export default function RatesEditorClient({
                             max={100}
                             value={item.gstPercent}
                             onChange={(e) => update(item.id, "gstPercent", parseFloat(e.target.value) || 0)}
-                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 text-right"
+                            className="input text-sm text-right font-mono"
                           />
                         </div>
                         <div className="sm:col-span-2">
@@ -301,7 +301,7 @@ export default function RatesEditorClient({
                             value={item.unit ?? defaultUnitForAreaMode(item.areaMode)}
                             onChange={(e) => update(item.id, "unit", e.target.value)}
                             placeholder="sq.ft"
-                            className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                            className="input text-sm"
                           />
                         </div>
                         <div className="sm:col-span-2">
@@ -311,7 +311,7 @@ export default function RatesEditorClient({
                           <select
                             value={item.areaMode}
                             onChange={(e) => update(item.id, "areaMode", e.target.value as Item["areaMode"])}
-                            className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                            className="input text-sm"
                           >
                             <option value="plot">Plot area (L × W)</option>
                             <option value="perimeter">Perimeter (running ft)</option>
@@ -326,7 +326,7 @@ export default function RatesEditorClient({
                           <select
                             value={sectionForItem(item)}
                             onChange={(e) => update(item.id, "section", e.target.value)}
-                            className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                            className="input text-sm"
                           >
                             {allSections.map((s) => (
                               <option key={s} value={s}>
@@ -343,7 +343,7 @@ export default function RatesEditorClient({
                             value={item.description}
                             onChange={(e) => update(item.id, "description", e.target.value)}
                             rows={3}
-                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 resize-none"
+                            className="input text-sm resize-none"
                           />
                         </div>
                         {item.areaMode === "wrap" && (
@@ -356,7 +356,7 @@ export default function RatesEditorClient({
                               min={0}
                               value={item.wrapHeightFt ?? 35}
                               onChange={(e) => update(item.id, "wrapHeightFt", parseFloat(e.target.value) || 35)}
-                              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 text-right"
+                              className="input text-sm text-right font-mono"
                             />
                           </div>
                         )}

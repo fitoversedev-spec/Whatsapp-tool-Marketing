@@ -444,24 +444,24 @@ export default function ContactDetailClient({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span
-                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${
-                  r.kind === "logged" ? "bg-wa-green/10 text-wa-dark" : r.completed ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"
+                className={`badge ${
+                  r.kind === "logged" ? "bg-court-100 text-court-700" : r.completed ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"
                 }`}
               >
                 {r.kind === "logged" ? "Logged" : r.completed ? "Completed" : "Scheduled"}
               </span>
               {r.typeLabel && (
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide bg-slate-100 text-slate-600">{r.typeLabel}</span>
+                <span className="badge bg-slate-100 text-slate-600">{r.typeLabel}</span>
               )}
               <span className={`text-sm font-medium ${r.kind === "scheduled" && r.completed ? "text-slate-400" : "text-slate-900"}`}>{r.title}</span>
             </div>
             {r.detail && <div className="text-sm text-slate-600 mt-0.5">{r.detail}</div>}
-            <div className="text-xs text-slate-500 mt-0.5">{fmtDateTime(r.timestamp)}</div>
+            <div className="text-xs text-slate-500 mt-0.5 font-mono">{fmtDateTime(r.timestamp)}</div>
           </div>
           {r.kind === "scheduled" && !r.completed && completingReminderId !== r.id && (
             <button
               onClick={() => { setCompletingReminderId(r.id); setCompletionNoteDraft(""); }}
-              className="text-xs font-medium text-wa-dark hover:underline shrink-0"
+              className="text-xs font-medium text-court-700 hover:underline shrink-0"
             >
               Mark complete
             </button>
@@ -475,11 +475,11 @@ export default function ContactDetailClient({
               rows={2}
               autoFocus
               placeholder="What happened? (optional)"
-              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+              className="w-full input"
             />
             <div className="flex gap-2 justify-end mt-1.5">
-              <button onClick={() => setCompletingReminderId(null)} className="text-xs font-medium text-slate-700 px-2 py-1">Cancel</button>
-              <button onClick={() => completeReminder(r.id)} disabled={completingBusy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50">
+              <button onClick={() => setCompletingReminderId(null)} className="btn btn-ghost !px-2 !py-1 !text-xs">Cancel</button>
+              <button onClick={() => completeReminder(r.id)} disabled={completingBusy} className="btn btn-primary !px-3 !py-1 !text-xs disabled:opacity-50">
                 {completingBusy ? "Saving..." : "Confirm"}
               </button>
             </div>
@@ -501,25 +501,25 @@ export default function ContactDetailClient({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide bg-slate-100 text-slate-600">
+              <span className="badge bg-slate-100 text-slate-600">
                 {r.activityTypeName ?? "Reminder"}
               </span>
               {r.priority && (
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${PRIORITY_COLORS[r.priority] ?? "bg-slate-100 text-slate-600"}`}>
+                <span className={`badge ${PRIORITY_COLORS[r.priority] ?? "bg-slate-100 text-slate-600"}`}>
                   {r.priority}
                 </span>
               )}
               <span className="text-sm font-medium text-slate-900">{r.message}</span>
             </div>
             <div className={`text-xs mt-0.5 ${isOverdue ? "text-red-600 font-medium" : "text-slate-500"}`}>
-              {isOverdue ? "Overdue · " : "Due "}{fmtDateTime(r.dueAt)}
+              {isOverdue ? "Overdue · " : "Due "}<span className="font-mono">{fmtDateTime(r.dueAt)}</span>
             </div>
             {r.notes && <div className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">{r.notes}</div>}
           </div>
           {completingReminderId !== r.id && (
             <button
               onClick={() => { setCompletingReminderId(r.id); setCompletionNoteDraft(""); }}
-              className="text-xs font-medium text-wa-dark hover:underline shrink-0"
+              className="text-xs font-medium text-court-700 hover:underline shrink-0"
             >
               Mark complete
             </button>
@@ -533,11 +533,11 @@ export default function ContactDetailClient({
               rows={2}
               autoFocus
               placeholder="What happened? (optional)"
-              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+              className="w-full input"
             />
             <div className="flex gap-2 justify-end mt-1.5">
-              <button onClick={() => setCompletingReminderId(null)} className="text-xs font-medium text-slate-700 px-2 py-1">Cancel</button>
-              <button onClick={() => completeReminder(r.id)} disabled={completingBusy} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50">
+              <button onClick={() => setCompletingReminderId(null)} className="btn btn-ghost !px-2 !py-1 !text-xs">Cancel</button>
+              <button onClick={() => completeReminder(r.id)} disabled={completingBusy} className="btn btn-primary !px-3 !py-1 !text-xs disabled:opacity-50">
                 {completingBusy ? "Saving..." : "Confirm"}
               </button>
             </div>
@@ -618,7 +618,7 @@ export default function ContactDetailClient({
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="text-lg font-semibold text-slate-900 border border-slate-300 rounded-lg px-2 py-1 w-full max-w-xs focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                className="input text-lg font-semibold text-slate-900 w-full max-w-xs"
               />
             ) : (
               <h1 className="text-xl font-semibold text-slate-900 truncate">{contact.name}</h1>
@@ -626,20 +626,20 @@ export default function ContactDetailClient({
             <p className="text-sm text-slate-600">
               <Link href={`/crm/companies/${contact.accountId}`} className="hover:underline">{contact.accountName}</Link>
               {contact.designation ? ` · ${contact.designation}` : ""}
-              {contact.isPrimary && <span className="ml-1.5 text-[10px] font-semibold text-wa-dark bg-wa-green/10 px-1.5 py-0.5 rounded">PRIMARY</span>}
-              {contact.pipelineStage === "LEAD" && <span className="ml-1.5 text-[10px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">LEAD</span>}
+              {contact.isPrimary && <span className="ml-1.5 badge bg-green-100 text-green-700">PRIMARY</span>}
+              {contact.pipelineStage === "LEAD" && <span className="ml-1.5 badge bg-indigo-100 text-indigo-700">LEAD</span>}
               {/* "Converted" is derived, never stored — a lead with a deal has moved on. */}
-              {contact.pipelineStage === "LEAD" && deals.length > 0 && <span className="ml-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">CONVERTED</span>}
+              {contact.pipelineStage === "LEAD" && deals.length > 0 && <span className="ml-1.5 badge bg-emerald-100 text-emerald-700">CONVERTED</span>}
             </p>
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
           {editing ? (
             <>
-              <button onClick={() => setEditing(false)} disabled={saving} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              <button onClick={() => setEditing(false)} disabled={saving} className="btn btn-secondary !px-3 !py-1.5 !text-sm disabled:opacity-50">
                 Cancel
               </button>
-              <button onClick={saveEdit} disabled={saving} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50">
+              <button onClick={saveEdit} disabled={saving} className="btn btn-primary !px-3 !py-1.5 !text-sm disabled:opacity-50">
                 {saving ? "Saving..." : "Save"}
               </button>
             </>
@@ -650,7 +650,7 @@ export default function ContactDetailClient({
                   href={`https://wa.me/${contact.phone.replace(/[^0-9]/g, "")}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1.5 text-sm font-medium"
+                  className="btn btn-turf !px-3 !py-1.5 !text-sm"
                 >
                   Send message
                 </a>
@@ -659,7 +659,7 @@ export default function ContactDetailClient({
                 onClick={syncToMarketing}
                 disabled={syncing || !contact.phone}
                 title={!contact.phone ? "Add a phone number first" : "Add this person to the WhatsApp marketing contact list"}
-                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                className="btn btn-secondary !px-3 !py-1.5 !text-sm disabled:opacity-40"
               >
                 {syncing ? "Syncing..." : "Sync to WhatsApp Marketing"}
               </button>
@@ -673,7 +673,7 @@ export default function ContactDetailClient({
                   {convertingLead ? "Converting..." : "Convert to Lead"}
                 </button>
               )}
-              <button onClick={startEdit} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button onClick={startEdit} className="btn btn-secondary !px-3 !py-1.5 !text-sm">
                 Edit
               </button>
             </>
@@ -685,19 +685,19 @@ export default function ContactDetailClient({
 
       {/* Quick actions — attach a new quotation/court design/product interest against this lead. Deal and Activity each have their own + in their own section below instead. */}
       <div className="flex flex-wrap gap-2 mb-5">
-        <button onClick={() => onQuickAction("quote")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5">
+        <button onClick={() => onQuickAction("quote")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
           <span>📄</span> New Quotation
         </button>
-        <button onClick={() => onQuickAction("court")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5">
+        <button onClick={() => onQuickAction("court")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
           <span>🎨</span> New Court Design
         </button>
-        <button onClick={() => onQuickAction("product")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5">
+        <button onClick={() => onQuickAction("product")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
           <span>📦</span> Product interest
         </button>
-        <button onClick={() => onQuickAction("meeting")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5">
+        <button onClick={() => onQuickAction("meeting")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
           <span>📅</span> Schedule Meeting
         </button>
-        <button onClick={() => onQuickAction("call")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5">
+        <button onClick={() => onQuickAction("call")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
           <span>📞</span> Schedule Call
         </button>
       </div>
@@ -708,7 +708,7 @@ export default function ContactDetailClient({
             key={t}
             onClick={() => setTab(t)}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
-              tab === t ? "border-wa-green text-wa-dark" : "border-transparent text-slate-500 hover:text-slate-800"
+              tab === t ? "border-court-600 text-court-700" : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             {t === "overview" ? "Overview" : t === "calls-meetings" ? "Calls & Meetings" : "Timeline"}
@@ -717,20 +717,20 @@ export default function ContactDetailClient({
       </div>
 
       {tab === "timeline" ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <div className="card p-4">
           <UnifiedTimeline entries={timeline} />
         </div>
       ) : tab === "calls-meetings" ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <div className="card p-4">
           <div className="flex items-center justify-between mb-1">
             <h3 className="text-base font-semibold text-slate-900">
-              Calls &amp; Meetings <span className="text-slate-400 font-normal">{callsAndMeetingsRows.length}</span>
+              Calls &amp; Meetings <span className="text-slate-400 font-normal font-mono">{callsAndMeetingsRows.length}</span>
             </h3>
             <div className="flex gap-2">
-              <button onClick={() => onQuickAction("meeting")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+              <button onClick={() => onQuickAction("meeting")} className="btn btn-secondary !px-3 !py-1.5 !text-xs">
                 + Meeting
               </button>
-              <button onClick={() => onQuickAction("call")} className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">
+              <button onClick={() => onQuickAction("call")} className="btn btn-secondary !px-3 !py-1.5 !text-xs">
                 + Call
               </button>
             </div>
@@ -757,7 +757,7 @@ export default function ContactDetailClient({
                     onClick={() => setAddMenuOpen((v) => !v)}
                     aria-label="Add activity"
                     title="Add task, meeting or call"
-                    className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-wa-dark text-base leading-none"
+                    className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-court-700 text-base leading-none"
                   >
                     +
                   </button>
@@ -785,7 +785,7 @@ export default function ContactDetailClient({
                     disabled={uploadingFile}
                     aria-label="Add attachment"
                     title="Upload a file"
-                    className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-wa-dark text-base leading-none disabled:opacity-40"
+                    className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-court-700 text-base leading-none disabled:opacity-40"
                   >
                     +
                   </button>
@@ -820,20 +820,20 @@ export default function ContactDetailClient({
           </nav>
 
           <div className="flex-1 min-w-0 space-y-4">
-            <div id="details" className="bg-white rounded-xl border border-slate-200 p-4 text-sm scroll-mt-4">
+            <div id="details" className="card p-4 text-sm scroll-mt-4">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
                   <div className="text-xs text-slate-600">Phone</div>
                   {editing ? (
-                    <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
+                    <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full input" />
                   ) : (
-                    <div className="font-medium text-slate-900">{contact.phone ?? "—"}</div>
+                    <div className="font-medium text-slate-900 font-mono">{contact.phone ?? "—"}</div>
                   )}
                 </div>
                 <div>
                   <div className="text-xs text-slate-600">Email</div>
                   {editing ? (
-                    <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
+                    <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full input" />
                   ) : (
                     <div className="font-medium text-slate-900">{contact.email ?? "—"}</div>
                   )}
@@ -842,11 +842,11 @@ export default function ContactDetailClient({
                   <div className="text-xs text-slate-600">Designation</div>
                   {editing ? (
                     <>
-                      <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                      <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full input">
                         {DESIGNATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                       </select>
                       {designation === "Other" && (
-                        <input value={designationOther} onChange={(e) => setDesignationOther(e.target.value)} placeholder="Enter designation" className="mt-1.5 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
+                        <input value={designationOther} onChange={(e) => setDesignationOther(e.target.value)} placeholder="Enter designation" className="mt-1.5 w-full input" />
                       )}
                     </>
                   ) : (
@@ -857,7 +857,7 @@ export default function ContactDetailClient({
                 <div>
                   <div className="text-xs text-slate-600">City</div>
                   {editing ? (
-                    <input value={siteCity} onChange={(e) => setSiteCity(e.target.value)} placeholder="City / site location" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
+                    <input value={siteCity} onChange={(e) => setSiteCity(e.target.value)} placeholder="City / site location" className="mt-1 w-full input" />
                   ) : (
                     <div className="font-medium text-slate-900">{contact.accountCity ?? "—"}</div>
                   )}
@@ -865,7 +865,7 @@ export default function ContactDetailClient({
                 <div>
                   <div className="text-xs text-slate-600">Customer segment</div>
                   {editing ? (
-                    <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full input">
                       <option value="">Unspecified</option>
                       {customerProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
@@ -877,7 +877,7 @@ export default function ContactDetailClient({
                   <div className="text-xs text-slate-600">Business type</div>
                   {editing ? (
                     <>
-                      <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                      <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full input">
                         <option value="">Unspecified</option>
                         <option value="B2B">B2B</option>
                         <option value="B2C">B2C</option>
@@ -885,20 +885,20 @@ export default function ContactDetailClient({
                         <option value="Other">Other</option>
                       </select>
                       {isBusinessTypeOther && (
-                        <input value={businessTypeOther} onChange={(e) => setBusinessTypeOther(e.target.value)} placeholder="Describe the business type" className="mt-1.5 w-full border border-slate-300 rounded-lg px-2 py-1 text-sm" />
+                        <input value={businessTypeOther} onChange={(e) => setBusinessTypeOther(e.target.value)} placeholder="Describe the business type" className="mt-1.5 w-full input" />
                       )}
                     </>
                   ) : (
                     <div className="font-medium text-slate-900">{contact.accountBusinessType ?? "—"}</div>
                   )}
                 </div>
-                <div><div className="text-xs text-slate-600">Contact created</div><div className="font-medium text-slate-900">{fmtDate(contact.createdAt)}</div></div>
+                <div><div className="text-xs text-slate-600">Contact created</div><div className="font-medium text-slate-900 font-mono">{fmtDate(contact.createdAt)}</div></div>
               </div>
 
               <div className="mt-4">
                 <div className="text-xs text-slate-600">What this lead wants</div>
                 {editing ? (
-                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full input" />
                 ) : contact.notes ? (
                   <div className="text-base text-slate-700 whitespace-pre-wrap">{contact.notes}</div>
                 ) : (
@@ -923,7 +923,7 @@ export default function ContactDetailClient({
                         <input
                           value={fields[k] ?? ""}
                           onChange={(e) => setFields((prev) => ({ ...prev, [k]: e.target.value }))}
-                          className="flex-1 border border-slate-300 rounded-lg px-2 py-1 text-sm"
+                          className="flex-1 input"
                         />
                         <button type="button" onClick={() => removeField(k)} aria-label={`Remove ${k}`} className="text-slate-400 hover:text-red-600 text-xs shrink-0 px-1">
                           ✕
@@ -935,7 +935,7 @@ export default function ContactDetailClient({
                         value={newFieldKey}
                         onChange={(e) => setNewFieldKey(e.target.value)}
                         placeholder="New field name (e.g. Sports requested)"
-                        className="flex-1 border border-slate-300 rounded-lg px-2 py-1 text-sm"
+                        className="flex-1 input"
                       />
                       <button type="button" onClick={addField} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-slate-200 rounded-lg font-medium text-slate-700 shrink-0">
                         + Field
@@ -957,9 +957,9 @@ export default function ContactDetailClient({
               </div>
             </div>
 
-            <div id="deals" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+            <div id="deals" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-slate-900">Deals <span className="text-slate-400 font-normal">{deals.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Deals <span className="text-slate-400 font-normal font-mono">{deals.length}</span></h3>
                 <button
                   onClick={() => setPendingAction("deal")}
                   aria-label="New deal"
@@ -977,7 +977,7 @@ export default function ContactDetailClient({
                     <div key={d.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
                       <Link href={`/deals/${d.id}`} className="min-w-0">
                         <div className="text-sm font-medium text-slate-900 hover:underline truncate">{d.title}</div>
-                        <div className="text-xs text-slate-600">{d.code}</div>
+                        <div className="text-xs text-slate-600 font-mono">{d.code}</div>
                       </Link>
                       <div className="text-right shrink-0 ml-3">
                         <select
@@ -995,7 +995,7 @@ export default function ContactDetailClient({
                             <option key={s.id} value={s.id} style={{ color: s.colorHex ?? "#475569" }}>{s.name}</option>
                           ))}
                         </select>
-                        <div className="text-xs text-slate-600">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
+                        <div className="text-xs text-slate-600 font-mono">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
                       </div>
                     </div>
                   ))}
@@ -1003,9 +1003,9 @@ export default function ContactDetailClient({
               )}
             </div>
 
-            <div id="quotations" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+            <div id="quotations" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-slate-900">Quotations <span className="text-slate-400 font-normal">{quotations.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Quotations <span className="text-slate-400 font-normal font-mono">{quotations.length}</span></h3>
                 <button
                   onClick={() => onQuickAction("quote")}
                   aria-label="New quotation"
@@ -1026,14 +1026,14 @@ export default function ContactDetailClient({
                             sport, value and date sit alongside as detail. */}
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-slate-900">{contact.name}</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-700"}`}>
+                          <span className={`badge ${STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-700"}`}>
                             {q.status}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-600"><span className="capitalize">{q.sport}</span> · {fmtInr(q.grandTotal)} · {fmtDate(q.sentAt ?? q.createdAt)}</div>
+                        <div className="text-xs text-slate-600"><span className="capitalize">{q.sport}</span> · <span className="font-mono">{fmtInr(q.grandTotal)}</span> · <span className="font-mono">{fmtDate(q.sentAt ?? q.createdAt)}</span></div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0 ml-3">
-                        <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-wa-dark hover:underline">
+                        <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-court-700 hover:underline">
                           View PDF
                         </a>
                         <button onClick={() => resendQuotation(q)} disabled={resending === q.id} className="text-xs text-blue-700 hover:underline disabled:opacity-40">
@@ -1046,9 +1046,9 @@ export default function ContactDetailClient({
               )}
             </div>
 
-            <div id="court-designs" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+            <div id="court-designs" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-slate-900">Court Designs <span className="text-slate-400 font-normal">{courtImages.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Court Designs <span className="text-slate-400 font-normal font-mono">{courtImages.length}</span></h3>
                 <button
                   onClick={() => onQuickAction("court")}
                   aria-label="New court design"
@@ -1069,15 +1069,15 @@ export default function ContactDetailClient({
                             code + date stay as a small reference below. */}
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-slate-900">{contact.name}</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${STATUS_COLORS[c.status] ?? "bg-slate-100 text-slate-700"}`}>
+                          <span className={`badge ${STATUS_COLORS[c.status] ?? "bg-slate-100 text-slate-700"}`}>
                             {c.status}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-600"><span className="font-mono">{c.number}</span> · {fmtDate(c.sentAt ?? c.createdAt)}</div>
+                        <div className="text-xs text-slate-600"><span className="font-mono">{c.number}</span> · <span className="font-mono">{fmtDate(c.sentAt ?? c.createdAt)}</span></div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0 ml-3">
                         {c.imageUrl && (
-                          <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-xs text-wa-dark hover:underline">
+                          <a href={c.imageUrl} target="_blank" rel="noreferrer" className="text-xs text-court-700 hover:underline">
                             View design
                           </a>
                         )}
@@ -1091,9 +1091,9 @@ export default function ContactDetailClient({
               )}
             </div>
 
-            <div id="products" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+            <div id="products" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-slate-900">Product interest <span className="text-slate-400 font-normal">{productInterests.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Product interest <span className="text-slate-400 font-normal font-mono">{productInterests.length}</span></h3>
                 <button
                   onClick={() => onQuickAction("product")}
                   aria-label="Add product interest"
@@ -1124,15 +1124,15 @@ export default function ContactDetailClient({
                 the contact. The per-type Meetings/Calls split still lives in
                 the Calls & Meetings tab (which also shows logged ones); this
                 sidebar view is deliberately the open-vs-closed cut instead. */}
-            <div id="open-activities" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+            <div id="open-activities" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-slate-900">Open activities <span className="text-slate-400 font-normal">{openCount}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Open activities <span className="text-slate-400 font-normal font-mono">{openCount}</span></h3>
                 {/* Mobile-only: the desktop entry point is the "+" on the
                     left section nav (which is hidden on mobile). */}
                 <div className="relative lg:hidden">
                   <button
                     onClick={() => setAddMenuOpen((v) => !v)}
-                    className="text-xs font-medium border border-slate-300 rounded-lg px-2.5 py-1 hover:bg-slate-50"
+                    className="btn btn-secondary !px-2.5 !py-1 !text-xs"
                   >
                     + Add activity
                   </button>
@@ -1161,12 +1161,12 @@ export default function ContactDetailClient({
                 records a past activity of any type (Email/WhatsApp/etc.), the
                 capability that used to live on the standalone Activities
                 section. */}
-            <div id="closed-activities" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+            <div id="closed-activities" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-slate-900">Closed activities <span className="text-slate-400 font-normal">{closedItems.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Closed activities <span className="text-slate-400 font-normal font-mono">{closedItems.length}</span></h3>
                 <button
                   onClick={() => setShowLogActivity(true)}
-                  className="text-xs font-medium border border-slate-300 rounded-lg px-2.5 py-1 hover:bg-slate-50"
+                  className="btn btn-secondary !px-2.5 !py-1 !text-xs"
                 >
                   Log activity
                 </button>
@@ -1177,18 +1177,18 @@ export default function ContactDetailClient({
                 <div className="space-y-4">
                   {Array.from(closedGroups.entries()).map(([day, items]) => (
                     <div key={day}>
-                      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{day}</div>
+                      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 font-mono">{day}</div>
                       <div className="space-y-2">
                         {items.map((item) => (
                           <div key={`${item.kind}-${item.id}`} className="rounded-lg border border-slate-100 px-3 py-2">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide ${item.kind === "reminder" ? "bg-slate-100 text-slate-600" : "bg-wa-green/10 text-wa-dark"}`}>
+                              <span className={`badge ${item.kind === "reminder" ? "bg-slate-100 text-slate-600" : "bg-court-100 text-court-700"}`}>
                                 {item.typeLabel}
                               </span>
                               <span className="text-sm font-medium text-slate-900">{item.subject}</span>
                             </div>
                             {item.detail && <div className="text-sm text-slate-600 mt-0.5">{item.detail}</div>}
-                            <div className="text-xs text-slate-500 mt-0.5">{fmtDateTime(item.timestamp)}</div>
+                            <div className="text-xs text-slate-500 mt-0.5 font-mono">{fmtDateTime(item.timestamp)}</div>
                           </div>
                         ))}
                       </div>
@@ -1203,9 +1203,9 @@ export default function ContactDetailClient({
                 A plain scratchpad, like Zoho's own Notes tab; excluded from
                 analytics on purpose (see AccountContactNote's own schema
                 comment). */}
-            <div id="notes" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+            <div id="notes" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-slate-900">Notes <span className="text-slate-400 font-normal">{contactNotes.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Notes <span className="text-slate-400 font-normal font-mono">{contactNotes.length}</span></h3>
                 <button
                   onClick={() => setShowAddNote((v) => !v)}
                   aria-label="Add note"
@@ -1221,7 +1221,7 @@ export default function ContactDetailClient({
                     value={noteTitle}
                     onChange={(e) => setNoteTitle(e.target.value)}
                     placeholder="Title (optional)"
-                    className="w-full border-0 border-b border-slate-200 px-0 py-1.5 text-sm font-medium focus:outline-none focus:border-wa-green mb-2"
+                    className="w-full border-0 border-b border-slate-200 px-0 py-1.5 text-sm font-medium focus:outline-none focus:border-court-500 mb-2"
                   />
                   <textarea
                     value={noteBody}
@@ -1229,13 +1229,13 @@ export default function ContactDetailClient({
                     rows={3}
                     autoFocus
                     placeholder="What's this note about?"
-                    className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                    className="w-full input"
                   />
                   <div className="flex gap-2 justify-end mt-2">
-                    <button onClick={() => { setShowAddNote(false); setNoteTitle(""); setNoteBody(""); }} className="text-sm font-medium text-slate-700 px-3 py-1.5">
+                    <button onClick={() => { setShowAddNote(false); setNoteTitle(""); setNoteBody(""); }} className="btn btn-ghost !px-3 !py-1.5 !text-sm">
                       Cancel
                     </button>
-                    <button onClick={submitNote} disabled={savingNote || !noteBody.trim()} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50">
+                    <button onClick={submitNote} disabled={savingNote || !noteBody.trim()} className="btn btn-primary !px-3 !py-1.5 !text-sm disabled:opacity-50">
                       {savingNote ? "Saving..." : "Save"}
                     </button>
                   </div>
@@ -1249,16 +1249,16 @@ export default function ContactDetailClient({
                     <div key={n.id} className="border-l-2 border-slate-200 pl-3 py-0.5">
                       {n.title && <div className="text-sm font-semibold text-slate-900">{n.title}</div>}
                       <div className="text-sm text-slate-700 whitespace-pre-wrap">{n.body}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{fmtDateTime(n.createdAt)} · {n.authorName}</div>
+                      <div className="text-xs text-slate-500 mt-0.5"><span className="font-mono">{fmtDateTime(n.createdAt)}</span> · {n.authorName}</div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            <div id="attachments" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+            <div id="attachments" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-slate-900">Attachments <span className="text-slate-400 font-normal">{attachments.length}</span></h3>
+                <h3 className="text-base font-semibold text-slate-900">Attachments <span className="text-slate-400 font-normal font-mono">{attachments.length}</span></h3>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploadingFile}
@@ -1283,8 +1283,8 @@ export default function ContactDetailClient({
                   {attachments.map((a) => (
                     <div key={a.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
                       <a href={a.fileUrl} target="_blank" rel="noreferrer" className="min-w-0">
-                        <div className="text-sm font-medium text-wa-dark hover:underline truncate">{a.fileName}</div>
-                        <div className="text-xs text-slate-500">{fmtFileSize(a.fileSize)} · {fmtDateTime(a.createdAt)} · {a.uploadedByName}</div>
+                        <div className="text-sm font-medium text-court-700 hover:underline truncate">{a.fileName}</div>
+                        <div className="text-xs text-slate-500"><span className="font-mono">{fmtFileSize(a.fileSize)}</span> · <span className="font-mono">{fmtDateTime(a.createdAt)}</span> · {a.uploadedByName}</div>
                       </a>
                       <button onClick={() => deleteAttachment(a.id)} aria-label={`Delete ${a.fileName}`} className="text-slate-400 hover:text-red-600 text-xs shrink-0 px-2">
                         ✕
@@ -1472,44 +1472,44 @@ function ScheduleReminderModal({
         <div className="space-y-3">
           <div>
             <label className="text-xs font-medium text-slate-600">Title</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 w-full input" />
           </div>
           {mode === "meeting" && (
             <div>
               <label className="text-xs font-medium text-slate-600">Venue</label>
               <div className="flex gap-2 mt-1 mb-2">
-                <button type="button" onClick={() => setVenueType("online")} className={`text-xs px-2.5 py-1 rounded-lg border ${venueType === "online" ? "bg-wa-green/10 border-wa-green text-wa-dark font-medium" : "border-slate-200 text-slate-500"}`}>
+                <button type="button" onClick={() => setVenueType("online")} className={`text-xs px-2.5 py-1 rounded-lg border ${venueType === "online" ? "bg-court-50 border-court-500 text-court-700 font-medium" : "border-slate-200 text-slate-500"}`}>
                   Online
                 </button>
-                <button type="button" onClick={() => setVenueType("physical")} className={`text-xs px-2.5 py-1 rounded-lg border ${venueType === "physical" ? "bg-wa-green/10 border-wa-green text-wa-dark font-medium" : "border-slate-200 text-slate-500"}`}>
+                <button type="button" onClick={() => setVenueType("physical")} className={`text-xs px-2.5 py-1 rounded-lg border ${venueType === "physical" ? "bg-court-50 border-court-500 text-court-700 font-medium" : "border-slate-200 text-slate-500"}`}>
                   Physical
                 </button>
               </div>
               {venueType === "online" ? (
-                <input value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} placeholder="Meeting link (optional)" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                <input value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} placeholder="Meeting link (optional)" className="w-full input" />
               ) : (
-                <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location" className="w-full input" />
               )}
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-slate-600">Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full input" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Time</label>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 w-full input" />
             </div>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600">Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Optional context / agenda" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Optional context / agenda" className="mt-1 w-full input" />
           </div>
         </div>
         <div className="flex gap-2 mt-4">
-          <button onClick={onClose} className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
-          <button onClick={submit} disabled={saving || !title.trim()} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50">
+          <button onClick={onClose} className="flex-1 btn btn-secondary">Cancel</button>
+          <button onClick={submit} disabled={saving || !title.trim()} className="flex-1 btn btn-primary disabled:opacity-50">
             {saving ? "Scheduling..." : "Schedule"}
           </button>
         </div>
@@ -1550,8 +1550,8 @@ function CreateDealFirstModal({
         <h2 className="font-semibold text-slate-900 mb-2">New deal</h2>
         <p className="text-base text-slate-600 mb-4">Create a deal for {contactName} to track this opportunity.</p>
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
-          <button onClick={create} disabled={creating} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50">
+          <button onClick={onClose} className="flex-1 btn btn-secondary">Cancel</button>
+          <button onClick={create} disabled={creating} className="flex-1 btn btn-primary disabled:opacity-50">
             {creating ? "Creating..." : "Create deal"}
           </button>
         </div>
@@ -1609,16 +1609,16 @@ function TaskModal({
         <div className="space-y-3">
           <div>
             <label className="text-xs font-medium text-slate-600">Subject</label>
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} autoFocus className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} autoFocus className="mt-1 w-full input" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-slate-600">Due date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full input" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Priority</label>
-              <select value={priority} onChange={(e) => setPriority(e.target.value as "HIGH" | "MEDIUM" | "LOW")} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+              <select value={priority} onChange={(e) => setPriority(e.target.value as "HIGH" | "MEDIUM" | "LOW")} className="mt-1 w-full input">
                 <option value="HIGH">High</option>
                 <option value="MEDIUM">Medium</option>
                 <option value="LOW">Low</option>
@@ -1627,7 +1627,7 @@ function TaskModal({
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600">Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Optional context / agenda" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Optional context / agenda" className="mt-1 w-full input" />
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={reminderOn} onChange={(e) => setReminderOn(e.target.checked)} />
@@ -1635,8 +1635,8 @@ function TaskModal({
           </label>
         </div>
         <div className="flex gap-2 mt-4">
-          <button onClick={onClose} className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
-          <button onClick={submit} disabled={saving || !subject.trim() || !date} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50">
+          <button onClick={onClose} className="flex-1 btn btn-secondary">Cancel</button>
+          <button onClick={submit} disabled={saving || !subject.trim() || !date} className="flex-1 btn btn-primary disabled:opacity-50">
             {saving ? "Saving..." : "Add task"}
           </button>
         </div>
@@ -1693,19 +1693,19 @@ function NextActionCard({ deal }: { deal: Deal | null }) {
           <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Next action</div>
           {editing ? (
             <div className="mt-2 flex flex-col sm:flex-row gap-2">
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm shrink-0" />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input shrink-0" />
               <input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 autoFocus
                 placeholder="What's the next step?"
-                className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm min-w-0"
+                className="flex-1 input min-w-0"
               />
             </div>
           ) : hasAction ? (
             <div className="mt-1 flex items-center gap-2 flex-wrap">
               {deal.nextActionDueAt && (
-                <span className="text-[11px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded uppercase">{fmtDate(deal.nextActionDueAt)}</span>
+                <span className="text-[11px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded uppercase font-mono">{fmtDate(deal.nextActionDueAt)}</span>
               )}
               <span className="text-sm text-slate-800">{deal.nextActionNote ?? "—"}</span>
             </div>
@@ -1715,8 +1715,8 @@ function NextActionCard({ deal }: { deal: Deal | null }) {
         </div>
         {editing ? (
           <div className="flex gap-2 shrink-0">
-            <button onClick={() => setEditing(false)} disabled={saving} className="text-xs font-medium text-slate-700 px-2 py-1">Cancel</button>
-            <button onClick={save} disabled={saving} className="bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50">
+            <button onClick={() => setEditing(false)} disabled={saving} className="btn btn-ghost !px-2 !py-1 !text-xs">Cancel</button>
+            <button onClick={save} disabled={saving} className="btn btn-primary !px-3 !py-1 !text-xs disabled:opacity-50">
               {saving ? "Saving..." : "Save"}
             </button>
           </div>
@@ -1780,7 +1780,7 @@ function LogActivityModal({
           {deals.length > 0 && (
             <div>
               <label className="text-xs font-medium text-slate-600">Deal (optional)</label>
-              <select value={dealId} onChange={(e) => setDealId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+              <select value={dealId} onChange={(e) => setDealId(e.target.value)} className="mt-1 w-full input">
                 <option value="">Not tied to a specific deal</option>
                 {deals.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
               </select>
@@ -1788,31 +1788,31 @@ function LogActivityModal({
           )}
           <div>
             <label className="text-xs font-medium text-slate-600">Type</label>
-            <select value={activityTypeId} onChange={(e) => setActivityTypeId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+            <select value={activityTypeId} onChange={(e) => setActivityTypeId(e.target.value)} className="mt-1 w-full input">
               {activityTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600">Subject</label>
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} required autoFocus className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} required autoFocus className="mt-1 w-full input" />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600">Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="mt-1 w-full input" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-slate-600">Duration (minutes)</label>
-              <input type="number" min={0} max={1440} value={durationMins} onChange={(e) => setDurationMins(e.target.value)} placeholder="Optional" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+              <input type="number" min={0} max={1440} value={durationMins} onChange={(e) => setDurationMins(e.target.value)} placeholder="Optional" className="mt-1 w-full input" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Outcome</label>
-              <input value={outcome} onChange={(e) => setOutcome(e.target.value)} placeholder="e.g. Interested" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+              <input value={outcome} onChange={(e) => setOutcome(e.target.value)} placeholder="e.g. Interested" className="mt-1 w-full input" />
             </div>
           </div>
           <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
-            <button type="submit" disabled={saving || !subject || !activityTypeId} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50">
+            <button type="button" onClick={onClose} className="flex-1 btn btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving || !subject || !activityTypeId} className="flex-1 btn btn-primary disabled:opacity-50">
               {saving ? "Saving..." : "Log activity"}
             </button>
           </div>
@@ -1881,27 +1881,27 @@ function CloseoutModal({
           {needsValue && (
             <div>
               <label className="text-xs font-medium text-slate-600">Won value (₹) *</label>
-              <input type="number" min={0} value={wonValue} onChange={(e) => setWonValue(e.target.value)} autoFocus className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+              <input type="number" min={0} value={wonValue} onChange={(e) => setWonValue(e.target.value)} autoFocus className="mt-1 w-full input" />
             </div>
           )}
           {needsReason && (
             <>
               <div>
                 <label className="text-xs font-medium text-slate-600">Reason {!lossReasonNote.trim() && "*"}</label>
-                <select value={lossReasonId} onChange={(e) => setLossReasonId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" autoFocus>
+                <select value={lossReasonId} onChange={(e) => setLossReasonId(e.target.value)} className="mt-1 w-full input" autoFocus>
                   <option value="">—</option>
                   {lossReasons.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-600">Notes {!lossReasonId && "*"}</label>
-                <textarea value={lossReasonNote} onChange={(e) => setLossReasonNote(e.target.value)} rows={2} placeholder="Optional detail beyond the reason picked above" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+                <textarea value={lossReasonNote} onChange={(e) => setLossReasonNote(e.target.value)} rows={2} placeholder="Optional detail beyond the reason picked above" className="mt-1 w-full input" />
               </div>
             </>
           )}
         </div>
         <div className="flex gap-2 mt-4">
-          <button onClick={onClose} className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
+          <button onClick={onClose} className="flex-1 btn btn-secondary">Cancel</button>
           <button
             onClick={() =>
               onConfirm({
@@ -1911,7 +1911,7 @@ function CloseoutModal({
               })
             }
             disabled={!canConfirm}
-            className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-40"
+            className="flex-1 btn btn-primary disabled:opacity-40"
           >
             Confirm
           </button>
@@ -1991,12 +1991,12 @@ function ProductInterestModal({
             onChange={(e) => setOtherLabel(e.target.value)}
             placeholder="Describe the product"
             autoFocus
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-4 focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            className="w-full input mb-4"
           />
         )}
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
-          <button onClick={submit} disabled={saving || !canSubmit} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50">
+          <button onClick={onClose} className="flex-1 btn btn-secondary">Cancel</button>
+          <button onClick={submit} disabled={saving || !canSubmit} className="flex-1 btn btn-primary disabled:opacity-50">
             {saving ? "Saving..." : "Save"}
           </button>
         </div>

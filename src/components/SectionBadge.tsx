@@ -21,11 +21,11 @@ const SECTION_ROUTES: { href: string; title: string }[] = ALL_TOOLS_GROUPS
 // Per-section pill colours. MUST be complete literal class strings — Tailwind's
 // JIT can't see classes built by string concatenation.
 const SECTION_STYLE: Record<string, { pill: string; dot: string }> = {
-  CRM: { pill: "bg-[#159341]/10 text-[#159341]", dot: "bg-[#159341]" },
-  "Meta Ads": { pill: "bg-[#1985d9]/10 text-[#1985d9]", dot: "bg-[#1985d9]" },
-  "Marketing & Sales": { pill: "bg-[#7c3aed]/10 text-[#7c3aed]", dot: "bg-[#7c3aed]" },
+  CRM: { pill: "bg-turf-500/10 text-turf-700", dot: "bg-turf-500" }, // turf
+  "Meta Ads": { pill: "bg-court-500/10 text-court-700", dot: "bg-court-500" }, // court
+  "Marketing & Sales": { pill: "bg-[#7c3aed]/10 text-[#7c3aed]", dot: "bg-[#7c3aed]" }, // accent (orthogonal — no palette token)
   Organization: { pill: "bg-slate-500/10 text-slate-600", dot: "bg-slate-500" },
-  Admin: { pill: "bg-[#c81124]/10 text-[#c81124]", dot: "bg-[#c81124]" },
+  Admin: { pill: "bg-track-500/10 text-track-700", dot: "bg-track-500" }, // track
 };
 const DEFAULT_STYLE = { pill: "bg-wa-green/10 text-wa-dark", dot: "bg-wa-green" };
 
@@ -47,7 +47,7 @@ export default function SectionBadge({ compact = false }: { compact?: boolean })
   }
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${section.pill}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wide whitespace-nowrap ${section.pill}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${section.dot}`} />
       {section.label}
     </span>

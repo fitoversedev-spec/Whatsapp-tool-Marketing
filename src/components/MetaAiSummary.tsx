@@ -89,18 +89,18 @@ function normalizeRows(rows: unknown): { headers: string[]; body: string[][] } {
 function DataBlockCard({ block }: { block: DataBlock }) {
   const { headers, body } = normalizeRows(block.rows);
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
+    <div className="card p-4">
       <h3 className="text-base font-semibold text-slate-900">{block.title}</h3>
       <div className="mt-3 overflow-x-auto">
         {body.length === 0 ? (
           <p className="text-sm text-slate-400">No data for this section.</p>
         ) : (
-          <table className="w-full text-sm">
+          <table className="data-table">
             {headers.length > 0 && (
               <thead>
-                <tr className="text-left border-b border-slate-200">
+                <tr>
                   {headers.map((h, i) => (
-                    <th key={i} className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">
+                    <th key={i} className="whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -109,11 +109,11 @@ function DataBlockCard({ block }: { block: DataBlock }) {
             )}
             <tbody>
               {body.map((row, i) => (
-                <tr key={i} className="border-b border-slate-100 last:border-0">
+                <tr key={i}>
                   {row.map((cell, j) => (
                     <td
                       key={j}
-                      className={`px-2 py-2 whitespace-nowrap ${j === 0 ? "font-medium text-slate-900" : "text-slate-700"}`}
+                      className={`whitespace-nowrap ${j === 0 ? "font-medium text-slate-900" : "text-slate-700"}`}
                     >
                       {cell}
                     </td>
@@ -164,7 +164,7 @@ export default function MetaAiSummary() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="card p-4">
         <h3 className="text-base font-semibold text-slate-900">Ask AI about your ad campaigns</h3>
         <p className="text-sm text-slate-600 mt-1 mb-3">
           Ask in plain English. The assistant answers only from your real Meta ad data — every figure comes from the
@@ -176,7 +176,7 @@ export default function MetaAiSummary() {
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="Ask anything about your ad campaigns…"
           rows={3}
-          className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:border-wa-green focus:outline-none focus:ring-2 focus:ring-wa-green/20"
+          className="input text-sm"
         />
 
         <div className="flex flex-wrap gap-1.5 mt-3">
@@ -185,7 +185,7 @@ export default function MetaAiSummary() {
               key={q}
               type="button"
               onClick={() => setQuestion(q)}
-              className="bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-medium px-3 py-1 rounded-full"
+              className="chip hover:bg-slate-50"
             >
               {q}
             </button>
@@ -197,7 +197,7 @@ export default function MetaAiSummary() {
             type="button"
             onClick={ask}
             disabled={loading}
-            className="bg-wa-green hover:bg-wa-dark disabled:opacity-40 text-white text-sm font-medium px-5 py-2 rounded-xl ml-auto"
+            className="btn btn-primary ml-auto"
           >
             {loading ? "Asking…" : "Ask AI"}
           </button>
@@ -212,7 +212,7 @@ export default function MetaAiSummary() {
 
       {!loading && result && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="card p-4">
             <h3 className="text-base font-semibold text-slate-900 mb-3">AI summary</h3>
             {result.narrative.trim() ? (
               <Markdown text={result.narrative} />
@@ -222,7 +222,7 @@ export default function MetaAiSummary() {
           </div>
 
           {result.dataBlocks.length > 0 && (
-            <details className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+            <details className="card px-4 py-3">
               <summary className="text-sm font-medium text-slate-600 cursor-pointer select-none marker:text-slate-400">
                 Show the data behind this report
               </summary>

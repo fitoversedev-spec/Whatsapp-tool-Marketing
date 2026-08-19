@@ -108,7 +108,6 @@ export async function POST(req: NextRequest) {
     if (!convo) return NextResponse.json({ error: "conversation_not_found" }, { status: 404 });
     if (
       user.role !== "admin" &&
-      convo.assignedToUserId !== null &&
       convo.assignedToUserId !== user.id
     ) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });

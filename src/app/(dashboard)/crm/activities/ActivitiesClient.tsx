@@ -38,7 +38,7 @@ function TypeIcon({ typeName }: { typeName: string | null }) {
   const cls = "w-4 h-4 shrink-0";
   if (typeName && CALL_TYPE_NAMES.has(typeName)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`${cls} text-wa-dark`} aria-label="Call">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`${cls} text-court-600`} aria-label="Call">
         <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
       </svg>
     );
@@ -63,7 +63,7 @@ function TypeIcon({ typeName }: { typeName: string | null }) {
 const KIND_TAG: Record<ActivityRow["kind"], { label: string; cls: string }> = {
   logged: { label: "Logged", cls: "bg-slate-100 text-slate-500" },
   scheduled: { label: "Scheduled", cls: "bg-amber-100 text-amber-700" },
-  done: { label: "Done", cls: "bg-wa-green/10 text-wa-dark" },
+  done: { label: "Done", cls: "bg-green-100 text-green-700" },
 };
 
 export default function ActivitiesClient({ isAdmin, activities, dateRange }: { isAdmin: boolean; activities: ActivityRow[]; dateRange: DateRange | null }) {
@@ -112,17 +112,17 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
   const typeItem = (value: TypeFilter, label: string, count: number) => (
     <button
       onClick={() => setTypeFilter(value)}
-      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm ${typeFilter === value ? "bg-wa-green/10 text-wa-dark font-medium" : "text-slate-600 hover:bg-slate-100"}`}
+      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-sm ${typeFilter === value ? "bg-court-50 text-court-700 font-medium" : "text-slate-600 hover:bg-slate-100"}`}
     >
       <span>{label}</span>
-      <span className="text-xs text-slate-400">{count}</span>
+      <span className="text-xs text-slate-400 font-mono">{count}</span>
     </button>
   );
 
   const whenItem = (value: boolean, label: string) => (
     <button
       onClick={() => setTodayOnly(value)}
-      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-sm ${todayOnly === value ? "bg-wa-green/10 text-wa-dark font-medium" : "text-slate-600 hover:bg-slate-100"}`}
+      className={`w-full text-left px-2.5 py-1.5 rounded text-sm ${todayOnly === value ? "bg-court-50 text-court-700 font-medium" : "text-slate-600 hover:bg-slate-100"}`}
     >
       {label}
     </button>
@@ -159,7 +159,7 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search by subject, customer, phone, or deal code..."
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full max-w-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+              className="input w-full max-w-sm text-sm"
             />
             <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
             {dateRange && (
@@ -169,39 +169,39 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full text-sm">
+          <div className="card overflow-x-auto">
+        <table className="data-table">
           <thead>
-            <tr className="text-left border-b border-slate-200">
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Type</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Activity</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Customer</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Phone</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500 whitespace-nowrap">When</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Owner</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Deal</th>
-              <th className="px-4 py-3 text-xs uppercase tracking-wide font-semibold text-slate-500">Status</th>
+            <tr>
+              <th>Type</th>
+              <th>Activity</th>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th className="whitespace-nowrap">When</th>
+              <th>Owner</th>
+              <th>Deal</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
             {visible.map((a) => {
               const tag = KIND_TAG[a.kind];
               return (
-                <tr key={a.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 align-top">
-                  <td className="px-4 py-2.5">
+                <tr key={a.id} className="align-top">
+                  <td>
                     <div className="flex items-center gap-1.5">
                       <TypeIcon typeName={a.typeName} />
                       <span className="text-slate-700 whitespace-nowrap">{a.typeName ?? "—"}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td>
                     <div className="font-medium text-slate-900">{a.title}</div>
                     {a.detail && <div className="text-xs text-slate-500 mt-0.5 max-w-xs truncate" title={a.detail}>{a.detail}</div>}
                   </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
+                  <td className="whitespace-nowrap">
                     {a.contactName ? (
                       a.contactId ? (
-                        <Link href={`/crm/contacts/${a.contactId}`} className="text-wa-dark hover:underline font-medium">{a.contactName}</Link>
+                        <Link href={`/crm/contacts/${a.contactId}`} className="text-court-700 hover:underline font-medium">{a.contactName}</Link>
                       ) : (
                         <span className="text-slate-700">{a.contactName}</span>
                       )
@@ -209,27 +209,27 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{a.contactPhone ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{fmtDate(a.timestamp)}</td>
-                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{a.ownerName}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
+                  <td className="text-slate-600 whitespace-nowrap font-mono">{a.contactPhone ?? "—"}</td>
+                  <td className="text-slate-500 whitespace-nowrap font-mono">{fmtDate(a.timestamp)}</td>
+                  <td className="text-slate-600 whitespace-nowrap">{a.ownerName}</td>
+                  <td className="whitespace-nowrap">
                     {a.dealId ? (
-                      <Link href={`/deals/${a.dealId}`} className="text-wa-dark hover:underline">{a.dealCode}</Link>
+                      <Link href={`/deals/${a.dealId}`} className="text-court-700 hover:underline font-mono">{a.dealCode}</Link>
                     ) : a.accountId ? (
-                      <Link href={`/crm/companies/${a.accountId}`} className="text-wa-dark hover:underline">{a.accountName}</Link>
+                      <Link href={`/crm/companies/${a.accountId}`} className="text-court-700 hover:underline">{a.accountName}</Link>
                     ) : (
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${tag.cls}`}>{tag.label}</span>
+                  <td>
+                    <span className={`badge ${tag.cls}`}>{tag.label}</span>
                   </td>
                 </tr>
               );
             })}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">No activities found.</td>
+                <td colSpan={8} className="py-8 text-center text-slate-400">No activities found.</td>
               </tr>
             )}
           </tbody>

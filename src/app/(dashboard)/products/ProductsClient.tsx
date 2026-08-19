@@ -72,35 +72,38 @@ export default function ProductsClient({
       <div className="flex flex-col lg:flex-row gap-4 p-4 sm:p-6 lg:p-8">
         {/* Sidebar sections */}
         <nav className="lg:w-56 shrink-0 flex lg:flex-col gap-2">
-          {nav.map((n) => (
-            <button
-              key={n.id}
-              type="button"
-              onClick={() => setSection(n.id)}
-              className={`flex-1 lg:flex-none flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition ${
-                section === n.id
-                  ? "bg-wa-green/10 border-wa-green text-wa-dark"
-                  : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
-              }`}
-            >
-              <span className="text-lg">{n.icon}</span>
-              <span className="min-w-0">
-                <span className="block text-sm font-medium leading-tight">
-                  {n.label}
+          {nav.map((n) => {
+            const isActive = section === n.id;
+            return (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => setSection(n.id)}
+                className={`flex-1 lg:flex-none flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition ${
+                  isActive
+                    ? "bg-court-600 border-court-700 text-white"
+                    : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                <span className="text-lg">{n.icon}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium leading-tight">
+                    {n.label}
+                  </span>
+                  <span className={`block text-[11px] truncate ${isActive ? "text-court-100" : "text-slate-500"}`}>
+                    {n.hint}
+                  </span>
                 </span>
-                <span className="block text-[11px] text-slate-500 truncate">
-                  {n.hint}
-                </span>
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </nav>
 
         {/* Content */}
         <div className="flex-1 min-w-0 space-y-4">
           {/* Sport filter — shared across sections */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mr-1">
+            <span className="heading text-[11px] text-slate-500 tracking-wide mr-1">
               Sport
             </span>
             <FilterChip
@@ -163,7 +166,7 @@ function FilterChip({
       onClick={onClick}
       className={`px-2.5 py-1 text-xs rounded-full border transition ${
         active
-          ? "bg-slate-900 text-white border-slate-900"
+          ? "bg-court-600 text-white border-court-700"
           : "bg-white text-slate-600 border-slate-300 hover:border-slate-400"
       }`}
     >
@@ -203,14 +206,14 @@ function ProductSection({
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-slate-900">
           {kindLabel}s{" "}
-          <span className="text-sm font-normal text-slate-500">
+          <span className="text-sm font-normal text-slate-500 font-mono">
             ({filtered.length})
           </span>
         </h2>
         <button
           type="button"
           onClick={() => setAdding((a) => !a)}
-          className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-semibold px-4 py-2 rounded-xl"
+          className="btn btn-primary"
         >
           {adding ? "Cancel" : `+ Add ${kindLabel.toLowerCase()}`}
         </button>
@@ -228,7 +231,7 @@ function ProductSection({
       )}
 
       {filtered.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-sm text-slate-500">
+        <div className="card p-8 text-center text-sm text-slate-500">
           No {kindLabel.toLowerCase()}s yet{sportFilter !== "all" ? ` for ${SPORT_LABEL[sportFilter]}` : ""}.
         </div>
       ) : (
@@ -298,7 +301,7 @@ function ProductCard({
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+    <div className="card overflow-hidden">
       <div className="aspect-video bg-slate-100">
         {product.heroImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -324,7 +327,7 @@ function ProductCard({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="text-xs text-wa-dark hover:underline"
+              className="text-xs text-court-700 hover:underline"
             >
               Edit
             </button>
@@ -338,13 +341,13 @@ function ProductCard({
           </div>
         </div>
         <div className="flex flex-wrap gap-1">
-          <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded capitalize">
+          <span className="badge bg-slate-100 text-slate-600">
             {product.type}
           </span>
           {product.sports.map((s) => (
             <span
               key={s}
-              className="text-[10px] px-1.5 py-0.5 bg-wa-green/10 text-wa-dark rounded"
+              className="badge bg-court-50 text-court-700"
             >
               {SPORT_LABEL[s] ?? s}
             </span>
@@ -356,7 +359,7 @@ function ProductCard({
           </p>
         )}
         {product.priceInr != null && (
-          <div className="text-xs text-slate-700">
+          <div className="text-xs text-slate-700 font-mono">
             ₹{product.priceInr.toLocaleString("en-IN")}
             {product.unit ? ` / ${product.unit}` : ""}
           </div>
@@ -366,7 +369,7 @@ function ProductCard({
             href={product.videoUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[11px] text-wa-dark hover:underline block"
+            className="text-[11px] text-court-700 hover:underline block"
           >
             ▶ Video
           </a>
@@ -376,18 +379,13 @@ function ProductCard({
   );
 }
 
-// Shared field styling. The page has no global `.input` rule (that class is
-// only defined inside other pages' styled-jsx), so fields must carry their
-// own border/padding/focus styles or they render as bare unstyled text.
-const FIELD =
-  "w-full mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm " +
-  "text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 " +
-  "focus:ring-wa-green/30 focus:border-wa-green transition";
+// Shared field styling — built on the global `.input` primitive (globals.css),
+// with `text-sm` + a small top margin to sit under its label.
+const FIELD = "input mt-1 text-sm";
 const FIELD_LABEL =
-  "text-[11px] font-semibold text-slate-500 uppercase tracking-wide";
+  "text-[11px] font-heading font-bold text-slate-500 uppercase tracking-wide";
 const SECTION_BOX = "rounded-xl border border-slate-200 bg-slate-50/40 p-4";
-const SECTION_TITLE =
-  "text-xs font-semibold text-slate-700 uppercase tracking-wide mb-3";
+const SECTION_TITLE = "heading text-xs text-slate-700 tracking-wide mb-3";
 
 function ProductForm({
   types,
@@ -545,7 +543,7 @@ function ProductForm({
   return (
     <form
       onSubmit={submit}
-      className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 space-y-5 shadow-sm"
+      className="card p-4 sm:p-6 space-y-5 shadow-sm"
     >
       <h3 className="text-base font-semibold text-slate-900">
         {editing ? "Edit product" : "New product"}
@@ -611,7 +609,7 @@ function ProductForm({
           <button
             type="button"
             onClick={pullSpecsFromDescription}
-            className="shrink-0 text-[11px] font-medium text-wa-dark border border-slate-300 rounded-md px-2.5 py-1 hover:border-wa-green hover:bg-wa-green/5"
+            className="btn btn-secondary shrink-0 !px-2.5 !py-1 !text-[11px]"
             title="Fill these rows from the description's spec tables"
           >
             ↧ Pull from description
@@ -657,7 +655,7 @@ function ProductForm({
         <button
           type="button"
           onClick={addSpecRow}
-          className="mt-2 text-[11px] text-wa-dark border border-dashed border-wa-green/40 rounded-md px-3 py-1 hover:bg-wa-green/5"
+          className="mt-2 text-[11px] text-court-700 border border-dashed border-court-300 rounded px-3 py-1 hover:bg-court-50"
         >
           + Add spec row
         </button>
@@ -680,7 +678,7 @@ function ProductForm({
               onClick={() => toggleSport(s)}
               className={`px-2.5 py-1 text-xs rounded-full border transition ${
                 sports.includes(s)
-                  ? "bg-wa-green text-white border-wa-green"
+                  ? "bg-court-600 text-white border-court-700"
                   : "bg-white text-slate-600 border-slate-300 hover:border-slate-400"
               }`}
             >
@@ -764,7 +762,7 @@ function ProductForm({
                   href={t.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 min-w-0 text-wa-dark hover:underline truncate"
+                  className="flex-1 min-w-0 text-court-700 hover:underline truncate"
                 >
                   📄 {t.name}
                 </a>
@@ -792,7 +790,7 @@ function ProductForm({
         <button
           type="submit"
           disabled={busy}
-          className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-semibold px-5 py-2 rounded-xl disabled:opacity-50"
+          className="btn btn-primary"
         >
           {busy ? "Saving…" : editing ? "Save changes" : "Save product"}
         </button>
@@ -950,7 +948,7 @@ function TdsSection({
 
       <form
         onSubmit={upload}
-        className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+        className="card p-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
       >
         <input
           value={name}
@@ -988,7 +986,7 @@ function TdsSection({
         <button
           type="submit"
           disabled={busy || !name.trim() || !file}
-          className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 whitespace-nowrap shrink-0"
+          className="btn btn-primary whitespace-nowrap shrink-0"
         >
           Upload
         </button>
@@ -997,7 +995,7 @@ function TdsSection({
       {!loaded ? (
         <div className="text-xs text-slate-500 italic">Loading…</div>
       ) : files.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 text-center text-sm text-slate-500">
+        <div className="card p-6 text-center text-sm text-slate-500">
           No TDS files for {SPORT_LABEL[sport] ?? sport} yet.
         </div>
       ) : (
@@ -1005,7 +1003,7 @@ function TdsSection({
           {files.map((f) => (
             <li
               key={f.id}
-              className="bg-white border border-slate-200 rounded-md px-3 py-2 text-sm"
+              className="card px-3 py-2 text-sm"
             >
               {editingId === f.id ? (
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1027,7 +1025,7 @@ function TdsSection({
                       type="button"
                       disabled={busy || !editName.trim()}
                       onClick={() => saveEdit(f.id)}
-                      className="bg-wa-green hover:bg-wa-green/90 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
+                      className="btn btn-primary !px-3 !py-1.5 !text-xs"
                     >
                       Save
                     </button>
@@ -1046,14 +1044,14 @@ function TdsSection({
                     href={f.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 text-wa-dark hover:underline truncate"
+                    className="flex-1 text-court-700 hover:underline truncate"
                   >
                     📄 {f.name}
                   </a>
                   <button
                     type="button"
                     onClick={() => startEdit(f)}
-                    className="text-xs text-wa-dark hover:underline"
+                    className="text-xs text-court-700 hover:underline"
                   >
                     Edit
                   </button>

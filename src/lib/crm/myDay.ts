@@ -4,6 +4,7 @@
 // the new web dashboard (Phase 4). Adds the one piece the bot command
 // never had: deals closing within 7 days (spec §7.5's fourth bucket).
 import { prisma } from "@/lib/prisma";
+import { startOfDayIST, endOfDayIST } from "@/lib/time";
 
 const DEFAULT_SLA_HOURS = 72;
 
@@ -78,4 +79,82 @@ export async function getMyDay(userId: string): Promise<MyDayData> {
     noRecentActivityDeals: noRecentActivityDeals.map((d) => ({ id: d.id, code: d.code, title: d.title })),
     closingThisWeek: closing.map((d) => ({ id: d.id, code: d.code, title: d.title, expectedCloseAt: d.expectedCloseAt!.toISOString() })),
   };
+}
+
+// ---- Upcoming schedule (scheduled meetings / calls / tasks) ----------------
+
+export type UpcomingReminder = {
+  id: string;
+  message: string;
+  dueAt: string;
+  // ActivityType.name — "Google Meet" | "In-Person Meeting" | "Outbound Call" |
+  // "Inbound Call" | "Task". Never null here (rows without an activityType are
+  // filtered out) but typed nullable to stay compatible with the shared UI.
+  typeName: string | null;
+  // Set only on Task-kind reminders; null for scheduled meetings/calls.
+  priority: string | null;
+  // The assigned rep — surfaced only in the team-wide (admin) variant.
+  ownerName: string;
+};
+
+export type UpcomingScheduleData = {
+  overdue: UpcomingReminder[];
+  today: UpcomingReminder[];
+  tomorrow: UpcomingReminder[];
+  week: UpcomingReminder[];
+  total: number;
+};
+
+// Scheduled meetings/calls/tasks (Reminder rows tagged with an ActivityType —
+// plain follow-up reminders leave activityTypeId null and are excluded, mirroring
+// how ContactDetailClient/activities distinguish the two) that are OVERDUE or
+// fall within today..+7 days. Pass ownerUserId to scope to one rep; omit it for
+// the team-wide (admin) view. Day boundaries use the IST helpers so
+// "today"/"tomorrow" track the team's calendar rather than the server's UTC one.
+export async function getUpcomingSchedule(opts: { ownerUserId?: string } = {}): Promise<UpcomingScheduleData> {
+  const now = new Date();
+  const startToday = startOfDayIST(now);
+  const endToday = endOfDayIST(now);
+  const endTomorrow = endOfDayIST(new Date(now.getTime() + 86_400_000));
+  const endWeek = endOfDayIST(new Date(now.getTime() + 7 * 86_400_000));
+
+  const reminders = await prisma.reminder.findMany({
+    where: {
+      ...(opts.ownerUserId ? { ownerUserId: opts.ownerUserId } : {}),
+      completedAt: null,
+      activityTypeId: { not: null },
+      dueAt: { lte: endWeek },
+    },
+    orderBy: { dueAt: "asc" },
+    select: {
+      id: true,
+      message: true,
+      dueAt: true,
+      priority: true,
+      activityType: { select: { name: true } },
+      owner: { select: { name: true } },
+    },
+  });
+
+  const overdue: UpcomingReminder[] = [];
+  const today: UpcomingReminder[] = [];
+  const tomorrow: UpcomingReminder[] = [];
+  const week: UpcomingReminder[] = [];
+
+  for (const r of reminders) {
+    const row: UpcomingReminder = {
+      id: r.id,
+      message: r.message,
+      dueAt: r.dueAt.toISOString(),
+      typeName: r.activityType?.name ?? null,
+      priority: r.priority,
+      ownerName: r.owner.name,
+    };
+    if (r.dueAt < startToday) overdue.push(row);
+    else if (r.dueAt <= endToday) today.push(row);
+    else if (r.dueAt <= endTomorrow) tomorrow.push(row);
+    else week.push(row);
+  }
+
+  return { overdue, today, tomorrow, week, total: reminders.length };
 }

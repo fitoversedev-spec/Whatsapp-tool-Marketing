@@ -68,7 +68,7 @@ export default function MoveToCrmDialog({
         <select
           value={ownerUserId}
           onChange={(e) => setOwnerUserId(e.target.value)}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30"
+          className="input text-sm"
         >
           <option value="">Don&apos;t assign (unassigned)</option>
           {reps.map((r) => (
@@ -82,14 +82,14 @@ export default function MoveToCrmDialog({
           <button
             onClick={onClose}
             disabled={saving}
-            className="flex-1 border border-slate-300 bg-white rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="btn btn-secondary flex-1"
           >
             Cancel
           </button>
           <button
             onClick={submit}
             disabled={saving}
-            className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            className="btn btn-primary flex-1"
           >
             {saving ? "Moving…" : "Move to CRM"}
           </button>

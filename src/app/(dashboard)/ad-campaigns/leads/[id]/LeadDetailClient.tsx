@@ -65,17 +65,17 @@ export default function LeadDetailClient({ lead, reps }: { lead: MetaLeadRow; re
               onClick={moveToMarketing}
               disabled={sendingToMarketing}
               title="Add this lead's phone to the WhatsApp marketing contact list"
-              className="text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="btn btn-secondary !px-3 !py-1.5"
             >
               {sendingToMarketing ? "Adding…" : "→ WhatsApp marketing"}
             </button>
             {lead.inCrm ? (
-              <span className="text-sm font-semibold text-emerald-700">In CRM ✓</span>
+              <span className="badge bg-green-100 text-green-700">In CRM ✓</span>
             ) : (
               <button
                 type="button"
                 onClick={() => setMoving(true)}
-                className="text-sm font-medium px-3 py-1.5 rounded-lg bg-wa-green text-white hover:bg-wa-green/90"
+                className="btn btn-primary !px-3 !py-1.5"
               >
                 Move to CRM
               </button>
@@ -84,20 +84,23 @@ export default function LeadDetailClient({ lead, reps }: { lead: MetaLeadRow; re
         }
       />
 
-      <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+      <div className="mt-4 overflow-x-auto card">
         <table className="w-full text-sm">
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.label} className="border-b border-slate-100 last:border-0">
-                <th className="text-left align-top px-3 py-2 w-40 text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">
-                  {r.label}
-                </th>
-                <td className="px-3 py-2 text-slate-800 break-words">{r.value}</td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const mono = r.label === "Phone" || r.label === "Captured";
+              return (
+                <tr key={r.label} className="border-b border-slate-100 last:border-0">
+                  <th className="text-left align-top px-3 py-2 w-40 text-xs font-heading font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">
+                    {r.label}
+                  </th>
+                  <td className={`px-3 py-2 text-slate-800 break-words ${mono ? "font-mono" : ""}`}>{r.value}</td>
+                </tr>
+              );
+            })}
             {fields.length > 0 && (
               <tr className="bg-slate-50/60 border-b border-slate-100">
-                <td colSpan={2} className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                <td colSpan={2} className="px-3 py-1.5 text-[11px] font-heading font-bold uppercase tracking-wide text-slate-400">
                   Form answers
                 </td>
               </tr>

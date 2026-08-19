@@ -37,13 +37,9 @@ type Contact = {
 
 function ConsentBadge({ allowed }: { allowed: boolean }) {
   return allowed ? (
-    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700 whitespace-nowrap">
-      ✓ CAMPAIGN
-    </span>
+    <span className="badge bg-green-100 text-green-700">✓ CAMPAIGN</span>
   ) : (
-    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700 whitespace-nowrap">
-      ✕ NO CAMPAIGN
-    </span>
+    <span className="badge bg-red-100 text-red-700">✕ NO CAMPAIGN</span>
   );
 }
 
@@ -147,13 +143,13 @@ export default function ContactsClient({
             </a>
             <button
               onClick={() => setShowAdd(true)}
-              className="flex-1 sm:flex-none border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium px-4 py-2 rounded-lg transition"
+              className="btn btn-secondary flex-1 sm:flex-none"
             >
               + Add
             </button>
             <button
               onClick={() => setShowUpload(true)}
-              className="flex-1 sm:flex-none bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg transition"
+              className="btn btn-primary flex-1 sm:flex-none"
             >
               Upload file
             </button>
@@ -169,7 +165,7 @@ export default function ContactsClient({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search phone or name…"
-            className="flex-1 px-3 py-2 rounded-lg border border-slate-300 focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none text-sm"
+            className="input flex-1"
           />
           <select
             value={tagFilter ?? ""}
@@ -181,7 +177,7 @@ export default function ContactsClient({
               else params.delete("tag");
               router.push(`/contacts${params.toString() ? `?${params}` : ""}`);
             }}
-            className="px-3 py-2 rounded-lg border border-slate-300 focus:border-wa-green outline-none text-sm bg-white"
+            className="input sm:w-auto"
           >
             <option value="">All tags</option>
             {allTags.map((t) => (
@@ -196,7 +192,7 @@ export default function ContactsClient({
               setFilterField(e.target.value);
               setFilterValue("");
             }}
-            className="px-3 py-2 rounded-lg border border-slate-300 focus:border-wa-green outline-none text-sm bg-white"
+            className="input sm:w-auto"
           >
             <option value="">Filter by field…</option>
             {keys.map((k) => (
@@ -210,7 +206,7 @@ export default function ContactsClient({
               value={filterValue}
               onChange={(e) => setFilterValue(e.target.value)}
               placeholder={`${filterField} equals…`}
-              className="px-3 py-2 rounded-lg border border-slate-300 focus:border-wa-green outline-none text-sm"
+              className="input sm:w-auto"
             />
           )}
         </div>
@@ -230,7 +226,7 @@ export default function ContactsClient({
         )}
 
         {contacts.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-center text-slate-500">
+          <div className="card p-8 sm:p-12 text-center text-slate-500">
             {search || filterField
               ? "No contacts match your search/filter."
               : "No contacts yet. Click "}
@@ -242,7 +238,7 @@ export default function ContactsClient({
             {/* Mobile cards */}
             <div className="md:hidden space-y-3">
               {contacts.map((c) => (
-                <div key={c.id} className="bg-white border border-slate-200 rounded-xl p-4">
+                <div key={c.id} className="card p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="font-semibold text-slate-900 truncate">
@@ -277,12 +273,12 @@ export default function ContactsClient({
             </div>
 
             {/* Desktop table */}
-            <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="hidden md:block card overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                <table className="data-table">
+                  <thead>
                     <tr>
-                      <th className="px-3 py-3 w-8 text-left">
+                      <th className="w-8">
                         <input
                           type="checkbox"
                           checked={contacts.length > 0 && contacts.every((c) => selectedIds.has(c.id))}
@@ -297,22 +293,22 @@ export default function ContactsClient({
                           aria-label="Select all"
                         />
                       </th>
-                      <th className="px-4 py-3 text-left">Name</th>
-                      <th className="px-4 py-3 text-left">Phone</th>
-                      <th className="px-4 py-3 text-left">Tags</th>
-                      <th className="px-4 py-3 text-left">Campaign</th>
+                      <th className="text-left">Name</th>
+                      <th className="text-left">Phone</th>
+                      <th className="text-left">Tags</th>
+                      <th className="text-left">Campaign</th>
                       {keys.map((k) => (
-                        <th key={k} className="px-4 py-3 text-left">
+                        <th key={k} className="text-left">
                           {k}
                         </th>
                       ))}
-                      <th className="px-4 py-3 text-right">Actions</th>
+                      <th className="!text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {contacts.map((c) => (
-                      <tr key={c.id} className={`hover:bg-slate-50 ${selectedIds.has(c.id) ? "bg-wa-green/5" : ""}`}>
-                        <td className="px-3 py-2.5">
+                      <tr key={c.id} className={selectedIds.has(c.id) ? "bg-court-50" : ""}>
+                        <td>
                           <input
                             type="checkbox"
                             checked={selectedIds.has(c.id)}
@@ -328,11 +324,11 @@ export default function ContactsClient({
                             aria-label={`Select ${c.name ?? c.phone}`}
                           />
                         </td>
-                        <td className="px-4 py-2.5 font-medium text-slate-900">
+                        <td className="font-medium text-slate-900">
                           {c.name || <span className="text-slate-400">(no name)</span>}
                         </td>
-                        <td className="px-4 py-2.5 text-slate-600 font-mono text-xs">+{c.phone}</td>
-                        <td className="px-4 py-2.5">
+                        <td className="text-slate-600 font-mono text-xs">+{c.phone}</td>
+                        <td>
                           {c.tags.length === 0 ? (
                             <span className="text-slate-300 text-xs">—</span>
                           ) : (
@@ -351,15 +347,15 @@ export default function ContactsClient({
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-2.5">
+                        <td>
                           <ConsentBadge allowed={c.allowCampaign} />
                         </td>
                         {keys.map((k) => (
-                          <td key={k} className="px-4 py-2.5 text-slate-600">
+                          <td key={k} className="text-slate-600">
                             {c.fields[k] || <span className="text-slate-300">—</span>}
                           </td>
                         ))}
-                        <td className="px-4 py-2.5 text-right">
+                        <td className="!text-right">
                           <button
                             onClick={() => setEditing(c)}
                             className="text-xs text-slate-600 hover:text-slate-900 underline"
@@ -380,17 +376,18 @@ export default function ContactsClient({
                 <button
                   onClick={() => load({ page: page - 1 })}
                   disabled={page <= 1 || loading}
-                  className="px-3 py-1.5 text-sm border border-slate-300 rounded-md disabled:opacity-40 hover:bg-slate-50"
+                  className="btn btn-secondary"
                 >
                   Previous
                 </button>
                 <span className="text-sm text-slate-500">
-                  Page {page} of {totalPages}
+                  Page <span className="font-mono">{page}</span> of{" "}
+                  <span className="font-mono">{totalPages}</span>
                 </span>
                 <button
                   onClick={() => load({ page: page + 1 })}
                   disabled={page >= totalPages || loading}
-                  className="px-3 py-1.5 text-sm border border-slate-300 rounded-md disabled:opacity-40 hover:bg-slate-50"
+                  className="btn btn-secondary"
                 >
                   Next
                 </button>
@@ -655,7 +652,7 @@ function UploadModal({
               type="button"
               onClick={loadSheet}
               disabled={loadingSheet}
-              className="bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
+              className="btn btn-primary"
             >
               {loadingSheet ? "Loading…" : "Load sheet"}
             </button>
@@ -778,9 +775,9 @@ function UploadModal({
                       key={h}
                       type="button"
                       onClick={() => toggleFieldCol(h)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                      className={`px-3 py-1.5 rounded text-xs font-medium border transition ${
                         fieldCols.includes(h)
-                          ? "bg-wa-green text-white border-wa-green"
+                          ? "bg-court-600 text-white border-court-700"
                           : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
                       }`}
                     >
@@ -927,7 +924,7 @@ function ContactFormModal({
                 setNewKey("");
               }
             }}
-            className="px-3 py-2 text-sm bg-slate-100 hover:bg-slate-200 rounded-lg font-medium text-slate-700 shrink-0"
+            className="btn btn-secondary shrink-0"
           >
             + Field
           </button>
@@ -939,7 +936,7 @@ function ContactFormModal({
               type="button"
               onClick={remove}
               disabled={busy}
-              className="order-3 sm:order-1 text-sm text-red-600 hover:text-red-700 px-3 py-2.5"
+              className="order-3 sm:order-1 btn btn-ghost text-track-600 hover:text-track-700"
             >
               Delete contact
             </button>
@@ -950,14 +947,14 @@ function ContactFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="order-2 px-4 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg"
+              className="order-2 btn btn-ghost"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={busy}
-              className="order-1 sm:order-3 bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-5 py-2.5 rounded-lg"
+              className="order-1 sm:order-3 btn btn-primary"
             >
               {busy ? "Saving…" : mode === "add" ? "Add contact" : "Save changes"}
             </button>
@@ -997,7 +994,7 @@ function ModalShell({
         :global(.cinput) {
           width: 100%;
           padding: 0.625rem 0.75rem;
-          border-radius: 0.5rem;
+          border-radius: 3px;
           border: 1px solid #cbd5e1;
           outline: none;
           font-size: 16px;
@@ -1008,8 +1005,8 @@ function ModalShell({
           }
         }
         :global(.cinput:focus) {
-          border-color: #159341;
-          box-shadow: 0 0 0 3px rgba(21, 147, 65, 0.2);
+          border-color: #1c6e8c;
+          box-shadow: 0 0 0 3px rgba(28, 110, 140, 0.25);
         }
       `}</style>
     </div>
@@ -1030,14 +1027,14 @@ function ModalActions({
       <button
         type="button"
         onClick={onClose}
-        className="order-2 sm:order-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg"
+        className="order-2 sm:order-1 btn btn-ghost"
       >
         Cancel
       </button>
       <button
         type="submit"
         disabled={disabled}
-        className="order-1 sm:order-2 bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-5 py-2.5 rounded-lg"
+        className="order-1 sm:order-2 btn btn-primary"
       >
         {confirmLabel}
       </button>

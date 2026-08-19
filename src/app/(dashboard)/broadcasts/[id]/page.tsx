@@ -49,7 +49,7 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
             <a
               href={`/api/broadcasts/${broadcast.id}/recipients/export`}
               download
-              className="inline-flex items-center gap-1.5 text-sm text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 px-3 py-1.5 rounded-md font-medium"
+              className="btn btn-secondary"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -73,12 +73,12 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Status + counters */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+        <div className="card p-5">
           <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap">
               <span
-                className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wide ${
-                  STATUS_COLORS[broadcast.status] ?? "bg-slate-100"
+                className={`badge ${
+                  STATUS_COLORS[broadcast.status] ?? "bg-slate-100 text-slate-700"
                 }`}
               >
                 {broadcast.status}
@@ -87,13 +87,13 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
             </div>
             <div className="text-xs text-slate-500 text-right">
               {broadcast.scheduledAt && broadcast.status === "scheduled" && (
-                <div>Scheduled: {new Date(broadcast.scheduledAt).toLocaleString("en-IN")}</div>
+                <div>Scheduled: <span className="font-mono">{new Date(broadcast.scheduledAt).toLocaleString("en-IN")}</span></div>
               )}
               {broadcast.launchedAt && (
-                <div>Launched: {new Date(broadcast.launchedAt).toLocaleString()}</div>
+                <div>Launched: <span className="font-mono">{new Date(broadcast.launchedAt).toLocaleString()}</span></div>
               )}
               {broadcast.completedAt && (
-                <div>Completed: {new Date(broadcast.completedAt).toLocaleString()}</div>
+                <div>Completed: <span className="font-mono">{new Date(broadcast.completedAt).toLocaleString()}</span></div>
               )}
             </div>
           </div>
@@ -114,25 +114,25 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
                 />
               </div>
               <div className="flex justify-between text-xs text-slate-500 mt-1">
-                <span>{broadcast.sent} of {broadcast.total} sent</span>
-                <span>{Math.round((broadcast.sent / broadcast.total) * 100)}%</span>
+                <span><span className="font-mono">{broadcast.sent}</span> of <span className="font-mono">{broadcast.total}</span> sent</span>
+                <span className="font-mono">{Math.round((broadcast.sent / broadcast.total) * 100)}%</span>
               </div>
             </div>
           )}
         </div>
 
         {/* Template preview */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5">
-          <div className="text-sm font-semibold text-slate-900 mb-2">Template body</div>
+        <div className="card p-5">
+          <div className="heading text-sm text-slate-900 mb-2">Template body</div>
           <div className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap font-mono text-xs break-words">
             {broadcast.template.body}
           </div>
         </div>
 
         {/* Recipients */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="card overflow-hidden">
           <div className="p-5 border-b border-slate-200">
-            <div className="text-sm font-semibold text-slate-900">Recipients</div>
+            <div className="heading text-sm text-slate-900">Recipients</div>
             <p className="text-xs text-slate-500 mt-0.5">
               {recipients.length === 0
                 ? "No recipients yet (broadcast hasn't enqueued any)."
@@ -161,7 +161,7 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
 function Stat({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
     <div className="bg-slate-50 rounded-lg p-3">
-      <div className={`text-2xl font-bold ${color ?? "text-slate-900"}`}>{value}</div>
+      <div className={`text-2xl font-bold font-mono ${color ?? "text-slate-900"}`}>{value}</div>
       <div className="text-xs text-slate-500 uppercase tracking-wide mt-0.5">{label}</div>
     </div>
   );

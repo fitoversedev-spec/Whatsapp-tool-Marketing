@@ -8,10 +8,11 @@ export async function GET(req: NextRequest) {
 
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
 
+  // Reps see ONLY their assigned conversations (unassigned = admin-only).
   const roleWhere =
     user.role === "admin"
       ? {}
-      : { OR: [{ assignedToUserId: user.id }, { assignedToUserId: null }] };
+      : { assignedToUserId: user.id };
 
   let conversations;
   if (q) {

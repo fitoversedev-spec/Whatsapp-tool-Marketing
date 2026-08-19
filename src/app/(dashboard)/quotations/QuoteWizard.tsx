@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 import { useUserUnit } from "@/lib/units/useUserUnit";
+import { sanitize } from "@/lib/quotation/sanitize";
 import { toFeet, toUnit } from "@/lib/units";
 import { sectionForItem, orderedSectionsFor } from "@/lib/quotation/sections";
 import { SPORT_STANDARDS } from "@/lib/court-image/sport-standards";
@@ -55,7 +56,170 @@ type LineItem = {
   specs?: Array<{ label: string; value: string }> | null;
   // Which catalogue Product this line came from — see lineItemsForSubmit().
   productId?: string | null;
+  // Word-level highlight marks for the PDF (word index → colour hex), per
+  // field. A whole cell/box = every word index set. See ItemHighlighter.
+  highlights?: {
+    name?: Record<string, string>;
+    description?: Record<string, string>;
+  } | null;
 };
+
+// ── Highlighting (feature #5) ───────────────────────────────────────────────
+// Paint individual words (or a whole cell) in a line's name/description with a
+// colour; stored as word-index → hex maps and rendered as a coloured background
+// in the quotation PDF. Word indices are whitespace-split positions, matching
+// the PDF renderer's own split so the two agree.
+const HIGHLIGHT_COLORS: { name: string; hex: string }[] = [
+  { name: "Yellow", hex: "#fff3bf" },
+  { name: "Green", hex: "#d3f9d8" },
+  { name: "Pink", hex: "#ffdeeb" },
+  { name: "Blue", hex: "#d0ebff" },
+  { name: "Orange", hex: "#ffe8cc" },
+];
+
+function WordChips({
+  label,
+  text,
+  map,
+  onWord,
+  onAll,
+}: {
+  label: string;
+  text: string;
+  map: Record<string, string> | undefined;
+  onWord: (index: number) => void;
+  onAll: () => void;
+}) {
+  // Split on sanitize(text) — the SAME basis the PDF renderer uses — so the
+  // painted word indices line up with what gets highlighted in the PDF (a
+  // stripped non-WinAnsi token would otherwise shift the two out of sync).
+  const words = sanitize(text).split(/\s+/);
+  const empty = words.length === 1 && words[0] === "";
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-[10px] uppercase tracking-wide text-slate-500">{label}</span>
+        {!empty && (
+          <button type="button" onClick={onAll} className="text-[10px] text-court-600 hover:underline">
+            whole box
+          </button>
+        )}
+      </div>
+      {empty ? (
+        <span className="text-[10px] text-slate-400 italic">— empty —</span>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {words.map((w, i) =>
+            w === "" ? null : (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onWord(i)}
+                className="text-xs leading-tight px-1 py-0.5 rounded border border-transparent hover:border-slate-300"
+                style={{ background: map?.[String(i)] ?? "transparent" }}
+              >
+                {w}
+              </button>
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ItemHighlighter({
+  name,
+  description,
+  value,
+  onChange,
+}: {
+  name: string;
+  description: string;
+  value: LineItem["highlights"];
+  onChange: (next: LineItem["highlights"]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [armed, setArmed] = useState<string | null>(HIGHLIGHT_COLORS[0].hex);
+
+  const clean = (h: {
+    name?: Record<string, string>;
+    description?: Record<string, string>;
+  }): LineItem["highlights"] => {
+    const out: { name?: Record<string, string>; description?: Record<string, string> } = {};
+    if (h.name && Object.keys(h.name).length) out.name = h.name;
+    if (h.description && Object.keys(h.description).length) out.description = h.description;
+    return Object.keys(out).length ? out : null;
+  };
+
+  const paint = (field: "name" | "description", index: number) => {
+    const cur = { ...(value?.[field] ?? {}) };
+    const key = String(index);
+    if (armed === null || cur[key] === armed) delete cur[key];
+    else cur[key] = armed;
+    onChange(clean({ ...value, [field]: cur }));
+  };
+
+  const paintAll = (field: "name" | "description", text: string) => {
+    const next: Record<string, string> = {};
+    if (armed !== null) sanitize(text).split(/\s+/).forEach((w, i) => { if (w) next[String(i)] = armed; });
+    onChange(clean({ ...value, [field]: next }));
+  };
+
+  const hasAny =
+    (value?.name && Object.keys(value.name).length) ||
+    (value?.description && Object.keys(value.description).length);
+
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-[11px] text-slate-500 hover:text-court-700 inline-flex items-center gap-1"
+      >
+        <span>🖍 Highlight</span>
+        {hasAny ? <span className="text-court-600 font-medium">• on</span> : null}
+        <span className="text-slate-400">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] text-slate-500">Colour:</span>
+            {HIGHLIGHT_COLORS.map((c) => (
+              <button
+                key={c.hex}
+                type="button"
+                title={c.name}
+                onClick={() => setArmed(c.hex)}
+                className={`w-5 h-5 rounded border ${armed === c.hex ? "ring-2 ring-court-500 border-court-500" : "border-slate-300"}`}
+                style={{ background: c.hex }}
+              />
+            ))}
+            <button
+              type="button"
+              title="Eraser"
+              onClick={() => setArmed(null)}
+              className={`w-5 h-5 rounded border bg-white text-[10px] flex items-center justify-center ${armed === null ? "ring-2 ring-court-500 border-court-500" : "border-slate-300"}`}
+            >
+              ⌫
+            </button>
+            <span className="text-[10px] text-slate-400 ml-1">
+              tap a word to {armed === null ? "clear" : "paint"}
+            </span>
+          </div>
+          <WordChips label="Name" text={name} map={value?.name} onWord={(i) => paint("name", i)} onAll={() => paintAll("name", name)} />
+          <WordChips
+            label="Description"
+            text={description}
+            map={value?.description}
+            onWord={(i) => paint("description", i)}
+            onAll={() => paintAll("description", description)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Catalogue product row (subset of ProductDTO) shown in the Products step.
 type ProductRow = {
@@ -683,7 +847,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             <div
               key={s}
               className={`h-1 flex-1 rounded-full ${
-                s <= step ? "bg-wa-green" : "bg-slate-200"
+                s <= step ? "bg-court-600" : "bg-slate-200"
               }`}
             />
           ))}
@@ -701,7 +865,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
                   placeholder="e.g. Dr. P. Prabhusankar"
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                  className="input text-sm"
                 />
               </div>
 
@@ -713,7 +877,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
                   placeholder="+919876543210"
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                  className="input text-sm font-mono"
                 />
                 <p className="mt-1 text-xs text-slate-400">Who the finished quote gets sent to — required to send later, even if you save this as a draft for now.</p>
               </div>
@@ -726,7 +890,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   value={siteCity}
                   onChange={(e) => setSiteCity(e.target.value)}
                   placeholder="e.g. Coimbatore"
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                  className="input text-sm"
                 />
                 <p className="mt-1 text-xs text-slate-400">Where the court is being built — powers the Geography view in Team Performance.</p>
               </div>
@@ -737,7 +901,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   <select
                     value={leadSourceId}
                     onChange={(e) => setLeadSourceId(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                    className="input text-sm"
                   >
                     <option value="">—</option>
                     {leadSources.map((s) => (
@@ -750,7 +914,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   <select
                     value={customerProfileId}
                     onChange={(e) => setCustomerProfileId(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                    className="input text-sm"
                   >
                     <option value="">—</option>
                     {customerProfiles.map((c) => (
@@ -763,7 +927,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   <select
                     value={businessType}
                     onChange={(e) => setBusinessType(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                    className="input text-sm"
                   >
                     <option value="">—</option>
                     <option value="B2B">B2B</option>
@@ -850,7 +1014,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                           Math.round(toFeet(parseFloat(e.target.value) || 0, unit))
                         )
                       }
-                      className="w-20 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                      className="input w-20 text-sm font-mono"
                     />
                     <span className="text-sm text-slate-500">{unit}</span>
                   </div>
@@ -866,11 +1030,11 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                           Math.round(toFeet(parseFloat(e.target.value) || 0, unit))
                         )
                       }
-                      className="w-20 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                      className="input w-20 text-sm font-mono"
                     />
                     <span className="text-sm text-slate-500">{unit}</span>
                   </div>
-                  <span className="text-sm font-medium text-slate-700 ml-2">
+                  <span className="text-sm font-medium text-slate-700 ml-2 font-mono">
                     {unit === "ft"
                       ? `= ${(lengthFt * widthFt).toLocaleString("en-IN")} sq.ft`
                       : `= ${Math.round(lengthFt * widthFt * 0.0929).toLocaleString("en-IN")} m² (${(lengthFt * widthFt).toLocaleString("en-IN")} sq.ft)`}
@@ -908,7 +1072,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                               {active && <span className="text-wa-green">✓</span>}
                               {p.label}
                             </div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">
+                            <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
                               {unit === "ft"
                                 ? `${Math.round(p.lengthFt)} × ${Math.round(p.widthFt)} ft · ${p.areaSqFt.toLocaleString("en-IN")} sqft`
                                 : `${(p.lengthFt * 0.3048).toFixed(1)} × ${(p.widthFt * 0.3048).toFixed(1)} m · ${Math.round(p.areaSqFt * 0.0929).toLocaleString("en-IN")} m²`}
@@ -935,7 +1099,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                     type="date"
                     value={quoteDate}
                     onChange={(e) => setQuoteDate(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                    className="input text-sm font-mono"
                   />
                 </div>
                 <div>
@@ -948,7 +1112,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                     max={365}
                     value={validityDays}
                     onChange={(e) => setValidityDays(parseInt(e.target.value) || 30)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+                    className="input text-sm font-mono"
                   />
                 </div>
               </div>
@@ -962,7 +1126,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   onChange={(e) => setNotes(e.target.value)}
                   rows={3}
                   placeholder="Any custom notes for this customer…"
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green resize-none"
+                  className="input text-sm resize-none"
                 />
               </div>
             </div>
@@ -987,7 +1151,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                       onClick={() => setProductFilter(s.id)}
                       className={`px-3 py-1.5 text-xs rounded-full border transition ${
                         (productFilter || sport) === s.id
-                          ? "bg-wa-green text-white border-wa-green"
+                          ? "bg-court-600 text-white border-court-600"
                           : "bg-white text-slate-600 border-slate-300 hover:border-slate-400"
                       }`}
                     >
@@ -1071,7 +1235,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
 
                   {/* Product photos — auto-matched to a line item, reassignable */}
                   {picked.length > 0 && (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <div className="card bg-slate-50 p-3 space-y-2">
                       <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
                         Product photos
                       </div>
@@ -1082,7 +1246,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                       {picked.map((p) => (
                         <div
                           key={p.productId}
-                          className="flex items-center gap-3 bg-white border border-slate-200 rounded-md p-2"
+                          className="flex items-center gap-3 card p-2"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
@@ -1116,7 +1280,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                     ),
                                   )
                                 }
-                                className="text-xs border border-slate-300 rounded px-2 py-1 bg-white min-w-0 flex-1"
+                                className="input text-xs !px-2 !py-1 min-w-0 flex-1"
                               >
                                 <option value="">— none —</option>
                                 {lineItems
@@ -1201,7 +1365,13 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                   value={item.description}
                                   onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
                                   rows={5}
-                                  className="w-full mt-1.5 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2.5 focus:outline-none focus:ring-1 focus:ring-wa-green/30 focus:border-wa-green resize-y leading-relaxed min-h-[6rem]"
+                                  className="input mt-1.5 text-sm text-slate-600 bg-slate-50 resize-y leading-relaxed min-h-[6rem]"
+                                />
+                                <ItemHighlighter
+                                  name={item.name}
+                                  description={item.description}
+                                  value={item.highlights}
+                                  onChange={(next) => updateLineItem(item.id, "highlights", next)}
                                 />
                                 <div className="grid grid-cols-5 gap-2 mt-2">
                                   <div>
@@ -1214,7 +1384,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                       value={item.areaSqFt}
                                       onChange={(e) => updateLineItem(item.id, "areaSqFt", parseFloat(e.target.value) || 0)}
                                       disabled={!item.included}
-                                      className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                      className="input text-right font-mono"
                                     />
                                   </div>
                                   <div>
@@ -1226,7 +1396,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                       value={item.unit ?? "sq.ft"}
                                       onChange={(e) => updateLineItem(item.id, "unit", e.target.value)}
                                       disabled={!item.included}
-                                      className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-center focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                      className="input text-center font-mono"
                                     />
                                   </div>
                                   <div>
@@ -1239,7 +1409,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                       value={item.ratePerSqFt}
                                       onChange={(e) => updateLineItem(item.id, "ratePerSqFt", parseFloat(e.target.value) || 0)}
                                       disabled={!item.included}
-                                      className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                      className="input text-right font-mono"
                                     />
                                   </div>
                                   <div>
@@ -1253,14 +1423,14 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                       value={item.gstPercent}
                                       onChange={(e) => updateLineItem(item.id, "gstPercent", parseFloat(e.target.value) || 0)}
                                       disabled={!item.included}
-                                      className="w-full px-2.5 py-2 text-base border border-slate-300 rounded-md text-right focus:outline-none focus:ring-1 focus:ring-wa-green/30"
+                                      className="input text-right font-mono"
                                     />
                                   </div>
                                   <div>
                                     <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
                                       Total
                                     </label>
-                                    <div className="px-2 py-1 text-sm font-semibold text-right bg-slate-50 border border-slate-200 rounded">
+                                    <div className="px-2 py-1 text-sm font-semibold text-right bg-slate-50 border border-slate-200 rounded font-mono">
                                       ₹ {(item.areaSqFt * item.ratePerSqFt).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                                     </div>
                                   </div>
@@ -1302,15 +1472,15 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   <div className="mt-4 pt-4 border-t border-slate-200 space-y-1.5 text-sm">
                     <div className="flex justify-between">
                       <span className="text-slate-600">Subtotal</span>
-                      <span className="font-medium">₹ {totals.subtotal.toLocaleString("en-IN")}</span>
+                      <span className="font-medium font-mono">₹ {totals.subtotal.toLocaleString("en-IN")}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-600">GST</span>
-                      <span className="font-medium">₹ {totals.gstAmount.toLocaleString("en-IN")}</span>
+                      <span className="font-medium font-mono">₹ {totals.gstAmount.toLocaleString("en-IN")}</span>
                     </div>
                     <div className="flex justify-between text-base pt-2 mt-2 border-t border-slate-100">
                       <span className="font-semibold text-slate-900">Grand Total</span>
-                      <span className="font-bold text-wa-dark">
+                      <span className="font-bold text-court-700 font-mono">
                         ₹ {totals.grandTotal.toLocaleString("en-IN")}
                       </span>
                     </div>
@@ -1345,7 +1515,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   onChange={(e) => setCaption(e.target.value)}
                   rows={3}
                   placeholder={`Quotation ${draftNumber ?? ""} from Fitoverse — total ₹${totals.grandTotal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30 resize-none"
+                  className="input text-sm resize-none"
                 />
                 <div className="text-[10px] text-slate-500 mt-1">
                   Sent as its own message right before the PDF. Leave empty
@@ -1361,12 +1531,12 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                     value={contactPhone}
                     onChange={(e) => setContactPhone(e.target.value)}
                     placeholder="+919876543210"
-                    className="w-full px-3 py-2 text-sm border border-amber-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+                    className="input text-sm font-mono !border-amber-300"
                   />
                 </div>
               )}
               <div className="flex justify-between text-sm">
-                <button onClick={downloadDraftPdf} className="text-wa-dark hover:underline">
+                <button onClick={downloadDraftPdf} className="text-court-700 hover:underline">
                   ⬇ Download / open in new tab
                 </button>
               </div>
@@ -1380,7 +1550,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             {step > 1 && step < 4 && (
               <button
                 onClick={() => setStep(step - 1)}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md"
+                className="btn btn-ghost"
               >
                 ← Back
               </button>
@@ -1388,7 +1558,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             {step === 4 && (
               <button
                 onClick={() => setStep(3)}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md"
+                className="btn btn-ghost"
               >
                 ← Edit
               </button>
@@ -1397,7 +1567,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md"
+              className="btn btn-ghost"
             >
               Cancel
             </button>
@@ -1405,7 +1575,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
               <button
                 onClick={() => setStep(2)}
                 disabled={!step1Valid()}
-                className="px-5 py-2 text-sm font-medium bg-wa-green text-white rounded-md disabled:opacity-50 hover:bg-wa-green/90"
+                className="btn btn-primary"
               >
                 Next →
               </button>
@@ -1413,7 +1583,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             {step === 2 && (
               <button
                 onClick={() => setStep(3)}
-                className="px-5 py-2 text-sm font-medium bg-wa-green text-white rounded-md hover:bg-wa-green/90"
+                className="btn btn-primary"
               >
                 {picked.length > 0 ? "Next →" : "Skip →"}
               </button>
@@ -1422,7 +1592,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
               <button
                 onClick={submitStep2}
                 disabled={submitting}
-                className="px-5 py-2 text-sm font-medium bg-wa-green text-white rounded-md disabled:opacity-50 hover:bg-wa-green/90"
+                className="btn btn-primary"
               >
                 {submitting ? "Creating…" : "Generate Preview →"}
               </button>
@@ -1431,7 +1601,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
               <button
                 onClick={send}
                 disabled={submitting || !contactPhone.trim()}
-                className="px-5 py-2 text-sm font-medium bg-wa-green text-white rounded-md disabled:opacity-50 hover:bg-wa-green/90"
+                className="btn btn-turf"
               >
                 {submitting ? "Sending…" : "🚀 Send to customer"}
               </button>

@@ -76,7 +76,7 @@ export default function CompanyDetailClient({
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-11 h-11 rounded-full bg-wa-green/15 text-wa-dark font-semibold flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-full bg-court-100 text-court-700 font-semibold flex items-center justify-center shrink-0">
             {initials(account.name)}
           </div>
           <div className="min-w-0">
@@ -87,7 +87,7 @@ export default function CompanyDetailClient({
         <div className="flex gap-2 shrink-0">
           <button
             onClick={() => setShowEdit(true)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="btn btn-secondary"
           >
             Edit
           </button>
@@ -99,13 +99,13 @@ export default function CompanyDetailClient({
         <div className="flex flex-wrap gap-2 mb-5">
           <Link
             href={`/quotations?dealId=${deals[0].id}&customerName=${encodeURIComponent(account.name)}`}
-            className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5"
+            className="btn btn-secondary !px-3 !py-1 !text-xs flex items-center gap-1.5"
           >
             <span>📄</span> New Quotation
           </Link>
           <Link
             href={`/court-images?dealId=${deals[0].id}&customerName=${encodeURIComponent(account.name)}`}
-            className="text-xs font-medium border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50 flex items-center gap-1.5"
+            className="btn btn-secondary !px-3 !py-1 !text-xs flex items-center gap-1.5"
           >
             <span>🎨</span> New Court Design
           </Link>
@@ -119,7 +119,7 @@ export default function CompanyDetailClient({
             key={t}
             onClick={() => setTab(t)}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
-              tab === t ? "border-wa-green text-wa-dark" : "border-transparent text-slate-500 hover:text-slate-800"
+              tab === t ? "border-court-600 text-court-700" : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             {t === "overview" ? "Overview" : "Timeline"}
@@ -128,7 +128,7 @@ export default function CompanyDetailClient({
       </div>
 
       {tab === "timeline" ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <div className="card p-4">
           <UnifiedTimeline entries={timeline} />
         </div>
       ) : (
@@ -148,19 +148,19 @@ export default function CompanyDetailClient({
 
           <div className="flex-1 min-w-0 space-y-4">
             {/* Key-field summary */}
-            <div id="details" className="bg-white rounded-xl border border-slate-200 p-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm scroll-mt-4">
+            <div id="details" className="card p-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm scroll-mt-4">
               <div><div className="text-xs text-slate-600">City</div><div className="font-medium text-slate-900">{account.city ?? "—"}</div></div>
               <div><div className="text-xs text-slate-600">Segment</div><div className="font-medium text-slate-900">{account.customerProfileName ?? "—"}</div></div>
               <div><div className="text-xs text-slate-600">Business type</div><div className="font-medium text-slate-900">{account.businessType ?? "—"}</div></div>
-              <div><div className="text-xs text-slate-600">GSTIN</div><div className="font-medium text-slate-900">{account.gstin ?? "—"}</div></div>
+              <div><div className="text-xs text-slate-600">GSTIN</div><div className="font-medium text-slate-900 font-mono">{account.gstin ?? "—"}</div></div>
               <div className="col-span-2 sm:col-span-3"><div className="text-xs text-slate-600">Notes</div><div className="text-slate-700">{account.notes ?? "—"}</div></div>
             </div>
 
             {/* Contacts */}
-            <div id="contacts" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
+            <div id="contacts" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-slate-900">Contacts <span className="text-slate-400 font-normal">{contacts.length}</span></h3>
-                <button onClick={() => setShowNewContact(true)} className="text-xs font-medium text-wa-dark hover:underline">+ New contact</button>
+                <h3 className="text-base font-semibold text-slate-900">Contacts <span className="text-slate-400 font-normal font-mono">{contacts.length}</span></h3>
+                <button onClick={() => setShowNewContact(true)} className="text-xs font-medium text-court-700 hover:underline">+ New contact</button>
               </div>
               {contacts.length === 0 ? (
                 <p className="text-sm text-slate-400">No contacts yet.</p>
@@ -174,11 +174,11 @@ export default function CompanyDetailClient({
                     >
                       <div>
                         <div className="text-sm font-medium text-slate-900">
-                          {c.name} {c.isPrimary && <span className="text-[10px] font-semibold text-wa-dark bg-wa-green/10 px-1.5 py-0.5 rounded ml-1">PRIMARY</span>}
+                          {c.name} {c.isPrimary && <span className="badge bg-court-100 text-court-700 ml-1">PRIMARY</span>}
                         </div>
                         <div className="text-xs text-slate-600">{c.designation ?? "—"}</div>
                       </div>
-                      <div className="text-xs text-slate-600">{c.phone ?? c.email ?? "—"}</div>
+                      <div className="text-xs text-slate-600 font-mono">{c.phone ?? c.email ?? "—"}</div>
                     </Link>
                   ))}
                 </div>
@@ -186,8 +186,8 @@ export default function CompanyDetailClient({
             </div>
 
             {/* Deals */}
-            <div id="deals" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
-              <h3 className="text-base font-semibold text-slate-900 mb-3">Deals <span className="text-slate-400 font-normal">{deals.length}</span></h3>
+            <div id="deals" className="card p-4 scroll-mt-4">
+              <h3 className="text-base font-semibold text-slate-900 mb-3">Deals <span className="text-slate-400 font-normal font-mono">{deals.length}</span></h3>
               {deals.length === 0 ? (
                 <p className="text-sm text-slate-400">No deals yet.</p>
               ) : (
@@ -200,7 +200,7 @@ export default function CompanyDetailClient({
                     >
                       <div>
                         <div className="text-sm font-medium text-slate-900">{d.title}</div>
-                        <div className="text-xs text-slate-600">{d.code}</div>
+                        <div className="text-xs text-slate-600 font-mono">{d.code}</div>
                       </div>
                       <div className="text-right">
                         <span
@@ -209,7 +209,7 @@ export default function CompanyDetailClient({
                         >
                           {d.stageName}
                         </span>
-                        <div className="text-xs text-slate-600">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
+                        <div className="text-xs text-slate-600 font-mono">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
                       </div>
                     </Link>
                   ))}
@@ -218,8 +218,8 @@ export default function CompanyDetailClient({
             </div>
 
             {/* Activities */}
-            <div id="activities" className="bg-white rounded-xl border border-slate-200 p-4 scroll-mt-4">
-              <h3 className="text-base font-semibold text-slate-900 mb-3">Activities <span className="text-slate-400 font-normal">{activities.length}</span></h3>
+            <div id="activities" className="card p-4 scroll-mt-4">
+              <h3 className="text-base font-semibold text-slate-900 mb-3">Activities <span className="text-slate-400 font-normal font-mono">{activities.length}</span></h3>
               {activities.length === 0 ? (
                 <p className="text-sm text-slate-400">Nothing logged yet — activity logged against this company's deals will show up here.</p>
               ) : (
@@ -230,11 +230,11 @@ export default function CompanyDetailClient({
                         <span className="font-medium">{a.typeName}</span> — {a.subject}
                       </div>
                       <div className="text-xs text-slate-600">
-                        {new Date(a.occurredAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} · {a.ownerName}
+                        <span className="font-mono">{new Date(a.occurredAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span> · {a.ownerName}
                         {a.dealId && (
                           <>
                             {" · "}
-                            <Link href={`/deals/${a.dealId}`} className="text-wa-dark hover:underline">view deal</Link>
+                            <Link href={`/deals/${a.dealId}`} className="text-court-700 hover:underline">view deal</Link>
                           </>
                         )}
                       </div>
@@ -319,13 +319,13 @@ function EditCompanyModal({
         <h2 className="font-semibold text-slate-900 mb-4">Edit company</h2>
         <form onSubmit={submit} className="space-y-3">
           <div><label className="text-xs font-medium text-slate-600">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full input" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">City</label>
-            <input value={city} onChange={(e) => setCity(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <input value={city} onChange={(e) => setCity(e.target.value)} className="mt-1 w-full input" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">Business type</label>
-            <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+            <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 w-full input">
               <option value="">Unspecified</option>
               <option value="B2B">B2B</option>
               <option value="B2C">B2C</option>
@@ -333,28 +333,28 @@ function EditCompanyModal({
             </select>
           </div>
           <div><label className="text-xs font-medium text-slate-600">Segment</label>
-            <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+            <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 w-full input">
               <option value="">Unspecified</option>
               {customerProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div><label className="text-xs font-medium text-slate-600">GSTIN</label>
-            <input value={gstin} onChange={(e) => setGstin(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <input value={gstin} onChange={(e) => setGstin(e.target.value)} className="mt-1 w-full input" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full input" />
           </div>
           {isAdmin && (
             <div><label className="text-xs font-medium text-slate-600">Owner</label>
-              <select value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green">
+              <select value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)} className="mt-1 w-full input">
                 <option value="">Unassigned</option>
                 {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
           )}
           <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50">
+            <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
+            <button type="submit" disabled={saving} className="btn btn-primary flex-1">
               {saving ? "Saving..." : "Save"}
             </button>
           </div>
@@ -406,16 +406,16 @@ function NewContactModal({ accountId, onClose, onCreated }: { accountId: string;
         <h2 className="font-semibold text-slate-900 mb-4">New contact</h2>
         <form onSubmit={submit} className="space-y-3">
           <div><label className="text-xs font-medium text-slate-600">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full input" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">Phone</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full input" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">Email</label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 w-full input" />
           </div>
           <div><label className="text-xs font-medium text-slate-600">Designation</label>
-            <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green" />
+            <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 w-full input" />
           </div>
           {duplicate && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
@@ -428,8 +428,8 @@ function NewContactModal({ accountId, onClose, onCreated }: { accountId: string;
             </div>
           )}
           <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3 py-2 text-sm font-medium text-slate-700">Cancel</button>
-            <button type="submit" disabled={submitting} className="flex-1 bg-wa-green hover:bg-wa-green/90 text-white rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50">
+            <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
+            <button type="submit" disabled={submitting} className="btn btn-primary flex-1">
               {submitting ? "Adding..." : "Add"}
             </button>
           </div>

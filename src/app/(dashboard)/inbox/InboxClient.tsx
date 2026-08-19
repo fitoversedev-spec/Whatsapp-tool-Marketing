@@ -360,7 +360,7 @@ export default function InboxClient({
           <div>
             <h2 className="font-semibold text-slate-900">Conversations</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              {currentUser.role === "admin" ? "Showing all" : "Your assigned + unassigned"}
+              {currentUser.role === "admin" ? "Showing all" : "Your assigned"}
             </p>
           </div>
           <input
@@ -368,7 +368,7 @@ export default function InboxClient({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search phone, name, or message…"
-            className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none text-sm"
+            className="input text-sm"
           />
           <div className="flex gap-1.5">
             {(["open", "closed", "all"] as const).map((s) => (
@@ -377,7 +377,7 @@ export default function InboxClient({
                 onClick={() => setStatusFilter(s)}
                 className={`flex-1 text-xs font-medium px-2 py-1.5 rounded-md transition ${
                   statusFilter === s
-                    ? "bg-slate-900 text-white"
+                    ? "bg-court-600 text-white"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                 }`}
               >
@@ -414,10 +414,10 @@ export default function InboxClient({
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500 truncate">+{c.contactPhone}</div>
+                    <div className="text-xs text-slate-500 truncate font-mono">+{c.contactPhone}</div>
                   </div>
                   {c.unreadCount > 0 && (
-                    <span className="inline-block bg-wa-green text-white text-[10px] font-bold rounded-full px-1.5 min-w-[18px] text-center shrink-0">
+                    <span className="inline-block bg-wa-green text-white text-[10px] font-bold font-mono rounded-full px-1.5 min-w-[18px] text-center shrink-0">
                       {c.unreadCount}
                     </span>
                   )}
@@ -475,7 +475,7 @@ export default function InboxClient({
                   )}
                 </div>
                 <div className="text-xs text-slate-500 truncate flex items-center gap-2">
-                  <span>+{current.contactPhone}</span>
+                  <span className="font-mono">+{current.contactPhone}</span>
                   {current.assignedToName && (
                     <span className="text-slate-400">· assigned to {current.assignedToName}</span>
                   )}
@@ -628,7 +628,9 @@ export default function InboxClient({
                 >
                   <div
                     className={`max-w-[85%] sm:max-w-md rounded-2xl px-3 sm:px-4 py-2 shadow-sm ${
-                      m.direction === "outbound" ? "bg-wa-light" : "bg-white border border-slate-200"
+                      m.direction === "outbound"
+                        ? "bg-[#d9fdd3] border border-[#bfe9ad] dark:bg-[#005c4b] dark:border-transparent"
+                        : "bg-white border border-slate-200"
                     }`}
                   >
                     {m.mediaUrl && (
@@ -645,9 +647,9 @@ export default function InboxClient({
                       <div className="text-sm text-slate-900 whitespace-pre-wrap break-words">{m.body}</div>
                     )}
                     <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-                      <span>{new Date(m.createdAt).toLocaleString()}</span>
+                      <span className="font-mono">{new Date(m.createdAt).toLocaleString()}</span>
                       {m.direction === "outbound" && (
-                        <span className="uppercase tracking-wide">{m.status}</span>
+                        <span className="heading tracking-wide">{m.status}</span>
                       )}
                     </div>
                   </div>
@@ -708,7 +710,7 @@ export default function InboxClient({
                 <button
                   type="submit"
                   disabled={!withinWindow || sending || !reply.trim() || isClosed}
-                  className="bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 text-white font-medium px-4 sm:px-5 py-2.5 rounded-lg transition shrink-0"
+                  className="btn btn-primary shrink-0"
                 >
                   {sending ? "…" : "Send"}
                 </button>

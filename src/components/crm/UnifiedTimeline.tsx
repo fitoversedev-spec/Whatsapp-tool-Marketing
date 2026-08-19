@@ -17,8 +17,8 @@ function styleFor(e: TimelineEntry): { border: string; badge: string; label: str
       : { border: "border-amber-300", badge: "bg-amber-100 text-amber-700", label: typeLabel ?? "REMINDER" };
   }
   if (e.kind === "created") return { border: "border-slate-300", badge: "bg-slate-100 text-slate-600", label: "CREATED" };
-  if (e.kind === "stage") return { border: "border-blue-300", badge: "bg-blue-100 text-blue-700", label: "STAGE" };
-  return { border: "border-wa-green/40", badge: "bg-wa-green/10 text-wa-dark", label: typeLabel ?? "ACTIVITY" };
+  if (e.kind === "stage") return { border: "border-court-300", badge: "bg-court-100 text-court-700", label: "STAGE" };
+  return { border: "border-turf-300", badge: "bg-turf-100 text-turf-700", label: typeLabel ?? "ACTIVITY" };
 }
 
 export default function UnifiedTimeline({ entries }: { entries: TimelineEntry[] }) {
@@ -33,14 +33,14 @@ export default function UnifiedTimeline({ entries }: { entries: TimelineEntry[] 
         return (
           <div key={`${e.kind}-${e.id}`} className={`text-sm border-l-2 pl-3 ${style.border}`}>
             <div className="flex items-center gap-1.5">
-              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${style.badge}`}>{style.label}</span>
+              <span className={`badge ${style.badge}`}>{style.label}</span>
               <span className={`text-base font-medium ${e.kind === "reminder" && e.completed ? "text-slate-400" : "text-slate-800"}`}>
                 {e.title}
               </span>
             </div>
             {e.detail && <div className="text-slate-600 text-sm mt-0.5">{e.detail}</div>}
             <div className="text-xs text-slate-500 mt-0.5">
-              {fmtDate(e.timestamp)} · {e.ownerName}
+              <span className="font-mono">{fmtDate(e.timestamp)}</span> · {e.ownerName}
             </div>
           </div>
         );

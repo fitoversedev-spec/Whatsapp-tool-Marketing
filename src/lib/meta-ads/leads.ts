@@ -7,8 +7,9 @@
 // credential path only (fetchLead), never the WhatsApp/WABA token.
 
 import { prisma } from "@/lib/prisma";
-import { fetchLead, fetchFormName } from "./client";
+import { fetchLead, fetchFormName, fetchFormLeads, fetchLeadForms } from "./client";
 import type { MetaLeadFieldDatum, MetaLeadRaw } from "./client";
+import { getMetaAdsConfig } from "./config";
 import { extractCity, extractSport } from "./fieldMap";
 import { normalizePhone } from "@/lib/phone";
 
@@ -110,4 +111,72 @@ export async function handleLeadgen(value: LeadgenValue): Promise<void> {
   } catch (err) {
     console.error("[meta-ads] handleLeadgen failed", err);
   }
+}
+
+// On-demand lead reconciliation. Meta never REPLAYS leadgen webhooks, so if the
+// real-time webhook missed submissions (or was subscribed after leads had
+// already come in), our captured count drifts BELOW Meta's own insight count.
+// This pulls every lead-gen form's submissions straight from the Graph API and
+// upserts the missing ones (idempotent on leadgenId), stamping each with its
+// campaign so per-campaign captured counts catch up. Returns how many were
+// genuinely NEW. `formIds` limits the sweep; omitted = every form on the page.
+export async function syncMetaLeads(
+  opts: { formIds?: string[]; limit?: number } = {}
+): Promise<{
+  forms: number;
+  fetched: number;
+  created: number;
+  errors: { formId: string; error: string }[];
+}> {
+  const limit = opts.limit && opts.limit > 0 ? Math.min(opts.limit, 500) : 200;
+
+  // formId -> friendly name so freshly-synced leads get their form name too.
+  const formNames = new Map<string, string>();
+  let formIds = (opts.formIds ?? []).map((f) => String(f)).filter(Boolean);
+  if (formIds.length === 0) {
+    const forms = await fetchLeadForms();
+    formIds = forms.map((f) => f.id);
+    forms.forEach((f) => formNames.set(f.id, f.name));
+  }
+  if (formIds.length === 0) {
+    return { forms: 0, fetched: 0, created: 0, errors: [] };
+  }
+
+  const cfg = await getMetaAdsConfig();
+
+  // Snapshot existing ids up front so we can report how many synced leads are
+  // genuinely NEW — a bare upsert can't tell a create from an update.
+  const existing = new Set(
+    (await prisma.metaLead.findMany({ select: { leadgenId: true } })).map((r) => r.leadgenId)
+  );
+
+  let fetched = 0;
+  let created = 0;
+  const errors: { formId: string; error: string }[] = [];
+
+  for (const formId of formIds) {
+    try {
+      const leads = await fetchFormLeads(formId, limit);
+      for (const lead of leads) {
+        try {
+          await upsertMetaLead(lead, {
+            pageId: cfg.pageId || null,
+            formId,
+            formName: formNames.get(formId) ?? null,
+          });
+          fetched += 1;
+          if (!existing.has(lead.id)) {
+            created += 1;
+            existing.add(lead.id);
+          }
+        } catch (err) {
+          console.error("[meta-ads] syncMetaLeads upsert failed", lead.id, err);
+        }
+      }
+    } catch (err) {
+      errors.push({ formId, error: err instanceof Error ? err.message : "fetch_failed" });
+    }
+  }
+
+  return { forms: formIds.length, fetched, created, errors };
 }

@@ -328,13 +328,13 @@ function RepBreakdown({ title, description, segments }: { title: string; descrip
                       {s.reps.map((r) => (
                         <tr key={r.ownerId} className="border-t border-slate-50">
                           <td className="py-1.5">
-                            <Link href={s.drillFor(r.ownerId)} className="text-wa-dark hover:underline">
+                            <Link href={s.drillFor(r.ownerId)} className="text-court-700 hover:underline">
                               {r.ownerName}
                             </Link>
                           </td>
-                          <td className="py-1.5 text-right tabular-nums">{r.deals}</td>
-                          <td className="py-1.5 text-right tabular-nums">{r.won}</td>
-                          <td className="py-1.5 text-right tabular-nums">{fmtPct(r.winRate)}</td>
+                          <td className="py-1.5 text-right font-mono">{r.deals}</td>
+                          <td className="py-1.5 text-right font-mono">{r.won}</td>
+                          <td className="py-1.5 text-right font-mono">{fmtPct(r.winRate)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -493,7 +493,7 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
               key={g}
               onClick={() => selectGroup(g)}
               className={`px-3 py-1 text-xs font-medium rounded-full ${
-                group === g ? "bg-wa-green text-white" : "bg-slate-100 text-slate-600"
+                group === g ? "bg-court-600 text-white" : "bg-slate-100 text-slate-600"
               }`}
             >
               {GROUP_LABELS[g]}
@@ -527,7 +527,7 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
               key={t}
               onClick={() => setTab(t)}
               className={`px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap ${
-                tab === t ? "border-wa-green text-wa-dark font-semibold" : "border-transparent text-slate-500 font-medium hover:text-slate-800"
+                tab === t ? "border-court-600 text-court-700 font-semibold" : "border-transparent text-slate-500 font-medium hover:text-slate-800"
               }`}
             >
               {TAB_LABELS[t]}
@@ -644,8 +644,8 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
 function SeverityPill({ severity }: { severity: "info" | "warning" }) {
   return (
     <span
-      className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-        severity === "warning" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
+      className={`badge ${
+        severity === "warning" ? "bg-amber-100 text-amber-700" : "bg-court-100 text-court-700"
       }`}
     >
       {severity === "warning" ? "Warning" : "Info"}
@@ -657,7 +657,7 @@ function KpiTile({ label, value, sub }: { label: string; value: string; sub?: st
   return (
     <div className="bg-slate-50 rounded-lg p-4">
       <div className="text-sm text-slate-600">{label}</div>
-      <div className="text-lg font-semibold mt-1">{value}</div>
+      <div className="text-lg font-semibold mt-1 font-mono">{value}</div>
       {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
     </div>
   );
@@ -810,7 +810,7 @@ function DecisionLogTab({ insights }: { insights: InsightRow[] }) {
               onChange={(e) => setDecision(e.target.value)}
               placeholder="e.g. Reassigned stalled Bengaluru turf enquiries to the senior rep and set a 3-day follow-up SLA."
               rows={3}
-              className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+              className="input text-sm"
             />
           </div>
           <div>
@@ -818,7 +818,7 @@ function DecisionLogTab({ insights }: { insights: InsightRow[] }) {
             <select
               value={insightId}
               onChange={(e) => setInsightId(e.target.value)}
-              className="w-full sm:w-auto border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+              className="input w-full sm:w-auto text-sm"
             >
               <option value="">— none —</option>
               {insights.map((ins) => (
@@ -831,7 +831,7 @@ function DecisionLogTab({ insights }: { insights: InsightRow[] }) {
           <button
             onClick={submit}
             disabled={saving}
-            className="bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 text-white text-sm font-medium px-4 py-1.5 rounded-lg"
+            className="btn btn-primary !px-4 !py-1.5 !text-sm"
           >
             {saving ? "Saving…" : "Record decision"}
           </button>
@@ -840,28 +840,28 @@ function DecisionLogTab({ insights }: { insights: InsightRow[] }) {
 
       <div>
         <h3 className="text-sm font-semibold text-slate-700 mb-2">Recorded decisions</h3>
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="card overflow-hidden">
           {loading ? (
             <div className="p-8 text-center text-slate-400 text-sm">Loading…</div>
           ) : decisions.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-sm">No decisions recorded yet.</div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="data-table">
               <thead>
-                <tr className="text-left text-slate-500 border-b border-slate-200">
-                  <th className="px-4 py-2.5 font-medium">Decision</th>
-                  <th className="px-4 py-2.5 font-medium">Triggered by</th>
-                  <th className="px-4 py-2.5 font-medium">Recorded by</th>
-                  <th className="px-4 py-2.5 font-medium">When</th>
+                <tr>
+                  <th>Decision</th>
+                  <th>Triggered by</th>
+                  <th>Recorded by</th>
+                  <th>When</th>
                 </tr>
               </thead>
               <tbody>
                 {decisions.map((d) => (
-                  <tr key={d.id} className="border-b border-slate-100 last:border-0 align-top">
-                    <td className="px-4 py-2.5 text-slate-800">{d.decision}</td>
-                    <td className="px-4 py-2.5 text-slate-500">{d.triggeredByInsightId ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">{d.recordedByName}</td>
-                    <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{new Date(d.decidedAt).toLocaleDateString("en-IN")}</td>
+                  <tr key={d.id} className="align-top">
+                    <td className="text-slate-800">{d.decision}</td>
+                    <td className="text-slate-500">{d.triggeredByInsightId ?? "—"}</td>
+                    <td className="text-slate-700 whitespace-nowrap">{d.recordedByName}</td>
+                    <td className="text-slate-500 whitespace-nowrap font-mono">{new Date(d.decidedAt).toLocaleDateString("en-IN")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -879,7 +879,7 @@ function DecisionLogTab({ insights }: { insights: InsightRow[] }) {
 // Products (x=month) and Geography/Comparators (x=a single "Won revenue"
 // category, i.e. a one-bar 100% breakdown) stacked charts below, so the
 // same pivot/cap logic isn't written three times.
-const STACK_PALETTE = ["#25D366", "#73caf0", "#fbbf24", "#c81124", "#a78bfa", "#34d399", "#f472b6"];
+const STACK_PALETTE = ["#1C6E8C", "#2E7D4F", "#D9822B", "#7FD3A6", "#61A6BF", "#B33A26", "#566268"];
 type StackRow = { x: string; [k: string]: string | number };
 function stackedSeries(rows: { x: string; group: string; value: number }[], topN: number) {
   const totals = new Map<string, number>();
@@ -970,17 +970,17 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div className="bg-slate-50 rounded-lg p-4">
               <div className="text-sm text-slate-600">Leads this period</div>
-              <div className="text-xl font-semibold mt-1">{data.dealsCreated}</div>
+              <div className="text-xl font-semibold mt-1 font-mono">{data.dealsCreated}</div>
               <div className="text-xs text-slate-400 mt-1">New deals created</div>
             </div>
 
             <div className="bg-slate-50 rounded-lg p-4">
               <div className="text-sm text-slate-600">Won revenue vs target</div>
-              <div className="text-xl font-semibold mt-1">{fmtInr(data.wonRevenue)}</div>
+              <div className="text-xl font-semibold mt-1 font-mono">{fmtInr(data.wonRevenue)}</div>
               {tp?.targetRevenue != null ? (
                 <div className="text-xs text-slate-500 mt-1 space-y-0.5">
                   <div>Target {fmtInr(tp.targetRevenue)} · pace {tp.paceExpected != null ? fmtInr(tp.paceExpected) : "—"}</div>
-                  <div className={tp.gapToTarget != null && tp.gapToTarget > 0 ? "text-red-600" : "text-emerald-600"}>
+                  <div className={`font-mono ${tp.gapToTarget != null && tp.gapToTarget > 0 ? "text-red-600" : "text-green-700"}`}>
                     {tp.gapToTarget != null
                       ? tp.gapToTarget > 0
                         ? `${fmtInr(tp.gapToTarget)} short of full target`
@@ -995,7 +995,7 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
 
             <div className="bg-slate-50 rounded-lg p-4">
               <div className="text-sm text-slate-600">Win rate</div>
-              <div className="text-xl font-semibold mt-1">{fmtPct(data.winRate.rate)}</div>
+              <div className="text-xl font-semibold mt-1 font-mono">{fmtPct(data.winRate.rate)}</div>
               <div className="text-xs text-slate-500 mt-1">
                 {data.winRate.n} closed this period
                 {data.benchmarks.trailingWinRate != null && ` · co. avg ${fmtPct(data.benchmarks.trailingWinRate)}`}
@@ -1004,13 +1004,13 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
 
             <div className="bg-slate-50 rounded-lg p-4">
               <div className="text-sm text-slate-600">Avg project value</div>
-              <div className="text-xl font-semibold mt-1">{data.avgProjectValue != null ? fmtInr(data.avgProjectValue) : "—"}</div>
+              <div className="text-xl font-semibold mt-1 font-mono">{data.avgProjectValue != null ? fmtInr(data.avgProjectValue) : "—"}</div>
               {data.avgProjectValue == null && <div className="text-xs text-slate-400 mt-1">Not enough won deals yet</div>}
             </div>
 
             <div className="bg-slate-50 rounded-lg p-4">
               <div className="text-sm text-slate-600">Sales velocity</div>
-              <div className="text-xl font-semibold mt-1">{data.salesVelocity != null ? `${fmtInr(data.salesVelocity)}/day` : "—"}</div>
+              <div className="text-xl font-semibold mt-1 font-mono">{data.salesVelocity != null ? `${fmtInr(data.salesVelocity)}/day` : "—"}</div>
               <div className="text-xs text-slate-400 mt-1">Expected new won revenue per day, at current pace</div>
             </div>
           </div>
@@ -1019,7 +1019,7 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
             <div className="text-sm text-slate-600">Open pipeline coverage</div>
             {tp ? (
               <>
-                <div className="text-xl font-semibold mt-1">
+                <div className="text-xl font-semibold mt-1 font-mono">
                   {fmtInr(tp.isPipelineWeighted ? tp.weightedPipelineValue ?? 0 : tp.openPipelineValue)}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
@@ -1045,12 +1045,12 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="text-xs text-slate-500">Your activity score</div>
-                    <div className="text-lg font-semibold text-slate-900">{data.repQuadrantSelf.x}</div>
+                    <div className="text-lg font-semibold text-slate-900 font-mono">{data.repQuadrantSelf.x}</div>
                     <div className="text-xs text-slate-400 mt-0.5">Company median: {data.repQuadrantSelf.xBenchmark.toFixed(0)}</div>
                   </div>
                   <div>
                     <div className="text-xs text-slate-500">Your win rate</div>
-                    <div className="text-lg font-semibold text-slate-900">{fmtPct(data.repQuadrantSelf.y)}</div>
+                    <div className="text-lg font-semibold text-slate-900 font-mono">{fmtPct(data.repQuadrantSelf.y)}</div>
                     <div className="text-xs text-slate-400 mt-0.5">
                       Company avg: {fmtPct(data.repQuadrantSelf.yBenchmark)}
                       {data.repQuadrantSelf.n < MIN_SAMPLE_SIZE && ` · low confidence (n=${data.repQuadrantSelf.n})`}
@@ -1089,7 +1089,7 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
                         <span className="font-medium">Recommended:</span> {ins.recommendedAction}
                       </p>
                       {ins.drillHref && (
-                        <Link href={ins.drillHref} className="text-xs text-wa-dark hover:underline font-medium mt-1 inline-block">
+                        <Link href={ins.drillHref} className="text-xs text-court-700 hover:underline font-medium mt-1 inline-block">
                           See the deals →
                         </Link>
                       )}
@@ -1133,28 +1133,28 @@ function IndividualTab({ rows, range, isAdmin }: { rows: SalesActivityRow[]; ran
         <ExportButtons filename="individual-performance" headers={headers} rows={dataRows} />
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead><tr className="text-left text-slate-600 border-b border-slate-200">{headers.map((h) => <th key={h} className="px-2 py-2 font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
+        <table className="data-table">
+          <thead><tr>{headers.map((h) => <th key={h} className={h === "Rep" ? "whitespace-nowrap" : "!text-right whitespace-nowrap"}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.ownerId} className="border-b border-slate-100 last:border-0">
-                <td className="px-2 py-2 font-medium">
-                  <Link href={`/crm/analytics/rep/${r.ownerId}?from=${range.from}&to=${range.to}`} className="text-wa-dark hover:underline">
+              <tr key={r.ownerId}>
+                <td className="font-medium">
+                  <Link href={`/crm/analytics/rep/${r.ownerId}?from=${range.from}&to=${range.to}`} className="text-court-700 hover:underline">
                     {r.ownerName}
                   </Link>
                 </td>
-                <td className="px-2 py-2">{r.leadsCreated}</td>
-                <td className="px-2 py-2">{r.dealsCreated}</td>
-                <td className="px-2 py-2">{r.siteVisits}</td>
-                <td className="px-2 py-2">{r.quotationsSentInclRevisions}</td>
-                <td className="px-2 py-2">{fmtInr(r.quotedValue)}</td>
-                <td className="px-2 py-2">{r.dealsWon}</td>
-                <td className="px-2 py-2">{fmtInr(r.wonValue)}</td>
-                <td className="px-2 py-2">{fmtPct(r.winRate)}</td>
-                <td className="px-2 py-2">{r.avgCycleDays ?? "—"}</td>
+                <td className="!text-right font-mono">{r.leadsCreated}</td>
+                <td className="!text-right font-mono">{r.dealsCreated}</td>
+                <td className="!text-right font-mono">{r.siteVisits}</td>
+                <td className="!text-right font-mono">{r.quotationsSentInclRevisions}</td>
+                <td className="!text-right font-mono">{fmtInr(r.quotedValue)}</td>
+                <td className="!text-right font-mono">{r.dealsWon}</td>
+                <td className="!text-right font-mono">{fmtInr(r.wonValue)}</td>
+                <td className="!text-right font-mono">{fmtPct(r.winRate)}</td>
+                <td className="!text-right font-mono">{r.avgCycleDays ?? "—"}</td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={10} className="px-2 py-6 text-center text-slate-400">No activity in this range.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={10} className="py-6 text-center text-slate-400">No activity in this range.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1167,7 +1167,7 @@ export function StageVelocityCard({ rows }: { rows: StageVelocityRow[] }) {
   const headers = ["Stage", "Median time", "Moves"];
   const dataRows = withData.map((r) => [r.stageName, fmtDays(r.medianDays), r.n]);
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
+    <div className="card p-4">
       <h3 className="text-base font-semibold text-slate-900 mb-1">Time to move between stages</h3>
       <p className="text-sm text-slate-600 mb-3">Median days spent in each stage before advancing to the next one</p>
       {withData.length === 0 ? (
@@ -1179,7 +1179,7 @@ export function StageVelocityCard({ rows }: { rows: StageVelocityRow[] }) {
             dataKey="medianDays"
             labelKey="stageName"
             height={Math.max(80, withData.length * 40)}
-            colorFor={() => "#fbbf24"}
+            colorFor={() => "#D9822B"}
             tooltipFormatter={(r) => `${fmtDays(r.medianDays)} median · ${r.n} move${r.n === 1 ? "" : "s"}`}
           />
           <div className="mt-3">
@@ -1225,10 +1225,10 @@ function OverallTab({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-sm text-slate-600">Deals created</div><div className="text-xl font-semibold mt-1">{teamTotals.dealsCreated}</div></div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-sm text-slate-600">Quoted value</div><div className="text-xl font-semibold mt-1">{fmtInr(teamTotals.quotedValue)}</div></div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-sm text-slate-600">Deals won</div><div className="text-xl font-semibold mt-1">{teamTotals.dealsWon}</div></div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-sm text-slate-600">Won value</div><div className="text-xl font-semibold mt-1">{fmtInr(teamTotals.wonValue)}</div></div>
+        <div className="card p-4"><div className="text-sm text-slate-600">Deals created</div><div className="text-xl font-semibold mt-1 font-mono">{teamTotals.dealsCreated}</div></div>
+        <div className="card p-4"><div className="text-sm text-slate-600">Quoted value</div><div className="text-xl font-semibold mt-1 font-mono">{fmtInr(teamTotals.quotedValue)}</div></div>
+        <div className="card p-4"><div className="text-sm text-slate-600">Deals won</div><div className="text-xl font-semibold mt-1 font-mono">{teamTotals.dealsWon}</div></div>
+        <div className="card p-4"><div className="text-sm text-slate-600">Won value</div><div className="text-xl font-semibold mt-1 font-mono">{fmtInr(teamTotals.wonValue)}</div></div>
       </div>
       <AnalyticsCard
         title="Deals created by rep"
@@ -1248,7 +1248,7 @@ function OverallTab({
                 dataKey="dealsCreated"
                 labelKey="ownerName"
                 height={Math.max(80, createdWithData.length * 40)}
-                colorFor={() => "#a78bfa"}
+                colorFor={() => "#1C6E8C"}
                 tooltipFormatter={(r) => `${r.dealsCreated} created · ${r.dealsWon} won · ${fmtInr(r.wonValue)}`}
               />
             )}
@@ -1289,7 +1289,7 @@ function OverallTab({
         >
           <div className="space-y-1.5">
             {funnel.lossReasons.map((l) => (
-              <div key={l.reasonName} className="flex items-center justify-between text-sm"><span className="text-slate-700">{l.reasonName}</span><span className="text-slate-500">{l.count}</span></div>
+              <div key={l.reasonName} className="flex items-center justify-between text-sm"><span className="text-slate-700">{l.reasonName}</span><span className="text-slate-500 font-mono">{l.count}</span></div>
             ))}
           </div>
         </AnalyticsCard>
@@ -1464,19 +1464,19 @@ function ProductsTab({
           <p className="text-sm text-slate-400">No city-level flooring data in this range yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="data-table">
               <thead>
-                <tr className="text-left text-slate-600 border-b border-slate-200">
-                  {cityHeaders.map((h) => <th key={h} className="px-2 py-2 font-semibold whitespace-nowrap">{h}</th>)}
+                <tr>
+                  {cityHeaders.map((h) => <th key={h} className={h === "City" || h === "Product" ? "whitespace-nowrap" : "!text-right whitespace-nowrap"}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {cityRows.map((r) => (
-                  <tr key={`${r.city}|${r.productName}`} className="border-b border-slate-100 last:border-0">
-                    <td className="px-2 py-2 text-slate-700">{r.city}</td>
-                    <td className="px-2 py-2 font-medium text-slate-900">{r.productName}</td>
-                    <td className="px-2 py-2">{r.enquiries}</td>
-                    <td className="px-2 py-2">{fmtInr(r.wonValue)}</td>
+                  <tr key={`${r.city}|${r.productName}`}>
+                    <td className="text-slate-700">{r.city}</td>
+                    <td className="font-medium text-slate-900">{r.productName}</td>
+                    <td className="!text-right font-mono">{r.enquiries}</td>
+                    <td className="!text-right font-mono">{fmtInr(r.wonValue)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1726,7 +1726,7 @@ function ComparatorsTab({
               <select
                 value={effA}
                 onChange={(e) => setRepAId(e.target.value)}
-                className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-medium"
+                className="input w-auto text-sm font-medium"
               >
                 {repRows.map((r) => (
                   <option key={r.ownerId} value={r.ownerId}>{r.ownerName}</option>
@@ -1736,7 +1736,7 @@ function ComparatorsTab({
               <select
                 value={effB}
                 onChange={(e) => setRepBId(e.target.value)}
-                className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-medium"
+                className="input w-auto text-sm font-medium"
               >
                 {repRows.filter((r) => r.ownerId !== effA).map((r) => (
                   <option key={r.ownerId} value={r.ownerId}>{r.ownerName}</option>
@@ -1754,10 +1754,10 @@ function ComparatorsTab({
                 </thead>
                 <tbody>
                   {h2hMetrics.map((m) => (
-                    <tr key={m.label} className={`border-b border-slate-100 last:border-0 ${m.highlight ? "bg-wa-green/5" : ""}`}>
+                    <tr key={m.label} className={`border-b border-slate-100 last:border-0 ${m.highlight ? "bg-court-50" : ""}`}>
                       <td className={`py-2 ${m.highlight ? "font-semibold text-slate-800" : "text-slate-600"}`}>{m.label}</td>
-                      <td className={`py-2 text-right tabular-nums ${m.highlight ? "font-bold text-wa-dark text-base" : "text-slate-800"}`}>{m.a}</td>
-                      <td className={`py-2 text-right tabular-nums ${m.highlight ? "font-bold text-wa-dark text-base" : "text-slate-800"}`}>{m.b}</td>
+                      <td className={`py-2 text-right font-mono ${m.highlight ? "font-bold text-court-700 text-base" : "text-slate-800"}`}>{m.a}</td>
+                      <td className={`py-2 text-right font-mono ${m.highlight ? "font-bold text-court-700 text-base" : "text-slate-800"}`}>{m.b}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1791,7 +1791,7 @@ function ComparatorsTab({
           <select
             value={dimension}
             onChange={(e) => setDimension(e.target.value as Dimension)}
-            className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+            className="input w-auto text-sm"
           >
             <option value="region">Region</option>
             <option value="sector">Sector</option>
@@ -1808,7 +1808,7 @@ function ComparatorsTab({
               dataKey="enquiries"
               labelKey="label"
               height={Math.max(80, dimRows.length * 40)}
-              colorFor={() => "#60a5fa"}
+              colorFor={() => "#1C6E8C"}
               tooltipFormatter={(r) => `${r.enquiries} enquiries · ${r.won} won · ${fmtInr(r.wonValue)} · ${fmtPct(r.winRate)}`}
             />
             <div className="mt-3">
@@ -1896,7 +1896,7 @@ function FunnelPatternsTab({
               dataKey="value"
               labelKey="stageName"
               height={Math.max(80, valueRows.length * 40)}
-              colorFor={() => "#fbbf24"}
+              colorFor={() => "#D9822B"}
               tooltipFormatter={(r) => `${fmtInr(r.value)} · ${r.count} deal${r.count === 1 ? "" : "s"}`}
             />
             <div className="mt-3">
@@ -1961,25 +1961,25 @@ function CohortsTab({
           <p className="text-sm text-slate-400">No enquiry data yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="data-table">
               <thead>
-                <tr className="text-left text-slate-600 border-b border-slate-200">
-                  <th className="px-2 py-2 font-semibold whitespace-nowrap">Month</th>
-                  <th className="px-2 py-2 font-semibold whitespace-nowrap">Cohort size</th>
+                <tr>
+                  <th className="whitespace-nowrap">Month</th>
+                  <th className="!text-right whitespace-nowrap">Cohort size</th>
                   {stageColumns.map((s) => (
-                    <th key={s.stageId} className="px-2 py-2 font-semibold whitespace-nowrap">{s.stageName}</th>
+                    <th key={s.stageId} className="whitespace-nowrap">{s.stageName}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {months.map((m) => (
-                  <tr key={m.month} className="border-b border-slate-100 last:border-0">
-                    <td className="px-2 py-2 font-medium text-slate-900 whitespace-nowrap">{m.month}</td>
-                    <td className="px-2 py-2">{m.cohortSize}</td>
+                  <tr key={m.month}>
+                    <td className="font-medium text-slate-900 whitespace-nowrap">{m.month}</td>
+                    <td className="!text-right font-mono">{m.cohortSize}</td>
                     {stageColumns.map((sc) => {
                       const cell = m.stages.find((s) => s.stageId === sc.stageId);
                       return (
-                        <td key={sc.stageId} className="px-2 py-2 whitespace-nowrap">
+                        <td key={sc.stageId} className="whitespace-nowrap font-mono">
                           {m.insufficientData
                             ? "insufficient data"
                             : cell && cell.reachedPct != null
@@ -2074,7 +2074,7 @@ function FourQuadrantsTab({ data, range }: { data: QuadrantsResponse; range: Dat
         description="Enquiry volume vs win rate per lead source, split by trailing company win rate and median enquiry volume"
         result={data.leadSource}
         xFmt={(n) => `${n} enquir${n === 1 ? "y" : "ies"}`}
-        color="#25D366"
+        color="#1C6E8C"
         drillHref={dealsHref({ from: range.from, to: range.to })}
       />
       <QuadrantCard
@@ -2082,7 +2082,7 @@ function FourQuadrantsTab({ data, range }: { data: QuadrantsResponse; range: Dat
         description="Enquiry growth vs the prior period of equal length, against win rate — explicitly not margin"
         result={data.product}
         xFmt={(n) => `${n.toFixed(0)}% growth`}
-        color="#60a5fa"
+        color="#1C6E8C"
         drillHref={dealsHref({ outcome: "WON", from: range.from, to: range.to })}
       />
       <QuadrantCard
@@ -2090,7 +2090,7 @@ function FourQuadrantsTab({ data, range }: { data: QuadrantsResponse; range: Dat
         description="Deals created + site visits + samples sent, against win rate"
         result={data.rep}
         xFmt={(n) => `${n} activity`}
-        color="#fbbf24"
+        color="#1C6E8C"
         drillHref={dealsHref({ from: range.from, to: range.to })}
       />
       <QuadrantCard
@@ -2098,7 +2098,7 @@ function FourQuadrantsTab({ data, range }: { data: QuadrantsResponse; range: Dat
         description="Enquiry volume vs win rate, by city"
         result={data.region}
         xFmt={(n) => `${n} enquir${n === 1 ? "y" : "ies"}`}
-        color="#73caf0"
+        color="#1C6E8C"
         drillHref={dealsHref({ from: range.from, to: range.to })}
       />
     </div>
@@ -2143,7 +2143,7 @@ function TerritoryTab({ rows, range }: { rows: TerritoryBubbleRow[]; range: Date
             zKey="enquiryVolume"
             labelKey="city"
             height={280}
-            colorFor={() => "#a78bfa"}
+            colorFor={() => "#1C6E8C"}
             tooltipFormatter={(r) => `${r.city}: ${fmtInr(r.avgDealSize)} avg · ${fmtPct(r.winRate)} win rate · ${r.enquiryVolume} enquiries (n=${r.n})`}
           />
         )}
@@ -2198,7 +2198,7 @@ function SeasonalityTab({ data }: { data: SeasonalityResult }) {
                 <div className="flex items-end gap-1 h-12">
                   {idx.map((v, i) => (
                     <div key={i} className="flex-1 h-full flex items-end" title={`${MONTH_NAMES[i]}: ${v.toFixed(2)}x average`}>
-                      <div className="w-full bg-wa-green/70 rounded-t" style={{ height: `${Math.max(4, (v / max) * 100)}%` }} />
+                      <div className="w-full bg-court-600/70 rounded-t" style={{ height: `${Math.max(4, (v / max) * 100)}%` }} />
                     </div>
                   ))}
                 </div>
@@ -2273,30 +2273,30 @@ function RequirementFingerprintTab({ rows, range }: { rows: ProfileFingerprintRo
         <p className="text-sm text-slate-400">No segment data in this range yet.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="data-table">
             <thead>
-              <tr className="text-left text-slate-600 border-b border-slate-200">
-                {headers.map((h) => <th key={h} className="px-2 py-2 font-semibold whitespace-nowrap">{h}</th>)}
+              <tr>
+                {headers.map((h) => <th key={h} className={["Deals", "Avg area (sq ft)", "Avg won value"].includes(h) ? "!text-right whitespace-nowrap" : "whitespace-nowrap"}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
               {sorted.map((r) => (
-                <tr key={r.profileName} className="border-b border-slate-100 last:border-0">
-                  <td className="px-2 py-2 font-medium text-slate-900 whitespace-nowrap">
+                <tr key={r.profileName}>
+                  <td className="font-medium text-slate-900 whitespace-nowrap">
                     {r.customerProfileId ? (
-                      <Link href={dealsHref({ customerProfileId: r.customerProfileId, from: range.from, to: range.to })} className="text-wa-dark hover:underline">
+                      <Link href={dealsHref({ customerProfileId: r.customerProfileId, from: range.from, to: range.to })} className="text-court-700 hover:underline">
                         {r.profileName}
                       </Link>
                     ) : (
                       r.profileName
                     )}
                   </td>
-                  <td className="px-2 py-2">{r.dealCount}</td>
-                  <td className="px-2 py-2">{r.dominantSports.join(", ") || "—"}</td>
-                  <td className="px-2 py-2">{r.dominantProducts.join(", ") || "—"}</td>
-                  <td className="px-2 py-2">{r.avgAreaSqFt != null ? r.avgAreaSqFt.toFixed(0) : "insufficient data"}</td>
-                  <td className="px-2 py-2">{r.avgWonValue != null ? fmtInr(r.avgWonValue) : "insufficient data"}</td>
-                  <td className="px-2 py-2">{r.dominantSource}</td>
+                  <td className="!text-right font-mono">{r.dealCount}</td>
+                  <td>{r.dominantSports.join(", ") || "—"}</td>
+                  <td>{r.dominantProducts.join(", ") || "—"}</td>
+                  <td className="!text-right font-mono">{r.avgAreaSqFt != null ? r.avgAreaSqFt.toFixed(0) : "insufficient data"}</td>
+                  <td className="!text-right font-mono">{r.avgWonValue != null ? fmtInr(r.avgWonValue) : "insufficient data"}</td>
+                  <td>{r.dominantSource}</td>
                 </tr>
               ))}
             </tbody>
@@ -2339,7 +2339,7 @@ function WinLossSegmentTab({ winLoss, range }: { winLoss: Record<WinLossDimensio
         <select
           value={dimension}
           onChange={(e) => setDimension(e.target.value as WinLossDimension)}
-          className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+          className="input w-auto text-sm"
         >
           <option value="sector">Sector</option>
           <option value="region">Region</option>
@@ -2365,24 +2365,24 @@ function ExecutionPipelineTab({ data, range }: { data: ExecutionSummary; range: 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-slate-50 rounded-lg p-4">
           <div className="text-sm text-slate-600">Backlog</div>
-          <div className="text-xl font-semibold mt-1">{fmtInr(data.backlogValue)}</div>
+          <div className="text-xl font-semibold mt-1 font-mono">{fmtInr(data.backlogValue)}</div>
           <div className="text-xs text-slate-500 mt-1">{data.backlogCount} deal{data.backlogCount === 1 ? "" : "s"} not yet delivered</div>
         </div>
         <div className="bg-slate-50 rounded-lg p-4">
           <div className="text-sm text-slate-600">Delivery time</div>
-          <div className="text-xl font-semibold mt-1">{fmtDays(data.deliveryTime.medianDays)}</div>
+          <div className="text-xl font-semibold mt-1 font-mono">{fmtDays(data.deliveryTime.medianDays)}</div>
           <div className="text-xs text-slate-500 mt-1">
             {data.deliveryTime.n > 0 ? `median · p90 ${fmtDays(data.deliveryTime.p90Days)} · n=${data.deliveryTime.n}` : "No completed deliveries yet"}
           </div>
         </div>
         <div className="bg-slate-50 rounded-lg p-4">
           <div className="text-sm text-slate-600">Booked revenue</div>
-          <div className="text-xl font-semibold mt-1">{fmtInr(data.bookedRevenue)}</div>
+          <div className="text-xl font-semibold mt-1 font-mono">{fmtInr(data.bookedRevenue)}</div>
           <div className="text-xs text-slate-400 mt-1">Won in this range</div>
         </div>
         <div className="bg-slate-50 rounded-lg p-4">
           <div className="text-sm text-slate-600">Delivered revenue</div>
-          <div className="text-xl font-semibold mt-1">{fmtInr(data.deliveredRevenue)}</div>
+          <div className="text-xl font-semibold mt-1 font-mono">{fmtInr(data.deliveredRevenue)}</div>
           <div className="text-xs text-slate-400 mt-1">Won and delivered in this range</div>
         </div>
       </div>

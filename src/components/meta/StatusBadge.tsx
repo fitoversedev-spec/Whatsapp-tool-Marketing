@@ -18,7 +18,7 @@ export function StatusBadge({ status }: { status: string | null }) {
   const label = status && status.trim() ? titleCase(status.trim()) : "Unknown";
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${cls}`}
+      className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wide whitespace-nowrap ${cls}`}
     >
       {label}
     </span>

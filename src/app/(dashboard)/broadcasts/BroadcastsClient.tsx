@@ -61,7 +61,7 @@ export default function BroadcastsClient({
         action={
           <button
             onClick={() => setShowComposer(true)}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg transition w-full sm:w-auto disabled:opacity-50"
+            className="btn btn-primary w-full sm:w-auto"
             disabled={approvedTemplates.length === 0}
             title={approvedTemplates.length === 0 ? "No approved templates yet" : ""}
           >
@@ -72,7 +72,7 @@ export default function BroadcastsClient({
 
       <div className="p-4 sm:p-6 lg:p-8">
         {broadcasts.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-center text-slate-500">
+          <div className="card p-8 sm:p-12 text-center text-slate-500">
             No broadcasts yet. Click <strong>New broadcast</strong> to compose one.
           </div>
         ) : (
@@ -83,7 +83,7 @@ export default function BroadcastsClient({
                 <Link
                   key={b.id}
                   href={`/broadcasts/${b.id}`}
-                  className="block bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 active:bg-slate-50 transition"
+                  className="block card p-4 hover:border-slate-300 active:bg-slate-50 transition"
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0">
@@ -92,14 +92,14 @@ export default function BroadcastsClient({
                     </div>
                     <div className="text-right shrink-0">
                       <span
-                        className={`inline-block px-2 py-1 rounded-md text-[10px] font-semibold uppercase ${
-                          STATUS_COLORS[b.status] ?? "bg-slate-100"
+                        className={`badge ${
+                          STATUS_COLORS[b.status] ?? "bg-slate-100 text-slate-700"
                         }`}
                       >
                         {b.status}
                       </span>
                       {b.status === "scheduled" && b.scheduledAt && (
-                        <div className="text-[10px] text-amber-700 mt-1">
+                        <div className="text-[10px] text-amber-700 mt-1 font-mono">
                           {new Date(b.scheduledAt).toLocaleString("en-IN", {
                             day: "numeric",
                             month: "short",
@@ -122,44 +122,44 @@ export default function BroadcastsClient({
             </div>
 
             {/* Desktop table */}
-            <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="hidden md:block card overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                <table className="data-table">
+                  <thead>
                     <tr>
-                      <th className="px-4 py-3 text-left">Name</th>
-                      <th className="px-4 py-3 text-left">Template</th>
-                      <th className="px-4 py-3 text-left">Status</th>
-                      <th className="px-4 py-3 text-right">Sent</th>
-                      <th className="px-4 py-3 text-right">Delivered</th>
-                      <th className="px-4 py-3 text-right">Read</th>
-                      <th className="px-4 py-3 text-right">Failed</th>
-                      <th className="px-4 py-3 text-left">By</th>
+                      <th className="text-left">Name</th>
+                      <th className="text-left">Template</th>
+                      <th className="text-left">Status</th>
+                      <th className="!text-right">Sent</th>
+                      <th className="!text-right">Delivered</th>
+                      <th className="!text-right">Read</th>
+                      <th className="!text-right">Failed</th>
+                      <th className="text-left">By</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm">
+                  <tbody>
                     {broadcasts.map((b) => (
                       <tr
                         key={b.id}
                         onClick={() => router.push(`/broadcasts/${b.id}`)}
-                        className="hover:bg-slate-50 cursor-pointer"
+                        className="cursor-pointer"
                       >
-                        <td className="px-4 py-3 font-medium text-slate-900">
+                        <td className="font-medium text-slate-900">
                           <Link href={`/broadcasts/${b.id}`} className="hover:underline">
                             {b.name}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{b.templateName}</td>
-                        <td className="px-4 py-3">
+                        <td className="text-slate-600">{b.templateName}</td>
+                        <td>
                           <span
-                            className={`inline-block px-2 py-1 rounded-md text-[10px] font-semibold uppercase ${
-                              STATUS_COLORS[b.status] ?? "bg-slate-100"
+                            className={`badge ${
+                              STATUS_COLORS[b.status] ?? "bg-slate-100 text-slate-700"
                             }`}
                           >
                             {b.status}
                           </span>
                           {b.status === "scheduled" && b.scheduledAt && (
-                            <div className="text-[10px] text-amber-700 mt-1">
+                            <div className="text-[10px] text-amber-700 mt-1 font-mono">
                               {new Date(b.scheduledAt).toLocaleString("en-IN", {
                                 day: "numeric",
                                 month: "short",
@@ -169,19 +169,19 @@ export default function BroadcastsClient({
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-700">
+                        <td className="text-right font-mono text-slate-700">
                           {b.sent} / {b.total}
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-700">{b.delivered}</td>
-                        <td className="px-4 py-3 text-right text-slate-700">{b.read}</td>
-                        <td className="px-4 py-3 text-right text-slate-700">
+                        <td className="text-right font-mono text-slate-700">{b.delivered}</td>
+                        <td className="text-right font-mono text-slate-700">{b.read}</td>
+                        <td className="text-right font-mono text-slate-700">
                           {b.failed > 0 ? (
                             <span className="text-red-600 font-medium">{b.failed}</span>
                           ) : (
                             0
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-500">{b.createdByName}</td>
+                        <td className="text-slate-500">{b.createdByName}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -209,7 +209,7 @@ export default function BroadcastsClient({
 function Stat({ label, value, color }: { label: string; value: number | string; color?: string }) {
   return (
     <div>
-      <div className={`text-sm font-bold ${color ?? "text-slate-900"}`}>{value}</div>
+      <div className={`text-sm font-bold font-mono ${color ?? "text-slate-900"}`}>{value}</div>
       <div className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">{label}</div>
     </div>
   );
@@ -1099,14 +1099,14 @@ function BroadcastComposer({
           <button
             type="button"
             onClick={onClose}
-            className="order-2 sm:order-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 rounded-lg"
+            className="order-2 sm:order-1 btn btn-ghost"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={busy || !preview || (sendMode === "later" && !scheduledAt)}
-            className="order-1 sm:order-2 bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-medium px-5 py-2.5 rounded-lg"
+            className="order-1 sm:order-2 btn btn-primary"
           >
             {busy
               ? sendMode === "later"
@@ -1122,7 +1122,7 @@ function BroadcastComposer({
           :global(.input) {
             width: 100%;
             padding: 0.625rem 0.75rem;
-            border-radius: 0.5rem;
+            border-radius: 3px;
             border: 1px solid #cbd5e1;
             outline: none;
             font-size: 16px;
@@ -1131,8 +1131,8 @@ function BroadcastComposer({
             :global(.input) { font-size: 14px; }
           }
           :global(.input:focus) {
-            border-color: #159341;
-            box-shadow: 0 0 0 3px rgba(21, 147, 65, 0.2);
+            border-color: #1c6e8c;
+            box-shadow: 0 0 0 3px rgba(28, 110, 140, 0.25);
           }
           :global(.input:disabled) {
             background: #f8fafc;
@@ -1147,7 +1147,7 @@ function BroadcastComposer({
 function PreviewStat({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div>
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+      <div className={`text-2xl font-bold font-mono ${color}`}>{value}</div>
       <div className="text-xs text-slate-500">{label}</div>
     </div>
   );

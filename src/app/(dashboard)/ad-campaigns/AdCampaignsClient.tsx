@@ -1,8 +1,9 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/Toast";
 import PageHeader from "@/components/PageHeader";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import { AnalyticsCard } from "@/components/analytics/AnalyticsCard";
@@ -28,7 +29,7 @@ function KpiTile({ label, value, sub }: { label: string; value: string; sub?: st
   return (
     <div className="bg-slate-50 rounded-lg p-4">
       <div className="text-sm text-slate-600">{label}</div>
-      <div className="text-xl font-semibold mt-1">{value}</div>
+      <div className="text-xl font-semibold mt-1 font-mono">{value}</div>
       {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
     </div>
   );
@@ -48,7 +49,38 @@ export default function AdCampaignsClient({
   range: DateRange;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
+  const [syncing, setSyncing] = useState(false);
+
+  // Pull the latest lead-gen submissions from Meta and ingest any we're missing,
+  // so the "Captured leads" column catches up to Meta's own "Insight leads"
+  // (Meta doesn't replay webhooks, so real-time capture can fall behind).
+  async function syncLeads() {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/ad-campaigns/sync-leads", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error || "Lead sync failed. Please try again.");
+        return;
+      }
+      const created: number = data.created ?? 0;
+      const fetched: number = data.fetched ?? 0;
+      if (created > 0) {
+        toast.success(`Synced ${created} new lead${created === 1 ? "" : "s"} from Meta.`);
+      } else {
+        toast.info(`Up to date — checked ${fetched} lead${fetched === 1 ? "" : "s"}, none missing.`);
+      }
+      // Reload server data so the captured counts reflect the new leads.
+      startTransition(() => router.refresh());
+    } catch {
+      toast.error("Lead sync failed. Check your connection and try again.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   // Applying a range pushes ?from/?to; the server page re-fetches on the new
   // query string. useTransition keeps the old data visible with a subtle
@@ -123,20 +155,26 @@ export default function AdCampaignsClient({
             <p className="text-sm text-slate-400">No campaigns synced yet.</p>
           ) : (
             <div className="space-y-3">
-              <div className="flex justify-end">
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  onClick={syncLeads}
+                  disabled={syncing}
+                  title="Pull the latest lead-gen submissions from Meta and ingest any that are missing, so Captured leads catches up to Insight leads."
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-court-200 bg-court-50 px-3 py-1.5 text-sm font-medium text-court-700 hover:bg-court-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                >
+                  <span className={syncing ? "animate-spin" : ""} aria-hidden>
+                    ⟳
+                  </span>
+                  {syncing ? "Syncing leads…" : "Sync leads"}
+                </button>
                 <ExportButtons filename="ad-campaigns" headers={campaignHeaders} rows={campaignRows} />
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="data-table">
                   <thead>
-                    <tr className="text-left border-b border-slate-200">
+                    <tr>
                       {["Campaign", "Status", "Spend", "Insight leads", "Captured leads", "Cost / lead"].map((h, i) => (
-                        <th
-                          key={i}
-                          className={`px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap ${
-                            i >= 2 ? "text-right" : ""
-                          }`}
-                        >
+                        <th key={i} className={`whitespace-nowrap ${i >= 2 ? "!text-right" : ""}`}>
                           {h}
                         </th>
                       ))}
@@ -144,20 +182,20 @@ export default function AdCampaignsClient({
                   </thead>
                   <tbody>
                     {campaigns.map((c) => (
-                      <tr key={c.metaId} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                        <td className="px-2 py-2 font-medium">
-                          <Link href={`/ad-campaigns/${c.metaId}`} className="text-wa-dark hover:underline">
+                      <tr key={c.metaId}>
+                        <td className="font-medium">
+                          <Link href={`/ad-campaigns/${c.metaId}`} className="text-court-700 hover:underline">
                             {c.name}
                           </Link>
                           {c.objective && <div className="text-xs text-slate-400 font-normal">{c.objective}</div>}
                         </td>
-                        <td className="px-2 py-2 whitespace-nowrap">
+                        <td className="whitespace-nowrap">
                           <StatusBadge status={c.status} />
                         </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-700">{fmtInr(c.spend)}</td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-700">{fmtInt(c.insightLeads)}</td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-700">{fmtInt(c.capturedLeads)}</td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-700">{fmtCpl(c.cpl)}</td>
+                        <td className="whitespace-nowrap !text-right font-mono text-slate-700">{fmtInr(c.spend)}</td>
+                        <td className="whitespace-nowrap !text-right font-mono text-slate-700">{fmtInt(c.insightLeads)}</td>
+                        <td className="whitespace-nowrap !text-right font-mono text-slate-700">{fmtInt(c.capturedLeads)}</td>
+                        <td className="whitespace-nowrap !text-right font-mono text-slate-700">{fmtCpl(c.cpl)}</td>
                       </tr>
                     ))}
                   </tbody>

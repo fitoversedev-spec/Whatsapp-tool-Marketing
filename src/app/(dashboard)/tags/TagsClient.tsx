@@ -95,7 +95,7 @@ export default function TagsClient({
           isAdmin && (
             <button
               onClick={() => setCreating(true)}
-              className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-lg transition text-sm"
+              className="btn btn-primary"
             >
               + New tag
             </button>
@@ -111,15 +111,15 @@ export default function TagsClient({
         )}
 
         {creating && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5">
-            <div className="font-semibold text-slate-900 mb-3 text-sm">New tag</div>
+          <div className="card p-4 sm:p-5">
+            <div className="heading text-sm text-slate-900 mb-3">New tag</div>
             <div className="flex flex-col sm:flex-row gap-3">
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. VIP, School, Hot lead"
                 autoFocus
-                className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                className="input flex-1"
               />
               <ColorChooser value={color} onChange={setColor} />
               <div className="flex gap-2">
@@ -129,14 +129,14 @@ export default function TagsClient({
                     setName("");
                     setError(null);
                   }}
-                  className="px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md"
+                  className="btn btn-ghost"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={create}
                   disabled={!name.trim() || busy}
-                  className="bg-wa-green hover:bg-wa-green/90 text-white font-medium px-4 py-2 rounded-md text-sm disabled:opacity-50"
+                  className="btn btn-primary"
                 >
                   {busy ? "Creating…" : "Create"}
                 </button>
@@ -146,7 +146,7 @@ export default function TagsClient({
         )}
 
         {tags.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+          <div className="card p-10 text-center">
             <div className="text-4xl mb-2">🏷️</div>
             <h3 className="font-semibold text-slate-900">No tags yet</h3>
             <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
@@ -155,14 +155,14 @@ export default function TagsClient({
             {isAdmin && !creating && (
               <button
                 onClick={() => setCreating(true)}
-                className="mt-4 inline-block px-4 py-2 text-sm bg-wa-green text-white rounded-md hover:bg-wa-dark"
+                className="btn btn-primary mt-4"
               >
                 Create your first tag
               </button>
             )}
           </div>
         ) : (
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="card overflow-hidden">
             <ul className="divide-y divide-slate-100">
               {tags.map((tag) => {
                 const c = TAG_COLOR_CLASSES[tag.color] ?? TAG_COLOR_CLASSES.slate;
@@ -175,12 +175,12 @@ export default function TagsClient({
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
                           autoFocus
-                          className="flex-1 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-wa-green/30"
+                          className="input flex-1"
                         />
                         <ColorChooser value={editColor} onChange={setEditColor} size="sm" />
                         <button
                           onClick={() => saveEdit(tag.id)}
-                          className="px-3 py-1.5 text-xs font-medium bg-wa-green text-white rounded"
+                          className="px-3 py-1.5 text-xs font-medium bg-court-600 hover:bg-court-700 text-white rounded"
                         >
                           Save
                         </button>
@@ -202,7 +202,8 @@ export default function TagsClient({
                           href={`/contacts?tag=${tag.id}`}
                           className="text-xs text-slate-500 hover:text-slate-900"
                         >
-                          {tag.contactCount} {tag.contactCount === 1 ? "contact" : "contacts"}
+                          <span className="font-mono">{tag.contactCount}</span>{" "}
+                          {tag.contactCount === 1 ? "contact" : "contacts"}
                         </Link>
                         <div className="flex-1" />
                         {isAdmin && (

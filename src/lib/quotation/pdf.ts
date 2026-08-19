@@ -26,6 +26,7 @@ import {
 } from "pdf-lib";
 import type { QuoteLineItem } from "./calculator";
 import { sectionOrder } from "./sections";
+import { sanitize } from "./sanitize";
 import { convertToPng, isPng, isJpg } from "../pdf-image";
 import fs from "fs";
 import path from "path";
@@ -162,40 +163,6 @@ function inrRate(n: number): string {
   return n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
 }
 
-// pdf-lib's built-in Helvetica fonts use the WinAnsi character set, which
-// excludes any Unicode beyond Western European glyphs. Anything outside the
-// set throws "WinAnsi cannot encode" at draw time. We pre-replace the
-// characters that real quotations actually contain (rupee, math operators,
-// arrows, ellipsis, smart quotes) with WinAnsi-safe equivalents, then strip
-// any remaining unsupported codepoints to avoid mid-render failures.
-const SAFE_REPLACEMENTS: Record<string, string> = {
-  "₹": "Rs.", // ₹ Indian Rupee → Rs. (industry standard fallback)
-  "≥": ">=", // ≥
-  "≤": "<=", // ≤
-  "≠": "!=", // ≠
-  "…": "...", // …
-  "→": "->", // →
-  "←": "<-", // ←
-  "—": "-", // — em dash (technically in WinAnsi but inconsistent)
-  "–": "-", // – en dash
-  "‘": "'", // ' left single quote
-  "’": "'", // ' right single quote / apostrophe
-  "“": '"', // " left double quote
-  "”": '"', // " right double quote
-  " ": " ", // non-breaking space
-  "•": "-", // • bullet — we draw our own bullet glyph
-};
-function sanitize(text: string): string {
-  if (!text) return "";
-  let out = text;
-  for (const [from, to] of Object.entries(SAFE_REPLACEMENTS)) {
-    out = out.split(from).join(to);
-  }
-  // Drop any remaining codepoints WinAnsi can't render (emojis, CJK, etc.).
-  // 0x00–0xFF covers everything Helvetica's WinAnsi knows about.
-  out = out.replace(/[^\x00-\xFF]/g, "");
-  return out;
-}
 
 type Ctx = {
   doc: PDFDocument;
@@ -1201,6 +1168,65 @@ function wordWrap(font: PDFFont, rawText: string, size: number, maxWidth: number
   return lines;
 }
 
+// User-picked highlight colour hex → pdf-lib rgb.
+function hexToPdfRgb(hex: string): ReturnType<typeof rgb> {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  return rgb(
+    Number.isFinite(r) ? r : 1,
+    Number.isFinite(g) ? g : 0.95,
+    Number.isFinite(b) ? b : 0.75,
+  );
+}
+
+type HRun = { text: string; hex: string | null };
+
+// Same greedy width-wrap as wordWrap (identical line COUNT — the 2-page fit
+// simulation relies on that), but each returned line is a list of colour runs
+// so user-highlighted words render with a coloured background. `wordColors`
+// maps a whitespace-split word index → colour hex.
+function wrapWithHighlights(
+  font: PDFFont,
+  rawText: string,
+  size: number,
+  maxWidth: number,
+  wordColors?: Record<string, string>,
+): HRun[][] {
+  const text = sanitize(rawText);
+  const words = text.split(/\s+/);
+  const lines: HRun[][] = [];
+  let lineStart = 0;
+  let current = "";
+  const flush = (endExclusive: number) => {
+    const runs: HRun[] = [];
+    for (let i = lineStart; i < endExclusive; i++) {
+      const hex = wordColors?.[String(i)] ?? null;
+      const prev = runs[runs.length - 1];
+      if (prev && prev.hex === hex) prev.text += " " + words[i];
+      else runs.push({ text: words[i], hex });
+    }
+    lines.push(runs);
+  };
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const trial = current ? `${current} ${w}` : w;
+    if (font.widthOfTextAtSize(trial, size) > maxWidth) {
+      if (current) {
+        flush(i);
+        lineStart = i;
+      }
+      current = w;
+    } else {
+      current = trial;
+    }
+  }
+  if (current) flush(words.length);
+  if (lines.length === 0) lines.push([{ text: "", hex: null }]);
+  return lines;
+}
+
 // Direct page.drawText() callers below also need sanitize() — the helper
 // drawText/wordWrap functions above handle their inputs, but the imperative
 // page.drawText() spots in drawHeader/drawInfoGrid/drawItemsTable/etc don't
@@ -1319,43 +1345,104 @@ function drawParticularsTable(
     const w = safeWidth(font, t, size);
     safeDraw(ctx.page, t, { x: cx0 + cw - w - PAD, y, size, font, color });
   };
+  // Draw a wrapped line as colour runs: a highlight rect behind any run the
+  // user marked, then the text (always ink) on top. `baselineTop` is the text
+  // baseline as a distance from the page top.
+  const drawRuns = (runs: HRun[], x0: number, baselineTop: number, size: number, font: PDFFont) => {
+    let cx = x0;
+    const spaceW = font.widthOfTextAtSize(" ", size);
+    for (const run of runs) {
+      const w = safeWidth(font, run.text, size);
+      if (run.hex) {
+        drawRect(ctx, cx - 1, baselineTop - size, w + 2, size + 2.5, { fill: hexToPdfRgb(run.hex) });
+      }
+      safeDraw(ctx.page, run.text, { x: cx, y: yFromTop(baselineTop), size, font, color: COL.text });
+      cx += w + spaceW;
+    }
+  };
+  // ── Readable base type sizes (pt). The whole table renders at one `scale`
+  // (<=1) chosen below so the particulars rows PLUS the totals block always end
+  // within 2 pages — never a 3rd — while staying as large/readable as possible.
+  // 5–10 long-description items is the target; short quotes stay at 1.0 and
+  // simply finish early (we never pad to fill the second page).
+  const B = {
+    head: 10,
+    name: 10.5, nameLH: 13,
+    opt: 9, optLH: 11.5,
+    desc: 10, descLH: 12.5,
+    sec: 11, secLH: 13.5,
+    headerH: 24,
+    padTop: 4, padBot: 4,
+  };
+  const FLOOR = 0.85; // description never shrinks below ~8.5pt (the prior size)
+  const BOTTOM = PAGE_H - MARGIN - FOOTER_RESERVE; // same limit ensureSpace uses
+  // Continuation pages restart below the top-left logo (newPage adds MARGIN +
+  // logo height (<=34) + 14). Use the max height so the estimate never predicts
+  // fewer pages than the real render.
+  const CONT_START = MARGIN + 34 + 14;
+
   // Group rows by scope section (stable sort preserves within-section order).
   const ordered = [...items].sort((a, b) => sectionOrder(a.section) - sectionOrder(b.section));
   const inc = ordered.filter((i) => i.included);
 
-  // ── Auto-fit: a short quote (<= 10 rows) is shrunk so the WHOLE table PLUS the
-  // totals block (finalReserve) fits on the page it starts on. Descriptions are
-  // re-wrapped at the trial size, so shrinking cuts both line-height AND line
-  // count. Longer quotes keep flowing across pages at full size, as before.
-  const B = { head: 8.5, name: 9, nameLH: 11, opt: 8, optLH: 10, desc: 8.5, descLH: 10.5, sec: 9.5, secLH: 11, headerH: 20, padTop: 3, padBot: 4 };
-  const measureTable = (s: number): number => {
-    let h = B.headerH * s;
-    let seen: string | null = null;
-    for (const item of inc) {
+  // Measure each row's height at a candidate scale WITHOUT drawing — larger
+  // fonts wrap to more lines, so wrapping is re-run per scale. MUST mirror the
+  // draw loop's height math exactly, or the page prediction drifts.
+  const measureRows = (s: number): number[] => {
+    let lastSec: string | null = null;
+    return inc.map((item) => {
       const sec = item.section ?? null;
-      const isNew = !!sec && sec !== seen;
+      const isNew = !!sec && sec !== lastSec;
       const secLines = isNew ? wordWrap(ctx.bold, sec as string, B.sec * s, cols.item - PAD * 2) : [];
       const nameLines = wordWrap(ctx.bold, item.name, B.name * s, cols.desc - PAD * 2);
       const descLines = wordWrap(ctx.font, item.description, B.desc * s, cols.desc - PAD * 2);
       const itemColH = secLines.length * B.secLH * s;
-      const descColH = nameLines.length * B.nameLH * s + (item.optionTag ? B.optLH * s : 0) + descLines.length * B.descLH * s;
-      h += B.padTop * s + Math.max(itemColH, descColH, B.nameLH * s) + B.padBot * s;
-      if (sec) seen = sec;
-    }
-    return h + finalReserve;
+      const descColH =
+        nameLines.length * B.nameLH * s + (item.optionTag ? B.optLH * s : 0) + descLines.length * B.descLH * s;
+      if (sec) lastSec = sec;
+      return B.padTop * s + Math.max(itemColH, descColH, B.nameLH * s) + B.padBot * s;
+    });
   };
-  const available = PAGE_H - MARGIN - FOOTER_RESERVE - ctx.y;
-  let s = 1;
-  if (inc.length > 0 && inc.length <= 10) {
-    while (s > 0.6 && measureTable(s) > available) s -= 0.03;
-  }
-  const headerH = B.headerH * s;
-  const HEAD_SIZE = B.head * s;
-  const NAME_SIZE = B.name * s, NAME_LH = B.nameLH * s;
-  const OPT_SIZE = B.opt * s, OPT_LH = B.optLH * s;
-  const DESC_SIZE = B.desc * s, DESC_LH = B.descLH * s;
-  const SEC_SIZE = B.sec * s, SEC_LH = B.secLH * s;
-  const PAD_TOP = B.padTop * s, PAD_BOT = B.padBot * s;
+
+  // Page count at a scale, mirroring ensureSpace's break math (header re-emitted
+  // on each page; the totals reserve rides the final row).
+  const simulatePages = (s: number): number => {
+    const rows = measureRows(s);
+    const headH = B.headerH * s;
+    let page = 1;
+    let yy = ctx.y + headH; // header consumed on the table's first page
+    for (let i = 0; i < rows.length; i++) {
+      const reserve = i === rows.length - 1 ? finalReserve : 0;
+      if (yy + rows[i] + reserve > BOTTOM) {
+        page += 1;
+        yy = CONT_START + headH;
+      }
+      yy += rows[i];
+    }
+    // The totals block (finalReserve) is drawn below the last row via its own
+    // ensureSpace; if a very tall final row broke to a fresh page but leaves
+    // less than finalReserve beneath it, the totals spill to a further page —
+    // count that so the 2-page cap actually holds.
+    if (rows.length > 0 && yy + finalReserve > BOTTOM) page += 1;
+    return page;
+  };
+
+  // Largest readable scale whose table (incl. totals reserve) ends by page 2.
+  let scale = 1;
+  while (scale > FLOOR && simulatePages(scale) > 2) scale -= 0.02;
+
+  const HEAD_SIZE = B.head * scale;
+  const headerH = B.headerH * scale;
+  const NAME_SIZE = B.name * scale;
+  const NAME_LH = B.nameLH * scale;
+  const OPT_SIZE = B.opt * scale;
+  const OPT_LH = B.optLH * scale;
+  const DESC_SIZE = B.desc * scale;
+  const DESC_LH = B.descLH * scale;
+  const SEC_SIZE = B.sec * scale;
+  const SEC_LH = B.secLH * scale;
+  const PADTOP = B.padTop * scale;
+  const PADBOT = B.padBot * scale;
 
   const drawHead = () => {
     ensureSpace(ctx, headerH);
@@ -1389,7 +1476,7 @@ function drawParticularsTable(
     const hasOpt = !!item.optionTag;
     const itemColH = secLines.length * SEC_LH;
     const descColH = nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0) + descLines.length * DESC_LH;
-    const rowH = PAD_TOP + Math.max(itemColH, descColH, NAME_LH) + PAD_BOT;
+    const rowH = PADTOP + Math.max(itemColH, descColH, NAME_LH) + PADBOT;
     // Only the truly last row drags the totals block's reserve along with it.
     const reserve = idx === inc.length - 1 ? finalReserve : 0;
 
@@ -1399,7 +1486,7 @@ function drawParticularsTable(
 
     serial++;
     if (serial % 2 === 0) drawRect(ctx, MARGIN, ctx.y, CONTENT_W, rowH, { fill: COL.rowAlt });
-    const sy = ctx.y + PAD_TOP;
+    const sy = ctx.y + PADTOP;
     const line0 = sy + NAME_SIZE; // first-line baseline (distance from row top)
     const numY = yFromTop(line0);
     // S.NO
@@ -1409,16 +1496,16 @@ function drawParticularsTable(
       safeDraw(ctx.page, ln, { x: x.item + PAD, y: yFromTop(sy + SEC_SIZE + i * SEC_LH), size: SEC_SIZE, font: ctx.bold, color: COL.text });
     });
     // DESCRIPTION = item name (bold) + option + description, stacked.
-    nameLines.forEach((ln, i) => {
-      safeDraw(ctx.page, ln, { x: x.desc + PAD, y: yFromTop(line0 + i * NAME_LH), size: NAME_SIZE, font: ctx.bold, color: COL.text });
+    wrapWithHighlights(ctx.bold, item.name, NAME_SIZE, cols.desc - PAD * 2, item.highlights?.name).forEach((runs, i) => {
+      drawRuns(runs, x.desc + PAD, line0 + i * NAME_LH, NAME_SIZE, ctx.bold);
     });
     let below = sy + nameLines.length * NAME_LH; // top of the next stacked element
     if (hasOpt) {
       safeDraw(ctx.page, `Option ${item.optionTag}`, { x: x.desc + PAD, y: yFromTop(below + OPT_SIZE), size: OPT_SIZE, font: ctx.font, color: COL.muted });
       below += OPT_LH;
     }
-    descLines.forEach((ln, i) => {
-      safeDraw(ctx.page, ln, { x: x.desc + PAD, y: yFromTop(below + DESC_SIZE + i * DESC_LH), size: DESC_SIZE, font: ctx.font, color: COL.text });
+    wrapWithHighlights(ctx.font, item.description, DESC_SIZE, cols.desc - PAD * 2, item.highlights?.description).forEach((runs, i) => {
+      drawRuns(runs, x.desc + PAD, below + DESC_SIZE + i * DESC_LH, DESC_SIZE, ctx.font);
     });
     // Numeric cells, aligned to the first line.
     const amt = item.areaSqFt * item.ratePerSqFt;

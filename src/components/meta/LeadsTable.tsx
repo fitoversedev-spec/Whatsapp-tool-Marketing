@@ -37,9 +37,9 @@ function BreakdownList({
   onPick: (label: string) => void;
 }) {
   return (
-    <div className="border border-slate-200 rounded-lg p-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-        {title} <span className="text-slate-400 normal-case">· {items.length}</span>
+    <div className="card p-3">
+      <div className="heading text-xs tracking-wide text-slate-500 mb-2">
+        {title} <span className="text-slate-400 normal-case font-serif font-normal">· {items.length}</span>
       </div>
       <div className="max-h-44 overflow-y-auto pr-1 space-y-1">
         {items.map((t) => {
@@ -52,7 +52,7 @@ function BreakdownList({
             return (
               <div key={t.key} className="w-full flex items-center justify-between gap-2 text-xs px-2 py-1 text-slate-400">
                 <span className="truncate">{t.label}</span>
-                <span className="tabular-nums shrink-0 text-slate-400">{t.count}</span>
+                <span className="font-mono shrink-0 text-slate-400">{t.count}</span>
               </div>
             );
           }
@@ -61,12 +61,12 @@ function BreakdownList({
               key={t.key}
               type="button"
               onClick={() => onPick(t.label)}
-              className={`w-full flex items-center justify-between gap-2 text-left text-xs px-2 py-1 rounded-md transition ${
-                active ? "bg-wa-green/15 text-wa-dark font-semibold" : "hover:bg-slate-100 text-slate-700"
+              className={`w-full flex items-center justify-between gap-2 text-left text-xs px-2 py-1 rounded transition ${
+                active ? "bg-court-600 text-white font-semibold" : "hover:bg-slate-100 text-slate-700"
               }`}
             >
               <span className="truncate">{t.label}</span>
-              <span className={`tabular-nums shrink-0 ${active ? "text-wa-dark" : "text-slate-400"}`}>{t.count}</span>
+              <span className={`font-mono shrink-0 ${active ? "text-court-100" : "text-slate-400"}`}>{t.count}</span>
             </button>
           );
         })}
@@ -156,8 +156,7 @@ export default function LeadsTable({
     return <p className="text-sm text-slate-400">No leads captured in this range.</p>;
   }
 
-  const inputCls =
-    "w-44 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green/30";
+  const inputCls = "input w-44 text-sm";
 
   return (
     <div className="space-y-3">
@@ -194,7 +193,7 @@ export default function LeadsTable({
           </datalist>
         </div>
         <div className="text-xs text-slate-500 pb-1.5">
-          Showing <b className="text-slate-800">{filtered.length}</b> of {leads.length}
+          Showing <b className="text-slate-800 font-mono">{filtered.length}</b> of <span className="font-mono">{leads.length}</span>
           {hasFilter && <span className="text-slate-400"> (filtered)</span>}
         </div>
         {hasFilter && (
@@ -235,16 +234,11 @@ export default function LeadsTable({
         <p className="text-sm text-slate-400">No leads match the current filters.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="data-table">
             <thead>
-              <tr className="text-left border-b border-slate-200">
+              <tr>
                 {headers.map((h, i) => (
-                  <th
-                    key={i}
-                    className={`px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap ${
-                      h === "CRM" ? "text-right" : ""
-                    }`}
-                  >
+                  <th key={i} className={`whitespace-nowrap ${h === "CRM" ? "!text-right" : ""}`}>
                     {h}
                   </th>
                 ))}
@@ -252,41 +246,41 @@ export default function LeadsTable({
             </thead>
             <tbody>
               {filtered.map((l) => (
-                <tr key={l.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                  <td className="px-2 py-2 whitespace-nowrap font-medium">
-                    <Link href={`/ad-campaigns/leads/${l.id}`} className="text-wa-dark hover:underline">
+                <tr key={l.id}>
+                  <td className="whitespace-nowrap font-medium">
+                    <Link href={`/ad-campaigns/leads/${l.id}`} className="text-court-700 hover:underline">
                       {l.fullName ?? "—"}
                     </Link>
                   </td>
-                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.phone ?? "—"}</td>
-                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.email ?? "—"}</td>
-                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.city ?? "—"}</td>
-                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.sport ?? "—"}</td>
-                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.formName ?? "—"}</td>
+                  <td className="whitespace-nowrap text-slate-700 font-mono">{l.phone ?? "—"}</td>
+                  <td className="whitespace-nowrap text-slate-700">{l.email ?? "—"}</td>
+                  <td className="whitespace-nowrap text-slate-700">{l.city ?? "—"}</td>
+                  <td className="whitespace-nowrap text-slate-700">{l.sport ?? "—"}</td>
+                  <td className="whitespace-nowrap text-slate-700">{l.formName ?? "—"}</td>
                   {showCampaignColumn && (
-                    <td className="px-2 py-2 whitespace-nowrap text-slate-700">{l.campaignName ?? "—"}</td>
+                    <td className="whitespace-nowrap text-slate-700">{l.campaignName ?? "—"}</td>
                   )}
-                  <td className="px-2 py-2 whitespace-nowrap text-slate-500">
+                  <td className="whitespace-nowrap text-slate-500 font-mono">
                     {new Date(l.capturedAt).toLocaleDateString("en-IN")}
                   </td>
-                  <td className="px-2 py-2 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
+                  <td className="whitespace-nowrap !text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => moveToMarketing(l)}
                         disabled={marketingBusyId === l.id}
                         title="Add this lead's phone to the WhatsApp marketing contact list"
-                        className="text-xs font-medium px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        className="btn btn-secondary !px-2.5 !py-1 !text-xs"
                       >
                         {marketingBusyId === l.id ? "…" : "→ WhatsApp"}
                       </button>
                       {l.inCrm ? (
-                        <span className="text-xs font-semibold text-emerald-700">In CRM ✓</span>
+                        <span className="badge bg-green-100 text-green-700">In CRM ✓</span>
                       ) : (
                         <button
                           type="button"
                           onClick={() => setMovingLead(l)}
-                          className="text-xs font-medium px-2.5 py-1 rounded-lg bg-wa-green/10 text-wa-dark hover:bg-wa-green/20"
+                          className="btn btn-primary !px-2.5 !py-1 !text-xs"
                         >
                           Move to CRM
                         </button>

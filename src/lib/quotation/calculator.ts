@@ -51,6 +51,15 @@ export type QuoteLineItem = {
   // save; see docs/DECISIONS.md). Drives DealLineItem/product-movement
   // analytics. Historical line items predating this field are null.
   productId?: string | null;
+  // ── User highlights for the PDF particulars table (presentation only —
+  // ignored by the money math). Maps a whitespace-split WORD INDEX → colour hex
+  // for the item name and/or description, so the render and the wizard agree
+  // regardless of ₹→"Rs." sanitisation (word boundaries are preserved). A whole
+  // cell/box is highlighted by marking every word index.
+  highlights?: {
+    name?: Record<string, string>;
+    description?: Record<string, string>;
+  } | null;
 };
 
 // Single shared source of truth for both the POST (create) and PATCH
@@ -78,6 +87,16 @@ export const lineItemSchema = z.object({
     .nullable()
     .optional(),
   productId: z.string().uuid().nullable().optional(),
+  // Word-index → colour-hex highlight maps (see QuoteLineItem.highlights).
+  // Colours are constrained to 6-digit hex so nothing arbitrary reaches the
+  // PDF renderer.
+  highlights: z
+    .object({
+      name: z.record(z.string().regex(/^#[0-9a-fA-F]{6}$/)).optional(),
+      description: z.record(z.string().regex(/^#[0-9a-fA-F]{6}$/)).optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export function computeAreaForItem(

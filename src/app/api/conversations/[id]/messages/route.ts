@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!convo) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   // Sales role check: must be assigned to me or null
-  if (user.role !== "admin" && convo.assignedToUserId && convo.assignedToUserId !== user.id) {
+  if (user.role !== "admin" && convo.assignedToUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!convo) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   // Role check
-  if (user.role !== "admin" && convo.assignedToUserId && convo.assignedToUserId !== user.id) {
+  if (user.role !== "admin" && convo.assignedToUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

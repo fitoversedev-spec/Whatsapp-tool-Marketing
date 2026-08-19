@@ -30,7 +30,7 @@ export default function CourtImagesError({
 
   return (
     <div className="p-6 sm:p-10 max-w-2xl mx-auto">
-      <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+      <div className="card p-8 shadow-sm">
         <div className="text-3xl mb-3">⚠️</div>
         <h1 className="text-lg font-semibold text-slate-900 mb-1">
           Something went wrong loading the Court Designer.
@@ -58,14 +58,14 @@ export default function CourtImagesError({
               // Full reload so a stale bundle is discarded.
               if (typeof window !== "undefined") window.location.reload();
             }}
-            className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm"
+            className="btn btn-primary"
           >
             Reload page
           </button>
           <button
             type="button"
             onClick={reset}
-            className="bg-white text-slate-700 border border-slate-300 hover:border-slate-400 font-semibold px-4 py-2 rounded-xl text-sm"
+            className="btn btn-secondary"
           >
             Try again
           </button>

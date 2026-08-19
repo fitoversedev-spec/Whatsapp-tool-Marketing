@@ -13,6 +13,7 @@ import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import ElementInspector from "@/components/court-image/ElementInspector";
 import MaterialCalculator from "@/components/court-image/MaterialCalculator";
+import ItemHighlighter, { type Highlights } from "@/components/quotation/ItemHighlighter";
 import DesignAttachments, {
   type AttachmentTab,
   type Attachments,
@@ -138,6 +139,9 @@ type QuoteLineItem = {
   // Mirrors the standalone Quotation wizard so the canvas quote has the same
   // grouped structure in the UI and the attached PDF.
   section?: string;
+  // Per-line quote highlighting (fill-cell / tapped words), same shape the
+  // standalone Quotation module persists and the PDF renderer reads.
+  highlights?: Highlights | null;
 };
 
 let quoteLineSeq = 0;
@@ -307,6 +311,9 @@ function buildQuotePayload(
         // Carry the scope section so the attached-quote PDF groups rows the
         // same way the standalone quote does (route falls back to inferring it).
         section: i.section ?? sectionForItem(i),
+        // Persist per-line highlights so the attached-quote PDF renders them,
+        // matching the standalone Quotation module.
+        highlights: i.highlights ?? null,
       })),
     subtotal: t.subtotal,
     gst: t.gst,
@@ -1551,6 +1558,7 @@ export default function CourtImageWizard({
           optional?: boolean;
           section?: string;
           unit?: string;
+          highlights?: Highlights | null;
         }) => {
           const qty =
             it.areaMode === "perimeter"
@@ -1572,6 +1580,7 @@ export default function CourtImageWizard({
             gst: it.gstPercent,
             included: !it.optional,
             section: it.section ?? inferSection(it.name),
+            highlights: it.highlights ?? null,
           };
         },
       );
@@ -4352,6 +4361,7 @@ function ExistingQuotePicker({
           included?: boolean;
           section?: string;
           unit?: string | null;
+          highlights?: Highlights | null;
         }) => ({
           id: newQuoteLineId(),
           name: li.name ?? "",
@@ -4362,6 +4372,7 @@ function ExistingQuotePicker({
           gst: Number(li.gstPercent) || 18,
           included: li.included !== false,
           section: li.section ?? inferSection(li.name ?? ""),
+          highlights: li.highlights ?? null,
         }),
       );
       if (items.length === 0) {
@@ -4701,6 +4712,12 @@ function StepQuotation({
                                 placeholder="Description (optional)"
                                 rows={6}
                                 className="input mt-2 text-sm !py-2.5 text-slate-600 resize-y leading-relaxed min-h-[7rem]"
+                              />
+                              <ItemHighlighter
+                                name={it.name}
+                                description={it.desc}
+                                value={it.highlights}
+                                onChange={(h) => patch(it.id, { highlights: h })}
                               />
                             </div>
                             <input

@@ -285,6 +285,7 @@ export async function POST(req: NextRequest) {
               gst?: number;
               total?: number;
               section?: string | null;
+              highlights?: QuoteLineItem["highlights"];
             },
             idx: number,
           ) => {
@@ -307,6 +308,9 @@ export async function POST(req: NextRequest) {
                 typeof it.section === "string" && it.section.trim()
                   ? it.section
                   : inferSection(it.name),
+              // Per-line highlights (word maps + whole-cell fill) from the
+              // canvas quote editor, so the merged PDF renders them too.
+              highlights: it.highlights ?? null,
             };
           },
         );

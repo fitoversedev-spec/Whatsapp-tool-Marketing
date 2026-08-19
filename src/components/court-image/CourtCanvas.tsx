@@ -3959,10 +3959,10 @@ function PlotSurface({
   // When a real product is linked, lead the callout with its NAME so
   // the customer sees exactly what they're getting (not just "turf").
   const nameLine = productName ? [productName] : [];
-  const infoLines =
-    materialLines.length > 0 || nameLine.length > 0
-      ? [...nameLine, ...materialLines]
-      : [];
+  // Material quantities now live ONLY in the left-panel calculator (highlighted),
+  // not on the canvas — the callout keeps just the linked product name.
+  void materialLines;
+  const infoLines = nameLine;
   const infoH = labelFontSize * (infoLines.length * 1.6 + 0.8);
   // Clamp the sample photo so the whole callout (photo + info box) stays
   // above the bottom-right watermark. As big as calloutMax when there's

@@ -451,9 +451,10 @@ export default function MaterialCalculator({
         Calculate
       </button>
 
-      {/* 6 — Result snapshot */}
-      <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-2 space-y-0.5">
-        {result}
+      {/* 6 — Result snapshot — highlighted so it stands out after Calculate */}
+      <div className="rounded-md border-2 border-court-300 bg-court-50 p-2.5">
+        <div className="text-[10px] font-bold uppercase tracking-wide text-court-700 mb-1">Result</div>
+        <div className="text-xs text-slate-700 space-y-0.5">{result}</div>
       </div>
 
       <div className="text-[10px] text-slate-400 leading-snug">

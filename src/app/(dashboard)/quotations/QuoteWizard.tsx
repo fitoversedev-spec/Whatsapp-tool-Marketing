@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 import { useUserUnit } from "@/lib/units/useUserUnit";
+import { sanitize } from "@/lib/quotation/sanitize";
 import { toFeet, toUnit } from "@/lib/units";
 import { sectionForItem, orderedSectionsFor } from "@/lib/quotation/sections";
 import { SPORT_STANDARDS } from "@/lib/court-image/sport-standards";
@@ -89,7 +90,10 @@ function WordChips({
   onWord: (index: number) => void;
   onAll: () => void;
 }) {
-  const words = text.split(/\s+/);
+  // Split on sanitize(text) — the SAME basis the PDF renderer uses — so the
+  // painted word indices line up with what gets highlighted in the PDF (a
+  // stripped non-WinAnsi token would otherwise shift the two out of sync).
+  const words = sanitize(text).split(/\s+/);
   const empty = words.length === 1 && words[0] === "";
   return (
     <div>
@@ -158,7 +162,7 @@ function ItemHighlighter({
 
   const paintAll = (field: "name" | "description", text: string) => {
     const next: Record<string, string> = {};
-    if (armed !== null) text.split(/\s+/).forEach((w, i) => { if (w) next[String(i)] = armed; });
+    if (armed !== null) sanitize(text).split(/\s+/).forEach((w, i) => { if (w) next[String(i)] = armed; });
     onChange(clean({ ...value, [field]: next }));
   };
 

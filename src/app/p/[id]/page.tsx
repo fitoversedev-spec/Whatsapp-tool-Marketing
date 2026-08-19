@@ -125,19 +125,23 @@ export default async function ProductPage({
   if (!product) notFound();
 
   const description = htmlToWhatsappText(product.description);
+  // specs is free-form JSON, so a non-string value (e.g. {"weight": 42}) would
+  // make v.trim() throw a 500 on this public page — keep only non-empty strings.
   const specEntries = Object.entries(product.specs).filter(
-    ([, v]) => v && v.trim(),
+    ([, v]) => typeof v === "string" && v.trim(),
   );
 
-  // Gallery images (ProductMedia, kind "image"), hero shown separately so
-  // drop any gallery entry that duplicates the hero URL.
-  const galleryImages = product.media.filter(
-    (m) => m.kind === "image" && m.url !== product.heroImageUrl,
-  );
+  // Hero image, resolved first (falls back to the first gallery image when
+  // heroImageUrl is null) so the gallery can dedupe against what's ACTUALLY
+  // shown as the hero — otherwise a null-hero product shows its first gallery
+  // image both as the hero and in the grid.
   const heroUrl =
     product.heroImageUrl ??
     product.media.find((m) => m.kind === "image")?.url ??
     null;
+  const galleryImages = product.media.filter(
+    (m) => m.kind === "image" && m.url !== heroUrl,
+  );
 
   // Videos: the product-level videoUrl plus any "video" gallery media.
   const videoUrls = [
@@ -242,7 +246,7 @@ export default async function ProductPage({
                       {titleCase(key)}
                     </th>
                     <td className="border-b border-slate-100 px-5 py-3 align-top text-slate-800">
-                      {val}
+                      {String(val)}
                     </td>
                   </tr>
                 ))}

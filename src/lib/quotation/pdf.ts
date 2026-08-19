@@ -26,6 +26,7 @@ import {
 } from "pdf-lib";
 import type { QuoteLineItem } from "./calculator";
 import { sectionOrder } from "./sections";
+import { sanitize } from "./sanitize";
 import { convertToPng, isPng, isJpg } from "../pdf-image";
 import fs from "fs";
 import path from "path";
@@ -162,40 +163,6 @@ function inrRate(n: number): string {
   return n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
 }
 
-// pdf-lib's built-in Helvetica fonts use the WinAnsi character set, which
-// excludes any Unicode beyond Western European glyphs. Anything outside the
-// set throws "WinAnsi cannot encode" at draw time. We pre-replace the
-// characters that real quotations actually contain (rupee, math operators,
-// arrows, ellipsis, smart quotes) with WinAnsi-safe equivalents, then strip
-// any remaining unsupported codepoints to avoid mid-render failures.
-const SAFE_REPLACEMENTS: Record<string, string> = {
-  "₹": "Rs.", // ₹ Indian Rupee → Rs. (industry standard fallback)
-  "≥": ">=", // ≥
-  "≤": "<=", // ≤
-  "≠": "!=", // ≠
-  "…": "...", // …
-  "→": "->", // →
-  "←": "<-", // ←
-  "—": "-", // — em dash (technically in WinAnsi but inconsistent)
-  "–": "-", // – en dash
-  "‘": "'", // ' left single quote
-  "’": "'", // ' right single quote / apostrophe
-  "“": '"', // " left double quote
-  "”": '"', // " right double quote
-  " ": " ", // non-breaking space
-  "•": "-", // • bullet — we draw our own bullet glyph
-};
-function sanitize(text: string): string {
-  if (!text) return "";
-  let out = text;
-  for (const [from, to] of Object.entries(SAFE_REPLACEMENTS)) {
-    out = out.split(from).join(to);
-  }
-  // Drop any remaining codepoints WinAnsi can't render (emojis, CJK, etc.).
-  // 0x00–0xFF covers everything Helvetica's WinAnsi knows about.
-  out = out.replace(/[^\x00-\xFF]/g, "");
-  return out;
-}
 
 type Ctx = {
   doc: PDFDocument;
@@ -1452,6 +1419,11 @@ function drawParticularsTable(
       }
       yy += rows[i];
     }
+    // The totals block (finalReserve) is drawn below the last row via its own
+    // ensureSpace; if a very tall final row broke to a fresh page but leaves
+    // less than finalReserve beneath it, the totals spill to a further page —
+    // count that so the 2-page cap actually holds.
+    if (rows.length > 0 && yy + finalReserve > BOTTOM) page += 1;
     return page;
   };
 

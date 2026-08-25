@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/Sidebar";
 import CronTick from "@/components/CronTick";
+import NavigationTracker from "@/components/NavigationTracker";
 import FloatingChatLauncher from "@/components/chat/FloatingChatLauncher";
 import AskAiLauncher from "@/components/AskAiLauncher";
 import axios from "axios";
@@ -90,6 +91,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         tokenExpired={tokenExpired}
       />
       <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
+      <NavigationTracker />
       <CronTick />
       <FloatingChatLauncher initialUnread={chatUnread} initialMentions={chatMentions} />
       <AskAiLauncher />

@@ -8,12 +8,16 @@
 //
 // backHref is now only a FALLBACK for when there is no in-app history to go
 // back to (the page was opened directly via its URL — a fresh tab, a shared
-// link, a bookmark): in that case there's nothing to go "back" to, so we send
-// the user to the page's logical parent instead of stranding them. When no
-// backHref is supplied either, /inbox is the safe home (matters on mobile PWA /
-// fullscreen where router.back() on a fresh tab is a no-op).
+// link, a bookmark, an external referrer): in that case there's nothing to go
+// "back" to, so we send the user to the page's logical parent instead of
+// stranding them. When no backHref is supplied either, /inbox is the safe home.
+//
+// "Is there in-app history?" is answered by our own nav counter (nav-history),
+// NOT window.history — see that file for why (external same-tab pages inflate
+// history.length, and Next 14's App Router has no history index).
 
 import { useRouter } from "next/navigation";
+import { hasInAppHistory } from "@/lib/nav-history";
 
 export default function BackButton({
   backHref,
@@ -25,20 +29,11 @@ export default function BackButton({
   const router = useRouter();
 
   function handleClick() {
-    // Prefer real history: return to wherever the user actually came from.
-    // We detect "is there an in-app entry to go back to?" via the Next.js App
-    // Router history index (window.history.state.idx): 0 on this tab's first
-    // app entry, +1 per in-app navigation. Using idx (not window.history.length)
-    // matters because length also counts pages from OTHER origins visited in the
-    // same tab — so a deep link opened from Gmail/WhatsApp Web/a search result
-    // would otherwise send Back out of the app instead of to the parent.
-    if (typeof window !== "undefined") {
-      const state = window.history.state as { idx?: number } | null;
-      const idx = typeof state?.idx === "number" ? state.idx : 0;
-      if (idx > 0) {
-        router.back();
-        return;
-      }
+    // Prefer real history: return to the actual previous in-app page the user
+    // came from (e.g. campaign detail -> lead -> Back = campaign detail).
+    if (hasInAppHistory()) {
+      router.back();
+      return;
     }
     // No in-app history (direct URL load / external referrer) — fall back to the
     // page's logical parent so the user isn't stranded or ejected from the app.

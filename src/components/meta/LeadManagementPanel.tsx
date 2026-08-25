@@ -68,8 +68,15 @@ export default function LeadManagementPanel({
   const [savingAssignee, setSavingAssignee] = useState(false);
 
   // --- Reminder ----------------------------------------------------------
+  // reminderIso = the SAVED value; reminderDraft = the freely-editable input
+  // (datetime-local string), only persisted on the explicit "Set reminder"
+  // click (mirrors the Notes "Save note" flow) rather than on every keystroke.
   const [reminderIso, setReminderIso] = useState<string | null>(lead.reminderAt);
   const [savingReminder, setSavingReminder] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState<boolean>(!!lead.reminderAt);
+  const [reminderDraft, setReminderDraft] = useState<string>(
+    lead.reminderAt ? toLocalInput(lead.reminderAt) : "",
+  );
 
   // --- Labels ------------------------------------------------------------
   const [catalog, setCatalog] = useState<MetaLeadLabelChip[]>(labelCatalog);
@@ -131,7 +138,7 @@ export default function LeadManagementPanel({
     }
   }
 
-  async function setReminder(next: string | null) {
+  async function setReminder(next: string | null): Promise<boolean> {
     const prev = reminderIso;
     setReminderIso(next);
     setSavingReminder(true);
@@ -140,6 +147,36 @@ export default function LeadManagementPanel({
     if (!ok) {
       setReminderIso(prev);
       toast.error("Could not update the reminder");
+    }
+    return ok;
+  }
+
+  // Persist the current draft on the explicit "Set reminder" click.
+  async function saveReminder() {
+    const d = reminderDraft ? new Date(reminderDraft) : null; // browser parses as local time
+    if (!d || Number.isNaN(d.getTime())) return;
+    const ok = await setReminder(d.toISOString());
+    if (ok) toast.success("Reminder set");
+  }
+
+  // "No reminder" — clears immediately (a discrete action, no Set needed).
+  async function chooseNoReminder() {
+    setScheduleMode(false);
+    if (reminderIso) {
+      const ok = await setReminder(null);
+      if (!ok) setScheduleMode(true); // revert the radio if the clear failed
+    }
+  }
+
+  // "Schedule a reminder" — reveals the editable input; does NOT save yet.
+  // Seeds a sensible default (tomorrow 9am local) only when there's no draft.
+  function chooseSchedule() {
+    setScheduleMode(true);
+    if (!reminderDraft) {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(9, 0, 0, 0);
+      setReminderDraft(toLocalInput(d.toISOString()));
     }
   }
 
@@ -229,7 +266,14 @@ export default function LeadManagementPanel({
     }
   }
 
-  const reminderOverdue = reminderIso ? new Date(reminderIso).getTime() < Date.now() : false;
+  // Derived reminder state for the draft-then-Set flow.
+  const reminderDraftDate = reminderDraft ? new Date(reminderDraft) : null;
+  const reminderDraftValid = !!reminderDraftDate && !Number.isNaN(reminderDraftDate.getTime());
+  const savedReminderMs = reminderIso ? new Date(reminderIso).getTime() : null;
+  const draftReminderMs = reminderDraftValid ? reminderDraftDate!.getTime() : null;
+  const reminderUnsaved = reminderDraftValid && draftReminderMs !== savedReminderMs;
+  const canSetReminder = reminderDraftValid && reminderUnsaved && !savingReminder;
+  const savedReminderOverdue = savedReminderMs !== null ? savedReminderMs < Date.now() : false;
 
   return (
     <aside className="card p-4 space-y-5">
@@ -298,9 +342,9 @@ export default function LeadManagementPanel({
             <input
               type="radio"
               name="lead-reminder"
-              checked={!reminderIso}
+              checked={!scheduleMode}
               disabled={savingReminder}
-              onChange={() => setReminder(null)}
+              onChange={() => void chooseNoReminder()}
             />
             No reminder
           </label>
@@ -308,36 +352,46 @@ export default function LeadManagementPanel({
             <input
               type="radio"
               name="lead-reminder"
-              checked={!!reminderIso}
+              checked={scheduleMode}
               disabled={savingReminder}
-              onChange={() => {
-                // Default a fresh reminder to one day out at 9am local.
-                const d = new Date();
-                d.setDate(d.getDate() + 1);
-                d.setHours(9, 0, 0, 0);
-                setReminder(d.toISOString());
-              }}
+              onChange={chooseSchedule}
             />
             Schedule a reminder
           </label>
-          {reminderIso && (
-            <div className="pt-1 space-y-1">
+          {scheduleMode && (
+            <div className="pt-1 space-y-1.5">
+              {/* Freely editable — nothing is saved until "Set reminder". */}
               <input
                 type="datetime-local"
                 className={inputCls}
-                value={toLocalInput(reminderIso)}
-                disabled={savingReminder}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (!v) return;
-                  const d = new Date(v); // browser parses as local time
-                  if (!Number.isNaN(d.getTime())) setReminder(d.toISOString());
-                }}
+                value={reminderDraft}
+                onChange={(e) => setReminderDraft(e.target.value)}
               />
-              <p className={`text-xs ${reminderOverdue ? "text-rose-600 font-semibold" : "text-slate-500"}`}>
-                {reminderOverdue ? "Overdue — " : "Reminds on "}
-                {fmtDateTime(reminderIso)}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p
+                  className={`text-xs ${
+                    reminderUnsaved
+                      ? "text-amber-600"
+                      : savedReminderOverdue
+                        ? "text-rose-600 font-semibold"
+                        : "text-slate-500"
+                  }`}
+                >
+                  {!reminderDraftValid
+                    ? "Pick a date and time"
+                    : reminderUnsaved
+                      ? `Not saved — ${fmtDateTime(reminderDraftDate!.toISOString())}`
+                      : `${savedReminderOverdue ? "Overdue — " : "Reminds on "}${fmtDateTime(reminderIso!)}`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void saveReminder()}
+                  disabled={!canSetReminder}
+                  className="btn btn-primary !px-3 !py-1.5 shrink-0"
+                >
+                  {savingReminder ? "Setting…" : "Set reminder"}
+                </button>
+              </div>
             </div>
           )}
         </div>

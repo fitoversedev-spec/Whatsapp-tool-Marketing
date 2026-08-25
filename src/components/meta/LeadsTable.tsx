@@ -7,6 +7,7 @@ import { ExportButtons } from "@/components/analytics/ExportButtons";
 import { useToast } from "@/components/Toast";
 import MoveToCrmDialog, { type Rep } from "@/components/meta/MoveToCrmDialog";
 import type { MetaLeadRow } from "@/lib/meta-ads/queries";
+import { LEAD_STAGES, LEAD_STAGE_LABELS, LEAD_STAGE_CHIP, stageLabel } from "@/lib/meta-ads/lead-fields";
 
 type Tally = { key: string; label: string; count: number };
 
@@ -93,6 +94,7 @@ export default function LeadsTable({
   const [marketingBusyId, setMarketingBusyId] = useState<string | null>(null);
   const [cityQuery, setCityQuery] = useState("");
   const [sportQuery, setSportQuery] = useState("");
+  const [stageFilter, setStageFilter] = useState("");
 
   // One-click "Move to WhatsApp marketing" — upserts the lead's phone into the
   // marketing Contact list. No owner picker; the route is idempotent.
@@ -121,9 +123,10 @@ export default function LeadsTable({
       leads.filter((l) => {
         const cityOk = !cq || (l.city ?? "").toLowerCase().includes(cq);
         const sportOk = !sq || (l.sport ?? "").toLowerCase().includes(sq);
-        return cityOk && sportOk;
+        const stageOk = !stageFilter || l.stage === stageFilter;
+        return cityOk && sportOk && stageOk;
       }),
-    [leads, cq, sq]
+    [leads, cq, sq, stageFilter]
   );
 
   // Datalist options come from ALL leads (so you can always pick any value);
@@ -133,12 +136,19 @@ export default function LeadsTable({
   const cityBreakdown = useMemo(() => tally(filtered, (l) => l.city), [filtered]);
   const sportBreakdown = useMemo(() => tally(filtered, (l) => l.sport), [filtered]);
 
-  const hasFilter = !!(cityQuery || sportQuery);
+  const hasFilter = !!(cityQuery || sportQuery || stageFilter);
 
+  // Table columns: Stage replaces Captured (the captured date now lives on the
+  // lead detail page). Export keeps Captured for data completeness AND adds Stage.
   const headers = [
     "Name", "Phone", "Email", "City", "Sport", "Form",
     ...(showCampaignColumn ? ["Campaign"] : []),
-    "Captured", "CRM",
+    "Stage", "CRM",
+  ];
+  const exportHeaders = [
+    "Name", "Phone", "Email", "City", "Sport", "Form",
+    ...(showCampaignColumn ? ["Campaign"] : []),
+    "Stage", "Captured", "CRM",
   ];
   const exportRows: (string | number)[][] = filtered.map((l) => [
     l.fullName ?? "—",
@@ -148,6 +158,7 @@ export default function LeadsTable({
     l.sport ?? "—",
     l.formName ?? "—",
     ...(showCampaignColumn ? [l.campaignName ?? "—"] : []),
+    stageLabel(l.stage),
     new Date(l.capturedAt).toLocaleDateString("en-IN"),
     l.inCrm ? "In CRM" : "—",
   ]);
@@ -192,6 +203,21 @@ export default function LeadsTable({
             ))}
           </datalist>
         </div>
+        <div>
+          <label className="block text-[11px] font-medium text-slate-600 mb-1">Stage</label>
+          <select
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value)}
+            className="input w-40 text-sm"
+          >
+            <option value="">All stages</option>
+            {LEAD_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {LEAD_STAGE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="text-xs text-slate-500 pb-1.5">
           Showing <b className="text-slate-800 font-mono">{filtered.length}</b> of <span className="font-mono">{leads.length}</span>
           {hasFilter && <span className="text-slate-400"> (filtered)</span>}
@@ -202,6 +228,7 @@ export default function LeadsTable({
             onClick={() => {
               setCityQuery("");
               setSportQuery("");
+              setStageFilter("");
             }}
             className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
           >
@@ -209,7 +236,7 @@ export default function LeadsTable({
           </button>
         )}
         <div className="ml-auto">
-          <ExportButtons filename={exportFilename} headers={headers} rows={exportRows} />
+          <ExportButtons filename={exportFilename} headers={exportHeaders} rows={exportRows} />
         </div>
       </div>
 
@@ -260,8 +287,10 @@ export default function LeadsTable({
                   {showCampaignColumn && (
                     <td className="whitespace-nowrap text-slate-700">{l.campaignName ?? "—"}</td>
                   )}
-                  <td className="whitespace-nowrap text-slate-500 font-mono">
-                    {new Date(l.capturedAt).toLocaleDateString("en-IN")}
+                  <td className="whitespace-nowrap">
+                    <span className={`badge ${LEAD_STAGE_CHIP[l.stage as keyof typeof LEAD_STAGE_CHIP] ?? "bg-slate-100 text-slate-700"}`}>
+                      {stageLabel(l.stage)}
+                    </span>
                   </td>
                   <td className="whitespace-nowrap !text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-2">

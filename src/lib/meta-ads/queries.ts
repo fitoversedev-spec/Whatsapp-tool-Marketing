@@ -155,6 +155,7 @@ export type MetaLeadRow = {
   city: string | null; // extracted at ingest from the form's city question
   sport: string | null; // extracted at ingest from the form's sport question
   fieldData: string; // raw JSON string of all form answers — client parses defensively
+  stage: string; // lead pipeline stage (NEW|CONTACTED|QUALIFIED|CONVERTED|LOST); shown + filtered in the list
   inCrm: boolean; // MetaLead.accountContactId != null (linked to a CRM AccountContact on move-to-CRM)
   capturedAt: string; // ISO — createdAtMeta (Meta's submit time) when present, else the ingest time
 };
@@ -172,6 +173,7 @@ const META_LEAD_SELECT = {
   city: true,
   sport: true,
   fieldData: true,
+  stage: true,
   accountContactId: true,
   createdAtMeta: true,
   createdAt: true,
@@ -187,6 +189,7 @@ type MetaLeadSelected = {
   city: string | null;
   sport: string | null;
   fieldData: string;
+  stage: string;
   accountContactId: string | null;
   createdAtMeta: Date | null;
   createdAt: Date;
@@ -203,6 +206,7 @@ function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
     city: l.city,
     sport: l.sport,
     fieldData: l.fieldData,
+    stage: l.stage,
     inCrm: l.accountContactId != null,
     capturedAt: (l.createdAtMeta ?? l.createdAt).toISOString(),
   };
@@ -252,7 +256,7 @@ export type MetaLeadNoteRow = {
   createdAt: string;
 };
 export type MetaLeadDetail = MetaLeadRow & {
-  stage: string;
+  // stage is inherited from MetaLeadRow.
   reminderAt: string | null; // ISO, or null = "No reminder"
   assignedToUserId: string | null;
   assignedToName: string | null;
@@ -267,7 +271,6 @@ export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | nu
     where: { id },
     select: {
       ...META_LEAD_SELECT,
-      stage: true,
       reminderAt: true,
       assignedToUserId: true,
       assignedTo: { select: { name: true } },
@@ -291,7 +294,6 @@ export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | nu
 
   return {
     ...toMetaLeadRow(lead),
-    stage: lead.stage,
     reminderAt: lead.reminderAt ? lead.reminderAt.toISOString() : null,
     assignedToUserId: lead.assignedToUserId,
     assignedToName: lead.assignedTo?.name ?? null,

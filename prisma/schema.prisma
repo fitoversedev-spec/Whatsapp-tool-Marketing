@@ -430,6 +430,10 @@ model Reminder {
   // A Reminder (task/meeting/call) can now anchor to a contact directly, not
   // only a Deal — Zoho-style activities on a contact with no deal.
   accountContactId String? @map("account_contact_id")
+  // Follow-up reminder anchored to a captured Meta ad lead (the lead-detail
+  // sidebar's Reminder control). One active reminder per lead; owned by the
+  // lead's assigned rep (else whoever set it). Cascade-deletes with the lead.
+  metaLeadId     String?   @map("meta_lead_id")
   activityTypeId String?   @map("activity_type_id")
   // e.g. ["whatsapp","in_app"]. Empty/absent = in-app only (today's behavior).
   channels       String[]  @default([])
@@ -458,6 +462,7 @@ model Reminder {
   owner        User               @relation(fields: [ownerUserId], references: [id])
   deal         Deal?              @relation(fields: [dealId], references: [id], onDelete: SetNull)
   accountContact AccountContact?  @relation(fields: [accountContactId], references: [id], onDelete: SetNull)
+  metaLead     MetaLead?          @relation(fields: [metaLeadId], references: [id], onDelete: Cascade)
   activityType ActivityType?      @relation(fields: [activityTypeId], references: [id])
   dispatches   ReminderDispatch[]
 
@@ -465,6 +470,7 @@ model Reminder {
   @@index([dueAt, completedAt])
   @@index([dealId])
   @@index([accountContactId])
+  @@index([metaLeadId])
   @@map("reminders")
 }
 
@@ -2020,6 +2026,7 @@ model MetaLead {
   assignedTo User?             @relation("MetaLeadAssignee", fields: [assignedToUserId], references: [id])
   notes      MetaLeadNote[]
   labels     MetaLeadToLabel[]
+  reminders  Reminder[]
 
   @@index([pageId])
   @@index([campaignId])

@@ -30,7 +30,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
   const { stage, assignedToUserId, reminderAt, labelIds } = parsed.data;
 
-  const lead = await prisma.metaLead.findUnique({ where: { id: params.id }, select: { id: true } });
+  const lead = await prisma.metaLead.findUnique({
+    where: { id: params.id },
+    // fullName/phone label the reminder; current reminderAt/assignedToUserId let
+    // us sync ownership on a pure reassignment (reminder field absent from PATCH).
+    select: { id: true, fullName: true, phone: true, reminderAt: true, assignedToUserId: true },
+  });
   if (!lead) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   // Validate the assigned rep still exists (avoids an FK violation on a stale id).
@@ -88,6 +93,67 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           data: labelIds.map((labelId) => ({ metaLeadId: params.id, labelId })),
           skipDuplicates: true,
         });
+      }
+    }
+
+    // Keep the lead's follow-up Reminder in sync with reminderAt + assignee so
+    // the schedule actually fires — a real rep-owned Reminder rides the existing
+    // cron, sidebar "⏰ Reminders" badge, and /reminders page. One reminder per
+    // lead; owner = the (effective) assigned rep, else whoever made the change.
+    // Only runs when the reminder OR the assignee changed.
+    if (reminderDate !== undefined || assignedToUserId !== undefined) {
+      const effectiveDueAt = reminderDate !== undefined ? reminderDate : lead.reminderAt;
+      const effectiveAssignee =
+        assignedToUserId !== undefined ? assignedToUserId : lead.assignedToUserId;
+      const ownerUserId = effectiveAssignee ?? user.id;
+
+      const existing = await tx.reminder.findFirst({
+        where: { metaLeadId: params.id },
+        select: { id: true },
+      });
+
+      if (!effectiveDueAt) {
+        // "No reminder" — remove the linked reminder if one exists.
+        if (existing) await tx.reminder.delete({ where: { id: existing.id } });
+      } else {
+        const leadName = lead.fullName?.trim() || lead.phone || "lead";
+        const message = `Follow up with ${leadName} (Meta ad lead)`;
+        if (existing) {
+          if (reminderDate !== undefined) {
+            // Genuine reschedule: move ownership AND reset the fire state so it
+            // re-fires (mirrors PATCH /api/reminders resetting notifiedAt).
+            await tx.reminder.update({
+              where: { id: existing.id },
+              data: {
+                ownerUserId,
+                message,
+                channels: ["in_app"],
+                dueAt: effectiveDueAt,
+                completedAt: null,
+                notifiedAt: null,
+                status: "PENDING",
+              },
+            });
+          } else {
+            // Pure reassignment: move ownership only — never un-complete or
+            // re-fire a reminder just because the lead changed hands.
+            await tx.reminder.update({
+              where: { id: existing.id },
+              data: { ownerUserId, message },
+            });
+          }
+        } else {
+          await tx.reminder.create({
+            data: {
+              ownerUserId,
+              metaLeadId: params.id,
+              dueAt: effectiveDueAt,
+              message,
+              channels: ["in_app"],
+              status: "PENDING",
+            },
+          });
+        }
       }
     }
   });

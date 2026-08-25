@@ -5,16 +5,29 @@ import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import MoveToCrmDialog, { type Rep } from "@/components/meta/MoveToCrmDialog";
+import LeadManagementPanel from "@/components/meta/LeadManagementPanel";
 import { parseFieldData } from "@/lib/meta-ads/field-data";
-import type { MetaLeadRow } from "@/lib/meta-ads/queries";
+import type { MetaLeadDetail, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
 
 // Dedicated detail page for one captured lead — replaces the old inline
-// row-expand in LeadsTable. Renders the structured fields plus EVERY raw
-// field_data answer as a label|value table, with the two promote actions:
-// "Move to CRM" (owner-picker dialog, only when not already in the CRM) and the
-// one-click "Move to WhatsApp marketing" (upserts the phone into the marketing
-// Contact list — no owner picker).
-export default function LeadDetailClient({ lead, reps }: { lead: MetaLeadRow; reps: Rep[] }) {
+// row-expand in LeadsTable. Two columns: the captured fields (structured + EVERY
+// raw field_data answer) on the left, and the Meta-Leads-Centre-style "Lead
+// management" sidebar (Stage / Assigned-to / Reminder / Labels / Notes) on the
+// right. Header actions: "Move to CRM" (owner-picker dialog, only when not
+// already in the CRM) and one-click "Move to WhatsApp marketing".
+export default function LeadDetailClient({
+  lead,
+  reps,
+  labelCatalog,
+  currentUserId,
+  isAdmin,
+}: {
+  lead: MetaLeadDetail;
+  reps: Rep[];
+  labelCatalog: MetaLeadLabelChip[];
+  currentUserId: string;
+  isAdmin: boolean;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [moving, setMoving] = useState(false);
@@ -52,7 +65,7 @@ export default function LeadDetailClient({ lead, reps }: { lead: MetaLeadRow; re
   ];
 
   return (
-    <div className="p-4 sm:p-6 max-w-3xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <PageHeader
         large
         backHref="/ad-campaigns"
@@ -84,7 +97,8 @@ export default function LeadDetailClient({ lead, reps }: { lead: MetaLeadRow; re
         }
       />
 
-      <div className="mt-4 overflow-x-auto card">
+      <div className="mt-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+        <div className="overflow-x-auto card">
         <table className="w-full text-sm">
           <tbody>
             {rows.map((r) => {
@@ -115,6 +129,15 @@ export default function LeadDetailClient({ lead, reps }: { lead: MetaLeadRow; re
             ))}
           </tbody>
         </table>
+        </div>
+
+        <LeadManagementPanel
+          lead={lead}
+          reps={reps}
+          labelCatalog={labelCatalog}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+        />
       </div>
 
       {moving && (

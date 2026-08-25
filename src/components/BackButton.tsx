@@ -1,13 +1,17 @@
 "use client";
 
-// Back navigation used by PageHeader across the tool. Prefers a
-// caller-supplied parent route (backHref) so detail pages land on the
-// right list even if the user hit the URL directly. Falls back to
-// router.back() so top-level pages behave like the browser back button.
+// Back navigation used by PageHeader across the tool. Goes to the ACTUAL
+// previous page the user came from — i.e. real browser history — so drilling
+// e.g. campaign detail -> lead detail and hitting Back returns to that campaign
+// detail, not a hardcoded parent list. This is the app-wide "back = previous
+// page" behaviour.
 //
-// If the history stack is empty AND no backHref is provided we route
-// to /inbox as a safe home. This matters on mobile PWA / fullscreen
-// where router.back() on a fresh tab is a no-op.
+// backHref is now only a FALLBACK for when there is no in-app history to go
+// back to (the page was opened directly via its URL — a fresh tab, a shared
+// link, a bookmark): in that case there's nothing to go "back" to, so we send
+// the user to the page's logical parent instead of stranding them. When no
+// backHref is supplied either, /inbox is the safe home (matters on mobile PWA /
+// fullscreen where router.back() on a fresh tab is a no-op).
 
 import { useRouter } from "next/navigation";
 
@@ -21,12 +25,25 @@ export default function BackButton({
   const router = useRouter();
 
   function handleClick() {
+    // Prefer real history: return to wherever the user actually came from.
+    // We detect "is there an in-app entry to go back to?" via the Next.js App
+    // Router history index (window.history.state.idx): 0 on this tab's first
+    // app entry, +1 per in-app navigation. Using idx (not window.history.length)
+    // matters because length also counts pages from OTHER origins visited in the
+    // same tab — so a deep link opened from Gmail/WhatsApp Web/a search result
+    // would otherwise send Back out of the app instead of to the parent.
+    if (typeof window !== "undefined") {
+      const state = window.history.state as { idx?: number } | null;
+      const idx = typeof state?.idx === "number" ? state.idx : 0;
+      if (idx > 0) {
+        router.back();
+        return;
+      }
+    }
+    // No in-app history (direct URL load / external referrer) — fall back to the
+    // page's logical parent so the user isn't stranded or ejected from the app.
     if (backHref) {
       router.push(backHref);
-      return;
-    }
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
       return;
     }
     router.push("/inbox");

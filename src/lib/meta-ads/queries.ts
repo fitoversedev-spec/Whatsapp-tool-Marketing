@@ -239,6 +239,81 @@ export async function getMetaLeadById(id: string): Promise<MetaLeadRow | null> {
   return lead ? toMetaLeadRow(lead) : null;
 }
 
+// The lead-management fields shown in the detail-page sidebar. A superset of
+// MetaLeadRow (so it stays compatible with MoveToCrmDialog, which only reads
+// lead.id) plus stage/assignee/reminder and the labels + notes relations. Only
+// the detail page loads these — the list queries stay lean (META_LEAD_SELECT).
+export type MetaLeadLabelChip = { id: string; name: string; color: string };
+export type MetaLeadNoteRow = {
+  id: string;
+  authorUserId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+};
+export type MetaLeadDetail = MetaLeadRow & {
+  stage: string;
+  reminderAt: string | null; // ISO, or null = "No reminder"
+  assignedToUserId: string | null;
+  assignedToName: string | null;
+  labels: MetaLeadLabelChip[];
+  notes: MetaLeadNoteRow[]; // newest first
+};
+
+// One captured MetaLead with its full lead-management payload, for the detail
+// page. Returns null when no such lead exists.
+export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | null> {
+  const lead = await prisma.metaLead.findUnique({
+    where: { id },
+    select: {
+      ...META_LEAD_SELECT,
+      stage: true,
+      reminderAt: true,
+      assignedToUserId: true,
+      assignedTo: { select: { name: true } },
+      labels: {
+        select: { label: { select: { id: true, name: true, color: true } } },
+        orderBy: { labeledAt: "asc" },
+      },
+      notes: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          body: true,
+          createdAt: true,
+          authorUserId: true,
+          author: { select: { name: true } },
+        },
+      },
+    },
+  });
+  if (!lead) return null;
+
+  return {
+    ...toMetaLeadRow(lead),
+    stage: lead.stage,
+    reminderAt: lead.reminderAt ? lead.reminderAt.toISOString() : null,
+    assignedToUserId: lead.assignedToUserId,
+    assignedToName: lead.assignedTo?.name ?? null,
+    labels: lead.labels.map((l) => ({ id: l.label.id, name: l.label.name, color: l.label.color })),
+    notes: lead.notes.map((n) => ({
+      id: n.id,
+      authorUserId: n.authorUserId,
+      authorName: n.author?.name ?? "—",
+      body: n.body,
+      createdAt: n.createdAt.toISOString(),
+    })),
+  };
+}
+
+// The full label catalogue (for the sidebar's label picker), alphabetical.
+export async function getMetaLeadLabels(): Promise<MetaLeadLabelChip[]> {
+  return prisma.metaLeadLabel.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, color: true },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Campaign-centric reads (the "Campaigns" drill-down list + detail).
 // ---------------------------------------------------------------------------

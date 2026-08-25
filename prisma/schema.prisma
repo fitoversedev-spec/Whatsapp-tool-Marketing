@@ -86,6 +86,8 @@ model User {
   invoicesCreated         Invoice[]        @relation("InvoiceCreator")
   invoicePaymentsRecorded InvoicePayment[] @relation("InvoicePaymentRecorder")
   aiUsage                 AiUsage[]        @relation("AiUsageUser")
+  metaLeadsAssigned       MetaLead[]       @relation("MetaLeadAssignee")
+  metaLeadNotes           MetaLeadNote[]   @relation("MetaLeadNoteAuthor")
 
   @@map("users")
 }
@@ -2005,11 +2007,69 @@ model MetaLead {
   leadId           String?  @map("lead_id") // legacy mirror into the (deprecated) Lead model; prefer accountContactId
   accountContactId String?  @map("account_contact_id") // CRM link: AccountContact(pipelineStage=LEAD) id set on move-to-CRM
   normalizedPhone  String?  @map("normalized_phone") // E.164 dedupe key for repeat-lead detection
+  // Lead-management fields (Meta-Leads-Centre-style sidebar on the lead detail
+  // page). stage is an app-level enum string (see src/lib/meta-ads/lead-fields.ts:
+  // NEW|CONTACTED|QUALIFIED|CONVERTED|LOST) defaulting to NEW so every existing
+  // row reads as a fresh lead. reminderAt null = "No reminder". assignedToUserId
+  // owns the follow-up (the same assignable-reps list as Move-to-CRM).
+  stage            String    @default("NEW")
+  reminderAt       DateTime? @map("reminder_at")
+  assignedToUserId String?   @map("assigned_to_user_id")
   createdAt     DateTime  @default(now()) @map("created_at")
+
+  assignedTo User?             @relation("MetaLeadAssignee", fields: [assignedToUserId], references: [id])
+  notes      MetaLeadNote[]
+  labels     MetaLeadToLabel[]
 
   @@index([pageId])
   @@index([campaignId])
   @@index([createdAtMeta])
   @@index([normalizedPhone])
+  @@index([assignedToUserId])
+  @@index([stage])
   @@map("meta_leads")
+}
+
+// Running note log for a captured Meta lead (append-only, newest shown first),
+// modelled on AccountContactNote. Each entry keeps its author + timestamp so the
+// sidebar can render a mini activity feed rather than a single overwritable box.
+model MetaLeadNote {
+  id           String   @id @default(uuid())
+  metaLeadId   String   @map("meta_lead_id")
+  authorUserId String   @map("author_user_id")
+  body         String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  metaLead MetaLead @relation(fields: [metaLeadId], references: [id], onDelete: Cascade)
+  author   User     @relation("MetaLeadNoteAuthor", fields: [authorUserId], references: [id])
+
+  @@index([metaLeadId, createdAt])
+  @@map("meta_lead_notes")
+}
+
+// Colour-coded labels reps attach to Meta leads (dedicated catalogue, kept
+// separate from marketing Tags / ConversationLabels so the lead label set stays
+// its own thing). Reusable across leads via the join table below.
+model MetaLeadLabel {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  color     String   @default("slate")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  leads MetaLeadToLabel[]
+
+  @@map("meta_lead_labels")
+}
+
+model MetaLeadToLabel {
+  metaLeadId String   @map("meta_lead_id")
+  labelId    String   @map("label_id")
+  labeledAt  DateTime @default(now()) @map("labeled_at")
+
+  metaLead MetaLead      @relation(fields: [metaLeadId], references: [id], onDelete: Cascade)
+  label    MetaLeadLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([metaLeadId, labelId])
+  @@index([labelId])
+  @@map("meta_lead_to_labels")
 }

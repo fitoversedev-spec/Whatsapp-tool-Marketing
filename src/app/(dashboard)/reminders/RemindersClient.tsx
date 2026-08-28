@@ -233,7 +233,7 @@ function Row({
       />
       <div className="flex-1 min-w-0">
         <div
-          className={`text-sm ${isCompleted ? "text-slate-400 line-through" : "text-slate-900 font-medium"}`}
+          className={`text-sm ${isCompleted ? "text-slate-400" : "text-slate-900 font-medium"}`}
         >
           {reminder.message}
         </div>

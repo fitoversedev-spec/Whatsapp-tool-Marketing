@@ -448,14 +448,26 @@ export default function LeadManagementPanel({
                         />
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={confirmDateTimePick}
-                      disabled={!datePart || !timePart}
-                      className="btn btn-primary w-full !py-1.5"
-                    >
-                      Done
-                    </button>
+                    <div className="flex gap-2">
+                      {reminderIso && (
+                        <button
+                          type="button"
+                          onClick={() => void chooseNoReminder()}
+                          disabled={savingReminder}
+                          className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                        >
+                          Clear
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={confirmDateTimePick}
+                        disabled={!datePart || !timePart}
+                        className="btn btn-primary flex-1 !py-1.5"
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

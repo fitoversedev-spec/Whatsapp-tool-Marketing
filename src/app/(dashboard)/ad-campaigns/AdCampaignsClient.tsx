@@ -13,7 +13,7 @@ import { StatusBadge } from "@/components/meta/StatusBadge";
 import MetaAiSummary from "@/components/MetaAiSummary";
 import LeadsTable from "@/components/meta/LeadsTable";
 import type { Rep } from "@/components/meta/MoveToCrmDialog";
-import type { AdCampaignOverview, CampaignListRow, MetaLeadRow } from "@/lib/meta-ads/queries";
+import type { AdCampaignOverview, CampaignListRow, MetaLeadRow, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
 
 // Cost per lead is plain rupees — there is no fmtCpl, so it's formatted with
 // fmtInr like every other money figure. CTR comes through as a fraction (0..1)
@@ -40,12 +40,18 @@ export default function AdCampaignsClient({
   leads,
   campaigns,
   reps,
+  labelCatalog,
+  currentUserId,
+  isAdmin,
   range,
 }: {
   overview: AdCampaignOverview;
   leads: MetaLeadRow[];
   campaigns: CampaignListRow[];
   reps: Rep[];
+  labelCatalog: MetaLeadLabelChip[];
+  currentUserId: string;
+  isAdmin: boolean;
   range: DateRange;
 }) {
   const router = useRouter();
@@ -210,7 +216,7 @@ export default function AdCampaignsClient({
           title="Lead-gen leads"
           description="Every Instant-Form submission captured from your ads. Filter by city or sport, click a breakdown value to drill in, or open a lead for the full form answers."
         >
-          <LeadsTable leads={leads} reps={reps} showCampaignColumn exportFilename="ad-leads" />
+          <LeadsTable leads={leads} reps={reps} showCampaignColumn exportFilename="ad-leads" labelCatalog={labelCatalog} currentUserId={currentUserId} isAdmin={isAdmin} />
         </AnalyticsCard>
       </div>
     </div>

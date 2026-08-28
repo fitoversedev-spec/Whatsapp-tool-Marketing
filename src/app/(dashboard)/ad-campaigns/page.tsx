@@ -4,6 +4,7 @@ import {
   getMetaLeads,
   getCampaignList,
   getAssignableReps,
+  getMetaLeadLabels,
 } from "@/lib/meta-ads/queries";
 import AdCampaignsClient from "./AdCampaignsClient";
 
@@ -26,7 +27,7 @@ export default async function AdCampaignsPage({
 }: {
   searchParams: { from?: string; to?: string };
 }) {
-  await requireUser();
+  const user = await requireUser();
 
   const from = parseDateParam(searchParams.from, new Date("2000-01-01T00:00:00Z"));
   // Guard the upper bound against a malformed ?to= (an Invalid Date would throw
@@ -39,11 +40,12 @@ export default async function AdCampaignsPage({
 
   // getCampaignList() is a lifetime roster (NOT windowed) and getAssignableReps()
   // is static, so both are fetched alongside the windowed overview/leads.
-  const [overview, leads, campaigns, reps] = await Promise.all([
+  const [overview, leads, campaigns, reps, labelCatalog] = await Promise.all([
     getAdCampaignOverview({ from, to }),
     getMetaLeads({ from, to }),
     getCampaignList(),
     getAssignableReps(),
+    getMetaLeadLabels(),
   ]);
 
   return (
@@ -52,6 +54,9 @@ export default async function AdCampaignsPage({
       leads={leads}
       campaigns={campaigns}
       reps={reps}
+      labelCatalog={labelCatalog}
+      currentUserId={user.id}
+      isAdmin={user.role === "admin"}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}
     />
   );

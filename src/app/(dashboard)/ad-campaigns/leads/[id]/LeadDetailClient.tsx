@@ -137,6 +137,7 @@ export default function LeadDetailClient({
           labelCatalog={labelCatalog}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
+          showFormAnswers={false}
         />
       </div>
 

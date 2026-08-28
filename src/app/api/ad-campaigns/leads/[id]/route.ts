@@ -11,6 +11,15 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { LEAD_STAGES } from "@/lib/meta-ads/lead-fields";
+import { getMetaLeadDetail } from "@/lib/meta-ads/queries";
+
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const detail = await getMetaLeadDetail(params.id);
+  if (!detail) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  return NextResponse.json(detail);
+}
 
 const patchSchema = z.object({
   stage: z.enum(LEAD_STAGES).optional(),

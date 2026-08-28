@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 import type { Rep } from "./MoveToCrmDialog";
 import type { MetaLeadDetail, MetaLeadLabelChip, MetaLeadNoteRow } from "@/lib/meta-ads/queries";
+import { parseFieldData } from "@/lib/meta-ads/field-data";
 import {
   LEAD_STAGES,
   LEAD_STAGE_LABELS,
@@ -14,23 +15,28 @@ import {
   labelDot,
 } from "@/lib/meta-ads/lead-fields";
 
-// The Meta-Leads-Centre-style "Lead management" sidebar on the lead detail page:
-// Stage, Assigned-to, Reminder, Labels, and a running Notes log. Each control
-// saves on its own (optimistic local state -> PATCH/POST; revert + toast on
-// failure), so there is no page-level Save button. The left-hand fields table is
-// untouched server data; this panel owns all the editable state locally.
-
 const inputCls =
   "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const sectionLabelCls = "text-xs font-heading font-bold uppercase tracking-wide text-slate-500";
 
-// UTC ISO -> "YYYY-MM-DDTHH:mm" in the viewer's local time (datetime-local value).
 function toLocalInput(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
     d.getMinutes(),
   )}`;
+}
+
+function toDatePart(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function toTimePart(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function fmtDateTime(iso: string): string {
@@ -50,12 +56,18 @@ export default function LeadManagementPanel({
   labelCatalog,
   currentUserId,
   isAdmin,
+  onStageUpdated,
+  onLabelsUpdated,
+  showFormAnswers = true,
 }: {
   lead: MetaLeadDetail;
   reps: Rep[];
   labelCatalog: MetaLeadLabelChip[];
   currentUserId: string;
   isAdmin: boolean;
+  onStageUpdated?: (leadId: string, newStage: string) => void;
+  onLabelsUpdated?: (leadId: string, labels: MetaLeadLabelChip[]) => void;
+  showFormAnswers?: boolean;
 }) {
   const toast = useToast();
 
@@ -68,15 +80,34 @@ export default function LeadManagementPanel({
   const [savingAssignee, setSavingAssignee] = useState(false);
 
   // --- Reminder ----------------------------------------------------------
-  // reminderIso = the SAVED value; reminderDraft = the freely-editable input
-  // (datetime-local string), only persisted on the explicit "Set reminder"
-  // click (mirrors the Notes "Save note" flow) rather than on every keystroke.
   const [reminderIso, setReminderIso] = useState<string | null>(lead.reminderAt);
   const [savingReminder, setSavingReminder] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<boolean>(!!lead.reminderAt);
   const [reminderDraft, setReminderDraft] = useState<string>(
     lead.reminderAt ? toLocalInput(lead.reminderAt) : "",
   );
+
+  // Custom date/time popup state
+  const [pickerPopupOpen, setPickerPopupOpen] = useState(false);
+  const [datePart, setDatePart] = useState<string>(
+    lead.reminderAt ? toDatePart(lead.reminderAt) : "",
+  );
+  const [timePart, setTimePart] = useState<string>(
+    lead.reminderAt ? toTimePart(lead.reminderAt) : "",
+  );
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // Close popup on outside click
+  useEffect(() => {
+    if (!pickerPopupOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setPickerPopupOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [pickerPopupOpen]);
 
   // --- Labels ------------------------------------------------------------
   const [catalog, setCatalog] = useState<MetaLeadLabelChip[]>(labelCatalog);
@@ -93,13 +124,28 @@ export default function LeadManagementPanel({
   const [savingNote, setSavingNote] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
+  // --- Form answers ------------------------------------------------------
+  const formAnswers = useMemo(() => parseFieldData(lead.fieldData), [lead.fieldData]);
+
   const appliedIds = useMemo(() => new Set(applied.map((l) => l.id)), [applied]);
   const available = useMemo(() => catalog.filter((l) => !appliedIds.has(l.id)), [catalog, appliedIds]);
 
-  // Always resolves to a boolean — a network-layer rejection (offline, reset,
-  // aborted) becomes `false` so each caller's `if (!ok)` branch re-enables the
-  // control, reverts the optimistic value, and toasts, instead of leaving the
-  // saving flag stuck true forever.
+  // Reset local state when the lead changes (sidebar switches between leads)
+  useEffect(() => {
+    setStage(lead.stage);
+    setAssignedToUserId(lead.assignedToUserId);
+    setReminderIso(lead.reminderAt);
+    setScheduleMode(!!lead.reminderAt);
+    setReminderDraft(lead.reminderAt ? toLocalInput(lead.reminderAt) : "");
+    setDatePart(lead.reminderAt ? toDatePart(lead.reminderAt) : "");
+    setTimePart(lead.reminderAt ? toTimePart(lead.reminderAt) : "");
+    setApplied(lead.labels);
+    setNotes(lead.notes);
+    setNoteDraft("");
+    setPickerOpen(false);
+    setPickerPopupOpen(false);
+  }, [lead.id, lead.stage, lead.assignedToUserId, lead.reminderAt, lead.labels, lead.notes]);
+
   async function patch(payload: Record<string, unknown>): Promise<boolean> {
     try {
       const res = await fetch(`/api/ad-campaigns/leads/${lead.id}`, {
@@ -122,6 +168,8 @@ export default function LeadManagementPanel({
     if (!ok) {
       setStage(prev);
       toast.error("Could not update the stage");
+    } else {
+      onStageUpdated?.(lead.id, next);
     }
   }
 
@@ -151,33 +199,40 @@ export default function LeadManagementPanel({
     return ok;
   }
 
-  // Persist the current draft on the explicit "Set reminder" click.
   async function saveReminder() {
-    const d = reminderDraft ? new Date(reminderDraft) : null; // browser parses as local time
+    const d = reminderDraft ? new Date(reminderDraft) : null;
     if (!d || Number.isNaN(d.getTime())) return;
     const ok = await setReminder(d.toISOString());
     if (ok) toast.success("Reminder set");
   }
 
-  // "No reminder" — clears immediately (a discrete action, no Set needed).
   async function chooseNoReminder() {
     setScheduleMode(false);
+    setPickerPopupOpen(false);
     if (reminderIso) {
       const ok = await setReminder(null);
-      if (!ok) setScheduleMode(true); // revert the radio if the clear failed
+      if (!ok) setScheduleMode(true);
     }
   }
 
-  // "Schedule a reminder" — reveals the editable input; does NOT save yet.
-  // Seeds a sensible default (tomorrow 9am local) only when there's no draft.
   function chooseSchedule() {
     setScheduleMode(true);
-    if (!reminderDraft) {
+    if (!datePart) {
       const d = new Date();
       d.setDate(d.getDate() + 1);
       d.setHours(9, 0, 0, 0);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      setDatePart(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+      setTimePart("09:00");
       setReminderDraft(toLocalInput(d.toISOString()));
     }
+  }
+
+  function confirmDateTimePick() {
+    if (datePart && timePart) {
+      setReminderDraft(`${datePart}T${timePart}`);
+    }
+    setPickerPopupOpen(false);
   }
 
   async function saveLabels(nextApplied: MetaLeadLabelChip[]) {
@@ -189,6 +244,8 @@ export default function LeadManagementPanel({
     if (!ok) {
       setApplied(prev);
       toast.error("Could not update labels");
+    } else {
+      onLabelsUpdated?.(lead.id, nextApplied);
     }
   }
 
@@ -266,7 +323,6 @@ export default function LeadManagementPanel({
     }
   }
 
-  // Derived reminder state for the draft-then-Set flow.
   const reminderDraftDate = reminderDraft ? new Date(reminderDraft) : null;
   const reminderDraftValid = !!reminderDraftDate && !Number.isNaN(reminderDraftDate.getTime());
   const savedReminderMs = reminderIso ? new Date(reminderIso).getTime() : null;
@@ -322,10 +378,6 @@ export default function LeadManagementPanel({
               {r.name}
             </option>
           ))}
-          {/* The current owner may be a since-deactivated/soft-deleted rep who
-              is no longer in the assignable list; keep them visible + selected
-              (as "inactive") so the assignment isn't silently shown as
-              Unassigned or lost when the rep edits something else. */}
           {assignedToUserId && !reps.some((r) => r.id === assignedToUserId) && (
             <option value={assignedToUserId}>
               {(lead.assignedToName ?? "Unknown user") + " (inactive)"}
@@ -360,13 +412,53 @@ export default function LeadManagementPanel({
           </label>
           {scheduleMode && (
             <div className="pt-1 space-y-1.5">
-              {/* Freely editable — nothing is saved until "Set reminder". */}
-              <input
-                type="datetime-local"
-                className={inputCls}
-                value={reminderDraft}
-                onChange={(e) => setReminderDraft(e.target.value)}
-              />
+              {/* Custom date/time popup with Done button */}
+              <div className="relative" ref={popupRef}>
+                <button
+                  type="button"
+                  onClick={() => setPickerPopupOpen((o) => !o)}
+                  className={`${inputCls} text-left flex items-center justify-between`}
+                >
+                  <span className={reminderDraftValid ? "text-slate-800" : "text-slate-400"}>
+                    {reminderDraftValid ? fmtDateTime(reminderDraftDate!.toISOString()) : "Pick date & time"}
+                  </span>
+                  <svg className="h-4 w-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
+                {pickerPopupOpen && (
+                  <div className="absolute z-50 mt-1 left-0 right-0 rounded-lg border border-slate-200 bg-white shadow-lg p-3 space-y-3">
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-500 mb-1">Date</label>
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={datePart}
+                          onChange={(e) => setDatePart(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-500 mb-1">Time</label>
+                        <input
+                          type="time"
+                          className={inputCls}
+                          value={timePart}
+                          onChange={(e) => setTimePart(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={confirmDateTimePick}
+                      disabled={!datePart || !timePart}
+                      className="btn btn-primary w-full !py-1.5"
+                    >
+                      Done
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center justify-between gap-2">
                 <p
                   className={`text-xs ${
@@ -453,20 +545,18 @@ export default function LeadManagementPanel({
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-center gap-1">
-                {LABEL_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    aria-label={`Colour ${c}`}
-                    onClick={() => setNewLabelColor(c)}
-                    className={`h-4 w-4 rounded-full ${labelDot(c)} ${
-                      newLabelColor === c ? "ring-2 ring-offset-1 ring-slate-400" : ""
-                    }`}
-                  />
-                ))}
-              </div>
+            <div className="flex items-center gap-1">
+              {LABEL_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-label={`Colour ${c}`}
+                  onClick={() => setNewLabelColor(c)}
+                  className={`h-4 w-4 rounded-full ${labelDot(c)} ${
+                    newLabelColor === c ? "ring-2 ring-offset-1 ring-slate-400" : ""
+                  }`}
+                />
+              ))}
             </div>
             <div className="flex items-center gap-1.5">
               <input
@@ -547,6 +637,25 @@ export default function LeadManagementPanel({
           </ul>
         )}
       </div>
+
+      {/* Form answers — stacked Q&A like Meta Leads Centre */}
+      {showFormAnswers && formAnswers.length > 0 && (
+        <div className="space-y-1.5">
+          <span className={sectionLabelCls}>Form answers</span>
+          <div className="space-y-3">
+            {formAnswers.map((f, i) => (
+              <div key={i}>
+                <div className="text-xs text-court-600 capitalize">
+                  {f.name.replace(/_/g, " ")}
+                </div>
+                <div className="text-sm font-semibold text-slate-900 mt-0.5">
+                  {f.value || "—"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

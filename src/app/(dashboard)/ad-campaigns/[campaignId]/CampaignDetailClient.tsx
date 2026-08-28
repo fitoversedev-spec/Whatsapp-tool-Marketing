@@ -9,7 +9,7 @@ import { StackedBarChart, fmtInr, fmtPct } from "@/components/analytics/charts";
 import { StatusBadge } from "@/components/meta/StatusBadge";
 import LeadsTable from "@/components/meta/LeadsTable";
 import type { Rep } from "@/components/meta/MoveToCrmDialog";
-import type { CampaignDetail, MetaLeadRow, AdLeadBreakdownRow } from "@/lib/meta-ads/queries";
+import type { CampaignDetail, MetaLeadRow, AdLeadBreakdownRow, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
 
 // Cost per lead is plain rupees — there is no fmtCpl, so it's formatted with
 // fmtInr like every other money figure. CTR arrives as a fraction (0..1), so it
@@ -89,12 +89,18 @@ export default function CampaignDetailClient({
   leads,
   reps,
   adBreakdown,
+  labelCatalog,
+  currentUserId,
+  isAdmin,
   range,
 }: {
   detail: CampaignDetail;
   leads: MetaLeadRow[];
   reps: Rep[];
   adBreakdown: AdLeadBreakdownRow[];
+  labelCatalog: MetaLeadLabelChip[];
+  currentUserId: string;
+  isAdmin: boolean;
   range: DateRange;
 }) {
   const router = useRouter();
@@ -203,6 +209,9 @@ export default function CampaignDetailClient({
             reps={reps}
             showCampaignColumn={false}
             exportFilename={`campaign-${detail.metaId}-leads`}
+            labelCatalog={labelCatalog}
+            currentUserId={currentUserId}
+            isAdmin={isAdmin}
           />
         </AnalyticsCard>
       </div>

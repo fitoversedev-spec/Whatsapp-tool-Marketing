@@ -156,6 +156,7 @@ export type MetaLeadRow = {
   sport: string | null; // extracted at ingest from the form's sport question
   fieldData: string; // raw JSON string of all form answers — client parses defensively
   stage: string; // lead pipeline stage (NEW|CONTACTED|QUALIFIED|CONVERTED|LOST); shown + filtered in the list
+  labels: { id: string; name: string; color: string }[]; // applied label chips (for the list view)
   inCrm: boolean; // MetaLead.accountContactId != null (linked to a CRM AccountContact on move-to-CRM)
   capturedAt: string; // ISO — createdAtMeta (Meta's submit time) when present, else the ingest time
 };
@@ -177,6 +178,10 @@ const META_LEAD_SELECT = {
   accountContactId: true,
   createdAtMeta: true,
   createdAt: true,
+  labels: {
+    select: { label: { select: { id: true, name: true, color: true } } },
+    orderBy: { labeledAt: "asc" as const },
+  },
 } as const;
 
 type MetaLeadSelected = {
@@ -193,6 +198,7 @@ type MetaLeadSelected = {
   accountContactId: string | null;
   createdAtMeta: Date | null;
   createdAt: Date;
+  labels: { label: { id: string; name: string; color: string } }[];
 };
 
 function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
@@ -207,6 +213,7 @@ function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
     sport: l.sport,
     fieldData: l.fieldData,
     stage: l.stage,
+    labels: l.labels.map((j) => j.label),
     inCrm: l.accountContactId != null,
     capturedAt: (l.createdAtMeta ?? l.createdAt).toISOString(),
   };

@@ -1,25 +1,38 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { endOfDayIST } from "@/lib/time";
+import { startOfDayIST, endOfDayIST } from "@/lib/time";
 import RemindersClient from "./RemindersClient";
 
-export default async function RemindersPage() {
+export default async function RemindersPage({
+  searchParams,
+}: {
+  searchParams: { date?: string };
+}) {
   const user = await requireUser();
   const now = new Date();
-  // "Today" is the IST calendar day, not the server's local day. On Vercel
-  // (UTC) the old setHours approach would surface tomorrow's reminders
-  // between 18:30 and 23:59 IST as "today" — wrong by a day.
-  const endOfToday = endOfDayIST(now);
-  const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const dateFilter = searchParams.date;
+  let dateWhere: Record<string, unknown> | undefined;
+  if (dateFilter) {
+    const picked = new Date(dateFilter + "T00:00:00Z");
+    if (!isNaN(picked.getTime())) {
+      const dayStart = startOfDayIST(picked);
+      const dayEnd = endOfDayIST(picked);
+      dateWhere = { dueAt: { gte: dayStart, lte: dayEnd } };
+    }
+  }
 
   const reminders = await prisma.reminder.findMany({
     where: {
       ownerUserId: user.id,
-      OR: [
-        { completedAt: null },
-        // Show recently-completed (last 7 days) for context
-        { completedAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } },
-      ],
+      ...(dateWhere
+        ? dateWhere
+        : {
+            OR: [
+              { completedAt: null },
+              { completedAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } },
+            ],
+          }),
     },
     orderBy: [
       { completedAt: { sort: "asc", nulls: "first" } },
@@ -29,23 +42,44 @@ export default async function RemindersPage() {
       conversation: {
         select: { id: true, contactPhone: true, contactName: true },
       },
+      metaLead: { select: { id: true, fullName: true } },
+      deal: { select: { id: true, title: true } },
+      accountContact: { select: { id: true, name: true } },
     },
     take: 200,
   });
 
-  const overdue = reminders.filter((r) => !r.completedAt && r.dueAt < now);
-  const today = reminders.filter(
-    (r) => !r.completedAt && r.dueAt >= now && r.dueAt <= endOfToday
-  );
-  const week = reminders.filter(
-    (r) => !r.completedAt && r.dueAt > endOfToday && r.dueAt <= weekFromNow
-  );
-  const later = reminders.filter(
-    (r) => !r.completedAt && r.dueAt > weekFromNow
-  );
-  const completed = reminders.filter((r) => r.completedAt);
+  const endOfToday = endOfDayIST(now);
+  const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   function shape(r: (typeof reminders)[number]) {
+    let section: string = "General";
+    let sectionLink: string | null = null;
+    if (r.metaLeadId) {
+      section = "Meta Leads";
+      sectionLink = `/ad-campaigns/leads/${r.metaLeadId}`;
+    } else if (r.dealId) {
+      section = "CRM Deals";
+      sectionLink = `/crm/deals/${r.dealId}`;
+    } else if (r.accountContactId) {
+      section = "CRM Contacts";
+      sectionLink = `/crm/contacts/${r.accountContactId}`;
+    } else if (r.conversationId) {
+      section = "WhatsApp Inbox";
+      sectionLink = `/inbox?conversation=${r.conversationId}`;
+    }
+
+    let timeBucket: "overdue" | "today" | "week" | "later" | "completed" = "later";
+    if (r.completedAt) {
+      timeBucket = "completed";
+    } else if (r.dueAt < now) {
+      timeBucket = "overdue";
+    } else if (r.dueAt <= endOfToday) {
+      timeBucket = "today";
+    } else if (r.dueAt <= weekFromNow) {
+      timeBucket = "week";
+    }
+
     return {
       id: r.id,
       conversationId: r.conversationId,
@@ -55,16 +89,22 @@ export default async function RemindersPage() {
       dueAt: r.dueAt.toISOString(),
       completedAt: r.completedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
+      section,
+      sectionLink,
+      sectionEntityName:
+        r.metaLead?.fullName ??
+        r.deal?.title ??
+        r.accountContact?.name ??
+        r.conversation?.contactName ??
+        null,
+      timeBucket,
     };
   }
 
   return (
     <RemindersClient
-      overdue={overdue.map(shape)}
-      today={today.map(shape)}
-      week={week.map(shape)}
-      later={later.map(shape)}
-      completed={completed.map(shape)}
+      reminders={reminders.map(shape)}
+      dateFilter={dateFilter ?? null}
     />
   );
 }

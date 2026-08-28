@@ -3,10 +3,10 @@ import "./globals.css";
 import { ToastProvider } from "@/components/Toast";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
-// Industrial type system — Archivo (headings), Newsreader (body copy) and
-// JetBrains Mono (all numbers). Self-hosted from /public/fonts via @font-face in
-// globals.css (Manrope kept as the opt-in UI sans). We self-host rather than use
-// next/font/google because that fetch stalls behind some networks/proxies here.
+// Type system — Poppins (UI/body/headings) and JetBrains Mono (all numbers).
+// Self-hosted from /public/fonts via @font-face in globals.css. We self-host
+// rather than use next/font/google because that fetch stalls behind some
+// networks/proxies here.
 
 export const metadata: Metadata = {
   title: "Fitoverse",
@@ -18,7 +18,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
-  themeColor: "#1C6E8C",
+  themeColor: "#00aeef",
 };
 
 // Inline script runs BEFORE React hydrates — applies the persisted theme so

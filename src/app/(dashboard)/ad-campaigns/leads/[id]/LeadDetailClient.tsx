@@ -113,7 +113,7 @@ export default function LeadDetailClient({
               );
             })}
             {fields.length > 0 && (
-              <tr className="bg-slate-50/60 border-b border-slate-100">
+              <tr className="bg-slate-50 border-b border-slate-100">
                 <td colSpan={2} className="px-3 py-1.5 text-[11px] font-heading font-bold uppercase tracking-wide text-slate-400">
                   Form answers
                 </td>

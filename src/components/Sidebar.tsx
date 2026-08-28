@@ -282,14 +282,14 @@ export default function Sidebar({
                   collapsed ? "lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5" : "px-3 py-2.5"
                 } ${
                   active
-                    ? "bg-wa-green text-white shadow-md shadow-wa-green/30"
-                    : "text-slate-700 hover:bg-white/60 hover:text-slate-900 active:bg-white/80"
+                    ? "bg-[var(--acs)] text-[var(--ac)]"
+                    : "text-[rgb(var(--sub))] hover:bg-[rgb(var(--p2))] hover:text-[rgb(var(--tx))] active:bg-[rgb(var(--line))]"
                 }`}
               >
                 {active && (
                   <span
                     aria-hidden
-                    className="pointer-events-none absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-mint-300"
+                    className="pointer-events-none absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-[var(--ac)]"
                   />
                 )}
                 <span className="text-base shrink-0 relative">

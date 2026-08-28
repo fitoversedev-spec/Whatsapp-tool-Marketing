@@ -436,7 +436,7 @@ export default function LeadManagementPanel({
         )}
 
         {pickerOpen && (
-          <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50/60 p-2 space-y-2">
+          <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
             {available.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {available.map((l) => (

@@ -15,13 +15,13 @@ function BrandHero() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/quotation-assets/image1.png" alt="Fitoverse" className="h-9 w-auto" />
       </div>
-      <div className="relative text-[13px] font-bold tracking-[0.28em] text-[#8FE3FF] mb-5">SPORTS INFRASTRUCTURE</div>
+      <div className="relative text-[13px] font-bold tracking-[0.28em] text-[var(--ac)] mb-5">SPORTS INFRASTRUCTURE</div>
       <h1 className="relative text-[46px] leading-[1.06] font-extrabold tracking-tight max-w-[15ch]">
         From the first message to a{" "}
         <span style={{ background: "linear-gradient(90deg,#3FD07E,#73CAF0)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>closed deal.</span>
       </h1>
       <p className="relative text-lg text-white/70 mt-6 max-w-[36ch] leading-relaxed">WhatsApp marketing, quotations, court designs and a full CRM — in one tool.</p>
-      <div className="relative h-1.5 w-32 rounded mt-9" style={{ background: "linear-gradient(90deg,#159341,#73CAF0,#C81124)" }} />
+      <div className="relative h-1.5 w-32 rounded mt-9" style={{ background: "linear-gradient(90deg,var(--gd),var(--ac),var(--bd))" }} />
       <div className="absolute left-16 bottom-10 text-[13px] text-white/50 tracking-wide">© 2026 Fitoverse · Salem · Chennai · Bangalore</div>
     </aside>
   );

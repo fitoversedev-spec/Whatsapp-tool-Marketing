@@ -109,7 +109,7 @@ export default function ChatThreadView({
                     </div>
                   )}
                   {tags.length > 0 && (
-                    <div className="mt-1 pt-1 border-t border-slate-200/60 space-y-0.5">
+                    <div className="mt-1 pt-1 border-t border-slate-200 space-y-0.5">
                       {tags.map((g) => (
                         <div key={g.refType} className="text-[11px] leading-tight text-slate-500">
                           <span className="font-semibold text-slate-600">{g.category}:</span> {g.items.map((i) => i.label).join(", ")}

@@ -3143,7 +3143,7 @@ function PlotTitleBlock({
         shadowOffsetY={2}
       />
       {/* Brand-green accent bar on the left edge */}
-      <Rect x={x} y={top} width={4} height={boxH} fill="#15803d" cornerRadius={[7, 0, 0, 7]} />
+      <Rect x={x} y={top} width={4} height={boxH} fill="#159341" cornerRadius={[7, 0, 0, 7]} />
       {/* Fitoverse wordmark */}
       <Text
         x={x + padX}
@@ -3151,9 +3151,9 @@ function PlotTitleBlock({
         text="FITOVERSE"
         fontSize={brandFs}
         fontStyle="700"
-        fill="#15803d"
+        fill="#159341"
         letterSpacing={1.5}
-        fontFamily="system-ui, -apple-system, sans-serif"
+        fontFamily="Poppins, system-ui, -apple-system, sans-serif"
       />
       {/* Surface → colour legend (swatch + label), right-aligned on the brand row */}
       <Rect

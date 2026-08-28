@@ -384,7 +384,7 @@ function ProductCard({
 const FIELD = "input mt-1 text-sm";
 const FIELD_LABEL =
   "text-[11px] font-heading font-bold text-slate-500 uppercase tracking-wide";
-const SECTION_BOX = "rounded-xl border border-slate-200 bg-slate-50/40 p-4";
+const SECTION_BOX = "rounded-xl border border-slate-200 bg-slate-50 p-4";
 const SECTION_TITLE = "heading text-xs text-slate-700 tracking-wide mb-3";
 
 function ProductForm({

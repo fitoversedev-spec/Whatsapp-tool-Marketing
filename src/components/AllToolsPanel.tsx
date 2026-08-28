@@ -344,7 +344,10 @@ export default function AllToolsPanel({
             if (visible.length === 0) return null;
             return (
               <section key={group.title}>
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                <h3
+                  className="text-[10.5px] font-extrabold uppercase mb-2"
+                  style={{ letterSpacing: ".14em", color: "var(--ac-75)" }}
+                >
                   {group.title}
                 </h3>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">

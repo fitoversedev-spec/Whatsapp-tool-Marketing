@@ -2,38 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Self-hosted Manrope (brand UI font) — woff2 in /public/fonts, no network
-   fetch at build (unlike next/font/google, whose fetch stalls behind some
+/* Design-system swap (2026-08): self-hosted Poppins (brand UI font, replaces
+   Newsreader/Manrope/Archivo) — woff2 in /public/fonts, no network fetch at
+   build (unlike next/font/google, whose fetch stalls behind some
    networks/proxies). */
-@font-face { font-family: "Manrope"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/manrope-400.woff2") format("woff2"); }
-@font-face { font-family: "Manrope"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/manrope-500.woff2") format("woff2"); }
-@font-face { font-family: "Manrope"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/manrope-600.woff2") format("woff2"); }
-@font-face { font-family: "Manrope"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/manrope-700.woff2") format("woff2"); }
-@font-face { font-family: "Manrope"; font-style: normal; font-weight: 800; font-display: swap; src: url("/fonts/manrope-800.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 300; font-display: swap; src: url("/fonts/poppins-300.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/poppins-400.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/poppins-500.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/poppins-600.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/poppins-700.woff2") format("woff2"); }
 
-/* Self-hosted industrial type system (latin woff2 in /public/fonts — same
-   no-network pattern as Manrope above).
-     Archivo         → headings + CTAs (uppercase, tight tracking, 700/800)
-     Newsreader      → body copy (serif)
-     JetBrains Mono  → ALL numbers, ₹ amounts, rates, counts, dates, codes */
-@font-face { font-family: "Archivo"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/archivo-700.woff2") format("woff2"); }
-@font-face { font-family: "Archivo"; font-style: normal; font-weight: 800; font-display: swap; src: url("/fonts/archivo-800.woff2") format("woff2"); }
-@font-face { font-family: "Newsreader"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/newsreader-400.woff2") format("woff2"); }
-@font-face { font-family: "Newsreader"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/newsreader-500.woff2") format("woff2"); }
-@font-face { font-family: "Newsreader"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/newsreader-600.woff2") format("woff2"); }
+/* JetBrains Mono — unchanged, already the correct numeric/data typeface under
+   the new design system too (ALL numbers, ₹ amounts, rates, counts, dates,
+   codes). */
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/jetbrainsmono-400.woff2") format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/jetbrainsmono-500.woff2") format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/jetbrainsmono-600.woff2") format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/jetbrainsmono-700.woff2") format("woff2"); }
 
+/* ─── Design tokens (CSS custom properties) ─────────────────────────────────
+ * Ported from the Fitoverse/CivilTrack design system. Dark mode is scoped to
+ * `html.dark` (NOT [data-theme]/prefers-color-scheme) to match this app's
+ * existing 3-way light/system/dark toggle (ThemeProvider.tsx), which already
+ * resolves "system" via matchMedia in JS before paint and writes a plain
+ * `.dark` class — that mechanism is unchanged by this swap. */
 :root {
+  --bg: #ededed;      /* page ground — sits behind every panel */
+  --panel: #ffffff;   /* card/panel/input surface */
+  --p2: 246 247 249;      /* secondary surface — hover states, subtle fills */
+  --line: 226 226 230;    /* every border and divider */
+
+  --tx: 28 28 30;       /* primary text — headings, values, active nav */
+  --sub: 72 72 74;      /* secondary text — card meta, subtitles */
+  --dim: 110 110 115;      /* muted/tertiary — placeholders, timestamps */
+
+  --ac: #00aeef; --acs: rgba(0, 174, 239, .14); --ac-75: rgba(0, 174, 239, .75); /* accent — primary CTAs, links, active nav, focus rings */
+  --gd: #159341; --gds: rgba(21, 147, 65, .12);          /* good/approved/paid — same hex as turf[500] */
+  --wn: #f0a014; --wns: rgba(240, 160, 20, .12); --wnt: #92400e; /* warn/at-risk */
+  --bd: #c81124; --bds: rgba(200, 17, 36, .12);          /* bad/overdue/danger — same hex as track[500] */
+
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px; --r-full: 9999px;
+  --shadow-sm: 0 1px 3px rgba(10, 10, 10, .08);
+  --shadow-md: 0 4px 16px rgba(10, 10, 10, .10);
+  --shadow-lg: 0 12px 40px rgba(10, 10, 10, .16);
+
+  --font-ui: 'Poppins', system-ui, -apple-system, sans-serif;
+  --font-display: 'Orbitron', system-ui, sans-serif; /* declared for future use — no wordmark today, no font sourced */
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* Extended hues — unchanged across themes, reserved for specific badge/role
+     variants (kept on Tailwind's stock orange/purple palettes — see
+     tailwind.config.ts comments — these vars exist for any new CSS that wants
+     them directly). */
+  --accent-orange: #F97316; --purple: #7C3AED; --teal: #0D9488; --brand-navy: #0F172A;
+
   color-scheme: light;
 }
 
+html.dark {
+  --bg: #0a0a0a; --panel: #141417; --p2: 27 27 32; --line: 42 42 49;
+  --tx: 244 244 246; --sub: 176 176 182; --dim: 147 147 156;
+  --acs: rgba(0, 174, 239, .18);
+  --gds: rgba(21, 147, 65, .18);
+  --wns: rgba(240, 160, 20, .18); --wnt: #fbbf24;
+  --bds: rgba(200, 17, 36, .18);
+  color-scheme: dark;
+}
+
 html, body {
-  background-color: #f6f9fa; /* near-white, ink-neutral */
-  color: #0D2733;           /* ink — body text */
-  font-family: "Newsreader", "Iowan Old Style", "Georgia", "Cambria", "Times New Roman", serif;
+  background-color: var(--bg);
+  color: rgb(var(--tx));
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -42,18 +81,18 @@ html {
   font-size: 17px;
 }
 
-/* ─── Industrial type system ────────────────────────────────────────────────
- * Headings render in Archivo — UPPERCASE, tight tracking, heavy weight. Applied
- * to the raw h1–h6 elements so every page title/section header inherits the
- * look; any element can opt out with a `normal-case` / `font-serif` / `font-sans`
- * utility (class specificity beats these element selectors). */
+/* Headings — Poppins, normal case (was Archivo uppercase). Applied to the raw
+   h1–h6 elements so every page title/section header inherits the look; any
+   element can opt out with a `font-mono`/`uppercase` utility (class
+   specificity beats these element selectors). Sidebar nav labels, section
+   group labels, and badges intentionally KEEP their own explicit `uppercase`
+   utility classes in JSX — this rule only governs prose headings. */
 @layer base {
   h1, h2, h3, h4, h5, h6 {
-    font-family: "Archivo", "Segoe UI", system-ui, Arial, sans-serif;
+    font-family: var(--font-ui);
     font-weight: 700;
-    text-transform: uppercase;
     letter-spacing: -0.01em;
-    line-height: 1.12;
+    line-height: 1.2;
   }
 }
 
@@ -63,133 +102,154 @@ html {
   .font-mono { font-variant-numeric: tabular-nums; }
   /* Convenience: numbers / ₹ amounts / rates / counts / codes. */
   .num {
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     letter-spacing: 0;
   }
+  /* Opt-in numeric type scale matching the target design system (15/22/30px).
+     Additive only — the 294 existing .num/font-mono call sites are untouched
+     and keep whatever Tailwind text-size utility they already compose with. */
+  .num-inline { font: 700 15px var(--font-mono); font-variant-numeric: tabular-nums; }
+  .num-kpi    { font: 700 22px var(--font-mono); font-variant-numeric: tabular-nums; }
+  .num-hero   { font: 700 30px var(--font-mono); font-variant-numeric: tabular-nums; }
 }
 
 /* ─── Shared primitive vocabulary ───────────────────────────────────────────
- * Industrial primitives Phase-1 screens can adopt directly (and the shared
- * components below already use). Low rounding, strong borders, mono numerals,
- * Archivo-uppercase CTAs. These are additive utility classes — they change
- * nothing until an element opts in. */
+ * Same class names as before the design-system swap — every consuming file
+ * (~35-40 for .btn*, ~36 .card, ~28 .badge, ~15-20 .input, 18 .data-table)
+ * needs zero JSX edits, only these definitions change. */
 @layer components {
-  /* Buttons */
+  /* Buttons — pill radius, Poppins, NOT uppercase (target has no uppercase
+     transform; button label strings in JSX are already normal-case). */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded border font-heading font-bold uppercase text-sm px-4 py-2.5 transition select-none;
-    letter-spacing: 0.02em;
+    @apply inline-flex items-center justify-center gap-2 font-bold text-sm px-5 py-2.5 transition select-none border;
+    font-family: var(--font-ui);
+    border-radius: 22px;
+    letter-spacing: normal;
   }
   .btn:disabled { @apply opacity-50 pointer-events-none; }
-  .btn-primary { @apply bg-court-600 text-white border-court-700 hover:bg-court-700 active:bg-court-800; }
-  .btn-turf    { @apply bg-turf-600 text-white border-turf-700 hover:bg-turf-700 active:bg-turf-800; }
-  .btn-danger  { @apply bg-track-600 text-white border-track-700 hover:bg-track-700 active:bg-track-800; }
-  .btn-secondary { @apply bg-white text-slate-800 border-slate-300 hover:bg-slate-50 active:bg-slate-100; }
-  .btn-ghost   { @apply bg-transparent text-slate-700 border-transparent hover:bg-slate-100 active:bg-slate-200; }
+  .btn-primary { background: var(--ac); color: #fff; border-color: var(--ac); }
+  .btn-primary:hover { filter: brightness(0.92); }
+  .btn-primary:active { filter: brightness(0.85); }
+  .btn-turf { background: var(--gd); color: #fff; border-color: var(--gd); }
+  .btn-turf:hover { filter: brightness(0.92); }
+  .btn-turf:active { filter: brightness(0.85); }
+  .btn-danger { background: var(--bd); color: #fff; border-color: var(--bd); }
+  .btn-danger:hover { filter: brightness(0.92); }
+  .btn-danger:active { filter: brightness(0.85); }
+  .btn-secondary { background: var(--panel); color: rgb(var(--tx)); border-color: rgb(var(--line)); }
+  .btn-secondary:hover { background: rgb(var(--p2)); }
+  .btn-secondary:active { background: rgb(var(--line)); }
+  .btn-ghost { background: transparent; color: rgb(var(--sub)); border-color: transparent; }
+  .btn-ghost:hover { background: rgb(var(--p2)); }
+  .btn-ghost:active { background: rgb(var(--line)); }
 
   /* Surface / card */
-  .card { @apply bg-white border border-slate-200 rounded-md; }
+  .card { background: var(--panel); border: 1px solid rgb(var(--line)); border-radius: 14px; }
 
   /* Text inputs, selects, textareas */
   .input {
-    @apply w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-400 transition;
-    @apply focus:outline-none focus:border-court-500 focus:ring-2 focus:ring-court-500/25;
+    @apply w-full px-3.5 py-2.5 transition;
+    background: var(--panel);
+    border: 1px solid rgb(var(--line));
+    color: rgb(var(--tx));
+    font-family: var(--font-ui);
+    font-size: 15px;
+    border-radius: 8px;
+  }
+  .input::placeholder { color: rgb(var(--dim)); }
+  .input:focus { outline: none; border-color: var(--ac); box-shadow: 0 0 0 3px var(--acs); }
+
+  /* Badges / pills — mono, uppercase, kept from the target verbatim (a
+     distinct convention from prose headings, which are NOT uppercase). */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 whitespace-nowrap uppercase;
+    font: 700 11px var(--font-mono);
+    letter-spacing: .04em;
+    border-radius: 20px;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold whitespace-nowrap;
+    background: var(--panel);
+    border: 1px solid rgb(var(--line));
+    color: rgb(var(--sub));
+    border-radius: 20px;
   }
 
-  /* Badges / chips / pills — Archivo uppercase micro-label */
-  .badge { @apply inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-xs font-heading font-bold uppercase tracking-wide whitespace-nowrap; }
-  .chip  { @apply inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold border border-slate-200 bg-white text-slate-700 whitespace-nowrap; }
-
-  /* Data tables */
+  /* Data tables — headers keep uppercase, same reasoning as badges. */
   .data-table { @apply w-full text-sm; }
-  .data-table th { @apply text-left font-heading uppercase tracking-wide text-xs font-bold text-slate-500 border-b border-slate-300 px-3 py-2; }
-  .data-table td { @apply border-b border-slate-100 px-3 py-2 text-slate-800 align-middle; }
-  .data-table tbody tr:hover { @apply bg-slate-50; }
+  .data-table th {
+    @apply text-left uppercase tracking-wide text-xs font-bold px-3 py-2;
+    font-family: var(--font-ui);
+    color: rgb(var(--dim));
+    border-bottom: 1px solid rgb(var(--line));
+  }
+  .data-table td { @apply px-3 py-2 align-middle; border-bottom: 1px solid rgb(var(--line)); color: rgb(var(--tx)); }
+  .data-table tbody tr:hover { background: rgb(var(--p2)); }
 
-  /* Heading primitive (for non-h1–h6 elements that should read as a heading) */
-  .heading { @apply font-heading font-bold uppercase; letter-spacing: -0.01em; }
+  /* Heading primitive (for non-h1–h6 elements that should read as a prose
+     heading) — normal case, matching the h1-h6 base rule above. */
+  .heading { font-family: var(--font-ui); font-weight: 700; letter-spacing: -0.01em; }
 }
 
-/* ─── Dark mode (neutral grey, eye-comfort) ─────────────────────────────────
- * Class-driven (html.dark). Grounds/surfaces/text use a NEUTRAL dark grey (not
- * green-tinted) for reading comfort; the brand green/blue/red accents still
- * carry through on pills, buttons, and KPI cards. Each rule scopes to `.dark`.
- */
+/* ─── Dark mode ──────────────────────────────────────────────────────────────
+ * Class-driven (html.dark). The slate/white portion of the OLD manual
+ * override list is gone — bg/text/border-slate-* now resolve automatically
+ * via the CSS-variable-backed `slate` ramp in tailwind.config.ts (see its
+ * comments). What remains here is the smaller, genuinely necessary residual:
+ * the legacy 11-step court/turf/track color ramps (used directly in ~200+/41
+ * files as bg-court-50/text-court-700-style tint/shade pairs — a pattern the
+ * new CSS-variable tokens don't cover, since the target system only ever
+ * needs ONE base + ONE soft tint per status color) plus amber/orange/purple,
+ * which were never custom-ramped and keep their original values untouched.
+ *
+ * Each rule below is EXTENDED (not just kept) to also match the direct ramp
+ * name (court, turf, track) alongside the Tailwind-alias name
+ * (blue, green, emerald, red) — closing a pre-existing gap where direct
+ * ramp usage got ZERO dark-mode adjustment, since Tailwind generates them as
+ * separate class names even though they resolve to the same underlying
+ * color object. Values are reused verbatim from the original, proven set —
+ * dark-mode readability doesn't need to hue-match the light-mode base
+ * precisely, so no new color decisions were needed for this extension. */
 
-html.dark {
-  color-scheme: dark;
-}
+html.dark { color-scheme: dark; }
 
-html.dark body {
-  background-color: #0f1318;
-  color: #e3e7eb;
-}
-
-/* Surfaces — neutral grey */
-html.dark .bg-white { background-color: #191d23 !important; }
-html.dark .bg-slate-50 { background-color: #13171c !important; }
-html.dark .bg-slate-100 { background-color: #1c2127 !important; }
-html.dark .bg-slate-200 { background-color: #2a3038 !important; }
+/* Surfaces */
+html.dark .bg-white { background-color: var(--panel) !important; }
 html.dark .bg-amber-50 { background-color: #3a2705 !important; }
 html.dark .bg-amber-100 { background-color: #543509 !important; }
-html.dark .bg-red-50 { background-color: #3a1212 !important; }
-html.dark .bg-red-100 { background-color: #551818 !important; }
-html.dark .bg-green-50 { background-color: #0a2e1d !important; }
-html.dark .bg-emerald-50 { background-color: #0a2e1d !important; }
-html.dark .bg-emerald-100 { background-color: #134e2e !important; }
-html.dark .bg-blue-50 { background-color: #0c2233 !important; }
-html.dark .bg-blue-100 { background-color: #12405c !important; }
+html.dark .bg-red-50, html.dark .bg-track-50 { background-color: #3a1212 !important; }
+html.dark .bg-red-100, html.dark .bg-track-100 { background-color: #551818 !important; }
+html.dark .bg-green-50, html.dark .bg-emerald-50, html.dark .bg-turf-50 { background-color: #0a2e1d !important; }
+html.dark .bg-green-100, html.dark .bg-emerald-100, html.dark .bg-turf-100 { background-color: #134e2e !important; }
+html.dark .bg-blue-50, html.dark .bg-court-50 { background-color: #0c2233 !important; }
+html.dark .bg-blue-100, html.dark .bg-court-100 { background-color: #12405c !important; }
 html.dark .bg-purple-50 { background-color: #2a0c3a !important; }
 html.dark .bg-purple-100 { background-color: #3a1452 !important; }
 html.dark .bg-orange-50 { background-color: #3a1c05 !important; }
 html.dark .bg-orange-100 { background-color: #5a2810 !important; }
-html.dark .bg-pink-100 { background-color: #5a1e3b !important; }
-html.dark .text-pink-700 { color: #f9a8d4 !important; }
-html.dark .bg-pink-50 { background-color: #2a0c1b !important; }
 html.dark .bg-wa-light { background-color: #0f3040 !important; }
 
-/* Hover states */
-html.dark .hover\:bg-slate-50:hover { background-color: #1c2127 !important; }
-html.dark .hover\:bg-slate-100:hover { background-color: #2a3038 !important; }
-html.dark .active\:bg-slate-100:active { background-color: #2a3038 !important; }
-html.dark .active\:bg-slate-200:active { background-color: #343b43 !important; }
-html.dark .hover\:bg-red-50:hover { background-color: #551818 !important; }
-html.dark .hover\:bg-red-100:hover { background-color: #6b1f1f !important; }
+/* Hover / active states */
+html.dark .hover\:bg-red-50:hover, html.dark .hover\:bg-track-50:hover { background-color: #551818 !important; }
+html.dark .hover\:bg-red-100:hover, html.dark .hover\:bg-track-100:hover { background-color: #6b1f1f !important; }
 
-/* Text — neutral light greys */
-html.dark .text-slate-900 { color: #f1f3f5 !important; }
-html.dark .text-slate-800 { color: #e3e7eb !important; }
-html.dark .text-slate-700 { color: #c8ced4 !important; }
-html.dark .text-slate-600 { color: #9ba4ac !important; }
-html.dark .text-slate-500 { color: #9ba4ac !important; }
-html.dark .text-slate-400 { color: #6f7880 !important; }
-html.dark .text-slate-300 { color: #4c545c !important; }
-html.dark .hover\:text-slate-900:hover { color: #f1f3f5 !important; }
-
-/* Borders — neutral grey */
-html.dark .border-slate-100 { border-color: #1c2127 !important; }
-html.dark .border-slate-200 { border-color: #2a3038 !important; }
-html.dark .border-slate-300 { border-color: #363d45 !important; }
+/* Borders */
 html.dark .border-amber-200 { border-color: #6e4d12 !important; }
-html.dark .border-red-200 { border-color: #6e1f1f !important; }
-html.dark .border-emerald-200 { border-color: #14532d !important; }
-html.dark .border-blue-200 { border-color: #1c5478 !important; }
+html.dark .border-red-200, html.dark .border-track-200 { border-color: #6e1f1f !important; }
+html.dark .border-emerald-200, html.dark .border-green-200, html.dark .border-turf-200 { border-color: #14532d !important; }
+html.dark .border-blue-200, html.dark .border-court-200 { border-color: #1c5478 !important; }
 html.dark .border-purple-200 { border-color: #5b1d75 !important; }
 html.dark .border-orange-200 { border-color: #6e3a15 !important; }
-html.dark .border-green-200 { border-color: #14532d !important; }
-
-/* Status pill background tones — must keep contrast for the pill text. */
-html.dark .bg-green-100 { background-color: #134e2e !important; }
-html.dark .bg-green-50 { background-color: #0a2e1d !important; }
 
 /* Accent text colors used inside status pills, KPI cards, and tables */
-html.dark .text-red-600 { color: #f87171 !important; }
-html.dark .text-red-700 { color: #fca5a5 !important; }
-html.dark .text-red-800 { color: #fca5a5 !important; }
-html.dark .text-red-900 { color: #fecaca !important; }
-html.dark .text-green-600 { color: #4ade80 !important; }
-html.dark .text-green-700 { color: #86efac !important; }
-html.dark .text-green-800 { color: #86efac !important; }
+html.dark .text-red-600, html.dark .text-track-600 { color: #f87171 !important; }
+html.dark .text-red-700, html.dark .text-track-700 { color: #fca5a5 !important; }
+html.dark .text-red-800, html.dark .text-track-800 { color: #fca5a5 !important; }
+html.dark .text-red-900, html.dark .text-track-900 { color: #fecaca !important; }
+html.dark .text-green-600, html.dark .text-turf-600 { color: #4ade80 !important; }
+html.dark .text-green-700, html.dark .text-turf-700 { color: #86efac !important; }
+html.dark .text-green-800, html.dark .text-turf-800 { color: #86efac !important; }
 html.dark .text-emerald-600 { color: #34d399 !important; }
 html.dark .text-emerald-700 { color: #6ee7b7 !important; }
 html.dark .text-emerald-800 { color: #6ee7b7 !important; }
@@ -197,21 +257,20 @@ html.dark .text-amber-600 { color: #fbbf24 !important; }
 html.dark .text-amber-700 { color: #fcd34d !important; }
 html.dark .text-amber-800 { color: #fcd34d !important; }
 html.dark .text-amber-900 { color: #fde68a !important; }
-html.dark .text-blue-600 { color: #5cc0f5 !important; }
-html.dark .text-blue-700 { color: #8fd4f8 !important; }
-html.dark .text-blue-800 { color: #8fd4f8 !important; }
+html.dark .text-blue-600, html.dark .text-court-600 { color: #5cc0f5 !important; }
+html.dark .text-blue-700, html.dark .text-court-700 { color: #8fd4f8 !important; }
+html.dark .text-blue-800, html.dark .text-court-800 { color: #8fd4f8 !important; }
 html.dark .text-purple-700 { color: #c4b5fd !important; }
 html.dark .text-purple-800 { color: #c4b5fd !important; }
 html.dark .text-orange-700 { color: #fdba74 !important; }
 html.dark .text-orange-800 { color: #fdba74 !important; }
-html.dark .divide-slate-100 > * + * { border-color: #1c2127 !important; }
-html.dark .divide-slate-200 > * + * { border-color: #2a3038 !important; }
 
-/* Wa-dark used as accent text — bump for contrast on dark bg */
+/* Wa-dark used as accent text — bump for contrast on dark bg (kept exactly as
+   before this pass; unrelated to the slate/court remap). */
 html.dark .text-wa-dark { color: #4ade80 !important; }
 html.dark .hover\:text-wa-dark:hover { color: #86efac !important; }
 
-/* Inputs */
+/* Native inputs not using the .input primitive class */
 html.dark input[type="text"],
 html.dark input[type="email"],
 html.dark input[type="password"],
@@ -244,16 +303,10 @@ html.dark pre, html.dark code {
   color: #f1f3f5 !important;
 }
 
-/* App sidebar — light-blue in light mode, neutral dark grey in dark. Driven by a
-   class so it adapts to the theme (inline styles wouldn't). */
+/* App sidebar — flat panel surface (was a light-blue/dark-grey gradient),
+   matching the target system's plain white/panel sidebar. Dark mode now
+   free-flips via var(--panel)/var(--line), no separate override needed. */
 .app-sidebar {
-  background: linear-gradient(180deg, #E9F2F6 0%, #C9E1EA 100%);
-  border-color: #9CC1D0 !important;
+  background: var(--panel);
+  border-color: rgb(var(--line));
 }
-html.dark .app-sidebar {
-  background: linear-gradient(180deg, #1b2026 0%, #12161b 100%);
-  border-color: #2a3038 !important;
-}
-/* Sidebar internal dividers pick up a matching tone */
-.app-sidebar .border-slate-200 { border-color: #CDE0E8; }
-html.dark .app-sidebar .border-slate-200 { border-color: #2a3038 !important; }

@@ -103,14 +103,14 @@ export default function CourtViewerClient({
   const pill = (active: boolean) =>
     `px-2.5 py-1 text-xs rounded-md transition ${
       active
-        ? "bg-white text-[#159341] font-semibold shadow-sm"
+        ? "bg-white text-[var(--gd)] font-semibold shadow-sm"
         : "bg-white/15 text-white/90 hover:bg-white/25"
     }`;
 
   return (
     <div className="fixed inset-0 flex flex-col bg-slate-900 text-white">
       {/* Brand header */}
-      <header className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[#159341] shrink-0 shadow-md">
+      <header className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[var(--gd)] shrink-0 shadow-md">
         <div className="flex items-center gap-3 min-w-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -155,7 +155,7 @@ export default function CourtViewerClient({
           <button
             type="button"
             onClick={share}
-            className="px-2.5 py-1 text-xs rounded-md bg-white text-[#159341] font-semibold hover:bg-white/90 transition"
+            className="px-2.5 py-1 text-xs rounded-md bg-white text-[var(--gd)] font-semibold hover:bg-white/90 transition"
           >
             {copied ? "Link copied" : "Share"}
           </button>

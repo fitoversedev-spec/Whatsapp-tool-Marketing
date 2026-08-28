@@ -240,7 +240,7 @@ export default async function ProductPage({
                 {specEntries.map(([key, val], i) => (
                   <tr
                     key={key}
-                    className={i % 2 === 1 ? "bg-slate-50/60" : undefined}
+                    className={i % 2 === 1 ? "bg-slate-50" : undefined}
                   >
                     <th className="w-2/5 border-b border-slate-100 px-5 py-3 text-left align-top font-semibold text-slate-600">
                       {titleCase(key)}

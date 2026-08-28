@@ -24,7 +24,7 @@ const SECTION_STYLE: Record<string, { pill: string; dot: string }> = {
   CRM: { pill: "bg-turf-500/10 text-turf-700", dot: "bg-turf-500" }, // turf
   "Meta Ads": { pill: "bg-court-500/10 text-court-700", dot: "bg-court-500" }, // court
   "Marketing & Sales": { pill: "bg-[#7c3aed]/10 text-[#7c3aed]", dot: "bg-[#7c3aed]" }, // accent (orthogonal — no palette token)
-  Organization: { pill: "bg-slate-500/10 text-slate-600", dot: "bg-slate-500" },
+  Organization: { pill: "bg-slate-100 text-slate-600", dot: "bg-slate-500" },
   Admin: { pill: "bg-track-500/10 text-track-700", dot: "bg-track-500" }, // track
 };
 const DEFAULT_STYLE = { pill: "bg-wa-green/10 text-wa-dark", dot: "bg-wa-green" };

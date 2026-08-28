@@ -1,20 +1,22 @@
 import type { Config } from "tailwindcss";
 
-// ─── Fitoverse industrial palette ──────────────────────────────────────────
+// ─── Fitoverse palette (design-system swap, 2026-08) ───────────────────────
 // Pinned brand colours, expressed as full 50–950 ramps so BOTH the light tints
 // (backgrounds) and the deep shades (text) hold contrast wherever an existing
-// utility step is used. The mid step (500) is the exact pinned hex.
+// utility step is used. The mid step (500) is the exact pinned hex, mirrored
+// as a CSS custom property in globals.css for the new component primitives.
 //
-//   ink   #0D2733  primary dark + body text          → neutral ramp (slate) anchor
-//   turf  #2E7D4F  success / won / progress           → success role
-//   court #1C6E8C  info / links / PRIMARY action      → primary + info role
-//   track #B33A26  danger / lost / alerts             → danger role
-//   mint  #7FD3A6  accent / highlight                 → accent role
+//   ink   #0D2733  primary dark + body text          → neutral ramp (slate) anchor — now var(--tx)-driven, see below
+//   turf  #2E7D4F  success / won / progress           → success role — matches --gd
+//   court #00AEEF  info / links / PRIMARY action      → primary + accent role — matches --ac (was #1C6E8C)
+//   track #B33A26  danger / lost / alerts             → danger role — matches --bd
+//   mint  #7FD3A6  accent / highlight                 → legacy, near-unused after the sidebar accent moved to --ac
 //
 // These ramps are ALSO aliased onto Tailwind's `green`/`emerald`/`blue`/`red`
 // keys so the thousands of existing raw `text-green-600` / `bg-blue-50` /
-// `text-red-700` usages inherit the new palette automatically — the same
-// wholesale-remap trick the neutral `slate` ramp already uses.
+// `text-red-700` usages inherit the palette automatically — the same
+// wholesale-remap trick the neutral `slate` ramp uses (slate now resolves to
+// CSS variables instead of literal hex — see globals.css :root/html.dark).
 
 const turf = {
   50: "#EAF5EE",
@@ -30,18 +32,23 @@ const turf = {
   950: "#0A2015",
 };
 
+// Design-system swap (2026-08): court repointed from the old teal-blue
+// #1C6E8C to the new accent #00AEEF (matches --ac in globals.css). Ramp
+// recomputed (tint-toward-white 50-400 / shade-toward-black 600-950) so the
+// ~200 direct court-* usages across the app repaint consistently with the
+// wa.green/brand.blue alias, not just the alias itself.
 const court = {
-  50: "#E7F1F5",
-  100: "#C7E0EA",
-  200: "#98C6D7",
-  300: "#61A6BF",
-  400: "#3888A5",
-  500: "#1C6E8C", // pinned court
-  600: "#185D77",
-  700: "#144B61",
-  800: "#113C4E",
-  900: "#0D2E3B",
-  950: "#081E28",
+  50: "#F2FBFE",
+  100: "#DEF4FD",
+  200: "#B8E8FB",
+  300: "#8CDBF8",
+  400: "#4DC6F4",
+  500: "#00AEEF", // pinned court — matches --ac
+  600: "#0099D2",
+  700: "#0081B1",
+  800: "#00658B",
+  900: "#004964",
+  950: "#003143",
 };
 
 const track = {
@@ -71,21 +78,32 @@ const mint = {
   900: "#16412D",
 };
 
-// Neutral ramp — cool ink-biased grey. Lightness tracks Tailwind's slate so the
-// 3,000+ existing slate usages keep their contrast; the DARK end lands exactly
-// on ink (#0D2733) so `text-slate-900` == body ink.
+// Neutral ramp — now driven by CSS custom properties (globals.css :root /
+// html.dark) instead of literal hex, so the ~140 files using bg-slate-*/
+// text-slate-*/border-slate-* repaint automatically for both themes with zero
+// JSX edits — the same "retarget the ramp" trick already used for green/blue/
+// red above, extended to neutrals. Mapping grep-verified against real usage
+// (bg vs border vs text dominance per shade — see the design-token plan):
+//   50/100  -> --p2   (overwhelmingly background/hover-fill)
+//   200/300 -> --line (overwhelmingly border/divider)
+//   400/500 -> --dim  (overwhelmingly muted/secondary text)
+//   600/700 -> --sub  (overwhelmingly secondary/body text)
+//   800/900/950 -> --tx (overwhelmingly heading/primary text)
+// Tailwind's own `white` key is deliberately left untouched (see globals.css
+// dark-mode block) — remapping it would turn `text-white` on dark buttons
+// into dark-grey text.
 const slate = {
-  50: "#F4F7F8",
-  100: "#E7EDEF",
-  200: "#D5E0E3",
-  300: "#B8C7CC",
-  400: "#859398",
-  500: "#566268",
-  600: "#414D53",
-  700: "#2E3A40",
-  800: "#1B2A31",
-  900: "#0D2733", // ink
-  950: "#081A22",
+  50: "rgb(var(--p2) / <alpha-value>)",
+  100: "rgb(var(--p2) / <alpha-value>)",
+  200: "rgb(var(--line) / <alpha-value>)",
+  300: "rgb(var(--line) / <alpha-value>)",
+  400: "rgb(var(--dim) / <alpha-value>)",
+  500: "rgb(var(--dim) / <alpha-value>)",
+  600: "rgb(var(--sub) / <alpha-value>)",
+  700: "rgb(var(--sub) / <alpha-value>)",
+  800: "rgb(var(--tx) / <alpha-value>)",
+  900: "rgb(var(--tx) / <alpha-value>)", // ink
+  950: "rgb(var(--tx) / <alpha-value>)",
 };
 
 const config: Config = {
@@ -103,32 +121,22 @@ const config: Config = {
         base: ["1.0625rem", { lineHeight: "1.6rem" }],
       },
       fontFamily: {
-        // Body copy — Newsreader (self-hosted serif). This is what the app
-        // renders by default (see globals.css `html, body`).
+        // Design-system swap (2026-08): body/UI font is now Poppins
+        // (self-hosted, replaces Newsreader). `heading`/`display`/`sans` all
+        // repoint to the SAME Poppins stack (rather than being deleted) so the
+        // ~12 files using `font-heading` and 2 using `font-sans` need zero
+        // JSX edits — they just resolve to the new font automatically.
         serif: [
-          "Newsreader",
-          "Iowan Old Style",
-          "Georgia",
-          "Cambria",
-          "Times New Roman",
-          "serif",
-        ],
-        // Headings + CTAs — Archivo (self-hosted). Rendered UPPERCASE with tight
-        // tracking via the base layer / `.heading` primitive.
-        heading: ["Archivo", "Segoe UI", "system-ui", "Arial", "sans-serif"],
-        display: ["Archivo", "Segoe UI", "system-ui", "Arial", "sans-serif"],
-        // Opt-in UI sans (Manrope) — kept for chrome that prefers a grotesque
-        // over the serif body (nav labels, dense controls).
-        sans: [
-          "Manrope",
-          "Segoe UI",
+          "Poppins",
           "system-ui",
           "-apple-system",
-          "Helvetica Neue",
-          "Arial",
           "sans-serif",
         ],
+        heading: ["Poppins", "system-ui", "-apple-system", "sans-serif"],
+        display: ["Poppins", "system-ui", "-apple-system", "sans-serif"],
+        sans: ["Poppins", "system-ui", "-apple-system", "sans-serif"],
         // ALL numbers, ₹ amounts, rates, counts, dates, codes — JetBrains Mono.
+        // Unchanged — already matches the target design system's numeric role.
         mono: [
           "JetBrains Mono",
           "ui-monospace",
@@ -141,18 +149,17 @@ const config: Config = {
       letterSpacing: {
         heading: "-0.01em",
       },
-      // Industrial look — flatten rounding across the board. `rounded-full`
-      // stays circular for avatars/dots; every other step collapses toward
-      // near-square so the 1,000+ `rounded-lg/xl/2xl` usages read industrial.
+      // Design-system swap (2026-08): softened toward the new pill aesthetic
+      // (was a near-square "industrial" scale). rounded-full stays circular.
       borderRadius: {
         none: "0",
-        sm: "1px",
-        DEFAULT: "2px",
-        md: "3px",
-        lg: "4px",
-        xl: "6px",
-        "2xl": "8px",
-        "3xl": "10px",
+        sm: "var(--r-sm)", // 6px
+        DEFAULT: "8px",
+        md: "var(--r-md)", // 10px
+        lg: "var(--r-lg)", // 14px — matches .card
+        xl: "var(--r-xl)", // 20px — matches .badge/.pill
+        "2xl": "22px", // matches .btn
+        "3xl": "28px", // unused today (0 occurrences) — safe headroom
         full: "9999px",
       },
       colors: {
@@ -208,12 +215,12 @@ const config: Config = {
         red: track,
       },
       borderColor: {
-        // Stronger default border for the industrial look — bare `border`
-        // (no colour utility) now reads as a crisp slate-300 hairline.
-        DEFAULT: slate[300],
+        // Bare `border` (no colour utility) reads as a var(--line) hairline —
+        // slate[300] already resolves to that token, kept for clarity.
+        DEFAULT: "rgb(var(--line))",
       },
       ringColor: {
-        DEFAULT: court[500],
+        DEFAULT: court[500], // now the new accent (--ac)
       },
     },
   },

@@ -7,6 +7,7 @@ import FloatingChatLauncher from "@/components/chat/FloatingChatLauncher";
 import AskAiLauncher from "@/components/AskAiLauncher";
 import axios from "axios";
 import { getMetaAccessToken } from "@/lib/token-manager";
+import CrossTabRefresh from "@/components/CrossTabRefresh";
 import { endOfDayIST } from "@/lib/time";
 import type { Role } from "@/lib/rbac";
 
@@ -60,11 +61,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // Today's reminder count — overdue + due before end-of-IST-day, excluding
     // completed. IST end-of-day matches the /reminders page filter and prevents
     // off-by-a-day badges on Vercel (UTC server).
+    // Marketing-only reminders: exclude CRM Deals + CRM Contacts
     prisma.reminder.count({
       where: {
         ownerUserId: user.id,
         completedAt: null,
         dueAt: { lte: endOfDayIST(new Date()) },
+        dealId: null,
+        accountContactId: null,
       },
     }),
     // Team-chat unread + unseen mentions, to seed the floating launcher badge
@@ -95,6 +99,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <CronTick />
       <FloatingChatLauncher initialUnread={chatUnread} initialMentions={chatMentions} />
       <AskAiLauncher />
+      <CrossTabRefresh events={["marketing:contact-added", "marketing:data-changed"]} />
     </div>
   );
 }

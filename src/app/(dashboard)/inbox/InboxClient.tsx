@@ -10,6 +10,7 @@ import LabelPicker from "@/components/LabelPicker";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import MediaPreview from "@/components/MediaPreview";
 import type { Role } from "@/lib/rbac";
+import { postCrossTab } from "@/lib/cross-tab";
 
 // These three wizards are heavy (the court designer alone pulls in the Konva
 // 2D + 3D canvas and a large court-image lib). They open only when the user
@@ -343,6 +344,7 @@ export default function InboxClient({
     setConversations((prev) =>
       prev.map((c) => (c.id === current.id ? { ...c, accountContactId: data.accountContactId } : c))
     );
+    postCrossTab("crm:contact-added", { accountContactId: data.accountContactId });
     toast.success(data.matchedExisting ? "Linked to existing CRM contact" : "Moved to CRM");
     router.push(`/crm/contacts/${data.accountContactId}`);
   }

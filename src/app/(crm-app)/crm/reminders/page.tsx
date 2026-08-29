@@ -1,9 +1,13 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { startOfDayIST, endOfDayIST } from "@/lib/time";
-import RemindersClient from "./RemindersClient";
+import RemindersClient from "@/app/(dashboard)/reminders/RemindersClient";
 
-export default async function RemindersPage({
+/**
+ * CRM Reminders — only shows reminders linked to a Deal or AccountContact
+ * (excludes WhatsApp-conversation-only and Meta Lead reminders).
+ */
+export default async function CrmRemindersPage({
   searchParams,
 }: {
   searchParams: { date?: string };
@@ -22,19 +26,24 @@ export default async function RemindersPage({
     }
   }
 
-  // Marketing reminders only: Meta Leads, WhatsApp Inbox, and General
-  // (CRM Deals + CRM Contacts reminders are shown in the CRM tab)
   const reminders = await prisma.reminder.findMany({
     where: {
       ownerUserId: user.id,
-      dealId: null,
-      accountContactId: null,
+      // CRM-only: must be linked to a deal or account contact
+      OR: [
+        { dealId: { not: null } },
+        { accountContactId: { not: null } },
+      ],
       ...(dateWhere
         ? dateWhere
         : {
-            OR: [
-              { completedAt: null },
-              { completedAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } },
+            AND: [
+              {
+                OR: [
+                  { completedAt: null },
+                  { completedAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } },
+                ],
+              },
             ],
           }),
     },
@@ -64,7 +73,7 @@ export default async function RemindersPage({
       sectionLink = `/ad-campaigns/leads/${r.metaLeadId}`;
     } else if (r.dealId) {
       section = "CRM Deals";
-      sectionLink = `/crm/deals/${r.dealId}`;
+      sectionLink = `/deals/${r.dealId}`;
     } else if (r.accountContactId) {
       section = "CRM Contacts";
       sectionLink = `/crm/contacts/${r.accountContactId}`;

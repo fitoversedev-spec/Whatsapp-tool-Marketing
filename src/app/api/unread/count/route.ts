@@ -32,11 +32,14 @@ export async function GET() {
       where: unreadWhere,
       _sum: { unreadCount: true },
     }),
+    // Marketing-only reminders: exclude CRM Deals + CRM Contacts
     prisma.reminder.count({
       where: {
         ownerUserId: user.id,
         completedAt: null,
         dueAt: { lte: endOfDayIST(new Date()) },
+        dealId: null,
+        accountContactId: null,
       },
     }),
     // Team-chat unread — sum of this user's own per-thread unread counters

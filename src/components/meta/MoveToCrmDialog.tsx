@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useToast } from "@/components/Toast";
+import { postCrossTab } from "@/lib/cross-tab";
 import type { MetaLeadRow } from "@/lib/meta-ads/queries";
 
 export type Rep = { id: string; name: string };
@@ -42,6 +43,7 @@ export default function MoveToCrmDialog({
         toast.error(err.error ? String(err.error) : "Could not move this lead to the CRM");
         return;
       }
+      postCrossTab("crm:contact-added", { leadId: lead.id });
       toast.success("Lead moved to the CRM");
       onDone();
     } catch {

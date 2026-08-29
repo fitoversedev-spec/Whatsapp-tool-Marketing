@@ -3,54 +3,83 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { setFaviconBadge } from "@/lib/favicon";
 import ThemeToggle from "./ThemeToggle";
 import AllToolsPanel from "./AllToolsPanel";
-import SectionBadge from "./SectionBadge";
+import type { AllToolsGroup } from "./AllToolsPanel";
 import type { Role } from "@/lib/rbac";
 
 type Props = {
   user: { name: string; email: string; role: Role };
   pendingCount?: number;
-  unreadCount?: number;
   reminderCount?: number;
-  tokenExpired?: boolean;
 };
 
-// Primary nav — the 6 most-used items, always visible in the sidebar.
-// Everything else lives in the All Tools popover (see AllToolsPanel.tsx
-// for the full categorized list).
-const PRIMARY_NAV = [
-  { href: "/search", label: "Search", icon: "🔍" },
-  { href: "/inbox", label: "Inbox", icon: "💬", badgeKey: "unread" as const },
-  { href: "/contacts", label: "Contacts", icon: "📒" },
-  { href: "/broadcasts", label: "Broadcasts", icon: "📣" },
-  { href: "/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
-  { href: "/leads", label: "Bot leads", icon: "🤖" },
+const CRM_PRIMARY_NAV = [
+  { href: "/crm", label: "Dashboard", icon: "\u{1F9ED}", exact: true },
+  { href: "/crm/contacts", label: "Contacts", icon: "\u{1F9D1}" },
+  { href: "/crm/leads", label: "Leads", icon: "\u{1F3AF}" },
+  { href: "/deals", label: "Deals", icon: "\u{1F4C1}" },
+  { href: "/pipeline", label: "Pipeline", icon: "\u{1F3D7}️" },
+  { href: "/crm/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
+  { href: "/crm/quotations", label: "Quotations", icon: "\u{1F4C4}" },
+  { href: "/crm/court-images", label: "Court Designer", icon: "\u{1F3A8}" },
+  { href: "/crm/activities", label: "Activities", icon: "\u{1F5D2}️" },
 ];
 
-export default function Sidebar({
+const CRM_ALL_TOOLS_GROUPS: AllToolsGroup[] = [
+  {
+    title: "CRM",
+    items: [
+      { href: "/crm/companies", label: "Customer segments", icon: "\u{1F3E2}", description: "Contacts grouped by customer segment, business type, lead source, or city" },
+      { href: "/crm/invoices", label: "Invoices", icon: "\u{1F9FE}", description: "Convert confirmed quotes to invoices; track payments" },
+      { href: "/crm/import", label: "Import", icon: "\u{1F4E4}", description: "Bulk-load contacts, companies, leads, or deals from a spreadsheet" },
+      { href: "/crm/analytics", label: "CRM Analytics", icon: "\u{1F4C8}", description: "Individual and team performance, best sellers, platform performance" },
+      { href: "/crm/settings", label: "CRM Settings", icon: "⚙️", description: "Taxonomies, users, and audit log gathered in one place", adminOnly: true },
+    ],
+  },
+  {
+    title: "Admin",
+    items: [
+      { href: "/crm/connection", label: "Connection", icon: "\u{1F50C}", description: "Meta API status and token health", adminOnly: true },
+      { href: "/crm/users", label: "Users", icon: "\u{1F465}", description: "Team members and approval queue", adminOnly: true },
+      { href: "/crm/admin/ai-usage", label: "AI usage", icon: "✨", description: "Who's using AI, request counts, and estimated spend", adminOnly: true },
+      { href: "/crm/admin/taxonomies", label: "Taxonomies", icon: "\u{1F3F7}️", description: "Funnel stages, lead sources, customer profiles, and other editable lists", adminOnly: true },
+      { href: "/crm/admin/targets", label: "Targets", icon: "\u{1F3AF}", description: "Set company-wide or per-rep revenue targets by month, quarter, or FY", adminOnly: true },
+      { href: "/crm/admin/audit-log", label: "Audit log", icon: "\u{1F9FE}", description: "Every stage change, role change, and taxonomy edit", managementOrAbove: true },
+    ],
+  },
+];
+
+const CRM_ALL_PAGES = [
+  ...CRM_PRIMARY_NAV,
+  { href: "/crm/companies", label: "Customer segments" },
+  { href: "/crm/invoices", label: "Invoices" },
+  { href: "/crm/import", label: "Import" },
+  { href: "/crm/analytics", label: "CRM Analytics" },
+  { href: "/crm/settings", label: "CRM Settings" },
+  { href: "/crm/connection", label: "Connection" },
+  { href: "/crm/users", label: "Users" },
+  { href: "/crm/admin/ai-usage", label: "AI usage" },
+  { href: "/crm/admin/taxonomies", label: "Taxonomies" },
+  { href: "/crm/admin/targets", label: "Targets" },
+  { href: "/crm/admin/audit-log", label: "Audit log" },
+  { href: "/crm/profile", label: "Profile" },
+];
+
+export default function CrmSidebar({
   user,
   pendingCount = 0,
-  unreadCount: unreadInitial = 0,
   reminderCount: reminderInitial = 0,
-  tokenExpired = false,
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(unreadInitial);
   const [reminderCount, setReminderCount] = useState(reminderInitial);
-  const [pendingTemplates, setPendingTemplates] = useState(0);
   const [allToolsOpen, setAllToolsOpen] = useState(false);
-  // Collapsed sidebar (desktop only — mobile already uses a drawer).
-  // Persisted in localStorage so the user's preference survives reloads.
-  // Default expanded; flips to collapsed only after we read storage on mount
-  // to avoid a flicker for users who prefer collapsed.
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("ccd_sidebar_collapsed");
+    const stored = localStorage.getItem("ccd_crm_sidebar_collapsed");
     if (stored === "true") setCollapsed(true);
   }, []);
 
@@ -58,40 +87,29 @@ export default function Sidebar({
     setCollapsed((prev) => {
       const next = !prev;
       try {
-        localStorage.setItem("ccd_sidebar_collapsed", String(next));
-      } catch {
-        /* localStorage might be blocked — ignore */
-      }
-      // Force-close the All Tools popover when collapsing; expanded the
-      // popover anchors off the right edge of the sidebar and would be
-      // misaligned for the first paint after collapse.
+        localStorage.setItem("ccd_crm_sidebar_collapsed", String(next));
+      } catch {}
       if (next) setAllToolsOpen(false);
       return next;
     });
   }
 
-  // Close drawer + All Tools panel on route change
   useEffect(() => {
     setOpen(false);
     setAllToolsOpen(false);
   }, [pathname]);
 
-  // Live-poll unread + reminder counts every 15s. Pauses when tab is hidden.
   useEffect(() => {
     let cancelled = false;
     async function refresh() {
       if (document.visibilityState !== "visible") return;
       try {
-        const res = await fetch("/api/unread/count");
+        const res = await fetch("/api/crm-app/badge-count");
         if (!res.ok || cancelled) return;
         const data = await res.json();
         if (cancelled) return;
-        setUnreadCount(data.unread ?? 0);
         setReminderCount(data.reminders ?? 0);
-        setPendingTemplates(data.pendingTemplates ?? 0);
-      } catch {
-        // ignore transient network errors
-      }
+      } catch {}
     }
     refresh();
     const timer = setInterval(refresh, 15000);
@@ -103,51 +121,21 @@ export default function Sidebar({
     };
   }, []);
 
-  // Sync browser tab title + favicon when unread count changes.
   useEffect(() => {
-    const baseTitle = "WhatsApp Tool";
-    if (unreadCount > 0) {
-      document.title = `(${unreadCount > 99 ? "99+" : unreadCount}) ${baseTitle}`;
-      setFaviconBadge(true);
-    } else {
-      document.title = baseTitle;
-      setFaviconBadge(false);
-    }
-  }, [unreadCount]);
+    document.title = "Fitoverse CRM";
+  }, []);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   }
 
-  // Primary nav is shown directly in the sidebar; "All Tools" reveals the rest.
-  // For the mobile top-bar title we want to find the current page across BOTH
-  // primary and all-tools, so the title stays meaningful even when the user
-  // is on a less-frequent page (e.g. Templates) reached via All Tools.
-  const ALL_PAGES = [
-    ...PRIMARY_NAV,
-    { href: "/templates", label: "Templates" },
-    { href: "/tags", label: "Tags" },
-    { href: "/quotations", label: "Quotations" },
-    { href: "/invoices", label: "Invoices" },
-    { href: "/court-images", label: "Court Designer" },
-    { href: "/products", label: "Products" },
-    { href: "/portfolio", label: "Portfolio" },
-    { href: "/analytics", label: "Broadcast Analytics" },
-    { href: "/media", label: "Media library" },
-    // More specific first: startsWith("/ad-campaigns") also matches this URL,
-    // so the lead-analytics entry must precede it to win the label lookup.
-    { href: "/ad-campaigns/lead-analytics", label: "Lead Analytics" },
-    { href: "/ad-campaigns", label: "Ad Campaigns" },
-    { href: "/settings/quotation-rates", label: "Quotation rates" },
-    { href: "/connection", label: "Connection" },
-    { href: "/users", label: "Users" },
-    { href: "/admin/taxonomies", label: "Taxonomies" },
-    { href: "/admin/audit-log", label: "Audit log" },
-    { href: "/admin/ai-usage", label: "AI usage" },
-  ];
+  function openMarketing() {
+    window.open("/inbox", "fitoverse-marketing");
+  }
+
   const currentLabel =
-    ALL_PAGES.find((n) => pathname.startsWith(n.href))?.label ?? "WhatsApp Tool";
+    CRM_ALL_PAGES.find((n) => pathname.startsWith(n.href))?.label ?? "Fitoverse CRM";
 
   return (
     <>
@@ -166,10 +154,15 @@ export default function Sidebar({
         </button>
         <div className="flex-1 min-w-0">
           <div className="font-heading font-bold uppercase tracking-tight text-slate-900 truncate">{currentLabel}</div>
-          <div className="mt-0.5"><SectionBadge /></div>
+          <div className="mt-0.5">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wide whitespace-nowrap bg-turf-500/10 text-turf-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-turf-500" />
+              Fitoverse CRM
+            </span>
+          </div>
         </div>
-        <div className="w-8 h-8 rounded bg-wa-green text-white flex items-center justify-center font-heading font-bold text-sm">
-          W
+        <div className="w-8 h-8 rounded bg-turf-600 text-white flex items-center justify-center font-heading font-bold text-sm">
+          C
         </div>
       </header>
 
@@ -208,7 +201,6 @@ export default function Sidebar({
               className={collapsed ? "lg:hidden h-8 w-auto" : "h-8 w-auto"}
             />
             {collapsed && (
-              // Collapsed rail: clip the lockup to just the infinity mark.
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src="/quotation-assets/image1.png"
@@ -217,7 +209,6 @@ export default function Sidebar({
               />
             )}
           </div>
-          {/* Mobile close button */}
           <button
             aria-label="Close menu"
             onClick={() => setOpen(false)}
@@ -228,7 +219,6 @@ export default function Sidebar({
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
-          {/* Desktop collapse toggle — chevron flips based on state */}
           <button
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -245,31 +235,28 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Tool-wide context badge — "CRM" vs "WhatsApp Marketing" for the
-            current page. Lives in the always-present sidebar chrome so it never
-            disturbs page content (some pages are full-height, e.g. Inbox). */}
+        {/* Static CRM badge */}
         <div className="px-3 pt-3">
           <div className={collapsed ? "lg:hidden" : ""}>
-            <SectionBadge />
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wide whitespace-nowrap bg-turf-500/10 text-turf-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-turf-500" />
+              Fitoverse CRM
+            </span>
           </div>
           {collapsed && (
             <div className="hidden lg:flex lg:justify-center">
-              <SectionBadge compact />
+              <span className="w-2.5 h-2.5 rounded-full bg-turf-500" title="Fitoverse CRM" aria-label="Fitoverse CRM" />
             </div>
           )}
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {PRIMARY_NAV.map((item) => {
-            const active = pathname.startsWith(item.href);
-            const badge =
-              item.badgeKey === "unread"
-                ? unreadCount
-                : item.badgeKey === "reminders"
-                  ? reminderCount
-                  : 0;
-            const badgeColor =
-              item.badgeKey === "unread" ? "bg-red-500" : "bg-orange-500";
+          {CRM_PRIMARY_NAV.map((item) => {
+            const active = "exact" in item && item.exact
+              ? pathname === item.href
+              : pathname.startsWith(item.href);
+            const badge = item.badgeKey === "reminders" ? reminderCount : 0;
+            const badgeColor = "bg-orange-500";
             return (
               <Link
                 key={item.href}
@@ -291,7 +278,6 @@ export default function Sidebar({
                 )}
                 <span className="text-base shrink-0 relative">
                   {item.icon}
-                  {/* When collapsed, badge becomes a small dot overlay on the icon */}
                   {collapsed && badge > 0 && (
                     <span
                       className={`hidden lg:block absolute -top-1 -right-1 ${badgeColor} w-2.5 h-2.5 rounded-full ring-2 ring-white`}
@@ -307,7 +293,6 @@ export default function Sidebar({
                     {badge > 99 ? "99+" : badge}
                   </span>
                 )}
-                {/* Mobile drawer always shows badge as bubble (mobile never collapses) */}
                 {collapsed && badge > 0 && (
                   <span
                     className={`lg:hidden inline-block ${badgeColor} text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none ml-auto`}
@@ -319,32 +304,8 @@ export default function Sidebar({
             );
           })}
 
-          {/* CRM — opens in a named tab so repeated clicks reuse the same tab */}
-          <button
-            type="button"
-            onClick={() => window.open("/crm", "fitoverse-crm")}
-            title={collapsed ? "CRM" : undefined}
-            className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition ${
-              collapsed ? "lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5" : "px-3 py-2.5"
-            } text-[rgb(var(--sub))] hover:bg-[rgb(var(--p2))] hover:text-[rgb(var(--tx))] active:bg-[rgb(var(--line))]`}
-          >
-            <span className="text-base shrink-0">🧭</span>
-            <span className={`flex-1 text-left font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>
-              CRM
-            </span>
-            {!collapsed && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            )}
-          </button>
-
-          {/* Divider before All Tools */}
           <div className="my-2 border-t border-slate-200" />
 
-          {/* All Tools trigger — opens the categorized popover */}
           <button
             type="button"
             data-all-tools-trigger
@@ -359,15 +320,15 @@ export default function Sidebar({
             }`}
           >
             <span className="text-base shrink-0 relative">
-              🔲
-              {collapsed && pendingCount + pendingTemplates > 0 && user.role === "admin" && (
+              {"\u{1F532}"}
+              {collapsed && pendingCount > 0 && user.role === "admin" && (
                 <span className="hidden lg:block absolute -top-1 -right-1 bg-amber-500 w-2.5 h-2.5 rounded-full ring-2 ring-white" />
               )}
             </span>
             <span className={`flex-1 text-left font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>All Tools</span>
-            {!collapsed && pendingCount + pendingTemplates > 0 && user.role === "admin" && (
+            {!collapsed && pendingCount > 0 && user.role === "admin" && (
               <span className="inline-block bg-amber-500 text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
-                {pendingCount + pendingTemplates}
+                {pendingCount}
               </span>
             )}
             {!collapsed && (
@@ -386,40 +347,44 @@ export default function Sidebar({
               </svg>
             )}
           </button>
-        </nav>
 
-        {/* Token expiry warning — visible to admin on all pages.
-            When collapsed, render as a tiny lock icon so the user is still
-            alerted without breaking the slim layout. */}
-        {tokenExpired && (
-          <Link
-            href="/connection"
-            title={collapsed ? "Token expired — click to fix" : undefined}
-            className={`mx-3 mb-2 flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 hover:bg-red-100 transition ${
-              collapsed ? "lg:justify-center lg:px-2 lg:py-2 px-3 py-2.5" : "px-3 py-2.5"
-            }`}
+          <div className="my-2 border-t border-slate-200" />
+
+          {/* Switch to WhatsApp Marketing */}
+          <button
+            type="button"
+            onClick={openMarketing}
+            title={collapsed ? "WhatsApp Marketing" : undefined}
+            className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition ${
+              collapsed ? "lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5" : "px-3 py-2.5"
+            } text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100`}
           >
-            <span className="text-base shrink-0">🔑</span>
-            <div className={collapsed ? "lg:hidden" : ""}>
-              <div className="text-xs font-heading font-bold uppercase tracking-wide text-red-800 leading-tight">Token Expired</div>
-              <div className="text-[10px] text-red-700 mt-0.5 leading-tight">Messages cannot be sent. Click to fix →</div>
-            </div>
-          </Link>
-        )}
+            <span className="text-base shrink-0">{"\u{1F4AC}"}</span>
+            <span className={`flex-1 text-left font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>
+              WhatsApp Marketing
+            </span>
+            {!collapsed && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            )}
+          </button>
+        </nav>
 
         <div className={`border-t border-slate-200 ${collapsed ? "lg:p-2 p-3" : "p-3"}`}>
           <Link
-            href="/profile"
+            href="/crm/profile"
             title={collapsed ? `${user.name} (${user.role})` : undefined}
             className={`block rounded-lg transition ${
               collapsed ? "lg:px-1 lg:py-2 px-3 py-2" : "px-3 py-2"
             } ${
-              pathname.startsWith("/profile") ? "bg-slate-100" : "hover:bg-slate-50"
+              pathname.startsWith("/crm/profile") ? "bg-slate-100" : "hover:bg-slate-50"
             }`}
           >
             {collapsed ? (
               <>
-                {/* Collapsed: just initials avatar centered */}
                 <div className="hidden lg:flex items-center justify-center">
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-xs ${
@@ -431,16 +396,11 @@ export default function Sidebar({
                     {initials(user.name)}
                   </div>
                 </div>
-                {/* Mobile drawer keeps the full block */}
                 <div className="lg:hidden">
                   <div className="text-sm font-medium text-slate-900 truncate">{user.name}</div>
                   <div className="text-xs text-slate-500 truncate">{user.email}</div>
                   <div className="text-xs mt-0.5">
-                    <span
-                      className={`badge ${
-                        user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
-                      }`}
-                    >
+                    <span className={`badge ${user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
                       {user.role}
                     </span>
                   </div>
@@ -451,11 +411,7 @@ export default function Sidebar({
                 <div className="text-sm font-medium text-slate-900 truncate">{user.name}</div>
                 <div className="text-xs text-slate-500 truncate">{user.email}</div>
                 <div className="text-xs mt-0.5">
-                  <span
-                    className={`badge ${
-                      user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
-                    }`}
-                  >
+                  <span className={`badge ${user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
                     {user.role}
                   </span>
                 </div>
@@ -469,10 +425,9 @@ export default function Sidebar({
               collapsed ? "lg:flex lg:items-center lg:justify-center lg:px-2 lg:py-2 px-3 py-2.5 text-left" : "px-3 py-2.5 text-left"
             }`}
           >
-            <span className={collapsed ? "lg:inline hidden text-base" : "hidden"}>⏻</span>
+            <span className={collapsed ? "lg:inline hidden text-base" : "hidden"}>{"⏻"}</span>
             <span className={`font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>Sign out</span>
           </button>
-          {/* Theme toggle — hide on collapsed desktop to save vertical space */}
           <div className={`px-1 pt-2 ${collapsed ? "lg:hidden" : ""}`}>
             <ThemeToggle />
           </div>
@@ -484,15 +439,13 @@ export default function Sidebar({
         onClose={() => setAllToolsOpen(false)}
         userRole={user.role}
         pendingCount={pendingCount}
-        pendingTemplates={pendingTemplates}
+        groups={CRM_ALL_TOOLS_GROUPS}
         anchorOffset={collapsed ? 76 : 252}
       />
     </>
   );
 }
 
-// First letter of first + last name (e.g. "Vignesh Manikandan" → "VM").
-// Single-word names just use the first character.
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 0) return "?";

@@ -75,6 +75,18 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         icon: "📎",
         description: "All uploaded images, videos, and files",
       },
+      {
+        href: "/quotations",
+        label: "Quotations",
+        icon: "📄",
+        description: "Generate and track customer quotes",
+      },
+      {
+        href: "/invoices",
+        label: "Invoices",
+        icon: "🧾",
+        description: "Convert confirmed quotes to invoices; track payments",
+      },
     ],
   },
   {
@@ -108,79 +120,6 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         label: "Quotation rates",
         icon: "⚙️",
         description: "Default rate sheets per sport",
-        adminOnly: true,
-      },
-    ],
-  },
-  {
-    title: "CRM",
-    items: [
-      {
-        href: "/crm",
-        label: "CRM dashboard",
-        icon: "🧭",
-        description: "My Day for sales reps, team snapshot for admins",
-      },
-      {
-        href: "/crm/contacts",
-        label: "Contacts",
-        icon: "🧑",
-        description: "People at a company — separate from the WhatsApp broadcast list",
-      },
-      {
-        href: "/crm/leads",
-        label: "Leads",
-        icon: "🎯",
-        description: "Promoted leads — the ones being actively worked toward a deal",
-      },
-      {
-        href: "/deals",
-        label: "Deals",
-        icon: "📁",
-        description: "Every sales opportunity, across every channel",
-      },
-      {
-        href: "/quotations",
-        label: "Quotations",
-        icon: "📄",
-        description: "Generate and track customer quotes",
-      },
-      {
-        href: "/invoices",
-        label: "Invoices",
-        icon: "🧾",
-        description: "Convert confirmed quotes to invoices; track payments",
-      },
-      {
-        href: "/crm/activities",
-        label: "Activities",
-        icon: "🗒️",
-        description: "Every logged touchpoint and reminder, in one place",
-      },
-      {
-        href: "/crm/companies",
-        label: "Customer segments",
-        icon: "🏢",
-        description: "Contacts grouped by customer segment, business type, lead source, or city",
-      },
-      {
-        href: "/crm/import",
-        label: "Import",
-        icon: "📤",
-        description: "Bulk-load contacts, companies, leads, or deals from a spreadsheet",
-      },
-      {
-        href: "/crm/analytics",
-        label: "CRM analytics",
-        icon: "📈",
-        description: "Individual and team performance, best sellers, platform performance",
-        adminOnly: true,
-      },
-      {
-        href: "/crm/settings",
-        label: "CRM settings",
-        icon: "⚙️",
-        description: "Taxonomies, users, and audit log — gathered in one place",
         adminOnly: true,
       },
     ],
@@ -246,6 +185,9 @@ type Props = {
   // Tracks the current sidebar width (252 expanded, 76 collapsed) so the
   // popover stays flush against the sidebar regardless of collapsed state.
   anchorOffset?: number;
+  // Override the default ALL_TOOLS_GROUPS (used by CRM sidebar to show
+  // CRM-specific tool groups).
+  groups?: AllToolsGroup[];
 };
 
 export default function AllToolsPanel({
@@ -255,6 +197,7 @@ export default function AllToolsPanel({
   pendingCount,
   pendingTemplates = 0,
   anchorOffset = 260,
+  groups: groupsProp,
 }: Props) {
   const pathname = usePathname();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -335,7 +278,7 @@ export default function AllToolsPanel({
 
         {/* Groups */}
         <div className="p-5 space-y-6">
-          {ALL_TOOLS_GROUPS.map((group) => {
+          {(groupsProp ?? ALL_TOOLS_GROUPS).map((group) => {
             const visible = group.items.filter(
               (i) =>
                 (!i.adminOnly || userRole === "admin") &&

@@ -346,7 +346,6 @@ export default function InboxClient({
     );
     postCrossTab("crm:contact-added", { accountContactId: data.accountContactId });
     toast.success(data.matchedExisting ? "Linked to existing CRM contact" : "Moved to CRM");
-    router.push(`/crm/contacts/${data.accountContactId}`);
   }
 
   return (

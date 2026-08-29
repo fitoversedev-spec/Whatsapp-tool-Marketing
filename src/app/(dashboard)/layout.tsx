@@ -8,6 +8,7 @@ import AskAiLauncher from "@/components/AskAiLauncher";
 import axios from "axios";
 import { getMetaAccessToken } from "@/lib/token-manager";
 import CrossTabRefresh from "@/components/CrossTabRefresh";
+import BottomNav from "@/components/BottomNav";
 import { endOfDayIST } from "@/lib/time";
 import type { Role } from "@/lib/rbac";
 
@@ -94,12 +95,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
         reminderCount={reminderCount}
         tokenExpired={tokenExpired}
       />
-      <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
+      <main className="flex-1 min-w-0 overflow-x-hidden pb-14 lg:pb-0">{children}</main>
       <NavigationTracker />
       <CronTick />
       <FloatingChatLauncher initialUnread={chatUnread} initialMentions={chatMentions} />
       <AskAiLauncher />
       <CrossTabRefresh events={["marketing:contact-added", "marketing:data-changed"]} />
+      <BottomNav reminderCount={reminderCount} />
     </div>
   );
 }

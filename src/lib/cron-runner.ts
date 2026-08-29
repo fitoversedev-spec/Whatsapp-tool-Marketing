@@ -13,6 +13,7 @@ import { sendText } from "@/lib/whatsapp";
 import { runWeeklyDigest } from "@/lib/analytics/digestJob";
 import { postThreadNote } from "@/lib/chat/events";
 import { syncAdsInsights } from "@/lib/meta-ads/sync";
+import { sendPushToUser, isWebPushConfigured } from "@/lib/push";
 
 // The weekday the weekly digest fires on — Monday (getDay() 0=Sun..6=Sat).
 // A visible default, not a business-mandated day: Monday so the digest lands
@@ -115,6 +116,33 @@ export async function fireDueReminders(): Promise<{ notified: number; dispatched
           data: { error: err instanceof Error ? err.message.slice(0, 500) : "send_failed" },
         })
         .catch(() => null);
+    }
+  }
+
+  // Push notifications for reminders — parallel, fire-and-forget per reminder.
+  if (isWebPushConfigured()) {
+    const pushUsers = await prisma.user.findMany({
+      where: { id: { in: due.map((r) => r.ownerUserId) }, pushEnabled: true },
+      select: { id: true },
+    });
+    const pushIds = new Set(pushUsers.map((u) => u.id));
+    for (const reminder of due) {
+      if (!pushIds.has(reminder.ownerUserId)) continue;
+      const url = reminder.dealId
+        ? `/deals/${reminder.dealId}`
+        : reminder.accountContactId
+          ? `/crm/contacts/${reminder.accountContactId}`
+          : reminder.metaLeadId
+            ? `/ad-campaigns/leads/${reminder.metaLeadId}`
+            : reminder.conversationId
+              ? `/inbox?conversation=${reminder.conversationId}`
+              : "/reminders";
+      sendPushToUser(reminder.ownerUserId, {
+        title: "⏰ Reminder",
+        body: reminder.message,
+        url,
+        tag: `reminder-${reminder.id}`,
+      }).catch(() => null);
     }
   }
 

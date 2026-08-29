@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
@@ -57,6 +57,16 @@ export default function RemindersClient({
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [localDate, setLocalDate] = useState(dateFilter ?? "");
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    setIsOffline(!navigator.onLine);
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => { setIsOffline(false); router.refresh(); };
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => { window.removeEventListener("offline", goOffline); window.removeEventListener("online", goOnline); };
+  }, [router]);
 
   const sections = useMemo(() => {
     const map = new Map<string, Reminder[]>();
@@ -136,6 +146,12 @@ export default function RemindersClient({
         }
       />
 
+      {isOffline && (
+        <div className="mx-4 sm:mx-6 lg:mx-8 mt-2 px-4 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm flex items-center gap-2">
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 11-12.728 0M12 9v4m0 4h.01" /></svg>
+          You&apos;re offline — showing cached reminders
+        </div>
+      )}
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {reminders.length === 0 && (
           <div className="card p-10 text-center">

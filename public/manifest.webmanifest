@@ -1,24 +1,36 @@
 {
-  "name": "WhatsApp Marketing Tool",
-  "short_name": "WA Tool",
-  "description": "WhatsApp broadcasts, inbox, pipeline and analytics",
+  "name": "Fitoverse",
+  "short_name": "Fitoverse",
+  "description": "Fitoverse — WhatsApp marketing, quotations, court designs and CRM",
   "start_url": "/inbox",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a0f1c",
-  "theme_color": "#25D366",
+  "theme_color": "#159341",
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

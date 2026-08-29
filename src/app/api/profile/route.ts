@@ -19,8 +19,9 @@ const schema = z
       .regex(/^\+?\d{7,15}$/, "Enter digits only, e.g. 919876543210")
       .or(z.literal(""))
       .optional(),
+    pushEnabled: z.boolean().optional(),
   })
-  .refine((v) => v.name !== undefined || v.preferredUnit !== undefined || v.phone !== undefined, {
+  .refine((v) => v.name !== undefined || v.preferredUnit !== undefined || v.phone !== undefined || v.pushEnabled !== undefined, {
     message: "at least one field required",
   });
 
@@ -47,6 +48,7 @@ export async function PATCH(req: NextRequest) {
         preferredUnit: parsed.data.preferredUnit,
       }),
       ...(parsed.data.phone !== undefined && { phone: parsed.data.phone || null }),
+      ...(parsed.data.pushEnabled !== undefined && { pushEnabled: parsed.data.pushEnabled }),
     },
   });
 

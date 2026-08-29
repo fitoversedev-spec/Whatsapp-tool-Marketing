@@ -50,6 +50,12 @@ export default function Sidebar({
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
+    const toggle = () => setOpen((prev) => !prev);
+    window.addEventListener("toggle-sidebar", toggle);
+    return () => window.removeEventListener("toggle-sidebar", toggle);
+  }, []);
+
+  useEffect(() => {
     const stored = localStorage.getItem("ccd_sidebar_collapsed");
     if (stored === "true") setCollapsed(true);
   }, []);

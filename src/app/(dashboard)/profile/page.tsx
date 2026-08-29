@@ -9,7 +9,7 @@ export default async function ProfilePage() {
   // fresh for the initial render — avoids a client-side flash.
   const row = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { preferredUnit: true, phone: true },
+    select: { preferredUnit: true, phone: true, pushEnabled: true },
   });
   return (
     <ProfileClient
@@ -19,6 +19,8 @@ export default async function ProfilePage() {
         role: user.role as Role,
         preferredUnit: (row?.preferredUnit ?? "ft") as "ft" | "m",
         phone: row?.phone ?? null,
+        pushEnabled: row?.pushEnabled ?? false,
+        vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null,
       }}
     />
   );

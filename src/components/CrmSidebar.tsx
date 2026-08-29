@@ -14,6 +14,8 @@ type Props = {
   reminderCount?: number;
 };
 
+// --- CrmSidebar state + toggle event below ---
+
 const CRM_PRIMARY_NAV = [
   { href: "/crm", label: "Dashboard", icon: "\u{1F9ED}", exact: true },
   { href: "/crm/contacts", label: "Contacts", icon: "\u{1F9D1}" },
@@ -77,6 +79,12 @@ export default function CrmSidebar({
   const [reminderCount, setReminderCount] = useState(reminderInitial);
   const [allToolsOpen, setAllToolsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const toggle = () => setOpen((prev) => !prev);
+    window.addEventListener("toggle-sidebar", toggle);
+    return () => window.removeEventListener("toggle-sidebar", toggle);
+  }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem("ccd_crm_sidebar_collapsed");

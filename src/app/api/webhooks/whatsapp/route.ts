@@ -8,6 +8,7 @@ import { dispatchAfterHoursGate } from "@/lib/auto-replies/after-hours-gate";
 import { dispatchChatbot } from "@/lib/chatbot/dispatch";
 import { handleStaffMessage } from "@/lib/chatbot/staffCommands";
 import { handleLeadgen } from "@/lib/meta-ads/leads";
+import { notifyInboundMessage } from "@/lib/push";
 
 // Meta requires GET for verification handshake
 export async function GET(req: NextRequest) {
@@ -244,6 +245,14 @@ async function handleInboundMessage(msg: any, profileName?: string) {
       ...mediaFields,
     },
   });
+
+  // Push notification for the inbound message (fire-and-forget — must not
+  // delay the webhook response to Meta).
+  notifyInboundMessage(
+    { id: convo.id, assignedToUserId: convo.assignedToUserId, contactName: convo.contactName, contactPhone: from },
+    body ?? null,
+    storedType
+  ).catch(() => null);
 
   // Opt-out detection
   if (type === "text" && isOptOutMessage(body ?? "")) {

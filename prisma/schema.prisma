@@ -88,8 +88,25 @@ model User {
   aiUsage                 AiUsage[]        @relation("AiUsageUser")
   metaLeadsAssigned       MetaLead[]       @relation("MetaLeadAssignee")
   metaLeadNotes           MetaLeadNote[]   @relation("MetaLeadNoteAuthor")
+  pushEnabled             Boolean          @default(false) @map("push_enabled")
+  pushSubscriptions       PushSubscription[]
 
   @@map("users")
+}
+
+model PushSubscription {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  endpoint    String
+  p256dhKey   String   @map("p256dh_key")
+  authKey     String   @map("auth_key")
+  deviceLabel String?  @map("device_label")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, endpoint])
+  @@map("push_subscriptions")
 }
 
 // One row per login "session" for a rep — powers the admin Usage analytics

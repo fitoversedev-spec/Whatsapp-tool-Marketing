@@ -15,6 +15,8 @@ export default function ProfileClient({
     role: Role;
     preferredUnit: "ft" | "m";
     phone: string | null;
+    pushEnabled: boolean;
+    vapidPublicKey: string | null;
   };
 }) {
   const router = useRouter();
@@ -32,6 +34,8 @@ export default function ProfileClient({
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(user.pushEnabled);
+  const [togglingPush, setTogglingPush] = useState(false);
 
   async function saveUnit(unit: "ft" | "m") {
     if (unit === preferredUnit) return;
@@ -97,6 +101,60 @@ export default function ProfileClient({
       const err = await res.json().catch(() => ({}));
       toast.error(err.error ?? "Failed to update number");
     }
+  }
+
+  async function togglePush() {
+    if (!user.vapidPublicKey) {
+      toast.error("Push notifications are not configured on this server");
+      return;
+    }
+    setTogglingPush(true);
+    try {
+      if (!pushEnabled) {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          toast.error("Notification permission denied by browser");
+          setTogglingPush(false);
+          return;
+        }
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(user.vapidPublicKey),
+        });
+        const json = sub.toJSON();
+        const res = await fetch("/api/push-subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            keys: json.keys,
+            deviceLabel: navigator.userAgent.slice(0, 100),
+          }),
+        });
+        if (!res.ok) throw new Error("subscribe failed");
+        setPushEnabled(true);
+        toast.success("Push notifications enabled");
+      } else {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await fetch("/api/push-subscription", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          });
+          await sub.unsubscribe();
+        } else {
+          await fetch("/api/push-subscription", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        }
+        setPushEnabled(false);
+        toast.success("Push notifications disabled");
+      }
+    } catch {
+      toast.error("Failed to update push notifications");
+    }
+    setTogglingPush(false);
   }
 
   async function changePassword(e: FormEvent) {
@@ -191,6 +249,38 @@ export default function ProfileClient({
             </button>
           </div>
         </form>
+
+        {/* Push notifications */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Push notifications</h2>
+            <p className="text-xs text-slate-500">
+              Receive push notifications for reminders and new WhatsApp messages on this device.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={togglePush}
+              disabled={togglingPush || !("serviceWorker" in navigator)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-wa-green/20 disabled:opacity-50 ${
+                pushEnabled ? "bg-wa-green" : "bg-slate-200"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  pushEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+            <span className="text-sm text-slate-700">
+              {togglingPush ? "Updating…" : pushEnabled ? "Enabled" : "Disabled"}
+            </span>
+          </div>
+          {!("serviceWorker" in (typeof navigator !== "undefined" ? navigator : {})) && (
+            <p className="text-xs text-amber-600">Push notifications are not supported in this browser.</p>
+          )}
+        </div>
 
         {/* Preferred dimension unit */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-3">
@@ -318,4 +408,13 @@ function Field({
       {children}
     </div>
   );
+}
+
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr.buffer as ArrayBuffer;
 }

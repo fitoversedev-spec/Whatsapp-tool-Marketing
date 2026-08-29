@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
     createdAt: c.createdAt.toISOString(),
     tagIds: c.tags.map((ct) => ct.tag.id),
     tags: c.tags.map((ct) => ({ id: ct.tag.id, name: ct.tag.name, color: ct.tag.color })),
+    accountContactId: c.accountContactId,
   }));
 
   if (search) {

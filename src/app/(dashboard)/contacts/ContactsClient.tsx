@@ -9,6 +9,7 @@ import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import { analyzeFile, Detection } from "@/lib/file-analysis";
 import * as XLSX from "xlsx";
 import BulkActionBar from "./BulkActionBar";
+import { postCrossTab } from "@/lib/cross-tab";
 
 const ROLE_META: Record<Detection["role"], { label: string; icon: string }> = {
   phone: { label: "Phone", icon: "📞" },
@@ -33,6 +34,7 @@ type Contact = {
   createdAt: string;
   tagIds: string[];
   tags: ContactTag[];
+  accountContactId: string | null;
 };
 
 function ConsentBadge({ allowed }: { allowed: boolean }) {
@@ -78,6 +80,7 @@ export default function ContactsClient({
   const [showUpload, setShowUpload] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Contact | null>(null);
+  const [crmBusyId, setCrmBusyId] = useState<string | null>(null);
 
   const load = useCallback(
     async (opts?: { page?: number }) => {
@@ -118,6 +121,18 @@ export default function ContactsClient({
         if (typeof d.totalContacts === "number") setPoolTotal(d.totalContacts);
       })
       .catch(() => {});
+  }
+
+  async function moveToCrm(c: Contact) {
+    setCrmBusyId(c.id);
+    const res = await fetch(`/api/contacts/${c.id}/move-to-crm`, { method: "POST" });
+    setCrmBusyId(null);
+    if (!res.ok) { toast.error("Could not move to CRM"); return; }
+    const data = await res.json();
+    if (data.alreadyLinked) toast.success("Already in CRM");
+    else toast.success("Moved to CRM");
+    setContacts((prev) => prev.map((x) => x.id === c.id ? { ...x, accountContactId: data.accountContactId } : x));
+    postCrossTab("crm:contact-added", { accountContactId: data.accountContactId });
   }
 
   return (
@@ -248,12 +263,26 @@ export default function ContactsClient({
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <ConsentBadge allowed={c.allowCampaign} />
-                      <button
-                        onClick={() => setEditing(c)}
-                        className="text-xs text-slate-600 hover:text-slate-900 underline"
-                      >
-                        Edit
-                      </button>
+                      <div className="flex gap-2">
+                        {!c.accountContactId && (
+                          <button
+                            onClick={() => moveToCrm(c)}
+                            disabled={crmBusyId === c.id}
+                            className="text-xs text-indigo-600 hover:text-indigo-800 underline disabled:opacity-50"
+                          >
+                            {crmBusyId === c.id ? "..." : "CRM"}
+                          </button>
+                        )}
+                        {c.accountContactId && (
+                          <span className="text-[10px] text-green-600 font-medium">In CRM</span>
+                        )}
+                        <button
+                          onClick={() => setEditing(c)}
+                          className="text-xs text-slate-600 hover:text-slate-900 underline"
+                        >
+                          Edit
+                        </button>
+                      </div>
                     </div>
                   </div>
                   {Object.keys(c.fields).length > 0 && (
@@ -356,12 +385,26 @@ export default function ContactsClient({
                           </td>
                         ))}
                         <td className="!text-right">
-                          <button
-                            onClick={() => setEditing(c)}
-                            className="text-xs text-slate-600 hover:text-slate-900 underline"
-                          >
-                            Edit
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            {!c.accountContactId && (
+                              <button
+                                onClick={() => moveToCrm(c)}
+                                disabled={crmBusyId === c.id}
+                                className="text-xs text-indigo-600 hover:text-indigo-800 underline disabled:opacity-50"
+                              >
+                                {crmBusyId === c.id ? "Moving..." : "Move to CRM"}
+                              </button>
+                            )}
+                            {c.accountContactId && (
+                              <span className="text-[10px] text-green-600 font-medium">In CRM</span>
+                            )}
+                            <button
+                              onClick={() => setEditing(c)}
+                              className="text-xs text-slate-600 hover:text-slate-900 underline"
+                            >
+                              Edit
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

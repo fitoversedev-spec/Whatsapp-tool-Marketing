@@ -49,6 +49,7 @@ export default async function ContactsPage({
         createdAt: c.createdAt.toISOString(),
         tagIds: c.tags.map((ct) => ct.tag.id),
         tags: c.tags.map((ct) => ({ id: ct.tag.id, name: ct.tag.name, color: ct.tag.color })),
+        accountContactId: c.accountContactId,
       }))}
       total={total}
       fieldKeys={Array.from(fieldKeys).sort()}

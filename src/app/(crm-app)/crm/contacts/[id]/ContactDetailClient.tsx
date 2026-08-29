@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast } from "@/components/Toast";
 import BackButton from "@/components/BackButton";
+import { postCrossTab } from "@/lib/cross-tab";
 import UnifiedTimeline from "@/components/crm/UnifiedTimeline";
 import { CALL_TYPE_NAMES, MEETING_TYPE_NAMES, type TimelineEntry } from "@/lib/crm/timelineShared";
 import { DESIGNATIONS } from "../AccountContactsClient";
@@ -132,6 +133,7 @@ export default function ContactDetailClient({
   const [uploadingFile, setUploadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [syncing, setSyncing] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
   const [resending, setResending] = useState<string | null>(null);
   const [showLogActivity, setShowLogActivity] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
@@ -272,6 +274,22 @@ export default function ContactDetailClient({
     if (data.synced > 0) toast.success("Added to WhatsApp marketing contacts");
     else if (data.skippedNoPhone > 0) toast.error("This contact has no phone number to sync");
     else toast.error("Could not sync");
+  }
+
+  async function unlinkFromCrm() {
+    if (!confirm("Remove this contact from CRM? It will go back to WhatsApp Marketing / Meta leads. This cannot be undone.")) return;
+    setUnlinking(true);
+    const res = await fetch(`/api/account-contacts/${contact.id}/unlink`, { method: "POST" });
+    setUnlinking(false);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.message || "Could not remove from CRM");
+      return;
+    }
+    toast.success("Removed from CRM");
+    postCrossTab("marketing:data-changed");
+    router.push("/crm/contacts");
+    router.refresh();
   }
 
   // Reuses the same /send endpoints the standalone Quotations/Court Designs
@@ -662,6 +680,14 @@ export default function ContactDetailClient({
                 className="btn btn-secondary !px-3 !py-1.5 !text-sm disabled:opacity-40"
               >
                 {syncing ? "Syncing..." : "Sync to WhatsApp Marketing"}
+              </button>
+              <button
+                onClick={unlinkFromCrm}
+                disabled={unlinking}
+                title="Remove this contact from CRM and move it back to its source (WhatsApp Marketing / Meta leads)"
+                className="border border-red-200 text-red-600 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-red-50 disabled:opacity-50"
+              >
+                {unlinking ? "Removing..." : "Remove from CRM"}
               </button>
               {contact.pipelineStage !== "LEAD" && (
                 <button

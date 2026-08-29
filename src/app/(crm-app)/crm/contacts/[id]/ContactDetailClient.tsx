@@ -271,9 +271,12 @@ export default function ContactDetailClient({
     setSyncing(false);
     if (!res.ok) { toast.error("Could not sync"); return; }
     const data = await res.json();
-    if (data.synced > 0) toast.success("Added to WhatsApp marketing contacts");
-    else if (data.skippedNoPhone > 0) toast.error("This contact has no phone number to sync");
+    if (data.synced > 0) {
+      toast.success("Added to WhatsApp marketing contacts");
+      postCrossTab("marketing:contact-added");
+    } else if (data.skippedNoPhone > 0) toast.error("This contact has no phone number to sync");
     else toast.error("Could not sync");
+    router.refresh();
   }
 
   async function unlinkFromCrm() {

@@ -45,6 +45,7 @@ export default function LeadDetailClient({
         return;
       }
       toast.success("Lead added to WhatsApp marketing");
+      router.refresh();
     } catch {
       toast.error("Could not add this lead to WhatsApp marketing");
     } finally {

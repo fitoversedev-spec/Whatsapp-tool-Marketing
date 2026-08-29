@@ -131,6 +131,7 @@ export default function AccountContactsClient({
     if (data.synced > 0) toast.success(parts.join(", "));
     else toast.error(parts.join(", ") || "Nothing synced");
     setSelected(new Set());
+    router.refresh();
   }
 
   async function reassignSelected() {

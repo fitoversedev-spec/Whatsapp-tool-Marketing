@@ -269,7 +269,7 @@ export default function DealDetailClient({
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold text-slate-900">Timeline</h3>
               <div className="flex items-center gap-3">
-                <Link href="/reminders" className="text-xs font-medium text-slate-500 hover:underline">
+                <Link href="/crm/reminders" className="text-xs font-medium text-slate-500 hover:underline">
                   Manage reminders →
                 </Link>
                 <button

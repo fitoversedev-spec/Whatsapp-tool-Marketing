@@ -14,6 +14,10 @@ const nextConfig = {
   // 3. Switch the file watcher to polling — fs events from OneDrive-mediated
   //    files arrive out of order and webpack misreads them.
   experimental: {
+    // Disable the client-side Router Cache so every navigation fetches fresh
+    // server data. The default (30s dynamic / 5min static) causes stale lists
+    // after mutations (delete deal → navigate back → old list until manual F5).
+    staleTimes: { dynamic: 0, static: 0 },
     // Empty array intentionally OVERRIDES Next.js's auto-included default
     // list (which contains recharts since 14.x). Without this override
     // recharts gets barrel-optimized and we hit the OneDrive race.

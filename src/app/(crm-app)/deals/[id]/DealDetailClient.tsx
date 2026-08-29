@@ -163,6 +163,7 @@ export default function DealDetailClient({
     if (res.ok) {
       toast.success("Deal deleted");
       router.push("/deals");
+      router.refresh();
     } else {
       const err = await res.json().catch(() => ({}));
       toast.error(err.error ?? "Delete failed");

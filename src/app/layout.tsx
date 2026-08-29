@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/Toast";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import SwRegister from "@/components/SwRegister";
 
 // Type system — Poppins (UI/body/headings) and JetBrains Mono (all numbers).
 // Self-hosted from /public/fonts via @font-face in globals.css. We self-host
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <ToastProvider>{children}</ToastProvider>
         </ThemeProvider>
+        <SwRegister />
       </body>
     </html>
   );

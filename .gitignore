@@ -10,5 +10,10 @@ prisma/*.db
 prisma/*.db-journal
 *.tsbuildinfo
 
+# Serwist-generated service worker (build artifact)
+public/sw.js
+public/sw.js.map
+public/swe-worker-*.js
+
 # MS Office lock/temp files (e.g. ~$Fitoverse-Tool-Test-Focus-Areas.docx)
 ~$*

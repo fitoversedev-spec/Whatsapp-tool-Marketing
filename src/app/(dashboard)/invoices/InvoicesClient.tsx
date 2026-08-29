@@ -49,7 +49,7 @@ function dateShort(iso: string): string {
 
 const STATUSES = ["", "issued", "sent", "partially_paid", "paid", "overdue", "cancelled"];
 
-export default function InvoicesClient() {
+export default function InvoicesClient({ basePath = "" }: { basePath?: string } = {}) {
   const [rows, setRows] = useState<InvoiceRow[] | null>(null);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
@@ -113,7 +113,7 @@ export default function InvoicesClient() {
               rows.map((inv) => (
                 <tr key={inv.id}>
                   <td>
-                    <Link href={`/invoices/${inv.id}`} className="font-medium text-court-700 hover:underline">{inv.number}</Link>
+                    <Link href={`${basePath}/invoices/${inv.id}`} className="font-medium text-court-700 hover:underline">{inv.number}</Link>
                   </td>
                   <td className="text-slate-700">{inv.customerName}</td>
                   <td className="!text-right font-mono">{inr(inv.grandTotal)}</td>

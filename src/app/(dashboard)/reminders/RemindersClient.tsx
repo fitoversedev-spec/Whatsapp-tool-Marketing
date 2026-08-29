@@ -48,9 +48,11 @@ const BUCKET_STYLE: Record<
 export default function RemindersClient({
   reminders,
   dateFilter,
+  basePath = "",
 }: {
   reminders: Reminder[];
   dateFilter: string | null;
+  basePath?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -99,9 +101,9 @@ export default function RemindersClient({
   function applyDate(date: string) {
     setLocalDate(date);
     if (date) {
-      router.push(`/reminders?date=${date}`);
+      router.push(`${basePath}/reminders?date=${date}`);
     } else {
-      router.push("/reminders");
+      router.push(`${basePath}/reminders`);
     }
   }
 
@@ -149,8 +151,8 @@ export default function RemindersClient({
                 : "Set follow-up reminders from any conversation in the Inbox."}
             </p>
             {!dateFilter && (
-              <Link href="/inbox" className="btn btn-primary mt-4">
-                Go to Inbox
+              <Link href={basePath ? `${basePath}/reminders` : "/inbox"} className="btn btn-primary mt-4">
+                {basePath ? "View all reminders" : "Go to Inbox"}
               </Link>
             )}
           </div>

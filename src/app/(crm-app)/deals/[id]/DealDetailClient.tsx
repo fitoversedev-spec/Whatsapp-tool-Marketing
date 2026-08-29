@@ -7,6 +7,7 @@ import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import UnifiedTimeline from "@/components/crm/UnifiedTimeline";
 import type { TimelineEntry } from "@/lib/crm/timeline";
+import { postCrossTab } from "@/lib/cross-tab";
 
 type Deal = {
   id: string;
@@ -144,6 +145,7 @@ export default function DealDetailClient({
     setExecutionSaving(false);
     if (res.ok) {
       toast.success(status === "IN_EXECUTION" ? "Marked in execution" : "Marked delivered");
+      postCrossTab("crm:deal-updated");
       router.refresh();
     } else {
       const err = await res.json().catch(() => ({}));
@@ -162,6 +164,7 @@ export default function DealDetailClient({
     setDeleting(false);
     if (res.ok) {
       toast.success("Deal deleted");
+      postCrossTab("crm:deal-updated");
       router.push("/deals");
       router.refresh();
     } else {

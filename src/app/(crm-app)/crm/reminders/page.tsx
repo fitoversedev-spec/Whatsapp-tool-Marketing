@@ -118,6 +118,7 @@ export default async function CrmRemindersPage({
     <RemindersClient
       reminders={reminders.map(shape)}
       dateFilter={dateFilter ?? null}
+      basePath="/crm"
     />
   );
 }

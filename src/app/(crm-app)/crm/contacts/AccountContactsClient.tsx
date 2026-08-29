@@ -8,6 +8,7 @@ import { useToast } from "@/components/Toast";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import { matchesContactFilter } from "@/lib/contacts";
+import { postCrossTab } from "@/lib/cross-tab";
 
 type Contact = {
   id: string;
@@ -130,6 +131,7 @@ export default function AccountContactsClient({
     if (data.skippedForbidden > 0) parts.push(`${data.skippedForbidden} skipped — not yours`);
     if (data.synced > 0) toast.success(parts.join(", "));
     else toast.error(parts.join(", ") || "Nothing synced");
+    if (data.synced > 0) postCrossTab("marketing:contact-added");
     setSelected(new Set());
     router.refresh();
   }
@@ -223,6 +225,7 @@ export default function AccountContactsClient({
     if (data.skippedForbidden > 0) parts.push(`${data.skippedForbidden} skipped — not yours`);
     if (data.deleted > 0) toast.success(parts.join(", "));
     else toast.error(parts.join(", ") || "Nothing deleted");
+    postCrossTab("marketing:data-changed");
     setSelected(new Set());
     router.refresh();
   }

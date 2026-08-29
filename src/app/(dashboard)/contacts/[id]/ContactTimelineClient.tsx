@@ -4,10 +4,12 @@
 // Merges 5 streams (messages, notes, reminders, stage changes, broadcasts
 // received) into one date-sorted feed; right rail shows the contact card.
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import TagPicker from "@/components/TagPicker";
+import { useToast } from "@/components/Toast";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 
 type Tag = { id: string; name: string; color: string };
@@ -90,6 +92,10 @@ export default function ContactTimelineClient({
   stageHistory: StageEvent[];
   broadcastsReceived: BroadcastEvent[];
 }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [tagIds, setTagIds] = useState(contact.tagIds);
+
   const feed: Event[] = useMemo(() => {
     return [...messages, ...notes, ...reminders, ...stageHistory, ...broadcastsReceived].sort(
       (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()
@@ -97,11 +103,16 @@ export default function ContactTimelineClient({
   }, [messages, notes, reminders, stageHistory, broadcastsReceived]);
 
   async function saveTags(ids: string[]) {
-    await fetch(`/api/contacts/${contact.id}/tags`, {
+    setTagIds(ids);
+    const res = await fetch(`/api/contacts/${contact.id}/tags`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tagIds: ids }),
     });
+    if (!res.ok) {
+      toast.error("Could not update tags");
+      setTagIds(contact.tagIds);
+    }
   }
 
   return (
@@ -167,7 +178,7 @@ export default function ContactTimelineClient({
               Tags
             </h3>
             <TagPicker
-              selectedIds={contact.tagIds}
+              selectedIds={tagIds}
               onChange={saveTags}
               canCreate
               size="sm"

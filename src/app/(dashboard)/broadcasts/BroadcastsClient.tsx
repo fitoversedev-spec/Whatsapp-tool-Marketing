@@ -495,7 +495,8 @@ function BroadcastComposer({
       });
       toast.success(`Scheduled for ${when} · ${preview.willSend} contacts`);
     } else {
-      await fetch(`/api/broadcasts/${data.broadcast.id}/launch`, { method: "POST" });
+      const launchRes = await fetch(`/api/broadcasts/${data.broadcast.id}/launch`, { method: "POST" });
+      if (!launchRes.ok) { toast.error("Broadcast saved but launch failed"); return; }
       toast.success(`Broadcast launched to ${preview.willSend} contacts`);
     }
     onLaunched();

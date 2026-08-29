@@ -16,7 +16,7 @@
 // NOT window.history — see that file for why (external same-tab pages inflate
 // history.length, and Next 14's App Router has no history index).
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { hasInAppHistory } from "@/lib/nav-history";
 
 export default function BackButton({
@@ -27,6 +27,7 @@ export default function BackButton({
   label?: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
 
   function handleClick() {
     // Prefer real history: return to the actual previous in-app page the user
@@ -41,7 +42,8 @@ export default function BackButton({
       router.push(backHref);
       return;
     }
-    router.push("/inbox");
+    const isCrm = pathname.startsWith("/crm/") || pathname.startsWith("/deals") || pathname.startsWith("/pipeline");
+    router.push(isCrm ? "/crm" : "/inbox");
   }
 
   return (

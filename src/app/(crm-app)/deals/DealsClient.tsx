@@ -6,6 +6,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
+import { postCrossTab } from "@/lib/cross-tab";
 
 type Deal = {
   id: string;
@@ -106,6 +107,7 @@ export default function DealsClient({
     });
     if (res.ok) {
       toast.success(`${deal.code} moved to ${stage.name}`);
+      postCrossTab("crm:deal-updated");
       router.refresh();
     } else {
       const err = await res.json().catch(() => ({}));

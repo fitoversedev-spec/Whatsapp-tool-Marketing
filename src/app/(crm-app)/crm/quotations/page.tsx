@@ -44,6 +44,7 @@ export default async function CrmQuotationsPage() {
         createdAt: q.createdAt.toISOString(),
       }))}
       salesUsers={salesUsers}
+      basePath="/crm"
     />
   );
 }

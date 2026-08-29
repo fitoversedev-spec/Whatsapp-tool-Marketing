@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { postCrossTab } from "@/lib/cross-tab";
 import {
   DndContext,
   DragOverlay,
@@ -190,6 +191,7 @@ export default function PipelineClient({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || `Failed (${res.status})`);
       }
+      postCrossTab("crm:deal-updated");
     } catch (err) {
       setCards(prev);
       setErrorMsg(err instanceof Error ? err.message : "Move failed");

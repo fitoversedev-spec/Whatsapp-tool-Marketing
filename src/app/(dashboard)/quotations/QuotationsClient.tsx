@@ -42,10 +42,12 @@ export default function QuotationsClient({
   isAdmin,
   initialQuotations,
   salesUsers,
+  basePath = "",
 }: {
   isAdmin: boolean;
   initialQuotations: Quotation[];
   salesUsers: { id: string; name: string }[];
+  basePath?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -162,6 +164,7 @@ export default function QuotationsClient({
       pendingTab?.close();
       toast.success(`Quotation ${q.number} sent`);
     }
+    setQuotations((prev) => prev.map((x) => x.id === q.id ? { ...x, status: "sent", sentAt: new Date().toISOString() } : x));
     router.refresh();
   }
 
@@ -185,10 +188,13 @@ export default function QuotationsClient({
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.invoice) {
       toast.success(`Invoice ${data.invoice.number} created`);
-      router.push(`/invoices/${data.invoice.id}`);
+      setQuotations((prev) => prev.map((x) => x.id === q.id ? { ...x, status: "accepted" } : x));
+      router.push(`${basePath}/invoices/${data.invoice.id}`);
+      router.refresh();
     } else if (res.status === 409 && data.invoice) {
       toast.error("An invoice already exists for this quote");
-      router.push(`/invoices/${data.invoice.id}`);
+      router.push(`${basePath}/invoices/${data.invoice.id}`);
+      router.refresh();
     } else {
       toast.error(data.error ?? "Could not convert to invoice");
     }
@@ -248,7 +254,7 @@ export default function QuotationsClient({
           <div className="flex gap-2">
             {isAdmin && (
               <Link
-                href="/settings/quotation-rates"
+                href={`${basePath || ""}/settings/quotation-rates`}
                 className="hidden sm:inline-flex self-center text-xs text-slate-600 hover:text-slate-900 px-2"
               >
                 ⚙ Rate sheet

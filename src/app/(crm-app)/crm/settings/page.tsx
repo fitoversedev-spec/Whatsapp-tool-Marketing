@@ -5,10 +5,10 @@ import { isAdmin } from "@/lib/rbac";
 import PageHeader from "@/components/PageHeader";
 
 const LINKS = [
-  { href: "/admin/taxonomies", label: "Taxonomies", description: "Funnel stages, lead sources, customer profiles, loss reasons, activity types" },
-  { href: "/admin/targets", label: "Targets", description: "Company-wide or per-rep revenue targets by month, quarter, or fiscal year" },
-  { href: "/users", label: "Users", description: "Team members and approval queue" },
-  { href: "/admin/audit-log", label: "Audit log", description: "Every stage change, role change, and taxonomy edit" },
+  { href: "/crm/admin/taxonomies", label: "Taxonomies", description: "Funnel stages, lead sources, customer profiles, loss reasons, activity types" },
+  { href: "/crm/admin/targets", label: "Targets", description: "Company-wide or per-rep revenue targets by month, quarter, or fiscal year" },
+  { href: "/crm/users", label: "Users", description: "Team members and approval queue" },
+  { href: "/crm/admin/audit-log", label: "Audit log", description: "Every stage change, role change, and taxonomy edit" },
 ];
 
 export default async function CrmSettingsPage() {

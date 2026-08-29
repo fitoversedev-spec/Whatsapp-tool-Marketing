@@ -98,13 +98,13 @@ export default function CompanyDetailClient({
       {deals.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-5">
           <Link
-            href={`/quotations?dealId=${deals[0].id}&customerName=${encodeURIComponent(account.name)}`}
+            href={`/crm/quotations?dealId=${deals[0].id}&customerName=${encodeURIComponent(account.name)}`}
             className="btn btn-secondary !px-3 !py-1 !text-xs flex items-center gap-1.5"
           >
             <span>📄</span> New Quotation
           </Link>
           <Link
-            href={`/court-images?dealId=${deals[0].id}&customerName=${encodeURIComponent(account.name)}`}
+            href={`/crm/court-images?dealId=${deals[0].id}&customerName=${encodeURIComponent(account.name)}`}
             className="btn btn-secondary !px-3 !py-1 !text-xs flex items-center gap-1.5"
           >
             <span>🎨</span> New Court Design

@@ -322,7 +322,7 @@ export default function ContactDetailClient({
   function goToWizard(kind: "quote" | "court", dealId: string) {
     const params = new URLSearchParams({ dealId, customerName: contact.name });
     if (contact.phone) params.set("phone", contact.phone);
-    router.push(`${kind === "quote" ? "/quotations" : "/court-images"}?${params.toString()}`);
+    router.push(`${kind === "quote" ? "/crm/quotations" : "/crm/court-images"}?${params.toString()}`);
   }
 
   function openSchedule(mode: "meeting" | "call", dealId: string | null) {

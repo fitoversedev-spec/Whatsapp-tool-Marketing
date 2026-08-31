@@ -56,6 +56,9 @@ type LineItem = {
   specs?: Array<{ label: string; value: string }> | null;
   // Which catalogue Product this line came from — see lineItemsForSubmit().
   productId?: string | null;
+  // Dimension breakdown for QTY. Both set → L×W mode (areaSqFt = dim1×dim2).
+  qtyDim1?: number | null;
+  qtyDim2?: number | null;
   // Word-level highlight marks for the PDF (word index → colour hex), per
   // field. A whole cell/box = every word index set. See ItemHighlighter.
   highlights?: {
@@ -367,9 +370,14 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         prev.map((li) => {
           const r = rateSheet.find((x) => x.id === li.id);
           const area = r ? areaForRate(r, lengthFt, widthFt) : null;
-          return area == null
-            ? li
-            : { ...li, areaSqFt: area, total: area * li.ratePerSqFt };
+          if (area == null) return li;
+          const hasDims = li.qtyDim1 != null && li.qtyDim2 != null;
+          return {
+            ...li,
+            areaSqFt: area,
+            total: area * li.ratePerSqFt,
+            ...(hasDims ? { qtyDim1: lengthFt, qtyDim2: widthFt } : {}),
+          };
         }),
       );
       setPicked((prev) =>
@@ -401,6 +409,8 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             included: !r.optional,
             section: sectionForItem(r),
             unit: r.unit ?? defaultUnitForAreaMode(r.areaMode),
+            qtyDim1: r.areaMode === "plot" ? lengthFt : undefined,
+            qtyDim2: r.areaMode === "plot" ? widthFt : undefined,
           };
         });
         setLineItems(initial);
@@ -442,6 +452,9 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
       prev.map((it) => {
         if (it.id !== id) return it;
         const next = { ...it, [key]: value };
+        if ((key === "qtyDim1" || key === "qtyDim2") && next.qtyDim1 != null && next.qtyDim2 != null) {
+          next.areaSqFt = next.qtyDim1 * next.qtyDim2;
+        }
         next.total = next.areaSqFt * next.ratePerSqFt;
         return next;
       })
@@ -1217,22 +1230,70 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                   value={item.highlights}
                                   onChange={(next) => updateLineItem(item.id, "highlights", next)}
                                 />
-                                <div className="grid grid-cols-5 gap-2 mt-2">
+                                <div className="grid grid-cols-[1.4fr_0.8fr_1fr_0.7fr_1.1fr] gap-2 mt-2">
                                   <div>
-                                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
-                                      Qty
-                                    </label>
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      value={item.areaSqFt}
-                                      onChange={(e) => updateLineItem(item.id, "areaSqFt", parseFloat(e.target.value) || 0)}
-                                      disabled={!item.included}
-                                      className="input text-right font-mono"
-                                    />
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                                        Qty
+                                      </label>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setLineItems((prev) =>
+                                            prev.map((it) => {
+                                              if (it.id !== item.id) return it;
+                                              if (it.qtyDim1 != null && it.qtyDim2 != null) {
+                                                return { ...it, qtyDim1: null, qtyDim2: null };
+                                              }
+                                              const area = lengthFt * widthFt;
+                                              return { ...it, qtyDim1: lengthFt, qtyDim2: widthFt, areaSqFt: area, total: area * it.ratePerSqFt };
+                                            }),
+                                          );
+                                        }}
+                                        disabled={!item.included}
+                                        className="text-[10px] font-medium text-blue-600 hover:text-blue-800 disabled:opacity-40"
+                                      >
+                                        {item.qtyDim1 != null && item.qtyDim2 != null ? "Direct" : "L×W"}
+                                      </button>
+                                    </div>
+                                    {item.qtyDim1 != null && item.qtyDim2 != null ? (
+                                      <div>
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            value={item.qtyDim1}
+                                            onChange={(e) => updateLineItem(item.id, "qtyDim1", parseFloat(e.target.value) || 0)}
+                                            disabled={!item.included}
+                                            className="input text-right font-mono flex-1 min-w-0"
+                                          />
+                                          <span className="text-xs text-slate-400 font-medium">×</span>
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            value={item.qtyDim2}
+                                            onChange={(e) => updateLineItem(item.id, "qtyDim2", parseFloat(e.target.value) || 0)}
+                                            disabled={!item.included}
+                                            className="input text-right font-mono flex-1 min-w-0"
+                                          />
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 text-right mt-0.5 font-mono">
+                                          = {(item.areaSqFt).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={item.areaSqFt}
+                                        onChange={(e) => updateLineItem(item.id, "areaSqFt", parseFloat(e.target.value) || 0)}
+                                        disabled={!item.included}
+                                        className="input text-right font-mono"
+                                      />
+                                    )}
                                   </div>
                                   <div>
-                                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
+                                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
                                       Unit
                                     </label>
                                     <input
@@ -1244,7 +1305,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
+                                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
                                       Rate ₹
                                     </label>
                                     <input
@@ -1257,7 +1318,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
+                                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
                                       GST %
                                     </label>
                                     <input
@@ -1271,7 +1332,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">
+                                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
                                       Total
                                     </label>
                                     <div className="px-2 py-1 text-sm font-semibold text-right bg-slate-50 border border-slate-200 rounded font-mono">

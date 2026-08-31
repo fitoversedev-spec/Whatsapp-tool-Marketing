@@ -1515,7 +1515,14 @@ function drawParticularsTable(
     // Numeric cells, aligned to the first line.
     const amt = item.areaSqFt * item.ratePerSqFt;
     centerAt(item.unit ?? "sq.ft", x.unit, cols.unit, NAME_SIZE, ctx.font, COL.text, numY);
-    rightAt(inr(item.areaSqFt), x.qty, cols.qty, NAME_SIZE, ctx.font, COL.text, numY);
+    if (item.qtyDim1 != null && item.qtyDim2 != null) {
+      const dimStr = `${inr(item.qtyDim1)} x ${inr(item.qtyDim2)}`;
+      const dimFS = NAME_SIZE * 0.78;
+      rightAt(dimStr, x.qty, cols.qty, dimFS, ctx.font, COL.textSoft, numY);
+      rightAt(`= ${inr(item.areaSqFt)}`, x.qty, cols.qty, dimFS, ctx.font, COL.text, yFromTop(line0 + NAME_LH * 0.9));
+    } else {
+      rightAt(inr(item.areaSqFt), x.qty, cols.qty, NAME_SIZE, ctx.font, COL.text, numY);
+    }
     rightAt(inrRate(item.ratePerSqFt), x.rate, cols.rate, NAME_SIZE, ctx.font, COL.text, numY);
     centerAt(gstLabel(item.gstPercent), x.gst, cols.gst, NAME_SIZE, ctx.font, COL.text, numY);
     rightAt(inr(amt), x.amt, cols.amt, NAME_SIZE, ctx.bold, COL.text, numY);
@@ -1976,15 +1983,26 @@ function drawCoverPage(
     centerText("FIT O VERSE", 210, 28, ctx.bold, GREEN);
   }
 
-  // TO block — project subject (green italic) + customer/city (dark italic).
+  // TO block — customer name + city, then project subject in black.
   const subject = titleForSport(data.sport).replace(/^Quotation for\s+/i, "");
   const projectLine = `${subject} - ${data.lengthFt} ft x ${data.widthFt} ft`.toUpperCase();
   const parts = (data.customerName ?? "").split(",");
   const toName = (parts[0] ?? "").trim();
   const city = parts.slice(1).join(",").trim();
-  const customerLine = (toName + (city ? ` - ${city}` : "")).toUpperCase().trim();
-  centerText(projectLine, 318, 15, boldItalic, GREEN);
-  if (customerLine) centerText(customerLine, 344, 13, boldItalic, COL.text);
+  let toY = 300;
+  if (toName) {
+    centerText("To", toY, 13, ctx.bold, COL.text);
+    toY += 20;
+    centerText(toName.toUpperCase(), toY, 14, ctx.bold, COL.text);
+    toY += 18;
+    if (city) {
+      centerText(city, toY, 11, ctx.font, COL.textSoft);
+      toY += 22;
+    } else {
+      toY += 10;
+    }
+  }
+  centerText(projectLine, toY, 15, boldItalic, COL.text);
 
   // From block, centered.
   centerText("From", 438, 13, ctx.bold, COL.text);

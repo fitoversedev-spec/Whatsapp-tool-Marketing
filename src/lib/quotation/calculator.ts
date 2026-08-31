@@ -51,6 +51,12 @@ export type QuoteLineItem = {
   // save; see docs/DECISIONS.md). Drives DealLineItem/product-movement
   // analytics. Historical line items predating this field are null.
   productId?: string | null;
+  // Optional dimension breakdown for the QTY column. When both are set,
+  // areaSqFt = qtyDim1 × qtyDim2 (auto-computed). The PDF renders the
+  // breakdown (e.g. "60 × 100 = 6,000") and the wizard shows two editable
+  // inputs. Null/undefined = direct single-number QTY.
+  qtyDim1?: number | null;
+  qtyDim2?: number | null;
   // ── User highlights for the PDF particulars table (presentation only —
   // ignored by the money math). Maps a whitespace-split WORD INDEX → colour hex
   // for the item name and/or description, so the render and the wizard agree
@@ -90,6 +96,8 @@ export const lineItemSchema = z.object({
     .nullable()
     .optional(),
   productId: z.string().uuid().nullable().optional(),
+  qtyDim1: z.number().min(0).max(100_000).nullable().optional(),
+  qtyDim2: z.number().min(0).max(100_000).nullable().optional(),
   // Word-index → colour-hex highlight maps (see QuoteLineItem.highlights).
   // Colours are constrained to 6-digit hex so nothing arbitrary reaches the
   // PDF renderer.
@@ -141,8 +149,10 @@ export function buildInitialLineItems(
       ratePerSqFt: r.defaultRate,
       gstPercent: r.gstPercent,
       total: area * r.defaultRate,
-      included: !r.optional, // optional items (padding) start unchecked
+      included: !r.optional,
       section: sectionForItem(r),
+      qtyDim1: r.areaMode === "plot" ? lengthFt : undefined,
+      qtyDim2: r.areaMode === "plot" ? widthFt : undefined,
     };
   });
 }

@@ -1517,9 +1517,8 @@ function drawParticularsTable(
     centerAt(item.unit ?? "sq.ft", x.unit, cols.unit, NAME_SIZE, ctx.font, COL.text, numY);
     if (item.qtyDim1 != null && item.qtyDim2 != null) {
       const dimStr = `${inr(item.qtyDim1)} x ${inr(item.qtyDim2)}`;
-      const dimFS = NAME_SIZE * 0.78;
-      rightAt(dimStr, x.qty, cols.qty, dimFS, ctx.font, COL.textSoft, numY);
-      rightAt(`= ${inr(item.areaSqFt)}`, x.qty, cols.qty, dimFS, ctx.font, COL.text, yFromTop(line0 + NAME_LH * 0.9));
+      rightAt(dimStr, x.qty, cols.qty, NAME_SIZE, ctx.font, COL.text, numY);
+      rightAt(`= ${inr(item.areaSqFt)}`, x.qty, cols.qty, NAME_SIZE, ctx.font, COL.text, yFromTop(line0 + NAME_LH));
     } else {
       rightAt(inr(item.areaSqFt), x.qty, cols.qty, NAME_SIZE, ctx.font, COL.text, numY);
     }
@@ -1911,6 +1910,7 @@ function drawConnectPage(ctx: Ctx, driveLink: string | null = null) {
 export type QuotationPdfData = {
   number: string;
   customerName: string;
+  siteCity?: string | null;
   sport: string;
   lengthFt: number;
   widthFt: number;
@@ -1983,12 +1983,11 @@ function drawCoverPage(
     centerText("FIT O VERSE", 210, 28, ctx.bold, GREEN);
   }
 
-  // TO block — customer name + city, then project subject in black.
+  // TO block — customer name + site city, then project subject in black.
   const subject = titleForSport(data.sport).replace(/^Quotation for\s+/i, "");
   const projectLine = `${subject} - ${data.lengthFt} ft x ${data.widthFt} ft`.toUpperCase();
-  const parts = (data.customerName ?? "").split(",");
-  const toName = (parts[0] ?? "").trim();
-  const city = parts.slice(1).join(",").trim();
+  const toName = (data.customerName ?? "").trim();
+  const city = data.siteCity?.trim() ?? "";
   let toY = 300;
   if (toName) {
     centerText("To", toY, 13, ctx.bold, COL.text);
@@ -1996,7 +1995,7 @@ function drawCoverPage(
     centerText(toName.toUpperCase(), toY, 14, ctx.bold, COL.text);
     toY += 18;
     if (city) {
-      centerText(city, toY, 11, ctx.font, COL.textSoft);
+      centerText(city.toUpperCase(), toY, 14, ctx.bold, COL.text);
       toY += 22;
     } else {
       toY += 10;

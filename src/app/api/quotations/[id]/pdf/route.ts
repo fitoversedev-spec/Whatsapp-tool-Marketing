@@ -16,7 +16,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const user = await getCurrentUser();
   if (!user) return new NextResponse("unauthorized", { status: 401 });
 
-  const q = await prisma.quotation.findUnique({ where: { id: params.id } });
+  const q = await prisma.quotation.findUnique({
+    where: { id: params.id },
+    include: { deal: { select: { siteCity: true } } },
+  });
   if (!q) return new NextResponse("not found", { status: 404 });
   if (user.role !== "admin" && q.createdByUserId !== user.id) {
     return new NextResponse("forbidden", { status: 403 });
@@ -54,6 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     pdfBuffer = await renderQuotationPdf({
       number: q.number,
       customerName: q.customerName,
+      siteCity: q.deal?.siteCity ?? null,
       sport: q.sport,
       lengthFt: q.lengthFt,
       widthFt: q.widthFt,

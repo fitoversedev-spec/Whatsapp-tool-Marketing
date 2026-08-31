@@ -38,12 +38,11 @@ export default async function AdCampaignsPage({
     return Number.isNaN(d.getTime()) ? new Date() : d;
   })();
 
-  // getCampaignList() is a lifetime roster (NOT windowed) and getAssignableReps()
-  // is static, so both are fetched alongside the windowed overview/leads.
+  const hasDateFilter = !!searchParams.from || !!searchParams.to;
   const [overview, leads, campaigns, reps, labelCatalog] = await Promise.all([
     getAdCampaignOverview({ from, to }),
     getMetaLeads({ from, to }),
-    getCampaignList(),
+    getCampaignList(hasDateFilter ? { from, to } : undefined),
     getAssignableReps(),
     getMetaLeadLabels(),
   ]);

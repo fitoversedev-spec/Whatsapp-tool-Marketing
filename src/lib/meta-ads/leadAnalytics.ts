@@ -324,6 +324,84 @@ export async function salesCustomFieldAnalytics(range: Range): Promise<CustomFie
     .sort((a, b) => b.count - a.count);
 }
 
+// Top-performing campaign per dimension value — one query, all dimensions.
+export type TopCampaignMap = {
+  byCity: Record<string, string>;
+  bySport: Record<string, string>;
+  byArea: Record<string, string>;
+  byJob: Record<string, string>;
+  overall: string | null;
+};
+
+export async function topCampaignPerDimension(range: Range): Promise<TopCampaignMap> {
+  const leads = await prisma.metaLead.findMany({
+    where: leadWindowWhere(range),
+    select: { city: true, sport: true, fieldData: true, campaignName: true },
+  });
+
+  function topOf(entries: [string, Map<string, number>][]): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const [dim, campMap] of entries) {
+      let best = "";
+      let bestCount = 0;
+      for (const [camp, count] of campMap) {
+        if (count > bestCount) { best = camp; bestCount = count; }
+      }
+      if (best) result[dim] = best;
+    }
+    return result;
+  }
+
+  const cityMap = new Map<string, Map<string, number>>();
+  const sportMap = new Map<string, Map<string, number>>();
+  const areaMap = new Map<string, Map<string, number>>();
+  const jobMap = new Map<string, Map<string, number>>();
+  const overallMap = new Map<string, number>();
+
+  for (const l of leads) {
+    const camp = l.campaignName ?? "(unattributed)";
+    const city = normalizeLabel(l.city) ?? UNKNOWN;
+    const sport = normalizeLabel(l.sport) ?? UNKNOWN;
+    const area = extractArea(l.fieldData);
+    const job = normalizeLabel(extractJob(l.fieldData));
+
+    overallMap.set(camp, (overallMap.get(camp) ?? 0) + 1);
+
+    const cm = cityMap.get(city) ?? new Map<string, number>();
+    cm.set(camp, (cm.get(camp) ?? 0) + 1);
+    cityMap.set(city, cm);
+
+    const sm = sportMap.get(sport) ?? new Map<string, number>();
+    sm.set(camp, (sm.get(camp) ?? 0) + 1);
+    sportMap.set(sport, sm);
+
+    if (area) {
+      const am = areaMap.get(area) ?? new Map<string, number>();
+      am.set(camp, (am.get(camp) ?? 0) + 1);
+      areaMap.set(area, am);
+    }
+    if (job) {
+      const jm = jobMap.get(job) ?? new Map<string, number>();
+      jm.set(camp, (jm.get(camp) ?? 0) + 1);
+      jobMap.set(job, jm);
+    }
+  }
+
+  let overallBest: string | null = null;
+  let overallMax = 0;
+  for (const [camp, count] of overallMap) {
+    if (count > overallMax) { overallBest = camp; overallMax = count; }
+  }
+
+  return {
+    byCity: topOf([...cityMap.entries()]),
+    bySport: topOf([...sportMap.entries()]),
+    byArea: topOf([...areaMap.entries()]),
+    byJob: topOf([...jobMap.entries()]),
+    overall: overallBest,
+  };
+}
+
 export type CampaignSummaryRow = { campaignName: string; leadCount: number; metaCampaignId: string | null };
 
 export async function campaignSummaryInRange({ from, to }: Range): Promise<CampaignSummaryRow[]> {
@@ -341,4 +419,66 @@ export async function campaignSummaryInRange({ from, to }: Range): Promise<Campa
   return [...map.entries()]
     .map(([campaignName, v]) => ({ campaignName, leadCount: v.count, metaCampaignId: v.metaId }))
     .sort((a, b) => b.leadCount - a.leadCount);
+}
+
+// Top campaign per sales-data dimension (b2bB2c, sport, timeline).
+export type SalesTopCampaignMap = {
+  byB2bB2c: Record<string, string>;
+  bySport: Record<string, string>;
+  byTimeline: Record<string, string>;
+};
+
+export async function salesTopCampaignPerDimension(range: Range): Promise<SalesTopCampaignMap> {
+  const leads = await (prisma.metaLead as any).findMany({
+    where: leadWindowWhere(range),
+    select: { salesData: true, campaignName: true },
+  }) as { salesData?: string | null; campaignName?: string | null }[];
+
+  function topOf(entries: [string, Map<string, number>][]): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const [dim, campMap] of entries) {
+      let best = "";
+      let bestCount = 0;
+      for (const [camp, count] of campMap) {
+        if (count > bestCount) { best = camp; bestCount = count; }
+      }
+      if (best) result[dim] = best;
+    }
+    return result;
+  }
+
+  const b2bMap = new Map<string, Map<string, number>>();
+  const sportMap = new Map<string, Map<string, number>>();
+  const tlMap = new Map<string, Map<string, number>>();
+
+  for (const l of leads) {
+    const s = parseSales(l.salesData ?? null);
+    if (!s) continue;
+    const camp = l.campaignName ?? "(unattributed)";
+
+    const b2b = s.b2bB2c?.trim();
+    if (b2b) {
+      const m = b2bMap.get(b2b) ?? new Map<string, number>();
+      m.set(camp, (m.get(camp) ?? 0) + 1);
+      b2bMap.set(b2b, m);
+    }
+    const sport = normalizeLabel(s.sport);
+    if (sport) {
+      const m = sportMap.get(sport) ?? new Map<string, number>();
+      m.set(camp, (m.get(camp) ?? 0) + 1);
+      sportMap.set(sport, m);
+    }
+    const tl = s.timeline?.trim();
+    if (tl) {
+      const m = tlMap.get(tl) ?? new Map<string, number>();
+      m.set(camp, (m.get(camp) ?? 0) + 1);
+      tlMap.set(tl, m);
+    }
+  }
+
+  return {
+    byB2bB2c: topOf([...b2bMap.entries()]),
+    bySport: topOf([...sportMap.entries()]),
+    byTimeline: topOf([...tlMap.entries()]),
+  };
 }

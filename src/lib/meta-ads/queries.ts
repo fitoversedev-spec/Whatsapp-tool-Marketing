@@ -353,9 +353,14 @@ export type CampaignListRow = {
 
 const isActiveStatus = (s: string | null | undefined) => (s ?? "").toUpperCase() === "ACTIVE";
 
-// ALL campaigns (active, paused, archived, zero-spend) — never gated on the
-// existence of AdInsight rows. Sorted active-first, then by spend desc.
-export async function getCampaignList(): Promise<CampaignListRow[]> {
+// ALL campaigns (active, paused, archived, zero-spend). When a date range is
+// provided, insights and captured leads are windowed to that range and campaigns
+// with zero activity are excluded so only relevant campaigns show.
+export async function getCampaignList(range?: { from: Date; to: Date }): Promise<CampaignListRow[]> {
+  const insightWhere = range ? { date: { gte: range.from, lte: range.to } } : {};
+  const leadWhere = range
+    ? { campaignId: { not: null }, ...leadWindowWhere(range) }
+    : { campaignId: { not: null as any } };
   const [campaigns, leads] = await Promise.all([
     prisma.metaCampaign.findMany({
       select: {
@@ -363,11 +368,10 @@ export async function getCampaignList(): Promise<CampaignListRow[]> {
         name: true,
         status: true,
         objective: true,
-        insights: { select: { spend: true, impressions: true, clicks: true, leads: true } },
+        insights: { where: insightWhere, select: { spend: true, impressions: true, clicks: true, leads: true } },
       },
     }),
-    // Captured-lead counts joined on the RAW Meta id — tallied in JS (never groupBy).
-    prisma.metaLead.findMany({ where: { campaignId: { not: null } }, select: { campaignId: true } }),
+    prisma.metaLead.findMany({ where: leadWhere, select: { campaignId: true } }),
   ]);
 
   const capturedByMetaId = new Map<string, number>();
@@ -402,6 +406,7 @@ export async function getCampaignList(): Promise<CampaignListRow[]> {
         ctr: impressions > 0 ? clicks / impressions : null,
       };
     })
+    .filter((c) => !range || c.spend > 0 || c.insightLeads > 0 || c.capturedLeads > 0)
     .sort((a, b) => {
       const aa = isActiveStatus(a.status) ? 0 : 1;
       const bb = isActiveStatus(b.status) ? 0 : 1;

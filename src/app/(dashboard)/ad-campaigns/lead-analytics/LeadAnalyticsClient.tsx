@@ -11,7 +11,7 @@
 // repeat_leads tools). Same ?from/?to range convention as AdCampaignsClient:
 // applying a range pushes the query string and the server page re-fetches.
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
@@ -21,7 +21,7 @@ import { DataTable } from "@/components/analytics/DataTable";
 import { ExportButtons } from "@/components/analytics/ExportButtons";
 import { HorizontalBarChart, StackedBarChart, DonutChart, DONUT_PALETTE } from "@/components/analytics/charts";
 import MetaAiSummary from "@/components/MetaAiSummary";
-import type { LeadCityRow, SportCityCell, RepeatLeadRow, JobCityCell, AreaCityCell, B2bB2cRow, SalesSportRow, SalesTimelineRow, CustomFieldRow, CampaignSummaryRow } from "@/lib/meta-ads/leadAnalytics";
+import type { LeadCityRow, SportCityCell, RepeatLeadRow, JobCityCell, AreaCityCell, B2bB2cRow, SalesSportRow, SalesTimelineRow, CustomFieldRow, CampaignSummaryRow, TopCampaignMap, SalesTopCampaignMap } from "@/lib/meta-ads/leadAnalytics";
 
 function fmtInt(n: number): string {
   return n.toLocaleString("en-IN");
@@ -29,6 +29,16 @@ function fmtInt(n: number): string {
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN");
+}
+
+function TopCampaignBadge({ campaign }: { campaign: string | undefined }) {
+  if (!campaign) return null;
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+      <svg className="h-3.5 w-3.5 text-amber-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M10 1l2.39 4.84 5.34.78-3.87 3.77.91 5.32L10 13.27l-4.77 2.44.91-5.32L2.27 6.62l5.34-.78L10 1z" /></svg>
+      <span>Top campaign: <b className="text-slate-700 font-medium">{campaign}</b></span>
+    </div>
+  );
 }
 
 // Pivots flat {x, group, value} rows into StackedBarChart's per-x-category
@@ -83,21 +93,75 @@ function FilterCombo({
   onChange: (v: string) => void;
   options: string[];
 }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = search
+    ? options.filter((o) => o.toLowerCase().includes(search.toLowerCase()))
+    : options;
+
   return (
-    <div>
+    <div ref={ref} className="relative">
       <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-      <input
-        list={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Type or choose…"
-        className="input w-44 text-sm"
-      />
-      <datalist id={id}>
-        {options.map((o) => (
-          <option key={o} value={o} />
-        ))}
-      </datalist>
+      <button
+        type="button"
+        onClick={() => { setOpen((v) => !v); setSearch(""); }}
+        className="flex items-center justify-between gap-1 w-44 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-left hover:border-slate-400 transition-colors"
+      >
+        <span className={value ? "text-slate-900 truncate" : "text-slate-400 truncate"}>
+          {value || "Choose…"}
+        </span>
+        <svg className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-56 rounded-lg border border-slate-200 bg-white shadow-lg">
+          {options.length > 5 && (
+            <div className="p-1.5 border-b border-slate-100">
+              <input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search…"
+                className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm outline-none focus:border-slate-400"
+              />
+            </div>
+          )}
+          <div className="max-h-52 overflow-y-auto py-1">
+            {value && (
+              <button
+                type="button"
+                onClick={() => { onChange(""); setOpen(false); }}
+                className="w-full px-3 py-1.5 text-left text-xs text-slate-400 hover:bg-slate-50"
+              >
+                Clear selection
+              </button>
+            )}
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-slate-400">No matches</div>
+            ) : (
+              filtered.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => { onChange(o); setOpen(false); }}
+                  className={`w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50 transition-colors ${o === value ? "bg-slate-100 font-medium text-slate-900" : "text-slate-700"}`}
+                >
+                  {o}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -113,6 +177,8 @@ export default function LeadAnalyticsClient({
   salesTimelines,
   salesCustom,
   campaigns,
+  topCampaigns,
+  salesTopCampaigns,
   hasDateFilter,
   range,
 }: {
@@ -126,6 +192,8 @@ export default function LeadAnalyticsClient({
   salesTimelines: SalesTimelineRow[];
   salesCustom: CustomFieldRow[];
   campaigns: CampaignSummaryRow[];
+  topCampaigns: TopCampaignMap;
+  salesTopCampaigns: SalesTopCampaignMap;
   hasDateFilter: boolean;
   range: DateRange;
 }) {
@@ -162,6 +230,16 @@ export default function LeadAnalyticsClient({
   const [areaExpanded, setAreaExpanded] = useState(false);
   const [repeatExpanded, setRepeatExpanded] = useState(false);
   const JOBS_PREVIEW = 5;
+
+  // Data source toggle: customer form data vs sales follow-up data
+  const hasSalesData = b2bB2c.length > 0 || salesSports.length > 0 || salesTimelines.length > 0 || salesCustom.length > 0;
+  const [dataSource, setDataSource] = useState<"customer" | "sales">("customer");
+
+  // Per-section overall/by-city view toggle
+  const [cityView, setCityView] = useState<"byCity" | "overall">("byCity");
+  const [sportView, setSportView] = useState<"byCity" | "overall">("byCity");
+  const [areaView, setAreaView] = useState<"byCity" | "overall">("byCity");
+  const [jobView, setJobView] = useState<"byCity" | "overall">("byCity");
 
   // --- Leads by city ---
   // Totals + top city stay GLOBAL (KPI tiles + the share % denominator), so a
@@ -246,6 +324,13 @@ export default function LeadAnalyticsClient({
   const jobOptions = [...new Set(jobs.map((c) => c.job))];
   const jobCityOptions = [...new Set(jobs.map((c) => c.city))];
   const jobSportOptions = [...new Set(jobs.map((c) => c.sport))];
+  const jobOverallRanking = (() => {
+    const m = new Map<string, number>();
+    for (const c of jobs) m.set(c.job, (m.get(c.job) ?? 0) + c.count);
+    return [...m.entries()]
+      .map(([job, count]) => ({ job, count }))
+      .sort((a, b) => b.count - a.count || a.job.localeCompare(b.job));
+  })();
 
   // --- Area demand (area × city): rank areas within a city, or cities within
   // an area (and vice versa). Choosing an Area flips the ranking to cities. ---
@@ -271,6 +356,15 @@ export default function LeadAnalyticsClient({
     .map((c) => [c.area, c.city, c.count]);
   const areaOptions = [...new Set(areas.map((c) => c.area))];
   const areaCityOptions = [...new Set(areas.map((c) => c.city))];
+
+  // --- Overall area ranking (without city dimension) ---
+  const areaOverallRanking = (() => {
+    const m = new Map<string, number>();
+    for (const c of areas) m.set(c.area, (m.get(c.area) ?? 0) + c.count);
+    return [...m.entries()]
+      .map(([area, count]) => ({ label: area, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  })();
 
   // --- Repeat submitters ---
   const repeatHeaders = ["Person", "Phone", "Campaigns", "Which campaigns", "First seen", "Last seen"];
@@ -342,40 +436,53 @@ export default function LeadAnalyticsClient({
         {/* Ask AI — freeform questions + recommendations, answered only from the real lead data */}
         <MetaAiSummary />
 
+        {/* Data source toggle — always visible so the feature is discoverable */}
+        <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
+          <button
+            type="button"
+            onClick={() => setDataSource("customer")}
+            className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${dataSource === "customer" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
+          >
+            Customer data
+          </button>
+          <button
+            type="button"
+            onClick={() => setDataSource("sales")}
+            className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${dataSource === "sales" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
+          >
+            Sales follow-up data
+          </button>
+        </div>
+
+        {/* ═══ CUSTOMER DATA SECTIONS ═══ */}
+        {dataSource === "customer" && (<>
+
         {/* Leads by city */}
         <AnalyticsCard
-          title="Leads by city"
-          description={`Every lead's city, ranked by volume — where the demand is actually coming from.${totalCityLeads > 0 ? ` Overall: ${fmtInt(totalCityLeads)} leads across ${byCity.length} cities.` : ""}`}
+          title={cityView === "overall" ? "Total leads (overall)" : "Leads by city"}
+          description={`${cityView === "overall" ? "Overall lead volume across all cities." : "Every lead's city, ranked by volume — where the demand is coming from."}${totalCityLeads > 0 ? ` Overall: ${fmtInt(totalCityLeads)} leads across ${byCity.length} cities.` : ""}`}
           action={topCity ? `Most leads are coming from ${topCity.city} (${fmtInt(topCity.count)}) — prioritise follow-up and local offers there.` : undefined}
         >
           {byCity.length === 0 ? (
             <p className="text-sm text-slate-400">No location data in this range yet.</p>
           ) : (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <FilterCombo id="la-city" label="City" value={cityFilter} onChange={setCityFilter} options={byCity.map((r) => r.city)} />
-                <div className="text-xs text-slate-500 pb-1.5">
-                  Showing <b className="text-slate-800 font-mono">{byCityF.length}</b> of {byCity.length} cities
-                  {cq && <span className="text-slate-400"> (filtered)</span>}
-                </div>
-                {cityFilter && (
-                  <button type="button" onClick={() => setCityFilter("")} className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5">
-                    Clear
-                  </button>
-                )}
+              <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 w-fit">
+                <button type="button" onClick={() => setCityView("byCity")} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${cityView === "byCity" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>By city</button>
+                <button type="button" onClick={() => setCityView("overall")} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${cityView === "overall" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>Overall</button>
               </div>
-              {byCityF.length === 0 ? (
-                <p className="text-sm text-slate-400">No cities match “{cityFilter}”.</p>
-              ) : (
+              <TopCampaignBadge campaign={topCampaigns.overall ?? undefined} />
+
+              {cityView === "overall" ? (
                 <>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div>
-                      <div className="heading text-xs tracking-wide text-slate-500 mb-2">Top cities</div>
+                      <div className="heading text-xs tracking-wide text-slate-500 mb-2">All cities ranked</div>
                       <HorizontalBarChart
-                        data={cityBars}
+                        data={byCity.slice(0, 12)}
                         dataKey="count"
                         labelKey="city"
-                        height={Math.max(140, cityBars.length * 34)}
+                        height={Math.max(140, Math.min(byCity.length, 12) * 34)}
                         colorFor={() => "#1C6E8C"}
                         tooltipFormatter={(d) => `${d.city}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
                       />
@@ -383,7 +490,7 @@ export default function LeadAnalyticsClient({
                     <div>
                       <div className="heading text-xs tracking-wide text-slate-500 mb-2">Share of leads</div>
                       <DonutChart
-                        data={cityDonut}
+                        data={byCity.slice(0, 8)}
                         dataKey="count"
                         labelKey="city"
                         colorFor={(_r, i) => DONUT_PALETTE[i % DONUT_PALETTE.length]}
@@ -401,208 +508,315 @@ export default function LeadAnalyticsClient({
                   </div>
                   {cityExpanded && <DataTable headers={cityHeaders} rows={cityRows} />}
                 </>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <FilterCombo id="la-city" label="City" value={cityFilter} onChange={setCityFilter} options={byCity.map((r) => r.city)} />
+                    <div className="text-xs text-slate-500 pb-1.5">
+                      Showing <b className="text-slate-800 font-mono">{byCityF.length}</b> of {byCity.length} cities
+                      {cq && <span className="text-slate-400"> (filtered)</span>}
+                    </div>
+                    {cityFilter && (
+                      <button type="button" onClick={() => setCityFilter("")} className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5">Clear</button>
+                    )}
+                  </div>
+                  {byCityF.length === 0 ? (
+                    <p className="text-sm text-slate-400">No cities match "{cityFilter}".</p>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div>
+                          <div className="heading text-xs tracking-wide text-slate-500 mb-2">Top cities</div>
+                          <HorizontalBarChart
+                            data={cityBars}
+                            dataKey="count"
+                            labelKey="city"
+                            height={Math.max(140, cityBars.length * 34)}
+                            colorFor={() => "#1C6E8C"}
+                            tooltipFormatter={(d) => `${d.city}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
+                          />
+                        </div>
+                        <div>
+                          <div className="heading text-xs tracking-wide text-slate-500 mb-2">Share of leads</div>
+                          <DonutChart
+                            data={cityDonut}
+                            dataKey="count"
+                            labelKey="city"
+                            colorFor={(_r, i) => DONUT_PALETTE[i % DONUT_PALETTE.length]}
+                            tooltipFormatter={(r) =>
+                              `${r.city}: ${fmtInt(r.count)} (${totalCityLeads > 0 ? Math.round((r.count / totalCityLeads) * 100) : 0}%)`
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <button type="button" onClick={() => setCityExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
+                          {cityExpanded ? "Show less ▲" : `Show full list (${cityRows.length}) ▼`}
+                        </button>
+                        <ExportButtons filename="leads-by-city" headers={cityHeaders} rows={cityRows} />
+                      </div>
+                      {cityExpanded && <DataTable headers={cityHeaders} rows={cityRows} />}
+                    </>
+                  )}
+                </>
               )}
             </div>
           )}
         </AnalyticsCard>
 
-        {/* Sport demand per city */}
+        {/* Sport demand */}
         <AnalyticsCard
-          title="Most-requested sport per city"
-          description={`What each city is asking for — leads split by the sport/interest they selected on the form.${sportRankingAll.length > 0 ? ` Overall: ${fmtInt(sportByCity.reduce((a, c) => a + c.count, 0))} leads across ${sportRankingAll.length} sports.` : ""}`}
+          title={sportView === "overall" ? "Most-requested sport (overall)" : "Most-requested sport per city"}
+          description={`${sportView === "overall" ? "Overall sport demand across all cities." : "What each city is asking for — leads by sport."}${sportRankingAll.length > 0 ? ` Overall: ${fmtInt(sportByCity.reduce((a, c) => a + c.count, 0))} leads across ${sportRankingAll.length} sports.` : ""}`}
           action={topSport ? `${topSport.sport} is the most-requested interest (${fmtInt(topSport.count)} lead${topSport.count === 1 ? "" : "s"}) — feature it in your next campaign.` : undefined}
         >
           {sportByCity.length === 0 ? (
             <p className="text-sm text-slate-400">No sport data in this range yet.</p>
           ) : (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <FilterCombo id="la-sport-city" label="City" value={sportCityFilter} onChange={setSportCityFilter} options={citySportCities} />
-                <FilterCombo id="la-sport-sport" label="Sport" value={sportSportFilter} onChange={setSportSportFilter} options={citySportSports} />
-                <div className="text-xs text-slate-500 pb-1.5">
-                  <b className="text-slate-800 font-mono">{sportCellsF.reduce((a, c) => a + c.count, 0)}</b> leads
-                  {(scq || ssq) && <span className="text-slate-400"> (filtered)</span>}
-                </div>
-                {(sportCityFilter || sportSportFilter) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSportCityFilter("");
-                      setSportSportFilter("");
-                    }}
-                    className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
-                  >
-                    Clear
-                  </button>
-                )}
+              <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 w-fit">
+                <button type="button" onClick={() => setSportView("byCity")} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${sportView === "byCity" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>By city</button>
+                <button type="button" onClick={() => setSportView("overall")} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${sportView === "overall" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>Overall</button>
               </div>
-              {sportCellsF.length === 0 ? (
-                <p className="text-sm text-slate-400">No leads match the current filters.</p>
+              {topSport && <TopCampaignBadge campaign={topCampaigns.bySport[topSport.sport]} />}
+
+              {sportView === "overall" ? (
+                <>
+                  <HorizontalBarChart
+                    data={sportRankingAll.slice(0, 12)}
+                    dataKey="count"
+                    labelKey="sport"
+                    height={Math.max(140, Math.min(sportRankingAll.length, 12) * 34)}
+                    colorFor={() => "#1C6E8C"}
+                    tooltipFormatter={(d) => `${d.sport}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
+                  />
+                  <DonutChart
+                    data={sportRankingAll.slice(0, 8)}
+                    dataKey="count"
+                    labelKey="sport"
+                    colorFor={(_r, i) => DONUT_PALETTE[i % DONUT_PALETTE.length]}
+                    tooltipFormatter={(r) => `${r.sport}: ${fmtInt(r.count)}`}
+                  />
+                </>
               ) : (
                 <>
-                  <StackedBarChart
-                    data={sportStack.data}
-                    dataKey="x"
-                    stackKeys={sportStack.stackKeys}
-                    height={280}
-                    colorFor={sportStack.colorFor}
-                    tooltipFormatter={(d) =>
-                      `${d.x} · ${sportStack.stackKeys
-                        .filter((k) => Number(d[k] ?? 0) > 0)
-                        .map((k) => `${k}: ${fmtInt(Number(d[k] ?? 0))}`)
-                        .join(" · ")}`
-                    }
-                  />
-                  <div className="flex items-center justify-between gap-3">
-                    <button type="button" onClick={() => setSportExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
-                      {sportExpanded ? "Show less ▲" : `Show full list (${sportRows.length}) ▼`}
-                    </button>
-                    <ExportButtons filename="sport-by-city" headers={sportHeaders} rows={sportRows} />
+                  <div className="flex flex-wrap items-end gap-3">
+                    <FilterCombo id="la-sport-city" label="City" value={sportCityFilter} onChange={setSportCityFilter} options={citySportCities} />
+                    <FilterCombo id="la-sport-sport" label="Sport" value={sportSportFilter} onChange={setSportSportFilter} options={citySportSports} />
+                    <div className="text-xs text-slate-500 pb-1.5">
+                      <b className="text-slate-800 font-mono">{sportCellsF.reduce((a, c) => a + c.count, 0)}</b> leads
+                      {(scq || ssq) && <span className="text-slate-400"> (filtered)</span>}
+                    </div>
+                    {(sportCityFilter || sportSportFilter) && (
+                      <button type="button" onClick={() => { setSportCityFilter(""); setSportSportFilter(""); }} className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5">Clear</button>
+                    )}
                   </div>
-                  {sportExpanded && <DataTable headers={sportHeaders} rows={sportRows} />}
+                  {sportCellsF.length === 0 ? (
+                    <p className="text-sm text-slate-400">No leads match the current filters.</p>
+                  ) : (
+                    <>
+                      <StackedBarChart
+                        data={sportStack.data}
+                        dataKey="x"
+                        stackKeys={sportStack.stackKeys}
+                        height={280}
+                        colorFor={sportStack.colorFor}
+                        tooltipFormatter={(d) =>
+                          `${d.x} · ${sportStack.stackKeys
+                            .filter((k) => Number(d[k] ?? 0) > 0)
+                            .map((k) => `${k}: ${fmtInt(Number(d[k] ?? 0))}`)
+                            .join(" · ")}`
+                        }
+                      />
+                      <div className="flex items-center justify-between gap-3">
+                        <button type="button" onClick={() => setSportExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
+                          {sportExpanded ? "Show less ▲" : `Show full list (${sportRows.length}) ▼`}
+                        </button>
+                        <ExportButtons filename="sport-by-city" headers={sportHeaders} rows={sportRows} />
+                      </div>
+                      {sportExpanded && <DataTable headers={sportHeaders} rows={sportRows} />}
+                    </>
+                  )}
                 </>
               )}
             </div>
           )}
         </AnalyticsCard>
 
-        {/* Area demand (area × city) — rank areas in a city, or cities for an area */}
+        {/* Area demand */}
         <AnalyticsCard
-          title="Area demand by city"
-          description={`How much space leads are asking for (the form's area-in-sq.ft answer).${areas.length > 0 ? ` Overall: ${fmtInt(areas.reduce((a, c) => a + c.count, 0))} leads across ${new Set(areas.map(a => a.area)).size} area sizes.` : ""}`}
+          title={areaView === "overall" ? "Area demand (overall)" : "Area demand by city"}
+          description={`${areaView === "overall" ? "Overall area-size demand across all cities." : "How much space leads are asking for (the form's area-in-sq.ft answer)."}${areas.length > 0 ? ` Overall: ${fmtInt(areas.reduce((a, c) => a + c.count, 0))} leads across ${new Set(areas.map(a => a.area)).size} area sizes.` : ""}`}
         >
           {areas.length === 0 ? (
             <p className="text-sm text-slate-400">No area-size data in this range yet.</p>
           ) : (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <FilterCombo id="la-area-city" label="City" value={areaCityFilter} onChange={setAreaCityFilter} options={areaCityOptions} />
-                <FilterCombo id="la-area" label="Area" value={areaFilter} onChange={setAreaFilter} options={areaOptions} />
-                <div className="text-xs text-slate-500 pb-1.5">
-                  <b className="text-slate-800 font-mono">{areaLeadTotal}</b> leads
-                  {(aq || acq) && <span className="text-slate-400"> (filtered)</span>}
-                </div>
-                {(areaFilter || areaCityFilter) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAreaFilter("");
-                      setAreaCityFilter("");
-                    }}
-                    className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
-                  >
-                    Clear
-                  </button>
-                )}
+              <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 w-fit">
+                <button type="button" onClick={() => setAreaView("byCity")} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${areaView === "byCity" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>By city</button>
+                <button type="button" onClick={() => setAreaView("overall")} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${areaView === "overall" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>Overall</button>
               </div>
-              {areaRanking.length === 0 ? (
-                <p className="text-sm text-slate-400">No leads match the current filters.</p>
+              {areaOverallRanking[0] && <TopCampaignBadge campaign={topCampaigns.byArea[areaOverallRanking[0].label]} />}
+
+              {areaView === "overall" ? (
+                <>
+                  <HorizontalBarChart
+                    data={areaOverallRanking.slice(0, 12)}
+                    dataKey="count"
+                    labelKey="label"
+                    height={Math.max(140, Math.min(areaOverallRanking.length, 12) * 34)}
+                    colorFor={() => "#1C6E8C"}
+                    tooltipFormatter={(d) => `${d.label}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
+                  />
+                  <DonutChart
+                    data={areaOverallRanking.slice(0, 8)}
+                    dataKey="count"
+                    labelKey="label"
+                    colorFor={(_r, i) => DONUT_PALETTE[i % DONUT_PALETTE.length]}
+                    tooltipFormatter={(r) => `${r.label}: ${fmtInt(r.count)}`}
+                  />
+                </>
               ) : (
                 <>
-                  <div>
-                    <div className="heading text-xs tracking-wide text-slate-500 mb-2">
-                      {areaFilter
-                        ? "Cities requesting this area (most to least)"
-                        : areaCityFilter
-                          ? "Area sizes requested in this city (most to least)"
-                          : "Area sizes requested (most to least)"}
+                  <div className="flex flex-wrap items-end gap-3">
+                    <FilterCombo id="la-area-city" label="City" value={areaCityFilter} onChange={setAreaCityFilter} options={areaCityOptions} />
+                    <FilterCombo id="la-area" label="Area" value={areaFilter} onChange={setAreaFilter} options={areaOptions} />
+                    <div className="text-xs text-slate-500 pb-1.5">
+                      <b className="text-slate-800 font-mono">{areaLeadTotal}</b> leads
+                      {(aq || acq) && <span className="text-slate-400"> (filtered)</span>}
                     </div>
-                    <HorizontalBarChart
-                      data={areaBars}
-                      dataKey="count"
-                      labelKey="label"
-                      height={Math.max(140, areaBars.length * 34)}
-                      colorFor={() => "#1C6E8C"}
-                      tooltipFormatter={(d) => `${d.label}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
-                    />
+                    {(areaFilter || areaCityFilter) && (
+                      <button type="button" onClick={() => { setAreaFilter(""); setAreaCityFilter(""); }} className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5">Clear</button>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <button type="button" onClick={() => setAreaExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
-                      {areaExpanded ? "Show less ▲" : `Show full list (${areaRows.length}) ▼`}
-                    </button>
-                    <ExportButtons filename="area-by-city" headers={areaHeaders} rows={areaRows} />
-                  </div>
-                  {areaExpanded && <DataTable headers={areaHeaders} rows={areaRows} />}
+                  {areaRanking.length === 0 ? (
+                    <p className="text-sm text-slate-400">No leads match the current filters.</p>
+                  ) : (
+                    <>
+                      <div>
+                        <div className="heading text-xs tracking-wide text-slate-500 mb-2">
+                          {areaFilter
+                            ? "Cities requesting this area (most to least)"
+                            : areaCityFilter
+                              ? "Area sizes requested in this city (most to least)"
+                              : "Area sizes requested (most to least)"}
+                        </div>
+                        <HorizontalBarChart
+                          data={areaBars}
+                          dataKey="count"
+                          labelKey="label"
+                          height={Math.max(140, areaBars.length * 34)}
+                          colorFor={() => "#1C6E8C"}
+                          tooltipFormatter={(d) => `${d.label}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <button type="button" onClick={() => setAreaExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
+                          {areaExpanded ? "Show less ▲" : `Show full list (${areaRows.length}) ▼`}
+                        </button>
+                        <ExportButtons filename="area-by-city" headers={areaHeaders} rows={areaRows} />
+                      </div>
+                      {areaExpanded && <DataTable headers={areaHeaders} rows={areaRows} />}
+                    </>
+                  )}
                 </>
               )}
             </div>
           )}
         </AnalyticsCard>
 
-        {/* Jobs — who's asking (job title × city × sport, all in one) */}
+        {/* Jobs — who's asking */}
         <AnalyticsCard
-          title="Jobs — who's asking"
-          description={`What people do for a living (from the form's job-title answer).${jobs.length > 0 ? ` Overall: ${fmtInt(jobs.reduce((a, c) => a + c.count, 0))} leads across ${new Set(jobs.map(j => j.job)).size} job titles.` : ""}`}
+          title={jobView === "overall" ? "Jobs — who's asking (overall)" : "Jobs — who's asking"}
+          description={`${jobView === "overall" ? "Overall job title demand across all cities." : "What people do for a living (from the form's job-title answer)."}${jobs.length > 0 ? ` Overall: ${fmtInt(jobs.reduce((a, c) => a + c.count, 0))} leads across ${new Set(jobs.map(j => j.job)).size} job titles.` : ""}`}
         >
           {jobs.length === 0 ? (
             <p className="text-sm text-slate-400">No job-title data in this range yet.</p>
           ) : (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <FilterCombo id="la-job" label="Job title" value={jobFilter} onChange={setJobFilter} options={jobOptions} />
-                <FilterCombo id="la-job-city" label="City" value={jobCityFilter} onChange={setJobCityFilter} options={jobCityOptions} />
-                <FilterCombo id="la-job-sport" label="Sport" value={jobSportFilter} onChange={setJobSportFilter} options={jobSportOptions} />
-                <div className="text-xs text-slate-500 pb-1.5">
-                  <b className="text-slate-800 font-mono">{jobLeadTotal}</b> leads · {jobGroups.length} job{jobGroups.length === 1 ? "" : "s"}
-                  {(jq || jcq || jsq) && <span className="text-slate-400"> (filtered)</span>}
-                </div>
-                {(jobFilter || jobCityFilter || jobSportFilter) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setJobFilter("");
-                      setJobCityFilter("");
-                      setJobSportFilter("");
-                    }}
-                    className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
-                  >
-                    Clear
-                  </button>
-                )}
+              <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 w-fit">
+                <button type="button" onClick={() => setJobView("byCity")} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${jobView === "byCity" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>By city</button>
+                <button type="button" onClick={() => setJobView("overall")} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${jobView === "overall" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>Overall</button>
               </div>
-              {jobGroups.length === 0 ? (
-                <p className="text-sm text-slate-400">No leads match the current filters.</p>
+              {jobOverallRanking[0] && <TopCampaignBadge campaign={topCampaigns.byJob[jobOverallRanking[0].job]} />}
+
+              {jobView === "overall" ? (
+                <>
+                  <HorizontalBarChart
+                    data={jobOverallRanking.slice(0, 12)}
+                    dataKey="count"
+                    labelKey="job"
+                    height={Math.max(140, Math.min(jobOverallRanking.length, 12) * 34)}
+                    colorFor={() => "#1C6E8C"}
+                    tooltipFormatter={(d) => `${d.job}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
+                  />
+                  <DonutChart
+                    data={jobOverallRanking.slice(0, 8)}
+                    dataKey="count"
+                    labelKey="job"
+                    colorFor={(_r, i) => DONUT_PALETTE[i % DONUT_PALETTE.length]}
+                    tooltipFormatter={(r) => `${r.job}: ${fmtInt(r.count)}`}
+                  />
+                </>
               ) : (
                 <>
-                  <div className="space-y-2">
-                    {(jobsExpanded ? jobGroups : jobGroups.slice(0, JOBS_PREVIEW)).map((g, i) => (
-                      <div key={g.job} className="card p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="font-medium text-slate-900 break-words">
-                            <span className="text-slate-400 font-mono mr-1.5">{i + 1}.</span>
-                            {g.job}
+                  <div className="flex flex-wrap items-end gap-3">
+                    <FilterCombo id="la-job" label="Job title" value={jobFilter} onChange={setJobFilter} options={jobOptions} />
+                    <FilterCombo id="la-job-city" label="City" value={jobCityFilter} onChange={setJobCityFilter} options={jobCityOptions} />
+                    <FilterCombo id="la-job-sport" label="Sport" value={jobSportFilter} onChange={setJobSportFilter} options={jobSportOptions} />
+                    <div className="text-xs text-slate-500 pb-1.5">
+                      <b className="text-slate-800 font-mono">{jobLeadTotal}</b> leads · {jobGroups.length} job{jobGroups.length === 1 ? "" : "s"}
+                      {(jq || jcq || jsq) && <span className="text-slate-400"> (filtered)</span>}
+                    </div>
+                    {(jobFilter || jobCityFilter || jobSportFilter) && (
+                      <button type="button" onClick={() => { setJobFilter(""); setJobCityFilter(""); setJobSportFilter(""); }} className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5">Clear</button>
+                    )}
+                  </div>
+                  {jobGroups.length === 0 ? (
+                    <p className="text-sm text-slate-400">No leads match the current filters.</p>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        {(jobsExpanded ? jobGroups : jobGroups.slice(0, JOBS_PREVIEW)).map((g, i) => (
+                          <div key={g.job} className="card p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="font-medium text-slate-900 break-words">
+                                <span className="text-slate-400 font-mono mr-1.5">{i + 1}.</span>
+                                {g.job}
+                              </div>
+                              <div className="shrink-0 text-right leading-tight">
+                                <div className="text-lg font-semibold text-slate-900 font-mono">{fmtInt(g.count)}</div>
+                                <div className="text-xs text-slate-400">leads</div>
+                              </div>
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              <span className="heading text-xs tracking-wide text-slate-400 mr-1">Cities</span>
+                              {g.cities.map((c) => (
+                                <span key={c.city} className="chip">
+                                  {c.city} <span className="text-slate-400 font-mono">{c.count}</span>
+                                </span>
+                              ))}
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              <span className="heading text-xs tracking-wide text-slate-400 mr-1">Sports</span>
+                              {g.sports.map((s) => (
+                                <span key={s.sport} className="chip bg-court-50 border-court-200 text-court-700">
+                                  {s.sport} <span className="text-court-500 font-mono">{s.count}</span>
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                          <div className="shrink-0 text-right leading-tight">
-                            <div className="text-lg font-semibold text-slate-900 font-mono">{fmtInt(g.count)}</div>
-                            <div className="text-xs text-slate-400">leads</div>
-                          </div>
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          <span className="heading text-xs tracking-wide text-slate-400 mr-1">Cities</span>
-                          {g.cities.map((c) => (
-                            <span key={c.city} className="chip">
-                              {c.city} <span className="text-slate-400 font-mono">{c.count}</span>
-                            </span>
-                          ))}
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          <span className="heading text-xs tracking-wide text-slate-400 mr-1">Sports</span>
-                          {g.sports.map((s) => (
-                            <span key={s.sport} className="chip bg-court-50 border-court-200 text-court-700">
-                              {s.sport} <span className="text-court-500 font-mono">{s.count}</span>
-                            </span>
-                          ))}
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <button type="button" onClick={() => setJobsExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
-                      {jobsExpanded ? "Show less ▲" : `Show all ${jobGroups.length} jobs ▼`}
-                    </button>
-                    <ExportButtons filename="leads-by-job" headers={jobHeaders} rows={jobRows} />
-                  </div>
-                  {jobsExpanded && <DataTable headers={jobHeaders} rows={jobRows} />}
+                      <div className="flex items-center justify-between gap-3">
+                        <button type="button" onClick={() => setJobsExpanded((v) => !v)} className="text-sm font-medium text-court-700 hover:underline">
+                          {jobsExpanded ? "Show less ▲" : `Show all ${jobGroups.length} jobs ▼`}
+                        </button>
+                        <ExportButtons filename="leads-by-job" headers={jobHeaders} rows={jobRows} />
+                      </div>
+                      {jobsExpanded && <DataTable headers={jobHeaders} rows={jobRows} />}
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -634,13 +848,16 @@ export default function LeadAnalyticsClient({
           )}
         </AnalyticsCard>
 
-        {/* ─── Sales follow-up data (entered by reps) ───────────── */}
-        {(b2bB2c.length > 0 || salesSports.length > 0 || salesTimelines.length > 0 || salesCustom.length > 0) && (
-          <>
-            <div className="pt-2">
-              <h3 className="text-sm font-heading font-bold text-slate-700 uppercase tracking-wide">Sales follow-up data</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Data entered by sales reps during lead follow-up — separate from the customer's original form answers.</p>
+        </>)}
+
+        {/* ═══ SALES DATA SECTIONS ═══ */}
+        {dataSource === "sales" && (<>
+          {!hasSalesData ? (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm">
+              No sales follow-up data entered yet. Open a lead&apos;s sidebar (stage must be Contacted or later) and fill in the Sales follow-up form.
             </div>
+          ) : (<>
+
 
             {/* B2B / B2C */}
             {b2bB2c.length > 0 && (
@@ -649,6 +866,7 @@ export default function LeadAnalyticsClient({
                 description={`Lead classification by sales reps. Overall: ${fmtInt(totalB2bB2c)} leads classified.`}
               >
                 <div className="space-y-3">
+                  {b2bB2c[0] && <TopCampaignBadge campaign={salesTopCampaigns.byB2bB2c[b2bB2c[0].type]} />}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {b2bB2c.map((r) => (
                       <div key={r.type} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
@@ -676,6 +894,7 @@ export default function LeadAnalyticsClient({
                 title="Sport (sales-entered)"
                 description={`Sport confirmed by sales reps during follow-up. Overall: ${fmtInt(totalSalesSports)} leads.`}
               >
+                {salesSports[0] && <TopCampaignBadge campaign={salesTopCampaigns.bySport[salesSports[0].sport]} />}
                 <HorizontalBarChart
                   data={salesSports.slice(0, 10)}
                   dataKey="count"
@@ -693,6 +912,7 @@ export default function LeadAnalyticsClient({
                 title="Build timeline"
                 description={`When leads plan to start the build (sales-entered). Overall: ${fmtInt(salesTimelines.reduce((a, r) => a + r.count, 0))} leads.`}
               >
+                {salesTimelines[0] && <TopCampaignBadge campaign={salesTopCampaigns.byTimeline[salesTimelines[0].timeline]} />}
                 <HorizontalBarChart
                   data={salesTimelines.slice(0, 10)}
                   dataKey="count"
@@ -734,8 +954,8 @@ export default function LeadAnalyticsClient({
                 </div>
               </AnalyticsCard>
             )}
-          </>
-        )}
+          </>)}
+        </>)}
       </div>
     </div>
   );

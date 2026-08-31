@@ -29,6 +29,8 @@ const patchSchema = z.object({
   reminderAt: z.string().min(1).nullable().optional(),
   // Full replacement set of applied label ids (order-insensitive).
   labelIds: z.array(z.string().uuid()).optional(),
+  // Sales follow-up JSON (sport, dimension, location, jobTitle, timeline, b2bB2c, custom[]).
+  salesData: z.string().max(10_000).nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -37,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
-  const { stage, assignedToUserId, reminderAt, labelIds } = parsed.data;
+  const { stage, assignedToUserId, reminderAt, labelIds, salesData } = parsed.data;
 
   const lead = await prisma.metaLead.findUnique({
     where: { id: params.id },
@@ -83,10 +85,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     stage?: string;
     assignedToUserId?: string | null;
     reminderAt?: Date | null;
+    salesData?: string | null;
   } = {};
   if (stage !== undefined) scalarData.stage = stage;
   if (assignedToUserId !== undefined) scalarData.assignedToUserId = assignedToUserId;
   if (reminderDate !== undefined) scalarData.reminderAt = reminderDate;
+  if (salesData !== undefined) scalarData.salesData = salesData;
 
   await prisma.$transaction(async (tx) => {
     if (Object.keys(scalarData).length > 0) {

@@ -2038,6 +2038,7 @@ model MetaLead {
   stage            String    @default("NEW")
   reminderAt       DateTime? @map("reminder_at")
   assignedToUserId String?   @map("assigned_to_user_id")
+  salesData        String?   @map("sales_data") // JSON: sales follow-up form (sport, dimension, location, jobTitle, timeline, b2bB2c, custom[])
   createdAt     DateTime  @default(now()) @map("created_at")
 
   assignedTo User?             @relation("MetaLeadAssignee", fields: [assignedToUserId], references: [id])

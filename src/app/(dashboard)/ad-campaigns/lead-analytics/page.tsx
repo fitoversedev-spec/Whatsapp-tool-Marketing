@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { leadsByCity, sportByCity, repeatLeads, jobAnalytics, areaAnalytics } from "@/lib/meta-ads/leadAnalytics";
+import { leadsByCity, sportByCity, repeatLeads, jobAnalytics, areaAnalytics, b2bB2cAnalytics, salesSportAnalytics, salesTimelineAnalytics, salesCustomFieldAnalytics, campaignSummaryInRange } from "@/lib/meta-ads/leadAnalytics";
 import LeadAnalyticsClient from "./LeadAnalyticsClient";
 
 // Open to all approved reps — requireUser redirects a logged-out visitor who
@@ -32,13 +32,20 @@ export default async function LeadAnalyticsPage({
     return Number.isNaN(d.getTime()) ? new Date() : d;
   })();
 
-  const [byCity, sportCity, repeats, jobs, areas] = await Promise.all([
+  const [byCity, sportCity, repeats, jobs, areas, b2bB2c, salesSports, salesTimelines, salesCustom, campaigns] = await Promise.all([
     leadsByCity({ from, to }),
     sportByCity({ from, to }),
     repeatLeads({ from, to }),
     jobAnalytics({ from, to }),
     areaAnalytics({ from, to }),
+    b2bB2cAnalytics({ from, to }),
+    salesSportAnalytics({ from, to }),
+    salesTimelineAnalytics({ from, to }),
+    salesCustomFieldAnalytics({ from, to }),
+    campaignSummaryInRange({ from, to }),
   ]);
+
+  const hasDateFilter = !!searchParams.from || !!searchParams.to;
 
   return (
     <LeadAnalyticsClient
@@ -47,6 +54,12 @@ export default async function LeadAnalyticsPage({
       repeats={repeats}
       jobs={jobs}
       areas={areas}
+      b2bB2c={b2bB2c}
+      salesSports={salesSports}
+      salesTimelines={salesTimelines}
+      salesCustom={salesCustom}
+      campaigns={campaigns}
+      hasDateFilter={hasDateFilter}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}
     />
   );

@@ -19,6 +19,34 @@ const inputCls =
   "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
 const sectionLabelCls = "text-xs font-heading font-bold uppercase tracking-wide text-slate-500";
 
+type SalesFormData = {
+  sport: string;
+  dimension: string;
+  location: string;
+  jobTitle: string;
+  timeline: string;
+  b2bB2c: string;
+  custom: { name: string; value: string }[];
+};
+
+const EMPTY_SALES: SalesFormData = { sport: "", dimension: "", location: "", jobTitle: "", timeline: "", b2bB2c: "", custom: [] };
+
+function parseSalesData(raw: string | null): SalesFormData {
+  if (!raw) return { ...EMPTY_SALES, custom: [] };
+  try {
+    const d = JSON.parse(raw);
+    return {
+      sport: d.sport ?? "",
+      dimension: d.dimension ?? "",
+      location: d.location ?? "",
+      jobTitle: d.jobTitle ?? "",
+      timeline: d.timeline ?? "",
+      b2bB2c: d.b2bB2c ?? "",
+      custom: Array.isArray(d.custom) ? d.custom : [],
+    };
+  } catch { return { ...EMPTY_SALES, custom: [] }; }
+}
+
 function toLocalInput(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -124,6 +152,13 @@ export default function LeadManagementPanel({
   const [savingNote, setSavingNote] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
+  // --- Sales follow-up ----------------------------------------------------
+  const [salesForm, setSalesForm] = useState<SalesFormData>(() => parseSalesData(lead.salesData));
+  const [savingSales, setSavingSales] = useState(false);
+  const [newCustomName, setNewCustomName] = useState("");
+  const [newCustomValue, setNewCustomValue] = useState("");
+  const salesEnabled = stage !== "NEW";
+
   // --- Form answers ------------------------------------------------------
   const formAnswers = useMemo(() => parseFieldData(lead.fieldData), [lead.fieldData]);
 
@@ -144,7 +179,10 @@ export default function LeadManagementPanel({
     setNoteDraft("");
     setPickerOpen(false);
     setPickerPopupOpen(false);
-  }, [lead.id, lead.stage, lead.assignedToUserId, lead.reminderAt, lead.labels, lead.notes]);
+    setSalesForm(parseSalesData(lead.salesData));
+    setNewCustomName("");
+    setNewCustomValue("");
+  }, [lead.id, lead.stage, lead.assignedToUserId, lead.reminderAt, lead.labels, lead.notes, lead.salesData]);
 
   async function patch(payload: Record<string, unknown>): Promise<boolean> {
     try {
@@ -321,6 +359,40 @@ export default function LeadManagementPanel({
       setNotes(prev);
       toast.error("Could not delete the note");
     }
+  }
+
+  async function persistSales(next: SalesFormData) {
+    setSalesForm(next);
+    setSavingSales(true);
+    const ok = await patch({ salesData: JSON.stringify(next) });
+    setSavingSales(false);
+    if (!ok) toast.error("Could not save sales data");
+  }
+
+  function setSalesLocal(key: keyof Omit<SalesFormData, "custom">, value: string) {
+    setSalesForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function blurSalesField(key: keyof Omit<SalesFormData, "custom">) {
+    void persistSales(salesForm);
+  }
+
+  function selectSalesField(key: keyof Omit<SalesFormData, "custom">, value: string) {
+    const next = { ...salesForm, [key]: value };
+    void persistSales(next);
+  }
+
+  function addCustomField() {
+    const n = newCustomName.trim();
+    const v = newCustomValue.trim();
+    if (!n || !v) return;
+    void persistSales({ ...salesForm, custom: [...salesForm.custom, { name: n, value: v }] });
+    setNewCustomName("");
+    setNewCustomValue("");
+  }
+
+  function removeCustomField(idx: number) {
+    void persistSales({ ...salesForm, custom: salesForm.custom.filter((_, i) => i !== idx) });
   }
 
   const reminderDraftDate = reminderDraft ? new Date(reminderDraft) : null;
@@ -649,6 +721,67 @@ export default function LeadManagementPanel({
           </ul>
         )}
       </div>
+
+      {/* Sales follow-up — enabled once stage moves past NEW */}
+      {salesEnabled && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className={sectionLabelCls}>Sales follow-up</span>
+            {savingSales && <span className="text-[11px] text-slate-400">Saving…</span>}
+          </div>
+          <div className="space-y-2">
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 mb-0.5">Sport requested</label>
+              <input className={inputCls} value={salesForm.sport} placeholder="e.g. Football, Cricket" onChange={(e) => setSalesLocal("sport", e.target.value)} onBlur={() => blurSalesField("sport")} />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 mb-0.5">Dimension</label>
+              <input className={inputCls} value={salesForm.dimension} placeholder="e.g. 100×60 ft" onChange={(e) => setSalesLocal("dimension", e.target.value)} onBlur={() => blurSalesField("dimension")} />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 mb-0.5">Site location</label>
+              <input className={inputCls} value={salesForm.location} placeholder="e.g. Chennai, TN" onChange={(e) => setSalesLocal("location", e.target.value)} onBlur={() => blurSalesField("location")} />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 mb-0.5">Job title</label>
+              <input className={inputCls} value={salesForm.jobTitle} placeholder="e.g. Builder, Architect" onChange={(e) => setSalesLocal("jobTitle", e.target.value)} onBlur={() => blurSalesField("jobTitle")} />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 mb-0.5">When they start the build</label>
+              <input className={inputCls} value={salesForm.timeline} placeholder="e.g. 3 months, Q1 2027" onChange={(e) => setSalesLocal("timeline", e.target.value)} onBlur={() => blurSalesField("timeline")} />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 mb-0.5">B2B / B2C</label>
+              <select className={inputCls} value={salesForm.b2bB2c} onChange={(e) => selectSalesField("b2bB2c", e.target.value)}>
+                <option value="">— Not set —</option>
+                <option value="B2B">B2B</option>
+                <option value="B2C">B2C</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Custom fields */}
+          {salesForm.custom.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-medium text-slate-500">Custom fields</span>
+              {salesForm.custom.map((cf, i) => (
+                <div key={i} className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                  <span className="text-xs font-medium text-slate-600 truncate">{cf.name}:</span>
+                  <span className="text-xs text-slate-800 truncate flex-1">{cf.value}</span>
+                  <button type="button" onClick={() => removeCustomField(i)} className="shrink-0 text-slate-300 hover:text-rose-600 text-sm">×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="pt-1 space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <input className={inputCls} value={newCustomName} placeholder="Field name" maxLength={60} onChange={(e) => setNewCustomName(e.target.value)} />
+              <input className={inputCls} value={newCustomValue} placeholder="Value" maxLength={200} onChange={(e) => setNewCustomValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomField(); } }} />
+              <button type="button" onClick={addCustomField} disabled={!newCustomName.trim() || !newCustomValue.trim() || savingSales} className="btn btn-secondary !px-2.5 !py-1.5 shrink-0">+</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Form answers — stacked Q&A like Meta Leads Centre */}
       {showFormAnswers && formAnswers.length > 0 && (

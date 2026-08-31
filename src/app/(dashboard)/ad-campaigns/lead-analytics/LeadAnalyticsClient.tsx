@@ -21,7 +21,7 @@ import { DataTable } from "@/components/analytics/DataTable";
 import { ExportButtons } from "@/components/analytics/ExportButtons";
 import { HorizontalBarChart, StackedBarChart, DonutChart, DONUT_PALETTE } from "@/components/analytics/charts";
 import MetaAiSummary from "@/components/MetaAiSummary";
-import type { LeadCityRow, SportCityCell, RepeatLeadRow, JobCityCell, AreaCityCell } from "@/lib/meta-ads/leadAnalytics";
+import type { LeadCityRow, SportCityCell, RepeatLeadRow, JobCityCell, AreaCityCell, B2bB2cRow, SalesSportRow, SalesTimelineRow, CustomFieldRow, CampaignSummaryRow } from "@/lib/meta-ads/leadAnalytics";
 
 function fmtInt(n: number): string {
   return n.toLocaleString("en-IN");
@@ -108,6 +108,12 @@ export default function LeadAnalyticsClient({
   repeats,
   jobs,
   areas,
+  b2bB2c,
+  salesSports,
+  salesTimelines,
+  salesCustom,
+  campaigns,
+  hasDateFilter,
   range,
 }: {
   byCity: LeadCityRow[];
@@ -115,6 +121,12 @@ export default function LeadAnalyticsClient({
   repeats: RepeatLeadRow[];
   jobs: JobCityCell[];
   areas: AreaCityCell[];
+  b2bB2c: B2bB2cRow[];
+  salesSports: SalesSportRow[];
+  salesTimelines: SalesTimelineRow[];
+  salesCustom: CustomFieldRow[];
+  campaigns: CampaignSummaryRow[];
+  hasDateFilter: boolean;
   range: DateRange;
 }) {
   const router = useRouter();
@@ -271,6 +283,10 @@ export default function LeadAnalyticsClient({
     fmtDate(r.lastAt),
   ]);
 
+  // --- Sales data totals ---
+  const totalB2bB2c = b2bB2c.reduce((a, r) => a + r.count, 0);
+  const totalSalesSports = salesSports.reduce((a, r) => a + r.count, 0);
+
   const hasAnyData = byCity.length > 0 || sportByCity.length > 0 || repeats.length > 0;
 
   return (
@@ -307,13 +323,29 @@ export default function LeadAnalyticsClient({
           />
         </div>
 
+        {/* Campaign summary (visible when date filter is active) */}
+        {hasDateFilter && campaigns.length > 0 && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-xs font-heading font-bold uppercase tracking-wide text-slate-500 mb-2">Campaigns in this period</div>
+            <div className="flex flex-wrap gap-2">
+              {campaigns.map((c) => (
+                <div key={c.campaignName} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5">
+                  <span className="text-sm font-medium text-slate-800 truncate max-w-[200px]">{c.campaignName}</span>
+                  <span className="rounded-full bg-court-100 px-2 py-0.5 text-xs font-mono font-semibold text-court-700">{fmtInt(c.leadCount)}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-400 mt-2">{campaigns.length} campaign{campaigns.length === 1 ? "" : "s"}, {fmtInt(campaigns.reduce((a, c) => a + c.leadCount, 0))} total leads</p>
+          </div>
+        )}
+
         {/* Ask AI — freeform questions + recommendations, answered only from the real lead data */}
         <MetaAiSummary />
 
         {/* Leads by city */}
         <AnalyticsCard
           title="Leads by city"
-          description="Every lead's city, ranked by volume — where the demand is actually coming from. Chart shows the top cities; the table lists them all."
+          description={`Every lead's city, ranked by volume — where the demand is actually coming from.${totalCityLeads > 0 ? ` Overall: ${fmtInt(totalCityLeads)} leads across ${byCity.length} cities.` : ""}`}
           action={topCity ? `Most leads are coming from ${topCity.city} (${fmtInt(topCity.count)}) — prioritise follow-up and local offers there.` : undefined}
         >
           {byCity.length === 0 ? (
@@ -377,7 +409,7 @@ export default function LeadAnalyticsClient({
         {/* Sport demand per city */}
         <AnalyticsCard
           title="Most-requested sport per city"
-          description="What each city is asking for — leads split by the sport/interest they selected on the form. Top 6 sports shown, the rest folded into Other."
+          description={`What each city is asking for — leads split by the sport/interest they selected on the form.${sportRankingAll.length > 0 ? ` Overall: ${fmtInt(sportByCity.reduce((a, c) => a + c.count, 0))} leads across ${sportRankingAll.length} sports.` : ""}`}
           action={topSport ? `${topSport.sport} is the most-requested interest (${fmtInt(topSport.count)} lead${topSport.count === 1 ? "" : "s"}) — feature it in your next campaign.` : undefined}
         >
           {sportByCity.length === 0 ? (
@@ -437,7 +469,7 @@ export default function LeadAnalyticsClient({
         {/* Area demand (area × city) — rank areas in a city, or cities for an area */}
         <AnalyticsCard
           title="Area demand by city"
-          description="How much space leads are asking for (the form's area-in-sq.ft answer). Pick a city to rank its area sizes most-to-least, or pick an area to see which cities want it most — and vice versa."
+          description={`How much space leads are asking for (the form's area-in-sq.ft answer).${areas.length > 0 ? ` Overall: ${fmtInt(areas.reduce((a, c) => a + c.count, 0))} leads across ${new Set(areas.map(a => a.area)).size} area sizes.` : ""}`}
         >
           {areas.length === 0 ? (
             <p className="text-sm text-slate-400">No area-size data in this range yet.</p>
@@ -500,7 +532,7 @@ export default function LeadAnalyticsClient({
         {/* Jobs — who's asking (job title × city × sport, all in one) */}
         <AnalyticsCard
           title="Jobs — who's asking"
-          description="What people do for a living (from the form's job-title answer) and the cities and sports each job is asking for — all in one. Filter by job, city, or sport."
+          description={`What people do for a living (from the form's job-title answer).${jobs.length > 0 ? ` Overall: ${fmtInt(jobs.reduce((a, c) => a + c.count, 0))} leads across ${new Set(jobs.map(j => j.job)).size} job titles.` : ""}`}
         >
           {jobs.length === 0 ? (
             <p className="text-sm text-slate-400">No job-title data in this range yet.</p>
@@ -601,6 +633,109 @@ export default function LeadAnalyticsClient({
             </div>
           )}
         </AnalyticsCard>
+
+        {/* ─── Sales follow-up data (entered by reps) ───────────── */}
+        {(b2bB2c.length > 0 || salesSports.length > 0 || salesTimelines.length > 0 || salesCustom.length > 0) && (
+          <>
+            <div className="pt-2">
+              <h3 className="text-sm font-heading font-bold text-slate-700 uppercase tracking-wide">Sales follow-up data</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Data entered by sales reps during lead follow-up — separate from the customer's original form answers.</p>
+            </div>
+
+            {/* B2B / B2C */}
+            {b2bB2c.length > 0 && (
+              <AnalyticsCard
+                title="B2B / B2C split"
+                description={`Lead classification by sales reps. Overall: ${fmtInt(totalB2bB2c)} leads classified.`}
+              >
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {b2bB2c.map((r) => (
+                      <div key={r.type} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
+                        <div className="text-lg font-semibold font-mono text-slate-900">{fmtInt(r.count)}</div>
+                        <div className="text-sm font-medium text-slate-600">{r.type}</div>
+                        <div className="text-xs text-slate-400">{totalB2bB2c > 0 ? `${Math.round((r.count / totalB2bB2c) * 100)}%` : "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <DonutChart
+                    data={b2bB2c}
+                    dataKey="count"
+                    labelKey="type"
+                    height={180}
+                    colorFor={(_r, i) => i === 0 ? "#1C6E8C" : "#2E7D4F"}
+                    tooltipFormatter={(r) => `${r.type}: ${fmtInt(r.count)} (${totalB2bB2c > 0 ? Math.round((r.count / totalB2bB2c) * 100) : 0}%)`}
+                  />
+                </div>
+              </AnalyticsCard>
+            )}
+
+            {/* Sales-entered sport */}
+            {salesSports.length > 0 && (
+              <AnalyticsCard
+                title="Sport (sales-entered)"
+                description={`Sport confirmed by sales reps during follow-up. Overall: ${fmtInt(totalSalesSports)} leads.`}
+              >
+                <HorizontalBarChart
+                  data={salesSports.slice(0, 10)}
+                  dataKey="count"
+                  labelKey="sport"
+                  height={Math.max(140, Math.min(salesSports.length, 10) * 34)}
+                  colorFor={() => "#2E7D4F"}
+                  tooltipFormatter={(d) => `${d.sport}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
+                />
+              </AnalyticsCard>
+            )}
+
+            {/* Build timeline */}
+            {salesTimelines.length > 0 && (
+              <AnalyticsCard
+                title="Build timeline"
+                description={`When leads plan to start the build (sales-entered). Overall: ${fmtInt(salesTimelines.reduce((a, r) => a + r.count, 0))} leads.`}
+              >
+                <HorizontalBarChart
+                  data={salesTimelines.slice(0, 10)}
+                  dataKey="count"
+                  labelKey="timeline"
+                  height={Math.max(140, Math.min(salesTimelines.length, 10) * 34)}
+                  colorFor={() => "#D9822B"}
+                  tooltipFormatter={(d) => `${d.timeline}: ${fmtInt(d.count)} lead${d.count === 1 ? "" : "s"}`}
+                />
+              </AnalyticsCard>
+            )}
+
+            {/* Custom fields */}
+            {salesCustom.length > 0 && (
+              <AnalyticsCard
+                title="Custom fields"
+                description="Additional data points entered by sales reps. Grouped by field name and value."
+              >
+                <div className="space-y-2">
+                  {(() => {
+                    const byField = new Map<string, { value: string; count: number }[]>();
+                    for (const c of salesCustom) {
+                      const arr = byField.get(c.field) ?? [];
+                      arr.push({ value: c.value, count: c.count });
+                      byField.set(c.field, arr);
+                    }
+                    return [...byField.entries()].map(([field, values]) => (
+                      <div key={field} className="rounded-lg border border-slate-200 p-3">
+                        <div className="text-sm font-semibold text-slate-700 mb-2">{field}</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {values.map((v) => (
+                            <span key={v.value} className="chip">
+                              {v.value} <span className="text-slate-400 font-mono">{v.count}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </AnalyticsCard>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

@@ -269,6 +269,7 @@ export type MetaLeadDetail = MetaLeadRow & {
   assignedToName: string | null;
   labels: MetaLeadLabelChip[];
   notes: MetaLeadNoteRow[]; // newest first
+  salesData: string | null; // JSON: sales follow-up form data
 };
 
 // One captured MetaLead with its full lead-management payload, for the detail
@@ -280,6 +281,7 @@ export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | nu
       ...META_LEAD_SELECT,
       reminderAt: true,
       assignedToUserId: true,
+      salesData: true,
       assignedTo: { select: { name: true } },
       labels: {
         select: { label: { select: { id: true, name: true, color: true } } },
@@ -304,6 +306,7 @@ export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | nu
     reminderAt: lead.reminderAt ? lead.reminderAt.toISOString() : null,
     assignedToUserId: lead.assignedToUserId,
     assignedToName: lead.assignedTo?.name ?? null,
+    salesData: lead.salesData ?? null,
     labels: lead.labels.map((l) => ({ id: l.label.id, name: l.label.name, color: l.label.color })),
     notes: lead.notes.map((n) => ({
       id: n.id,

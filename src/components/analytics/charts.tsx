@@ -112,9 +112,15 @@ export function StackedBarChart<T extends Record<string, unknown>>({
           <YAxis type="number" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip
             cursor={{ fill: "#f8fafc" }}
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(15,23,42,0.08)" }}
-            formatter={((_value: unknown, _name: string, item: { payload: T }) => [tooltipFormatter(item.payload), ""]) as any}
-            labelFormatter={() => ""}
+            content={({ active, payload }) => {
+              if (!active || !payload?.[0]) return null;
+              const d = payload[0].payload as T;
+              return (
+                <div style={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(15,23,42,0.08)", background: "#fff", padding: "8px 12px" }}>
+                  {tooltipFormatter(d)}
+                </div>
+              );
+            }}
           />
           {stackKeys.map((k) => (
             <Bar key={k} dataKey={k} stackId="stack" fill={colorFor(k)} radius={[0, 0, 0, 0]} maxBarSize={40} />

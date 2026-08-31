@@ -228,3 +228,117 @@ export async function repeatLeads({ from, to }: Range): Promise<RepeatLeadRow[]>
 
   return rows.sort((a, b) => b.campaignCount - a.campaignCount || b.lastAt.localeCompare(a.lastAt));
 }
+
+// ---------------------------------------------------------------------------
+// Sales follow-up analytics — reads from salesData JSON entered by reps.
+// ---------------------------------------------------------------------------
+
+type SalesJson = {
+  sport?: string;
+  dimension?: string;
+  location?: string;
+  jobTitle?: string;
+  timeline?: string;
+  b2bB2c?: string;
+  custom?: { name: string; value: string }[];
+};
+
+function parseSales(raw: string | null): SalesJson | null {
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+// Sales-data queries use fieldData in the Prisma select (salesData isn't in
+// the generated client until the next prisma generate after a dev-server
+// restart) and read salesData from the raw row via type assertion.
+type SalesRow = { salesData?: string | null };
+
+async function salesLeads({ from, to }: Range): Promise<SalesRow[]> {
+  const leads = await (prisma.metaLead as any).findMany({
+    where: leadWindowWhere({ from, to }),
+    select: { salesData: true },
+  });
+  return leads as SalesRow[];
+}
+
+export type B2bB2cRow = { type: string; count: number };
+
+export async function b2bB2cAnalytics(range: Range): Promise<B2bB2cRow[]> {
+  const leads = await salesLeads(range);
+  const map = new Map<string, number>();
+  for (const l of leads) {
+    const s = parseSales(l.salesData ?? null);
+    const type = s?.b2bB2c?.trim();
+    if (!type) continue;
+    map.set(type, (map.get(type) ?? 0) + 1);
+  }
+  return [...map.entries()].map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count);
+}
+
+export type SalesSportRow = { sport: string; count: number };
+
+export async function salesSportAnalytics(range: Range): Promise<SalesSportRow[]> {
+  const leads = await salesLeads(range);
+  const map = new Map<string, number>();
+  for (const l of leads) {
+    const s = parseSales(l.salesData ?? null);
+    const sport = normalizeLabel(s?.sport);
+    if (!sport) continue;
+    map.set(sport, (map.get(sport) ?? 0) + 1);
+  }
+  return [...map.entries()].map(([sport, count]) => ({ sport, count })).sort((a, b) => b.count - a.count);
+}
+
+export type SalesTimelineRow = { timeline: string; count: number };
+
+export async function salesTimelineAnalytics(range: Range): Promise<SalesTimelineRow[]> {
+  const leads = await salesLeads(range);
+  const map = new Map<string, number>();
+  for (const l of leads) {
+    const s = parseSales(l.salesData ?? null);
+    const tl = s?.timeline?.trim();
+    if (!tl) continue;
+    map.set(tl, (map.get(tl) ?? 0) + 1);
+  }
+  return [...map.entries()].map(([timeline, count]) => ({ timeline, count })).sort((a, b) => b.count - a.count);
+}
+
+export type CustomFieldRow = { field: string; value: string; count: number };
+
+export async function salesCustomFieldAnalytics(range: Range): Promise<CustomFieldRow[]> {
+  const leads = await salesLeads(range);
+  const map = new Map<string, number>();
+  for (const l of leads) {
+    const s = parseSales(l.salesData ?? null);
+    if (!Array.isArray(s?.custom)) continue;
+    for (const cf of s!.custom) {
+      const n = cf.name?.trim();
+      const v = cf.value?.trim();
+      if (!n || !v) continue;
+      const key = `${n}||${v}`;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+  }
+  return [...map.entries()]
+    .map(([k, count]) => { const [field, value] = k.split("||"); return { field, value, count }; })
+    .sort((a, b) => b.count - a.count);
+}
+
+export type CampaignSummaryRow = { campaignName: string; leadCount: number; metaCampaignId: string | null };
+
+export async function campaignSummaryInRange({ from, to }: Range): Promise<CampaignSummaryRow[]> {
+  const leads = await prisma.metaLead.findMany({
+    where: leadWindowWhere({ from, to }),
+    select: { campaignName: true, campaignId: true },
+  });
+  const map = new Map<string, { count: number; metaId: string | null }>();
+  for (const l of leads) {
+    const name = l.campaignName ?? "(unattributed)";
+    const e = map.get(name) ?? { count: 0, metaId: l.campaignId };
+    e.count += 1;
+    map.set(name, e);
+  }
+  return [...map.entries()]
+    .map(([campaignName, v]) => ({ campaignName, leadCount: v.count, metaCampaignId: v.metaId }))
+    .sort((a, b) => b.leadCount - a.leadCount);
+}

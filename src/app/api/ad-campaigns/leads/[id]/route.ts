@@ -94,7 +94,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   await prisma.$transaction(async (tx) => {
     if (Object.keys(scalarData).length > 0) {
-      await tx.metaLead.update({ where: { id: params.id }, data: scalarData });
+      await (tx.metaLead as any).update({ where: { id: params.id }, data: scalarData });
     }
     if (labelIds !== undefined) {
       // Replace the applied set: drop any no longer selected, add the new ones.

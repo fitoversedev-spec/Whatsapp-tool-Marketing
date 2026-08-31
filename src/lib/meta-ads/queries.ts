@@ -275,7 +275,7 @@ export type MetaLeadDetail = MetaLeadRow & {
 // One captured MetaLead with its full lead-management payload, for the detail
 // page. Returns null when no such lead exists.
 export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | null> {
-  const lead = await prisma.metaLead.findUnique({
+  const lead = await (prisma.metaLead as any).findUnique({
     where: { id },
     select: {
       ...META_LEAD_SELECT,
@@ -298,7 +298,7 @@ export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | nu
         },
       },
     },
-  });
+  }) as any;
   if (!lead) return null;
 
   return {
@@ -307,8 +307,8 @@ export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | nu
     assignedToUserId: lead.assignedToUserId,
     assignedToName: lead.assignedTo?.name ?? null,
     salesData: lead.salesData ?? null,
-    labels: lead.labels.map((l) => ({ id: l.label.id, name: l.label.name, color: l.label.color })),
-    notes: lead.notes.map((n) => ({
+    labels: lead.labels.map((l: any) => ({ id: l.label.id, name: l.label.name, color: l.label.color })),
+    notes: lead.notes.map((n: any) => ({
       id: n.id,
       authorUserId: n.authorUserId,
       authorName: n.author?.name ?? "—",

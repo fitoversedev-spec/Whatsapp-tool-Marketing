@@ -288,8 +288,8 @@ export default function AllToolsPanel({
             return (
               <section key={group.title}>
                 <h3
-                  className="text-[10.5px] font-extrabold uppercase mb-2"
-                  style={{ letterSpacing: ".14em", color: "var(--ac-75)" }}
+                  className="text-xs font-extrabold uppercase mb-3"
+                  style={{ letterSpacing: ".12em", color: "var(--ac)" }}
                 >
                   {group.title}
                 </h3>
@@ -307,17 +307,17 @@ export default function AllToolsPanel({
                             : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-700"
                         }`}
                       >
-                        <span className="text-xl shrink-0">{item.icon}</span>
+                        <span className="text-2xl shrink-0">{item.icon}</span>
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-heading font-semibold uppercase tracking-wide leading-tight flex items-center gap-1.5">
+                          <div className="text-sm font-heading font-bold uppercase tracking-wide leading-tight flex items-center gap-1.5">
                             {item.label}
                             {item.href === "/users" && pendingCount > 0 && (
-                              <span className="inline-block bg-amber-500 text-white text-[9px] font-bold font-mono rounded-full px-1.5 py-0.5 leading-none">
+                              <span className="inline-block bg-amber-500 text-white text-[11px] font-bold font-mono rounded-full px-1.5 py-0.5 leading-none">
                                 {pendingCount}
                               </span>
                             )}
                             {item.href === "/templates" && pendingTemplates > 0 && (
-                              <span className="inline-block bg-amber-500 text-white text-[9px] font-bold font-mono rounded-full px-1.5 py-0.5 leading-none">
+                              <span className="inline-block bg-amber-500 text-white text-[11px] font-bold font-mono rounded-full px-1.5 py-0.5 leading-none">
                                 {pendingTemplates}
                               </span>
                             )}

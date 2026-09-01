@@ -47,7 +47,7 @@
   --shadow-lg: 0 12px 40px rgba(10, 10, 10, .16);
 
   --font-ui: 'Poppins', system-ui, -apple-system, sans-serif;
-  --font-display: 'Orbitron', system-ui, sans-serif; /* declared for future use — no wordmark today, no font sourced */
+  --font-display: 'Poppins', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 
   /* Extended hues — unchanged across themes, reserved for specific badge/role

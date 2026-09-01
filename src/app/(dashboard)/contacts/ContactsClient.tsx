@@ -356,10 +356,10 @@ export default function ContactsClient({
                         <td className="font-medium text-slate-900">
                           {c.name || <span className="text-slate-400">(no name)</span>}
                         </td>
-                        <td className="text-slate-600 font-mono text-xs">+{c.phone}</td>
+                        <td className="text-slate-600 font-mono text-sm">+{c.phone}</td>
                         <td>
                           {c.tags.length === 0 ? (
-                            <span className="text-slate-300 text-xs">—</span>
+                            <span className="text-slate-300">—</span>
                           ) : (
                             <div className="flex flex-wrap gap-1">
                               {c.tags.map((t) => {
@@ -367,7 +367,7 @@ export default function ContactsClient({
                                 return (
                                   <span
                                     key={t.id}
-                                    className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-medium ${col.bg} ${col.text}`}
+                                    className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${col.bg} ${col.text}`}
                                   >
                                     {t.name}
                                   </span>
@@ -390,17 +390,17 @@ export default function ContactsClient({
                               <button
                                 onClick={() => moveToCrm(c)}
                                 disabled={crmBusyId === c.id}
-                                className="text-xs text-indigo-600 hover:text-indigo-800 underline disabled:opacity-50"
+                                className="text-sm text-indigo-600 hover:text-indigo-800 underline disabled:opacity-50"
                               >
                                 {crmBusyId === c.id ? "Moving..." : "Move to CRM"}
                               </button>
                             )}
                             {c.accountContactId && (
-                              <span className="text-[10px] text-green-600 font-medium">In CRM</span>
+                              <span className="text-xs text-green-600 font-medium">In CRM</span>
                             )}
                             <button
                               onClick={() => setEditing(c)}
-                              className="text-xs text-slate-600 hover:text-slate-900 underline"
+                              className="text-sm text-slate-600 hover:text-slate-900 underline"
                             >
                               Edit
                             </button>

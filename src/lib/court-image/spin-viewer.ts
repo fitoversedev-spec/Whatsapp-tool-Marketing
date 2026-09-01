@@ -39,7 +39,7 @@ export function renderSpinViewerHtml(input: {
   /* P2-03: sky-blue backdrop (matches the 3D scene's sky so the letterbox
      around the render blends in) + Fitoverse green brand accent (#159341). */
   * { margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
-  html,body { height:100%; background:#8fb8de; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
+  html,body { height:100%; background:#8fb8de; font-family:'Poppins',system-ui,-apple-system,sans-serif; overflow:hidden; }
   #stage { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; touch-action:none; cursor:grab; }
   #stage.grabbing { cursor:grabbing; }
   canvas { max-width:100%; max-height:100%; display:block; }

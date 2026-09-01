@@ -2317,7 +2317,7 @@ function AnnotationShape({ el, pxPerFt }: { el: AnnotationElement; pxPerFt: numb
       <Text
         text={el.text}
         fontSize={fontSizePx}
-        fontFamily="system-ui, -apple-system, sans-serif"
+        fontFamily="Poppins, system-ui, -apple-system, sans-serif"
         fontStyle="500"
         fill={el.color ?? "#0f172a"}
         align={el.align ?? "center"}
@@ -3176,7 +3176,7 @@ function PlotTitleBlock({
         width={legendW - swatch - 6}
         wrap="none"
         ellipsis
-        fontFamily="system-ui, -apple-system, sans-serif"
+        fontFamily="Poppins, system-ui, -apple-system, sans-serif"
       />
       {/* Project title */}
       <Text
@@ -3189,7 +3189,7 @@ function PlotTitleBlock({
         width={width - padX * 2}
         wrap="none"
         ellipsis
-        fontFamily="system-ui, -apple-system, sans-serif"
+        fontFamily="Poppins, system-ui, -apple-system, sans-serif"
       />
       {/* Plot area (dual-unit) */}
       <Text
@@ -3201,7 +3201,7 @@ function PlotTitleBlock({
         width={width - padX * 2}
         wrap="none"
         ellipsis
-        fontFamily="system-ui, -apple-system, sans-serif"
+        fontFamily="Poppins, system-ui, -apple-system, sans-serif"
       />
     </Group>
   );
@@ -3328,7 +3328,7 @@ function DesignInfoPanel({
         fontStyle="700"
         fill="#ffffff"
         letterSpacing={1}
-        fontFamily="system-ui, -apple-system, sans-serif"
+        fontFamily="Poppins, system-ui, -apple-system, sans-serif"
       />
       {rows.map((r, i) => (
         <Text
@@ -3340,7 +3340,7 @@ function DesignInfoPanel({
           fontSize={r.kind === "label" ? fontSize : fontSize * 0.96}
           fontStyle={r.kind === "label" ? "700" : "400"}
           fill={r.kind === "label" ? "#0f766e" : "#1e293b"}
-          fontFamily="system-ui, -apple-system, sans-serif"
+          fontFamily="Poppins, system-ui, -apple-system, sans-serif"
           wrap="none"
         />
       ))}
@@ -3441,7 +3441,7 @@ function PlotDimensions({
         text={lengthLabel}
         fontSize={labelFontSize}
         fontStyle="600"
-        fontFamily="system-ui, -apple-system, sans-serif"
+        fontFamily="Poppins, system-ui, -apple-system, sans-serif"
         fill={labelColor}
         x={plotOriginX + plotPxWidth / 2 - labelFontSize * 4}
         y={topY - labelFontSize * 0.55}
@@ -3495,7 +3495,7 @@ function PlotDimensions({
         text={widthLabel}
         fontSize={labelFontSize}
         fontStyle="600"
-        fontFamily="system-ui, -apple-system, sans-serif"
+        fontFamily="Poppins, system-ui, -apple-system, sans-serif"
         fill={labelColor}
         x={leftX}
         y={plotOriginY + plotPxHeight / 2}

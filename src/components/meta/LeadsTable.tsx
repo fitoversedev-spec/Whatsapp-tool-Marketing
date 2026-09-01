@@ -280,7 +280,7 @@ export default function LeadsTable({
   const headers = [
     "Name", "Phone", "Email", "City", "Sport", "Form",
     ...(showCampaignColumn ? ["Campaign"] : []),
-    "Stage", "Labels", "CRM",
+    "Stage", "Labels", "Captured", "CRM",
   ];
   const exportHeaders = [
     "Name", "Phone", "Email", "City", "Sport", "Form",
@@ -437,6 +437,9 @@ export default function LeadsTable({
                       ) : (
                         <span className="text-slate-300 text-xs">—</span>
                       )}
+                    </td>
+                    <td className="whitespace-nowrap text-slate-500 text-xs font-mono">
+                      {new Date(l.capturedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
                     </td>
                     <td className="whitespace-nowrap !text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">

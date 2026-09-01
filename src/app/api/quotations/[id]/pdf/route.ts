@@ -69,6 +69,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       quoteDate: q.quoteDate,
       validityDays: q.validityDays,
       driveLink: await driveLinkPromise,
+      salespersonPhone: q.salespersonPhone ?? null,
     });
   } catch (e) {
     // Surface the real error to the preview iframe instead of letting an
@@ -81,20 +82,19 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       { status: 500 },
     );
   }
-  // Cache for next time — best-effort; a cache-write failure must never fail
-  // the response. Persists pdfUrl so future loads (and /send) skip the render.
-  try {
-    const uploaded = await uploadToBlob({
-      bytes: Buffer.from(pdfBuffer),
-      fileName: safeName,
-      mimeType: "application/pdf",
-      folder: "quotations",
-    });
-    await prisma.quotation.update({ where: { id: q.id }, data: { pdfUrl: uploaded.url } });
-  } catch (e) {
-    console.error("[quotation pdf] cache upload failed for", q.number, e);
-  }
+  // Cache for next time so reloads skip re-rendering. Awaited so the pdfUrl
+  // is persisted before the response — a quick reload will hit cache instead
+  // of triggering a second full render. Failure still never fails the response.
+  await uploadToBlob({
+    bytes: Buffer.from(pdfBuffer),
+    fileName: safeName,
+    mimeType: "application/pdf",
+    folder: "quotations",
+  })
+    .then((uploaded) =>
+      prisma.quotation.update({ where: { id: q.id }, data: { pdfUrl: uploaded.url } })
+    )
+    .catch((e) => console.error("[quotation pdf] cache upload failed for", q.number, e));
 
-  // Node Buffer isn't a valid BodyInit type — coerce to Uint8Array.
   return new NextResponse(new Uint8Array(pdfBuffer), { headers: pdfHeaders });
 }

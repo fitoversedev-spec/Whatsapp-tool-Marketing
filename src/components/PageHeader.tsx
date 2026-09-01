@@ -30,9 +30,9 @@ export default function PageHeader({
               <BackButton backHref={backHref} />
             </div>
           )}
-          <h1 className={large ? "text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900" : "text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900"}>{title}</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">{title}</h1>
           {description && (
-            <p className={large ? "text-base text-slate-600 mt-1 leading-snug" : "text-sm text-slate-500 mt-1 leading-snug"}>{description}</p>
+            <p className="text-base text-slate-600 mt-1 leading-snug">{description}</p>
           )}
         </div>
         {action && <div className="shrink-0">{action}</div>}

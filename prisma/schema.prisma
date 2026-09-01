@@ -694,6 +694,7 @@ model Quotation {
   // "SPLIT" (today's itemized-per-line-GST behavior, zero change) | "FLAT_18"
   // (compute path intentionally unimplemented — see docs/DATA_GAPS.md #16).
   gstMode      String    @default("SPLIT") @map("gst_mode")
+  salespersonPhone String? @map("salesperson_phone")
 
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")

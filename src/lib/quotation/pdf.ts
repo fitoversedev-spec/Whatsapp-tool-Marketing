@@ -27,7 +27,7 @@ import {
 import type { QuoteLineItem } from "./calculator";
 import { sectionOrder } from "./sections";
 import { sanitize } from "./sanitize";
-import { convertToPng, isPng, isJpg } from "../pdf-image";
+import { convertToPng, isPng, isJpg, resizeForEmbed } from "../pdf-image";
 import fs from "fs";
 import path from "path";
 
@@ -632,14 +632,25 @@ async function embedLineItemImages(
   items: QuoteLineItem[],
 ): Promise<Map<string, PDFImage>> {
   const map = new Map<string, PDFImage>();
-  for (const it of items) {
-    if (!it.included || !it.imageUrl) continue;
+  const toFetch = items.filter((it) => it.included && it.imageUrl);
+  const results = await Promise.allSettled(
+    toFetch.map(async (it) => {
+      const res = await fetch(it.imageUrl!, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return null;
+      const raw = new Uint8Array(await res.arrayBuffer());
+      // Downscale here (still inside the parallel fetch stage, so multiple
+      // photos resize concurrently via libuv's threadpool) — these render at
+      // well under 100pt in the PDF, so a full-resolution phone photo only
+      // costs embed time + file size with no visible benefit. See
+      // resizeForEmbed's doc comment.
+      const bytes = await resizeForEmbed(raw);
+      return { id: it.id, bytes };
+    }),
+  );
+  for (const r of results) {
+    if (r.status !== "fulfilled" || !r.value) continue;
+    const { id, bytes } = r.value;
     try {
-      // Bounded fetch so a slow/hung blob URL can't stall PDF generation —
-      // the item just renders without its photo instead.
-      const res = await fetch(it.imageUrl, { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) continue;
-      const bytes = new Uint8Array(await res.arrayBuffer());
       let img: PDFImage | null = null;
       if (isPng(bytes)) img = await doc.embedPng(bytes);
       else if (isJpg(bytes)) img = await doc.embedJpg(bytes);
@@ -647,7 +658,7 @@ async function embedLineItemImages(
         const converted = await convertToPng(bytes);
         if (converted) img = await doc.embedPng(converted);
       }
-      if (img) map.set(it.id, img);
+      if (img) map.set(id, img);
     } catch {
       // ignore — the item just renders without a photo
     }
@@ -1117,35 +1128,6 @@ function drawSignatures(ctx: Ctx, customerName: string) {
     color: COL.muted,
   });
 
-  // Right
-  const rightX = MARGIN + colW + 20;
-  safeDraw(ctx.page, "Accepted & Agreed", {
-    x: rightX,
-    y: yFromTop(startY + 10),
-    size: 10,
-    font: ctx.bold,
-    color: COL.text,
-  });
-  ctx.page.drawLine({
-    start: { x: rightX, y: yFromTop(startY + 50) },
-    end: { x: rightX + colW, y: yFromTop(startY + 50) },
-    color: COL.border,
-    thickness: 0.5,
-  });
-  safeDraw(ctx.page, `For ${customerName}`, {
-    x: rightX,
-    y: yFromTop(startY + 62),
-    size: 10,
-    font: ctx.font,
-    color: COL.text,
-  });
-  safeDraw(ctx.page, "(Signature)", {
-    x: rightX,
-    y: yFromTop(startY + 74),
-    size: 9,
-    font: ctx.font,
-    color: COL.muted,
-  });
   ctx.y = startY + 84;
 }
 
@@ -1298,7 +1280,7 @@ function drawOptionChip(ctx: Ctx, x: number, yTop: number, tag: string, color?: 
 function drawParticularsTable(
   ctx: Ctx,
   items: QuoteLineItem[],
-  _images: Map<string, PDFImage>,
+  images: Map<string, PDFImage>,
   finalReserve = 0,
 ) {
   // 8 columns; widths sum to CONTENT_W (S.NO narrowest, DESCRIPTION widest).
@@ -1385,6 +1367,16 @@ function drawParticularsTable(
   const ordered = [...items].sort((a, b) => sectionOrder(a.section) - sectionOrder(b.section));
   const inc = ordered.filter((i) => i.included);
 
+  // Thumbnail sizing for product photos in the description cell.
+  const IMG_MAX_W = cols.desc - PAD * 2;
+  const IMG_MAX_H = 64;
+  const imgDims = (item: QuoteLineItem): { w: number; h: number } => {
+    const img = images.get(item.id);
+    if (!img) return { w: 0, h: 0 };
+    const sc = Math.min(IMG_MAX_W / img.width, IMG_MAX_H / img.height, 1);
+    return { w: img.width * sc, h: img.height * sc };
+  };
+
   // Measure each row's height at a candidate scale WITHOUT drawing — larger
   // fonts wrap to more lines, so wrapping is re-run per scale. MUST mirror the
   // draw loop's height math exactly, or the page prediction drifts.
@@ -1397,8 +1389,10 @@ function drawParticularsTable(
       const nameLines = wordWrap(ctx.bold, item.name, B.name * s, cols.desc - PAD * 2);
       const descLines = wordWrap(ctx.font, item.description, B.desc * s, cols.desc - PAD * 2);
       const itemColH = secLines.length * B.secLH * s;
+      const { h: imgH } = imgDims(item);
+      const imgBlock = imgH > 0 ? imgH + 6 : 0;
       const descColH =
-        nameLines.length * B.nameLH * s + (item.optionTag ? B.optLH * s : 0) + descLines.length * B.descLH * s;
+        imgBlock + nameLines.length * B.nameLH * s + (item.optionTag ? B.optLH * s : 0) + descLines.length * B.descLH * s;
       if (sec) lastSec = sec;
       return B.padTop * s + Math.max(itemColH, descColH, B.nameLH * s) + B.padBot * s;
     });
@@ -1475,7 +1469,9 @@ function drawParticularsTable(
     const descLines = wordWrap(ctx.font, item.description, DESC_SIZE, cols.desc - PAD * 2);
     const hasOpt = !!item.optionTag;
     const itemColH = secLines.length * SEC_LH;
-    const descColH = nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0) + descLines.length * DESC_LH;
+    const { w: imgW, h: imgH } = imgDims(item);
+    const imgBlock = imgH > 0 ? imgH + 6 : 0;
+    const descColH = imgBlock + nameLines.length * NAME_LH + (hasOpt ? OPT_LH : 0) + descLines.length * DESC_LH;
     const rowH = PADTOP + Math.max(itemColH, descColH, NAME_LH) + PADBOT;
     // Only the truly last row drags the totals block's reserve along with it.
     const reserve = idx === inc.length - 1 ? finalReserve : 0;
@@ -1492,19 +1488,28 @@ function drawParticularsTable(
       drawRect(ctx, x.desc, ctx.y, cols.desc, rowH, { fill: hexToPdfRgb(item.highlights.cell) });
     }
     const sy = ctx.y + PADTOP;
-    const line0 = sy + NAME_SIZE; // first-line baseline (distance from row top)
-    const numY = yFromTop(line0);
+    // Product photo thumbnail at the top of the DESCRIPTION cell
+    let descStart = sy;
+    const descImg = images.get(item.id);
+    if (descImg && imgW > 0 && imgH > 0) {
+      const ix = x.desc + PAD;
+      ctx.page.drawImage(descImg, { x: ix, y: yFromTop(descStart + imgH), width: imgW, height: imgH });
+      ctx.page.drawRectangle({ x: ix, y: yFromTop(descStart + imgH), width: imgW, height: imgH, borderColor: COL.tableGrid, borderWidth: 0.5 });
+      descStart += imgH + 6;
+    }
+    const line0 = descStart + NAME_SIZE; // first-line baseline (distance from row top)
+    const numY = yFromTop(sy + NAME_SIZE); // numeric cells always align to row top
     // S.NO
     centerAt(String(serial), x.sno, cols.sno, NAME_SIZE, ctx.font, COL.text, numY);
     // ITEM = section title (only on the first row of each section)
     secLines.forEach((ln, i) => {
       safeDraw(ctx.page, ln, { x: x.item + PAD, y: yFromTop(sy + SEC_SIZE + i * SEC_LH), size: SEC_SIZE, font: ctx.bold, color: COL.text });
     });
-    // DESCRIPTION = item name (bold) + option + description, stacked.
+    // DESCRIPTION = item name (bold) + option + description, stacked below photo.
     wrapWithHighlights(ctx.bold, item.name, NAME_SIZE, cols.desc - PAD * 2, item.highlights?.name).forEach((runs, i) => {
       drawRuns(runs, x.desc + PAD, line0 + i * NAME_LH, NAME_SIZE, ctx.bold);
     });
-    let below = sy + nameLines.length * NAME_LH; // top of the next stacked element
+    let below = descStart + nameLines.length * NAME_LH;
     if (hasOpt) {
       safeDraw(ctx.page, `Option ${item.optionTag}`, { x: x.desc + PAD, y: yFromTop(below + OPT_SIZE), size: OPT_SIZE, font: ctx.font, color: COL.muted });
       below += OPT_LH;
@@ -1612,7 +1617,7 @@ function specSectionTitle(sport: string): string {
 // bottom doesn't leave its card(s) stranded on the next page — most visible
 // with a single/solo product, where there's only one row to begin with.
 function firstSpecCardRowHeight(
-  ctx: Ctx,
+  _ctx: Ctx,
   items: QuoteLineItem[],
   images: Map<string, PDFImage>,
 ): number {
@@ -1620,18 +1625,13 @@ function firstSpecCardRowHeight(
   const topPad = 14;
   const columns = Math.min(items.length, 3) || 1;
   const cardW = (CONTENT_W - gap * (columns - 1)) / columns;
-  const bulletSize = 9.5;
-  const lh = 14;
+  const rowH = 18;
   const imgMaxW = cardW - 24;
   const imgMaxH = 96;
-  let maxLines = 0;
+  let maxSpecs = 0;
   let maxImgH = 0;
   for (const it of items.slice(0, columns)) {
-    let lines = 0;
-    for (const s of it.specs ?? []) {
-      lines += wordWrap(ctx.bold, `${s.label}: ${s.value}`, bulletSize, cardW - 26).length;
-    }
-    maxLines = Math.max(maxLines, lines);
+    maxSpecs = Math.max(maxSpecs, (it.specs ?? []).length);
     const img = images.get(it.id);
     if (img) {
       const sc = Math.min(imgMaxW / img.width, imgMaxH / img.height, 1);
@@ -1639,7 +1639,7 @@ function firstSpecCardRowHeight(
     }
   }
   const imgBlock = maxImgH > 0 ? maxImgH + 10 : 0;
-  return topPad + imgBlock + 20 + maxLines * lh + 12;
+  return topPad + imgBlock + 20 + maxSpecs * rowH + 12;
 }
 
 // Spec cards (product photo + title + bullet specs), one per product. Laid out
@@ -1653,16 +1653,13 @@ function drawSpecCards(ctx: Ctx, items: QuoteLineItem[], images: Map<string, PDF
   const columns = Math.min(items.length, 3) || 1;
   const cardW = (CONTENT_W - gap * (columns - 1)) / columns;
   const titleSize = 11;
-  const bulletSize = 9.5;
-  const lh = 14;
+  const specSize = 9;
+  const rowH = 18;
+  const labelPct = 0.45;
   const imgMaxW = cardW - 24;
   const imgMaxH = 96;
   const prepared = items.map((it) => {
-    const lines: string[] = [];
-    for (const s of it.specs ?? []) {
-      const wrapped = wordWrap(ctx.bold, `${s.label}: ${s.value}`, bulletSize, cardW - 26);
-      wrapped.forEach((w, idx) => lines.push((idx === 0 ? "- " : "  ") + w));
-    }
+    const specs = (it.specs ?? []).map((s) => ({ label: s.label, value: s.value }));
     const img = images.get(it.id) ?? null;
     let imgW = 0;
     let imgH = 0;
@@ -1671,16 +1668,16 @@ function drawSpecCards(ctx: Ctx, items: QuoteLineItem[], images: Map<string, PDF
       imgW = img.width * sc;
       imgH = img.height * sc;
     }
-    return { it, lines, img, imgW, imgH };
+    return { it, specs, img, imgW, imgH };
   });
   // Render in rows of `columns`; each row's height fits its tallest card, and
   // the photo band height is shared so titles align across the row.
   for (let r = 0; r < prepared.length; r += columns) {
     const rowCards = prepared.slice(r, r + columns);
-    const maxLines = rowCards.reduce((m, c) => Math.max(m, c.lines.length), 0);
+    const maxSpecs = rowCards.reduce((m, c) => Math.max(m, c.specs.length), 0);
     const maxImgH = rowCards.reduce((m, c) => Math.max(m, c.imgH), 0);
     const imgBlock = maxImgH > 0 ? maxImgH + 10 : 0;
-    const cardH = topPad + imgBlock + 20 + maxLines * lh + 12;
+    const cardH = topPad + imgBlock + 20 + maxSpecs * rowH + 12;
     ensureSpace(ctx, cardH + 6);
     const top = ctx.y;
     rowCards.forEach((c, i) => {
@@ -1693,15 +1690,54 @@ function drawSpecCards(ctx: Ctx, items: QuoteLineItem[], images: Map<string, PDF
         ctx.page.drawImage(c.img, { x: ix, y: yFromTop(iy + c.imgH), width: c.imgW, height: c.imgH });
         ctx.page.drawRectangle({ x: ix, y: yFromTop(iy + c.imgH), width: c.imgW, height: c.imgH, borderColor: COL.tableGrid, borderWidth: 0.75 });
       }
-      // Title + specs sit below the shared photo band so rows line up.
+      // Title sits below the shared photo band so rows line up.
       const titleTop = top + topPad + imgBlock;
       let title = c.it.optionShort ?? c.it.name ?? "";
       while (title.length > 4 && safeWidth(ctx.bold, title, titleSize) > cardW - 20) title = title.slice(0, -1);
       safeDraw(ctx.page, title, { x: cx + 12, y: yFromTop(titleTop + titleSize), size: titleSize, font: ctx.bold, color: COL.blue });
-      let yy = titleTop + 20;
-      for (const ln of c.lines) {
-        safeDraw(ctx.page, ln, { x: cx + 12, y: yFromTop(yy + 8), size: bulletSize, font: ctx.bold, color: COL.text });
-        yy += lh;
+      // 2-column spec table: label (bold, left 40%) | value (right 60%)
+      const tableX = cx + 12;
+      const tableW = cardW - 24;
+      const labelW = tableW * labelPct;
+      const tableTop = titleTop + 22;
+      const tableH = c.specs.length * rowH;
+      // Outer border of the spec table
+      ctx.page.drawRectangle({
+        x: tableX,
+        y: yFromTop(tableTop + tableH),
+        width: tableW,
+        height: tableH,
+        borderColor: COL.tableGrid,
+        borderWidth: 0.75,
+      });
+      // Vertical divider between label and value columns
+      ctx.page.drawLine({
+        start: { x: tableX + labelW, y: yFromTop(tableTop) },
+        end: { x: tableX + labelW, y: yFromTop(tableTop + tableH) },
+        color: COL.tableGrid,
+        thickness: 0.5,
+      });
+      let yy = tableTop;
+      for (let si = 0; si < c.specs.length; si++) {
+        const s = c.specs[si];
+        // Horizontal row separator
+        if (si > 0) {
+          ctx.page.drawLine({
+            start: { x: tableX, y: yFromTop(yy) },
+            end: { x: tableX + tableW, y: yFromTop(yy) },
+            color: COL.tableGrid,
+            thickness: 0.5,
+          });
+        }
+        const textY = yFromTop(yy + (rowH + specSize) / 2);
+        let lbl = sanitize(s.label);
+        while (lbl.length > 3 && safeWidth(ctx.bold, lbl, specSize) > labelW - 10) lbl = lbl.slice(0, -1);
+        safeDraw(ctx.page, lbl, { x: tableX + 5, y: textY, size: specSize, font: ctx.bold, color: COL.text });
+        let val = sanitize(s.value);
+        const valMaxW = tableW - labelW - 10;
+        while (val.length > 3 && safeWidth(ctx.font, val, specSize) > valMaxW) val = val.slice(0, -1);
+        safeDraw(ctx.page, val, { x: tableX + labelW + 5, y: textY, size: specSize, font: ctx.font, color: COL.text });
+        yy += rowH;
       }
     });
     ctx.y = top + cardH;
@@ -1871,32 +1907,72 @@ function drawShowcaseSection(
 
 // ── Phase G: "Connect With Us" — shares the final page with Our Portfolio ──
 function drawConnectPage(ctx: Ctx, driveLink: string | null = null) {
-  space(ctx, 10);
-  drawCentered(ctx, "Connect With Us", MARGIN, CONTENT_W, ctx.y, 18, ctx.bold, COL.text);
-  ctx.y += 26;
+  const GREEN = rgb(0x15 / 255, 0x93 / 255, 0x41 / 255);
+  const LIGHT_GREEN = rgb(0.91, 0.97, 0.93);
+
+  space(ctx, 20);
+  // Title with green accent underline
+  drawCentered(ctx, "Connect With Us", MARGIN, CONTENT_W, ctx.y, 22, ctx.bold, COL.text);
+  ctx.y += 30;
+  const ulW = 60;
+  ctx.page.drawLine({
+    start: { x: (PAGE_W - ulW) / 2, y: yFromTop(ctx.y) },
+    end: { x: (PAGE_W + ulW) / 2, y: yFromTop(ctx.y) },
+    color: GREEN,
+    thickness: 2.5,
+  });
+  space(ctx, 12);
   drawCentered(ctx, "Reach out for a site visit, a detailed quote, or a walkthrough of our work.", MARGIN, CONTENT_W, ctx.y, 10, ctx.font, COL.muted);
   ctx.y += 28;
-  const rows: Array<[string, string, string | null]> = [
-    ["Phone", "+91 63815 02055   ·   +91 93638 63382", null],
+
+  // Phone callout box — centered on page
+  const phoneBoxW = 300;
+  const phoneBoxH = 38;
+  const phoneX = (PAGE_W - phoneBoxW) / 2;
+  drawRect(ctx, phoneX, ctx.y, phoneBoxW, phoneBoxH, { fill: LIGHT_GREEN, border: GREEN, borderWidth: 1 });
+  const phoneText = "+91 63815 02055";
+  const phoneW = safeWidth(ctx.bold, phoneText, 15);
+  safeDraw(ctx.page, phoneText, { x: (PAGE_W - phoneW) / 2, y: yFromTop(ctx.y + (phoneBoxH + 15) / 2), size: 15, font: ctx.bold, color: GREEN });
+  ctx.y += phoneBoxH;
+  space(ctx, 22);
+
+  // Links table — clean 2-column grid, all white rows
+  const linkRows: Array<[string, string, string]> = [
     ["Portfolio", "View our projects", driveLink || "https://fitoverse.com/"],
     ["Website", "fitoverse.com", "https://fitoverse.com/"],
     ["Instagram", "fito.verse", "https://www.instagram.com/fito.verse/"],
     ["LinkedIn", "Fitoverse", "https://www.linkedin.com/company/fitoverse/"],
     ["Facebook", "Fitoverse", "https://www.facebook.com/profile.php?id=100077279349300"],
   ];
-  const panelW = 380;
+  const panelW = 400;
   const px = (PAGE_W - panelW) / 2;
-  const panelH = rows.length * 26 + 20;
-  drawRect(ctx, px, ctx.y, panelW, panelH, { fill: COL.greenSoft, border: COL.border });
-  let ry = ctx.y + 14;
-  for (const [label, value, url] of rows) {
-    safeDraw(ctx.page, label, { x: px + 24, y: yFromTop(ry + 10), size: 10, font: ctx.bold, color: COL.blue });
-    if (url) {
-      drawLink(ctx, value, url, { x: px + 130, y: ry, size: 10 });
-    } else {
-      safeDraw(ctx.page, value, { x: px + 130, y: yFromTop(ry + 10), size: 10, font: ctx.font, color: COL.text });
-    }
-    ry += 26;
+  const lRowH = 26;
+  const labelCol = 120;
+  const topInset = 8;
+  const panelH = linkRows.length * lRowH + topInset * 2;
+  drawRect(ctx, px, ctx.y, panelW, panelH, { fill: rgb(1, 1, 1), border: COL.tableGrid, borderWidth: 0.75 });
+  // Single vertical divider spanning the full table height
+  ctx.page.drawLine({
+    start: { x: px + labelCol, y: yFromTop(ctx.y) },
+    end: { x: px + labelCol, y: yFromTop(ctx.y + panelH) },
+    color: COL.tableGrid, thickness: 0.5,
+  });
+  // Horizontal row separators spanning the full table width
+  for (let ri = 1; ri < linkRows.length; ri++) {
+    const lineY = ctx.y + topInset + ri * lRowH;
+    ctx.page.drawLine({
+      start: { x: px, y: yFromTop(lineY) },
+      end: { x: px + panelW, y: yFromTop(lineY) },
+      color: COL.tableGrid, thickness: 0.3,
+    });
+  }
+  // Draw text for each row
+  for (let ri = 0; ri < linkRows.length; ri++) {
+    const [label, value, url] = linkRows[ri];
+    const ry = ctx.y + topInset + ri * lRowH;
+    const textY = yFromTop(ry + (lRowH + 10) / 2);
+    safeDraw(ctx.page, label, { x: px + 16, y: textY, size: 10, font: ctx.bold, color: GREEN });
+    drawLink(ctx, value, url, { x: px + labelCol + 12, y: ry + 2, size: 10 });
   }
   ctx.y += panelH;
   space(ctx, 24);
@@ -1926,6 +2002,7 @@ export type QuotationPdfData = {
   // pattern). The page itself only renders when a photo also exists for
   // this sport in SHOWCASE_PHOTO_BYTES, so a link with no photo is a no-op.
   driveLink?: string | null;
+  salespersonPhone?: string | null;
 };
 
 // Sample-style COVER PAGE (page 1): company header top-right, big centered
@@ -1950,9 +2027,9 @@ function drawCoverPage(
 
   // Company details, top-right (right-aligned).
   const headerLines = [
-    "Plot no 96, Samiyappa Nagar 3rd cross west street,",
-    "Seelanaickenpatti, Salem, Tamil Nadu, Pincode: 636201",
-    "Phone: 9894570997, 9597766524",
+    "Fitoverse Private Limited",
+    "Salem  ·  Chennai  ·  Bangalore",
+    "Phone: 6381502055",
     "GSTIN: 33AAECF8905G1ZQ",
     "CIN: U92490TZ2022PTC038004",
   ];
@@ -2001,7 +2078,7 @@ function drawCoverPage(
       toY += 10;
     }
   }
-  centerText(projectLine, toY, 15, boldItalic, COL.text);
+  centerText(projectLine, toY, 15, ctx.bold, COL.text);
 
   // From block, centered.
   centerText("From", 438, 13, ctx.bold, COL.text);
@@ -2015,9 +2092,8 @@ function drawCoverPage(
     safeDraw(ctx.page, a, { x: startX, y: fy, size: 14, font: ctx.bold, color: COL.text });
     safeDraw(ctx.page, b, { x: startX + wa, y: fy, size: 14, font: ctx.bold, color: COL.text });
   }
-  centerText("Plot no 96, Samiyappa Nagar 3rd cross west street,", 478, 10, ctx.font, COL.textSoft);
-  centerText("Seelanaickenpatti, Salem, Tamil Nadu, 636201", 491, 10, ctx.font, COL.textSoft);
-  centerText("Phone: 9894570997, 9597766524", 504, 10, ctx.font, COL.textSoft);
+  centerText("Salem  ·  Chennai  ·  Bangalore", 478, 10, ctx.font, COL.textSoft);
+  centerText("Phone: 6381502055", 491, 10, ctx.font, COL.textSoft);
 
   // "Quoted On" section — styled to match the "From" title above (bold dark
   // title with its value directly below).
@@ -2030,20 +2106,12 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   doc.setTitle(`Quotation ${data.number}`);
   doc.setAuthor("Fitoverse Private Limited");
 
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const boldItalic = await doc.embedFont(StandardFonts.HelveticaBoldOblique);
-
-  // Embed logo once — reused across all 3 pages' footers/headers. Null if
-  // /public file was missing or embed failed (graceful text-only fallback).
-  let logoImage: PDFImage | null = null;
-  if (LOGO_BYTES) {
-    try {
-      logoImage = await doc.embedPng(LOGO_BYTES);
-    } catch {
-      logoImage = null;
-    }
-  }
+  const [font, bold, boldItalic, logoImage] = await Promise.all([
+    doc.embedFont(StandardFonts.Helvetica),
+    doc.embedFont(StandardFonts.HelveticaBold),
+    doc.embedFont(StandardFonts.HelveticaBoldOblique),
+    LOGO_BYTES ? doc.embedPng(LOGO_BYTES).catch(() => null) : Promise.resolve(null),
+  ]);
 
   const ctx: Ctx = {
     doc,
@@ -2067,7 +2135,8 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   newPage(ctx);
   space(ctx, 6);
   const hasOptions = anyOptions(data.lineItems);
-  drawSectionTitle(ctx, "Commercial Quotation");
+  const projectTitle = `${titleForSport(data.sport).replace(/^Quotation for\s+/i, "")} - ${data.lengthFt} ft x ${data.widthFt} ft`;
+  drawSectionTitle(ctx, `${projectTitle} Quotation`);
   const itemImages = await embedLineItemImages(doc, data.lineItems);
   // Matches drawComparisonTable's / drawTotals' own ensureSpace() cost (with a
   // little headroom) — see drawParticularsTable's finalReserve doc comment.
@@ -2177,7 +2246,10 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
   drawLine(ctx, MARGIN, PAGE_W - MARGIN);
   space(ctx, 6);
   drawText(ctx, "Project Contact Points", { x: MARGIN, size: 9, bold: true });
-  drawText(ctx, "Mr. Vignesh: +91 63815 02055      Mr. Praveen: +91 95977 66524      www.fitoverse.com", {
+  const contactLine = data.salespersonPhone
+    ? `Mr. Vignesh: +91 63815 02055      Salesperson: ${data.salespersonPhone}      www.fitoverse.com`
+    : "Mr. Vignesh: +91 63815 02055      www.fitoverse.com";
+  drawText(ctx, contactLine, {
     x: MARGIN,
     size: 9,
     color: COL.muted,

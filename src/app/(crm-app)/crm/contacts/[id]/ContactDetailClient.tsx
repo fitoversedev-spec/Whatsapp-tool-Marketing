@@ -109,6 +109,10 @@ export default function ContactDetailClient({
   const toast = useToast();
   const [tab, setTab] = useState<"overview" | "calls-meetings" | "timeline">("overview");
   const [showProductPicker, setShowProductPicker] = useState(false);
+  // "Link existing" on the Quotations section — search across every
+  // quotation (not just this contact's own deals) and send one straight to
+  // this contact's phone, e.g. re-using a generic/template quote.
+  const [showAttachQuote, setShowAttachQuote] = useState(false);
   // Only quote/court still need a deal (their wizards key off dealId); the
   // "deal" case is the standalone +New Deal. Task/meeting/call no longer gate
   // on a deal — they anchor to the contact directly.
@@ -321,6 +325,17 @@ export default function ContactDetailClient({
     router.refresh();
   }
 
+  // Duplicate opens the wizard pre-loaded from an existing quote instead of
+  // starting from a blank Step 1 — the actual field-prefill from
+  // duplicateFrom is wired up in the wizard itself (separate change); this
+  // just gets the rep there with the right context in the URL.
+  function duplicateQuotation(q: QuotationRow) {
+    const params = new URLSearchParams({ duplicateFrom: q.id, customerName: contact.name });
+    if (contact.phone) params.set("phone", contact.phone);
+    if (deals.length > 0) params.set("dealId", deals[0].id);
+    router.push(`/crm/quotations?${params.toString()}`);
+  }
+
   async function resendCourtImage(c: CourtImageRow) {
     if (!c.contactPhone) { toast.error("No phone on this design"); return; }
     const pendingTab = window.open("about:blank", "_blank");
@@ -340,8 +355,9 @@ export default function ContactDetailClient({
     router.refresh();
   }
 
-  function goToWizard(kind: "quote" | "court", dealId: string) {
-    const params = new URLSearchParams({ dealId, customerName: contact.name });
+  function goToWizard(kind: "quote" | "court", dealId?: string | null) {
+    const params = new URLSearchParams({ customerName: contact.name });
+    if (dealId) params.set("dealId", dealId);
     if (contact.phone) params.set("phone", contact.phone);
     router.push(`${kind === "quote" ? "/crm/quotations" : "/crm/court-images"}?${params.toString()}`);
   }
@@ -352,15 +368,12 @@ export default function ContactDetailClient({
   }
 
   function onQuickAction(kind: "quote" | "court" | "product" | "meeting" | "call") {
-    // Product keeps its own picker (which creates a deal itself when needed).
     if (kind === "product") { setShowProductPicker(true); return; }
-    // Meeting/Call anchor to the contact directly — open the schedule/log
-    // choice with the most-recent deal if one exists, else no deal at all.
     if (kind === "meeting" || kind === "call") { setChoosingFor({ mode: kind, dealId: deals[0]?.id ?? null }); return; }
-    // Quote/Court genuinely need a deal — gate on one, creating it first if
-    // this contact has none; otherwise default to the most-recently-updated.
-    if (deals.length === 0) { setPendingAction(kind); return; }
-    goToWizard(kind, deals[0].id);
+    if (kind === "quote" || kind === "court") {
+      goToWizard(kind, deals[0]?.id ?? null);
+      return;
+    }
   }
 
   async function completeReminder(id: string) {
@@ -710,7 +723,7 @@ export default function ContactDetailClient({
         </div>
       </div>
 
-      <NextActionCard deal={deals[0] ?? null} />
+      <NextActionCard deal={deals[0] ?? null} contactId={contact.id} />
 
       {/* Quick actions — attach a new quotation/court design/product interest against this lead. Deal and Activity each have their own + in their own section below instead. */}
       <div className="flex flex-wrap gap-2 mb-5">
@@ -1035,14 +1048,24 @@ export default function ContactDetailClient({
             <div id="quotations" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-slate-900">Quotations <span className="text-slate-400 font-normal font-mono">{quotations.length}</span></h3>
-                <button
-                  onClick={() => onQuickAction("quote")}
-                  aria-label="New quotation"
-                  title="New quotation"
-                  className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
-                >
-                  +
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setShowAttachQuote(true)}
+                    aria-label="Link existing quotation"
+                    title="Link an existing quotation to this contact"
+                    className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs leading-none"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                  </button>
+                  <button
+                    onClick={() => onQuickAction("quote")}
+                    aria-label="New quotation"
+                    title="New quotation"
+                    className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
               {quotations.length === 0 ? (
                 <p className="text-sm text-slate-400">No quotations created for this person yet.</p>
@@ -1065,6 +1088,9 @@ export default function ContactDetailClient({
                         <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-court-700 hover:underline">
                           View PDF
                         </a>
+                        <button onClick={() => duplicateQuotation(q)} className="text-xs text-slate-600 hover:underline">
+                          Duplicate
+                        </button>
                         <button onClick={() => resendQuotation(q)} disabled={resending === q.id} className="text-xs text-blue-700 hover:underline disabled:opacity-40">
                           {resending === q.id ? "…" : q.status === "draft" ? "Send" : "Resend"}
                         </button>
@@ -1433,6 +1459,16 @@ export default function ContactDetailClient({
           onSaved={() => { setShowProductPicker(false); toast.success("Product interest recorded"); router.refresh(); }}
         />
       )}
+
+      {showAttachQuote && (
+        <AttachQuotationModal
+          contactPhone={contact.phone}
+          contactName={contact.name}
+          contactId={contact.id}
+          dealId={deals[0]?.id ?? null}
+          onClose={() => { setShowAttachQuote(false); router.refresh(); }}
+        />
+      )}
     </div>
   );
 }
@@ -1678,7 +1714,7 @@ function TaskModal({
 // + date living on the Deal (the primary/first deal for this contact). It's
 // the deal's own field, so editing here is the single source of truth read
 // by Deal Detail / Pipeline too, not a copy to sync.
-function NextActionCard({ deal }: { deal: Deal | null }) {
+function NextActionCard({ deal, contactId }: { deal: Deal | null; contactId: string }) {
   const router = useRouter();
   const toast = useToast();
   const [editing, setEditing] = useState(false);
@@ -1708,6 +1744,35 @@ function NextActionCard({ deal }: { deal: Deal | null }) {
         nextActionDueAt: date ? new Date(`${date}T00:00:00`).toISOString() : null,
       }),
     });
+    if (res.ok && date) {
+      // A next action with a date but no reminder never actually surfaces
+      // anywhere (My Day, WhatsApp reminder cron) — fire a day-before +
+      // day-of Reminder so it does, anchored to the same deal + contact.
+      const dayOf = new Date(`${date}T09:00:00`);
+      const dayBefore = new Date(dayOf);
+      dayBefore.setDate(dayBefore.getDate() - 1);
+      const label = note.trim() || "Follow up";
+      await fetch("/api/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `[Next Action - Tomorrow] ${label}`,
+          dueAt: dayBefore.toISOString(),
+          dealId: deal!.id,
+          accountContactId: contactId,
+        }),
+      }).catch(() => {});
+      await fetch("/api/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `[Next Action - Today] ${label}`,
+          dueAt: dayOf.toISOString(),
+          dealId: deal!.id,
+          accountContactId: contactId,
+        }),
+      }).catch(() => {});
+    }
     setSaving(false);
     if (res.ok) { setEditing(false); toast.success("Next action updated"); router.refresh(); }
     else toast.error("Could not save next action");
@@ -1721,14 +1786,15 @@ function NextActionCard({ deal }: { deal: Deal | null }) {
         <div className="min-w-0">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Next action</div>
           {editing ? (
-            <div className="mt-2 flex flex-col sm:flex-row gap-2">
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input shrink-0" />
-              <input
+            <div className="mt-2 flex flex-col gap-2">
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input w-48" />
+              <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 autoFocus
-                placeholder="What's the next step?"
-                className="flex-1 input min-w-0"
+                rows={3}
+                placeholder="What's the next step? e.g. Follow up call, Site visit, Send revised quote..."
+                className="w-full input resize-none"
               />
             </div>
           ) : hasAction ? (
@@ -2028,6 +2094,189 @@ function ProductInterestModal({
           <button onClick={submit} disabled={saving || !canSubmit} className="flex-1 btn btn-primary disabled:opacity-50">
             {saving ? "Saving..." : "Save"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Shape returned by GET /api/quotations?search= — distinct from QuotationRow
+// (this page's own per-contact list), which the server pre-converts
+// grandTotal to a number and omits customerName/pdfUrl. This is every
+// quotation in the system (scoped server-side to the rep's own, same as the
+// standalone /quotations list), not just ones already tied to this contact.
+type QuotationSearchRow = {
+  id: string; number: string; customerName: string; sport: string; grandTotal: string;
+  status: string; contactPhone: string | null; createdAt: string;
+};
+
+// "Link existing" — search across every quotation (not just this contact's
+// own deals) and send one straight to this contact's WhatsApp, e.g. reusing
+// a generic/template quote for a similar customer. Sending passes an
+// explicit contactPhone override to /send (already supported there — see
+// its own header comment) so the PDF goes to THIS contact regardless of
+// whichever phone the quote was originally created for.
+function AttachQuotationModal({
+  contactPhone, contactName, contactId, dealId, onClose,
+}: { contactPhone: string | null; contactName: string; contactId: string; dealId: string | null; onClose: () => void }) {
+  const toast = useToast();
+  const [search, setSearch] = useState("");
+  const [results, setResults] = useState<QuotationSearchRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function doSearch(term: string) {
+    setLoading(true);
+    const res = await fetch(`/api/quotations?search=${encodeURIComponent(term)}`).catch(() => null);
+    const data = res ? await res.json().catch(() => ({ quotations: [] })) : { quotations: [] };
+    setResults(data.quotations ?? []);
+    setLoading(false);
+    setSearched(true);
+  }
+
+  function onSearchChange(value: string) {
+    setSearch(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const term = value.trim();
+    if (!term) { setResults([]); setSearched(false); return; }
+    debounceRef.current = setTimeout(() => doSearch(term), 350);
+  }
+
+  async function attachToContact(q: QuotationSearchRow) {
+    setBusy(q.id);
+    const patch: Record<string, unknown> = {};
+    if (contactPhone) patch.contactPhone = contactPhone;
+    if (dealId) patch.dealId = dealId;
+    if (Object.keys(patch).length) {
+      const res = await fetch(`/api/quotations/${q.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      setBusy(null);
+      if (!res.ok) { toast.error("Could not link quotation"); return; }
+    } else {
+      setBusy(null);
+    }
+    toast.success(`${q.number} linked to ${contactName}`);
+    onClose();
+  }
+
+  async function sendToContact(q: QuotationSearchRow) {
+    if (!contactPhone) { toast.error("This contact has no phone number"); return; }
+    setBusy(q.id);
+    const patch: Record<string, unknown> = { contactPhone };
+    if (dealId) patch.dealId = dealId;
+    await fetch(`/api/quotations/${q.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).catch(() => null);
+    const pendingTab = window.open("about:blank", "_blank");
+    const res = await fetch(`/api/quotations/${q.id}/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactPhone }),
+    });
+    setBusy(null);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { pendingTab?.close(); toast.error(data.error ?? "Send failed"); return; }
+    if (data.whatsappWebUrl) {
+      if (pendingTab) pendingTab.location.href = data.whatsappWebUrl;
+      else window.open(data.whatsappWebUrl, "_blank");
+      toast.success(`${q.number} ready — send from the WhatsApp tab`);
+    } else {
+      pendingTab?.close();
+      toast.success(`${q.number} sent to ${contactName}`);
+    }
+    onClose();
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`/api/account-contacts/${contactId}/attachments`, { method: "POST", body: form }).catch(() => null);
+    setUploading(false);
+    if (res?.ok) {
+      toast.success(`${file.name} uploaded to ${contactName}'s attachments`);
+      onClose();
+    } else {
+      toast.error("Upload failed");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl max-w-lg w-full p-5 max-h-[85vh] flex flex-col">
+        <h2 className="font-semibold text-slate-900 mb-1">Link an existing quotation</h2>
+        <p className="text-sm text-slate-600 mb-3">Search quotations to attach or send, or upload a file.</p>
+        <input
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          autoFocus
+          placeholder="Search by number, customer or phone..."
+          className="w-full input mb-3"
+        />
+        <div className="flex-1 overflow-y-auto -mx-1 px-1 min-h-0">
+          {loading ? (
+            <p className="text-sm text-slate-400 px-1 py-2">Searching...</p>
+          ) : results.length === 0 ? (
+            <p className="text-sm text-slate-400 px-1 py-2">
+              {searched ? "No matching quotations." : "Type to search all quotations."}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {results.map((q) => (
+                <div key={q.id} className="rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-medium text-slate-900 truncate">{q.customerName}</span>
+                    <span className={`badge ${STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-700"}`}>{q.status}</span>
+                  </div>
+                  <div className="text-xs text-slate-600 mb-2">
+                    <span className="font-mono">{q.number}</span> · <span className="capitalize">{q.sport}</span> · <span className="font-mono">{fmtInr(Number(q.grandTotal))}</span> · <span className="font-mono">{fmtDate(q.createdAt)}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <a href={`/api/quotations/${q.id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-court-700 hover:underline">
+                      View PDF
+                    </a>
+                    <button
+                      onClick={() => attachToContact(q)}
+                      disabled={busy === q.id}
+                      className="text-xs text-slate-700 hover:underline disabled:opacity-40"
+                    >
+                      {busy === q.id ? "..." : "Attach"}
+                    </button>
+                    <button
+                      onClick={() => sendToContact(q)}
+                      disabled={busy === q.id || !contactPhone}
+                      title={!contactPhone ? "No phone number" : ""}
+                      className="text-xs text-blue-700 hover:underline disabled:opacity-40"
+                    >
+                      {busy === q.id ? "..." : "Attach & Send"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
+          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" className="hidden" onChange={handleFileUpload} />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="btn btn-secondary text-sm"
+          >
+            {uploading ? "Uploading..." : "Upload file"}
+          </button>
+          <button onClick={onClose} className="flex-1 btn btn-secondary">Close</button>
         </div>
       </div>
     </div>

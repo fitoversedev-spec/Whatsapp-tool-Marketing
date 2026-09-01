@@ -47,25 +47,6 @@ function parseSalesData(raw: string | null): SalesFormData {
   } catch { return { ...EMPTY_SALES, custom: [] }; }
 }
 
-function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-    d.getMinutes(),
-  )}`;
-}
-
-function toDatePart(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function toTimePart(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-IN", {
@@ -107,35 +88,26 @@ export default function LeadManagementPanel({
   const [assignedToUserId, setAssignedToUserId] = useState<string | null>(lead.assignedToUserId);
   const [savingAssignee, setSavingAssignee] = useState(false);
 
-  // --- Reminder ----------------------------------------------------------
-  const [reminderIso, setReminderIso] = useState<string | null>(lead.reminderAt);
+  // --- Reminders (multiple) -----------------------------------------------
+  type ReminderRow = { id: string; message: string; dueAt: string; status: string; completedAt: string | null };
+  const [reminders, setReminders] = useState<ReminderRow[]>(lead.reminders ?? []);
   const [savingReminder, setSavingReminder] = useState(false);
-  const [scheduleMode, setScheduleMode] = useState<boolean>(!!lead.reminderAt);
-  const [reminderDraft, setReminderDraft] = useState<string>(
-    lead.reminderAt ? toLocalInput(lead.reminderAt) : "",
-  );
-
-  // Custom date/time popup state
-  const [pickerPopupOpen, setPickerPopupOpen] = useState(false);
-  const [datePart, setDatePart] = useState<string>(
-    lead.reminderAt ? toDatePart(lead.reminderAt) : "",
-  );
-  const [timePart, setTimePart] = useState<string>(
-    lead.reminderAt ? toTimePart(lead.reminderAt) : "",
-  );
+  const [addingReminder, setAddingReminder] = useState(false);
+  const [datePart, setDatePart] = useState("");
+  const [timePart, setTimePart] = useState("");
+  const [reminderMsg, setReminderMsg] = useState("");
   const popupRef = useRef<HTMLDivElement>(null);
 
-  // Close popup on outside click
   useEffect(() => {
-    if (!pickerPopupOpen) return;
+    if (!addingReminder) return;
     function handleClick(e: MouseEvent) {
       if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        setPickerPopupOpen(false);
+        setAddingReminder(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [pickerPopupOpen]);
+  }, [addingReminder]);
 
   // --- Labels ------------------------------------------------------------
   const [catalog, setCatalog] = useState<MetaLeadLabelChip[]>(labelCatalog);
@@ -169,20 +141,19 @@ export default function LeadManagementPanel({
   useEffect(() => {
     setStage(lead.stage);
     setAssignedToUserId(lead.assignedToUserId);
-    setReminderIso(lead.reminderAt);
-    setScheduleMode(!!lead.reminderAt);
-    setReminderDraft(lead.reminderAt ? toLocalInput(lead.reminderAt) : "");
-    setDatePart(lead.reminderAt ? toDatePart(lead.reminderAt) : "");
-    setTimePart(lead.reminderAt ? toTimePart(lead.reminderAt) : "");
+    setReminders(lead.reminders ?? []);
+    setAddingReminder(false);
+    setDatePart("");
+    setTimePart("");
+    setReminderMsg("");
     setApplied(lead.labels);
     setNotes(lead.notes);
     setNoteDraft("");
     setPickerOpen(false);
-    setPickerPopupOpen(false);
     setSalesForm(parseSalesData(lead.salesData));
     setNewCustomName("");
     setNewCustomValue("");
-  }, [lead.id, lead.stage, lead.assignedToUserId, lead.reminderAt, lead.labels, lead.notes, lead.salesData]);
+  }, [lead.id, lead.stage, lead.assignedToUserId, lead.reminders, lead.labels, lead.notes, lead.salesData]);
 
   async function patch(payload: Record<string, unknown>): Promise<boolean> {
     try {
@@ -224,37 +195,73 @@ export default function LeadManagementPanel({
     }
   }
 
-  async function setReminder(next: string | null): Promise<boolean> {
-    const prev = reminderIso;
-    setReminderIso(next);
+  async function addReminder() {
+    if (!datePart || !timePart) return;
+    const dueAt = new Date(`${datePart}T${timePart}`);
+    if (Number.isNaN(dueAt.getTime())) return;
+    const leadName = lead.fullName?.trim() || lead.phone || "lead";
+    const message = reminderMsg.trim() || `Follow up with ${leadName}`;
     setSavingReminder(true);
-    const ok = await patch({ reminderAt: next });
-    setSavingReminder(false);
-    if (!ok) {
-      setReminderIso(prev);
-      toast.error("Could not update the reminder");
+    try {
+      const res = await fetch("/api/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metaLeadId: lead.id, dueAt: dueAt.toISOString(), message }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.reminder) {
+        setReminders((r) => [...r, { id: data.reminder.id, message, dueAt: dueAt.toISOString(), status: "PENDING", completedAt: null }]);
+        setAddingReminder(false);
+        setDatePart("");
+        setTimePart("");
+        setReminderMsg("");
+        toast.success("Reminder added");
+      } else {
+        toast.error("Could not add reminder");
+      }
+    } catch {
+      toast.error("Could not add reminder");
+    } finally {
+      setSavingReminder(false);
     }
-    return ok;
   }
 
-  async function saveReminder() {
-    const d = reminderDraft ? new Date(reminderDraft) : null;
-    if (!d || Number.isNaN(d.getTime())) return;
-    const ok = await setReminder(d.toISOString());
-    if (ok) toast.success("Reminder set");
-  }
-
-  async function chooseNoReminder() {
-    setScheduleMode(false);
-    setPickerPopupOpen(false);
-    if (reminderIso) {
-      const ok = await setReminder(null);
-      if (!ok) setScheduleMode(true);
+  async function deleteReminder(id: string) {
+    const prev = reminders;
+    setReminders((r) => r.filter((x) => x.id !== id));
+    try {
+      const res = await fetch(`/api/reminders/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        setReminders(prev);
+        toast.error("Could not delete reminder");
+      }
+    } catch {
+      setReminders(prev);
+      toast.error("Could not delete reminder");
     }
   }
 
-  function chooseSchedule() {
-    setScheduleMode(true);
+  async function completeReminder(id: string) {
+    const prev = reminders;
+    setReminders((r) => r.map((x) => x.id === id ? { ...x, status: "DONE", completedAt: new Date().toISOString() } : x));
+    try {
+      const res = await fetch(`/api/reminders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completedAt: new Date().toISOString() }),
+      });
+      if (!res.ok) {
+        setReminders(prev);
+        toast.error("Could not complete reminder");
+      }
+    } catch {
+      setReminders(prev);
+      toast.error("Could not complete reminder");
+    }
+  }
+
+  function startAddReminder() {
+    setAddingReminder(true);
     if (!datePart) {
       const d = new Date();
       d.setDate(d.getDate() + 1);
@@ -262,15 +269,7 @@ export default function LeadManagementPanel({
       const pad = (n: number) => String(n).padStart(2, "0");
       setDatePart(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
       setTimePart("09:00");
-      setReminderDraft(toLocalInput(d.toISOString()));
     }
-  }
-
-  function confirmDateTimePick() {
-    if (datePart && timePart) {
-      setReminderDraft(`${datePart}T${timePart}`);
-    }
-    setPickerPopupOpen(false);
   }
 
   async function saveLabels(nextApplied: MetaLeadLabelChip[]) {
@@ -395,13 +394,8 @@ export default function LeadManagementPanel({
     void persistSales({ ...salesForm, custom: salesForm.custom.filter((_, i) => i !== idx) });
   }
 
-  const reminderDraftDate = reminderDraft ? new Date(reminderDraft) : null;
-  const reminderDraftValid = !!reminderDraftDate && !Number.isNaN(reminderDraftDate.getTime());
-  const savedReminderMs = reminderIso ? new Date(reminderIso).getTime() : null;
-  const draftReminderMs = reminderDraftValid ? reminderDraftDate!.getTime() : null;
-  const reminderUnsaved = reminderDraftValid && draftReminderMs !== savedReminderMs;
-  const canSetReminder = reminderDraftValid && reminderUnsaved && !savingReminder;
-  const savedReminderOverdue = savedReminderMs !== null ? savedReminderMs < Date.now() : false;
+  const openReminders = reminders.filter((r) => !r.completedAt);
+  const doneReminders = reminders.filter((r) => !!r.completedAt);
 
   return (
     <aside className="card p-4 space-y-5">
@@ -458,119 +452,81 @@ export default function LeadManagementPanel({
         </select>
       </div>
 
-      {/* Reminder */}
+      {/* Reminders */}
       <div className="space-y-1.5">
-        <span className={sectionLabelCls}>Reminder</span>
-        <div className="space-y-1.5 pt-0.5">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="radio"
-              name="lead-reminder"
-              checked={!scheduleMode}
-              disabled={savingReminder}
-              onChange={() => void chooseNoReminder()}
-            />
-            No reminder
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="radio"
-              name="lead-reminder"
-              checked={scheduleMode}
-              disabled={savingReminder}
-              onChange={chooseSchedule}
-            />
-            Schedule a reminder
-          </label>
-          {scheduleMode && (
-            <div className="pt-1 space-y-1.5">
-              {/* Custom date/time popup with Done button */}
-              <div className="relative" ref={popupRef}>
-                <button
-                  type="button"
-                  onClick={() => setPickerPopupOpen((o) => !o)}
-                  className={`${inputCls} text-left flex items-center justify-between`}
-                >
-                  <span className={reminderDraftValid ? "text-slate-800" : "text-slate-400"}>
-                    {reminderDraftValid ? fmtDateTime(reminderDraftDate!.toISOString()) : "Pick date & time"}
-                  </span>
-                  <svg className="h-4 w-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </button>
-                {pickerPopupOpen && (
-                  <div className="absolute z-50 mt-1 left-0 right-0 rounded-lg border border-slate-200 bg-white shadow-lg p-3 space-y-3">
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-500 mb-1">Date</label>
-                        <input
-                          type="date"
-                          className={inputCls}
-                          value={datePart}
-                          onChange={(e) => setDatePart(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-500 mb-1">Time</label>
-                        <input
-                          type="time"
-                          className={inputCls}
-                          value={timePart}
-                          onChange={(e) => setTimePart(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      {reminderIso && (
-                        <button
-                          type="button"
-                          onClick={() => void chooseNoReminder()}
-                          disabled={savingReminder}
-                          className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-                        >
-                          Clear
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={confirmDateTimePick}
-                        disabled={!datePart || !timePart}
-                        className="btn btn-primary flex-1 !py-1.5"
-                      >
-                        Done
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <p
-                  className={`text-xs ${
-                    reminderUnsaved
-                      ? "text-amber-600"
-                      : savedReminderOverdue
-                        ? "text-rose-600 font-semibold"
-                        : "text-slate-500"
-                  }`}
-                >
-                  {!reminderDraftValid
-                    ? "Pick a date and time"
-                    : reminderUnsaved
-                      ? `Not saved — ${fmtDateTime(reminderDraftDate!.toISOString())}`
-                      : `${savedReminderOverdue ? "Overdue — " : "Reminds on "}${fmtDateTime(reminderIso!)}`}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void saveReminder()}
-                  disabled={!canSetReminder}
-                  className="btn btn-primary !px-3 !py-1.5 shrink-0"
-                >
-                  {savingReminder ? "Setting…" : "Set reminder"}
-                </button>
-              </div>
-            </div>
+        <div className="flex items-center justify-between">
+          <span className={sectionLabelCls}>Reminders</span>
+          {!addingReminder && (
+            <button type="button" onClick={startAddReminder} className="text-xs font-medium text-court-600 hover:text-court-700">
+              + Add
+            </button>
           )}
         </div>
+        {openReminders.length === 0 && !addingReminder && (
+          <p className="text-xs text-slate-400">No reminders set</p>
+        )}
+        {openReminders.map((r) => {
+          const overdue = new Date(r.dueAt).getTime() < Date.now();
+          return (
+            <div key={r.id} className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 ${overdue ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-slate-50"}`}>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-slate-800 truncate">{r.message}</p>
+                <p className={`text-xs font-mono ${overdue ? "text-rose-600 font-semibold" : "text-slate-500"}`}>
+                  {overdue ? "Overdue — " : ""}{fmtDateTime(r.dueAt)}
+                </p>
+              </div>
+              <button type="button" onClick={() => void completeReminder(r.id)} title="Mark done" className="text-emerald-500 hover:text-emerald-700 shrink-0 mt-0.5">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              </button>
+              <button type="button" onClick={() => void deleteReminder(r.id)} title="Delete" className="text-slate-400 hover:text-rose-600 shrink-0 mt-0.5">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          );
+        })}
+        {doneReminders.length > 0 && (
+          <details className="pt-1">
+            <summary className="text-xs text-slate-400 cursor-pointer">Completed ({doneReminders.length})</summary>
+            <div className="space-y-1 mt-1">
+              {doneReminders.map((r) => (
+                <div key={r.id} className="flex items-center gap-2 rounded-lg border border-slate-100 bg-white px-2.5 py-1.5 opacity-60">
+                  <svg className="h-3.5 w-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  <span className="text-xs text-slate-600 truncate flex-1">{r.message}</span>
+                  <span className="text-xs text-slate-400 font-mono shrink-0">{fmtDateTime(r.dueAt)}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+        {addingReminder && (
+          <div ref={popupRef} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2 shadow-sm">
+            <input
+              type="text"
+              className={inputCls}
+              placeholder="Message (optional)"
+              value={reminderMsg}
+              onChange={(e) => setReminderMsg(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 mb-1">Date</label>
+                <input type="date" className={inputCls} value={datePart} onChange={(e) => setDatePart(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 mb-1">Time</label>
+                <input type="time" className={inputCls} value={timePart} onChange={(e) => setTimePart(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setAddingReminder(false)} className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="button" onClick={() => void addReminder()} disabled={!datePart || !timePart || savingReminder} className="btn btn-primary flex-1 !py-1.5">
+                {savingReminder ? "Adding…" : "Add reminder"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Labels */}

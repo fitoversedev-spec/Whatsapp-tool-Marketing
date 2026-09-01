@@ -18,7 +18,6 @@ import { sectionForItem, orderedSectionsFor } from "@/lib/quotation/sections";
 import { SPORT_STANDARDS } from "@/lib/court-image/sport-standards";
 import {
   UNIT_OPTIONS,
-  UNIT_DATALIST_ID,
   defaultUnitForAreaMode,
 } from "@/lib/quotation/units";
 import { extractHtmlTables } from "@/lib/products/format";
@@ -206,6 +205,7 @@ type Props = {
     contactPhone?: string;
     conversationId?: string;
     dealId?: string;
+    duplicateFrom?: string;
   };
 };
 
@@ -219,6 +219,46 @@ const SPORTS = [
   { id: "volleyball", label: "Volleyball", enabled: true },
   { id: "badminton", label: "Badminton", enabled: true },
 ];
+
+function UnitDropdown({ value, onChange, disabled, options }: { value: string; onChange: (v: string) => void; disabled?: boolean; options: readonly string[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [open]);
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen(!open)}
+        className="input text-center font-mono w-full flex items-center justify-between gap-1"
+      >
+        <span className="truncate">{value}</span>
+        <svg className="w-3 h-3 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+          {options.map((o) => (
+            <button
+              key={o}
+              type="button"
+              onClick={() => { onChange(o); setOpen(false); }}
+              className={`w-full px-3 py-1.5 text-sm text-left hover:bg-slate-100 font-mono ${o === value ? "bg-slate-50 font-semibold" : ""}`}
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function QuoteWizard({ open, onClose, onComplete, prefill }: Props) {
   const toast = useToast();
@@ -279,6 +319,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
   // field); this mirrors it. Confirmed against production: 21 real drafts
   // were stuck exactly this way before this fix — see docs/DECISIONS.md.
   const [contactPhone, setContactPhone] = useState(prefill?.contactPhone ?? "");
+  const [salespersonPhone, setSalespersonPhone] = useState("");
 
   // Reset state when modal opens fresh
   useEffect(() => {
@@ -290,6 +331,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
       setLeadSourceId("");
       setCustomerProfileId("");
       setBusinessType("");
+      setSalespersonPhone("");
       setLengthFt(60);
       setWidthFt(100);
       setQuoteDate(new Date().toISOString().slice(0, 10));
@@ -303,6 +345,32 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Duplicate flow — fetch the source quotation and pre-fill everything so
+  // the user can tweak and save as a new draft.
+  useEffect(() => {
+    if (!open || !prefill?.duplicateFrom) return;
+    const sourceId = prefill.duplicateFrom;
+    fetch(`/api/quotations/${sourceId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { quotation: { customerName: string; sport: string; lengthFt: number; widthFt: number; lineItems: LineItem[]; notes: string | null; validityDays: number; contactPhone: string | null } } | null) => {
+        if (!data?.quotation) return;
+        const q = data.quotation;
+        setCustomerName(q.customerName);
+        setSport(q.sport);
+        setLengthFt(q.lengthFt);
+        setWidthFt(q.widthFt);
+        setNotes(q.notes ?? "");
+        setValidityDays(q.validityDays);
+        if (q.contactPhone) setContactPhone(q.contactPhone);
+        if (q.lineItems?.length) {
+          setLineItems(q.lineItems.map((li: LineItem, i: number) => ({ ...li, id: li.id ?? `dup-${i}` })));
+          ratesLoadedForSport.current = q.sport;
+        }
+      })
+      .catch(() => null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefill?.duplicateFrom]);
 
   // Prefill location + classification from this customer's existing Deal,
   // if this conversation already has one (a previous quote/design already
@@ -350,7 +418,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
     setProductFilter((f) => f || sport);
     if (products.length > 0) return;
     setLoadingProducts(true);
-    fetch("/api/products")
+    fetch(`/api/products?sport=${encodeURIComponent(sport)}`)
       .then((r) => (r.ok ? r.json() : { products: [] }))
       .then((d: { products: ProductRow[] }) => setProducts(d.products ?? []))
       .finally(() => setLoadingProducts(false));
@@ -572,6 +640,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             conversationId: prefill?.conversationId ?? null,
             dealId: prefill?.dealId ?? null,
             contactPhone: contactPhone.trim() || null,
+            salespersonPhone: salespersonPhone.trim() || null,
           }),
         });
       } catch (err) {
@@ -675,13 +744,6 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-stretch justify-center p-2 sm:p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1400px] max-h-full overflow-hidden flex flex-col">
-        {/* Unit suggestions for every line item's Unit field (free typing still
-            allowed for custom units). */}
-        <datalist id={UNIT_DATALIST_ID}>
-          {UNIT_OPTIONS.map((u) => (
-            <option key={u} value={u} />
-          ))}
-        </datalist>
         {/* Header */}
         <div className="px-5 sm:px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <div>
@@ -750,6 +812,19 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   className="input text-sm"
                 />
                 <p className="mt-1 text-xs text-slate-400">Where the court is being built — powers the Geography view in Team Performance.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Salesperson phone
+                </label>
+                <input
+                  value={salespersonPhone}
+                  onChange={(e) => setSalespersonPhone(e.target.value)}
+                  placeholder="+91 XXXXX XXXXX"
+                  className="input text-sm font-mono"
+                />
+                <p className="mt-1 text-xs text-slate-400">Your contact number — shown on the quotation PDF.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1236,6 +1311,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                       <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
                                         Qty
                                       </label>
+                                      {(item.unit ?? "sq.ft") === "sq.ft" && (
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -1255,8 +1331,9 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                       >
                                         {item.qtyDim1 != null && item.qtyDim2 != null ? "Direct" : "L×W"}
                                       </button>
+                                      )}
                                     </div>
-                                    {item.qtyDim1 != null && item.qtyDim2 != null ? (
+                                    {(item.unit ?? "sq.ft") === "sq.ft" && item.qtyDim1 != null && item.qtyDim2 != null ? (
                                       <div>
                                         <div className="flex items-center gap-1">
                                           <input
@@ -1296,12 +1373,23 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                                     <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
                                       Unit
                                     </label>
-                                    <input
-                                      list={UNIT_DATALIST_ID}
+                                    <UnitDropdown
                                       value={item.unit ?? "sq.ft"}
-                                      onChange={(e) => updateLineItem(item.id, "unit", e.target.value)}
+                                      onChange={(v) => {
+                                        updateLineItem(item.id, "unit", v);
+                                        if (v === "sq.ft") {
+                                          const area = lengthFt * widthFt;
+                                          setLineItems((prev) => prev.map((it) =>
+                                            it.id === item.id ? { ...it, qtyDim1: lengthFt, qtyDim2: widthFt, areaSqFt: area, total: area * it.ratePerSqFt } : it
+                                          ));
+                                        } else {
+                                          setLineItems((prev) => prev.map((it) =>
+                                            it.id === item.id ? { ...it, qtyDim1: null, qtyDim2: null } : it
+                                          ));
+                                        }
+                                      }}
                                       disabled={!item.included}
-                                      className="input text-center font-mono"
+                                      options={UNIT_OPTIONS}
                                     />
                                   </div>
                                   <div>

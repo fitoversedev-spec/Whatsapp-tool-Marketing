@@ -37,6 +37,7 @@ const createSchema = z.object({
   leadSourceId: z.string().uuid().nullable().optional(),
   customerProfileId: z.string().uuid().nullable().optional(),
   businessType: z.enum(["B2B", "B2C", "B2G"]).nullable().optional(),
+  salespersonPhone: z.string().max(30).nullable().optional(),
 });
 
 const listFilterSchema = z.object({
@@ -147,73 +148,58 @@ export async function POST(req: NextRequest) {
     });
     dealId = resolved.id;
   }
-  // Keep the deal's headline value current — a later revision should be
-  // what Sources/Forecast see, not whatever the first quote happened to
-  // total. Also writes through siteCity/leadSourceId when given, whether
-  // the deal is brand new or an explicit/reused one being corrected — powers
-  // Geography and Sources. (customerProfileId/businessType live on Account,
-  // not Deal — those are handled inside findOrCreateDealForConversation
-  // above for the resolved-deal path; an explicitly-passed dealId skips that
-  // helper, so mirror the same Account write here for that path too.)
-  const dealAfterQuote = await prisma.deal
-    .update({
-      where: { id: dealId },
-      data: {
-        quotedValue: totals.grandTotal,
-        ...(parsed.data.siteCity ? { siteCity: parsed.data.siteCity } : {}),
-        ...(parsed.data.leadSourceId ? { leadSourceId: parsed.data.leadSourceId } : {}),
-      },
-    })
-    .catch(() => null);
-  // Sync straight to Conversation.dealValue too, unconditionally — the
-  // previous only path for this (transitionDeal.ts's write-through) is
-  // forward-only-on-stage-advance, so revising a quote on a deal already
-  // past "Quotation Sent" (routine — e.g. a Negotiation-stage deal gets a
-  // revised price) never re-fired it, leaving /pipeline and
-  // ContactDetailDrawer showing a stale total indefinitely. This is a
-  // direct, always-fires sync instead of piggybacking on stage logic that
-  // was never meant to gate it. See docs/DECISIONS.md.
-  if (dealAfterQuote?.conversationId) {
-    await prisma.conversation
+  // Run independent writes in parallel: deal update, isPrimary demotion, sequence number lookup.
+  const [dealAfterQuote, , nextSeqResult] = await Promise.all([
+    prisma.deal
       .update({
-        where: { id: dealAfterQuote.conversationId },
-        data: { dealValue: dealAfterQuote.wonValue ?? dealAfterQuote.quotedValue },
+        where: { id: dealId },
+        data: {
+          quotedValue: totals.grandTotal,
+          ...(parsed.data.siteCity ? { siteCity: parsed.data.siteCity } : {}),
+          ...(parsed.data.leadSourceId ? { leadSourceId: parsed.data.leadSourceId } : {}),
+        },
       })
-      .catch(() => null);
+      .catch(() => null),
+    prisma.quotation.updateMany({ where: { dealId, isPrimary: true }, data: { isPrimary: false } }),
+    nextSequenceForYear(year),
+  ]);
+
+  // Conversation + Account syncs (depend on dealAfterQuote, but independent of each other).
+  const sideEffects: Promise<unknown>[] = [];
+  if (dealAfterQuote?.conversationId) {
+    sideEffects.push(
+      prisma.conversation
+        .update({
+          where: { id: dealAfterQuote.conversationId },
+          data: { dealValue: dealAfterQuote.wonValue ?? dealAfterQuote.quotedValue },
+        })
+        .catch(() => null),
+    );
   }
   if (parsed.data.dealId && (parsed.data.customerProfileId || parsed.data.businessType)) {
-    const dealAccount = await prisma.deal.findUnique({ where: { id: dealId }, select: { accountId: true } });
-    if (dealAccount) {
-      await prisma.account
-        .update({
-          where: { id: dealAccount.accountId },
-          data: {
-            ...(parsed.data.customerProfileId ? { customerProfileId: parsed.data.customerProfileId } : {}),
-            ...(parsed.data.businessType ? { businessType: parsed.data.businessType } : {}),
-          },
-        })
-        .catch(() => null);
-    }
+    sideEffects.push(
+      prisma.deal
+        .findUnique({ where: { id: dealId }, select: { accountId: true } })
+        .then((d) =>
+          d
+            ? prisma.account
+                .update({
+                  where: { id: d.accountId },
+                  data: {
+                    ...(parsed.data.customerProfileId ? { customerProfileId: parsed.data.customerProfileId } : {}),
+                    ...(parsed.data.businessType ? { businessType: parsed.data.businessType } : {}),
+                  },
+                })
+                .catch(() => null)
+            : null,
+        ),
+    );
   }
+  if (sideEffects.length) await Promise.all(sideEffects);
 
-  // A new revision becomes the primary one — demote any existing
-  // quotations on this deal first. Previously nothing ever did this, so
-  // isPrimary stayed true on every quotation ever created (confirmed: 0 of
-  // 31 rows were ever false) — harmless for a deal with one quote, but
-  // src/lib/analytics/products.ts's "won" tracking filters on isPrimary
-  // specifically to avoid counting every historical revision's line items
-  // as won product volume once a deal closes. See docs/DECISIONS.md.
-  await prisma.quotation.updateMany({ where: { dealId, isPrimary: true }, data: { isPrimary: false } });
-
-  // Sequential quotation number per calendar year. Originally we just
-  // used count() + 1, but that collides as soon as ANY row gets deleted
-  // (count drops below the highest existing seq) or two users create at
-  // the same time. Read the highest existing FIT-QT-YYYY-NNN for the
-  // year and pick max + 1 instead — and if the unique constraint still
-  // trips (genuine race), bump and retry.
   let quotation;
   let lastError: unknown = null;
-  let nextSeq = await nextSequenceForYear(year);
+  let nextSeq = nextSeqResult;
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
       quotation = await prisma.quotation.create({
@@ -233,6 +219,7 @@ export async function POST(req: NextRequest) {
           validityDays: parsed.data.validityDays,
           conversationId: parsed.data.conversationId ?? null,
           contactPhone: parsed.data.contactPhone ?? null,
+          salespersonPhone: parsed.data.salespersonPhone ?? null,
           createdByUserId: user.id,
           status: "draft",
           dealId,

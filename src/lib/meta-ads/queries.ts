@@ -262,14 +262,23 @@ export type MetaLeadNoteRow = {
   body: string;
   createdAt: string;
 };
+export type MetaLeadReminderRow = {
+  id: string;
+  message: string;
+  dueAt: string;
+  status: string;
+  completedAt: string | null;
+};
+
 export type MetaLeadDetail = MetaLeadRow & {
   // stage is inherited from MetaLeadRow.
-  reminderAt: string | null; // ISO, or null = "No reminder"
+  reminderAt: string | null; // ISO, or null = "No reminder" (legacy scalar)
   assignedToUserId: string | null;
   assignedToName: string | null;
   labels: MetaLeadLabelChip[];
   notes: MetaLeadNoteRow[]; // newest first
   salesData: string | null; // JSON: sales follow-up form data
+  reminders: MetaLeadReminderRow[];
 };
 
 // One captured MetaLead with its full lead-management payload, for the detail
@@ -297,6 +306,16 @@ export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | nu
           author: { select: { name: true } },
         },
       },
+      reminders: {
+        orderBy: { dueAt: "asc" },
+        select: {
+          id: true,
+          message: true,
+          dueAt: true,
+          status: true,
+          completedAt: true,
+        },
+      },
     },
   }) as any;
   if (!lead) return null;
@@ -314,6 +333,13 @@ export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | nu
       authorName: n.author?.name ?? "—",
       body: n.body,
       createdAt: n.createdAt.toISOString(),
+    })),
+    reminders: (lead.reminders ?? []).map((r: any) => ({
+      id: r.id,
+      message: r.message,
+      dueAt: r.dueAt.toISOString(),
+      status: r.status,
+      completedAt: r.completedAt ? r.completedAt.toISOString() : null,
     })),
   };
 }

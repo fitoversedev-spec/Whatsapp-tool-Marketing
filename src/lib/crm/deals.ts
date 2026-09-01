@@ -150,23 +150,30 @@ export async function findOrCreateDealForConversation(args: {
     const existing = await prisma.deal.findFirst({ where: { conversationId: args.conversationId }, select: { id: true } });
     if (existing) {
       if (args.leadSourceId || args.customerProfileId || args.businessType) {
+        const writes: Promise<unknown>[] = [];
         if (args.leadSourceId) {
-          await prisma.deal.update({ where: { id: existing.id }, data: { leadSourceId: args.leadSourceId } }).catch(() => null);
+          writes.push(prisma.deal.update({ where: { id: existing.id }, data: { leadSourceId: args.leadSourceId } }).catch(() => null));
         }
         if (args.customerProfileId || args.businessType) {
-          const dealAccount = await prisma.deal.findUnique({ where: { id: existing.id }, select: { accountId: true } });
-          if (dealAccount) {
-            await prisma.account
-              .update({
-                where: { id: dealAccount.accountId },
-                data: {
-                  ...(args.customerProfileId ? { customerProfileId: args.customerProfileId } : {}),
-                  ...(args.businessType ? { businessType: args.businessType } : {}),
-                },
-              })
-              .catch(() => null);
-          }
+          writes.push(
+            prisma.deal
+              .findUnique({ where: { id: existing.id }, select: { accountId: true } })
+              .then((d) =>
+                d
+                  ? prisma.account
+                      .update({
+                        where: { id: d.accountId },
+                        data: {
+                          ...(args.customerProfileId ? { customerProfileId: args.customerProfileId } : {}),
+                          ...(args.businessType ? { businessType: args.businessType } : {}),
+                        },
+                      })
+                      .catch(() => null)
+                  : null,
+              ),
+          );
         }
+        await Promise.all(writes);
       }
       return { id: existing.id, isNew: false };
     }
@@ -216,11 +223,17 @@ export async function findOrCreateDealForConversation(args: {
   }
 
   const year = new Date().getFullYear();
-  const stageId = await defaultFunnelStageId();
+  // Independent reads (default stage lookup, next deal-code sequence) — were
+  // sequential awaits despite neither depending on the other's result; one
+  // fewer round-trip on every new-Deal creation (quote/design/reminder path).
+  const [stageId, nextSeqInit] = await Promise.all([
+    defaultFunnelStageId(),
+    nextDealSequenceForYear(year),
+  ]);
 
   let deal;
   let lastError: unknown = null;
-  let nextSeq = await nextDealSequenceForYear(year);
+  let nextSeq = nextSeqInit;
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
       deal = await prisma.deal.create({

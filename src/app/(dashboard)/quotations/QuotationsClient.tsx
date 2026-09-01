@@ -53,19 +53,22 @@ export default function QuotationsClient({
   const toast = useToast();
   const [quotations, setQuotations] = useState<Quotation[]>(initialQuotations);
   const [showWizard, setShowWizard] = useState(false);
-  const [wizardPrefill, setWizardPrefill] = useState<{ customerName?: string; contactPhone?: string; dealId?: string } | undefined>(undefined);
+  const [wizardPrefill, setWizardPrefill] = useState<{ customerName?: string; contactPhone?: string; dealId?: string; duplicateFrom?: string } | undefined>(undefined);
 
-  // Opened from a CRM Contact/Company page's "+ New Quotation" — auto-opens
-  // the wizard pre-attached to that deal instead of starting a standalone
-  // one with nothing to link back to.
+  // Opened from a CRM Contact/Company page's "+ New Quotation" or
+  // "Duplicate" — auto-opens the wizard. dealId is optional: the POST API
+  // auto-creates a deal when none is provided.
   const searchParams = useSearchParams();
   useEffect(() => {
     const dealId = searchParams.get("dealId");
-    if (!dealId) return;
+    const customerName = searchParams.get("customerName");
+    const duplicateFrom = searchParams.get("duplicateFrom");
+    if (!dealId && !customerName && !duplicateFrom) return;
     setWizardPrefill({
-      dealId,
-      customerName: searchParams.get("customerName") ?? undefined,
+      dealId: dealId ?? undefined,
+      customerName: customerName ?? undefined,
       contactPhone: searchParams.get("phone") ?? undefined,
+      duplicateFrom: duplicateFrom ?? undefined,
     });
     setShowWizard(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -392,37 +395,37 @@ export default function QuotationsClient({
                           />
                         </td>
                       )}
-                      <td className="font-mono text-xs font-semibold text-slate-900">
+                      <td className="font-mono text-sm font-semibold text-slate-900">
                         {q.number}
                       </td>
                       <td>
                         <div className="font-medium text-slate-900">{q.customerName}</div>
                         {q.contactPhone ? (
-                          <div className="text-xs text-slate-500 font-mono">+{q.contactPhone}</div>
+                          <div className="text-sm text-slate-500 font-mono">+{q.contactPhone}</div>
                         ) : q.status === "draft" ? (
                           <div className="flex items-center gap-1 mt-1">
                             <input
                               value={phoneEdits[q.id] ?? ""}
                               onChange={(e) => setPhoneEdits((curr) => ({ ...curr, [q.id]: e.target.value }))}
                               placeholder="+919876543210"
-                              className="input w-32 !px-1.5 !py-0.5 text-xs !border-amber-300 font-mono"
+                              className="input w-36 !px-1.5 !py-0.5 text-sm !border-amber-300 font-mono"
                             />
                             <button
                               onClick={() => savePhone(q)}
                               disabled={savingPhone === q.id || !(phoneEdits[q.id] ?? "").trim()}
-                              className="text-xs text-court-700 hover:underline disabled:opacity-40 disabled:no-underline"
+                              className="text-sm text-court-700 hover:underline disabled:opacity-40 disabled:no-underline"
                             >
                               {savingPhone === q.id ? "…" : "Save"}
                             </button>
                           </div>
                         ) : (
-                          <div className="text-xs text-amber-700">⚠ no phone</div>
+                          <div className="text-sm text-amber-700">no phone</div>
                         )}
                       </td>
                       <td className="text-slate-600 capitalize">
                         {q.sport}
-                        <div className="text-xs text-slate-400 font-mono">
-                          {q.lengthFt} × {q.widthFt} ft
+                        <div className="text-sm text-slate-400 font-mono">
+                          {q.lengthFt} × {q.widthFt} Ft
                         </div>
                       </td>
                       <td className="!text-right font-semibold text-slate-900 font-mono">
@@ -437,7 +440,7 @@ export default function QuotationsClient({
                           {q.status}
                         </span>
                       </td>
-                      <td className="text-xs text-slate-500 whitespace-nowrap font-mono">
+                      <td className="text-sm text-slate-500 whitespace-nowrap font-mono">
                         {new Date(q.quoteDate).toLocaleDateString("en-IN", {
                           day: "2-digit",
                           month: "short",
@@ -445,22 +448,22 @@ export default function QuotationsClient({
                         })}
                       </td>
                       {isAdmin && (
-                        <td className="text-xs text-slate-500">{q.createdByName}</td>
+                        <td className="text-sm text-slate-500">{q.createdByName}</td>
                       )}
                       <td className="!text-right">
-                        <div className="flex items-center gap-2 justify-end flex-wrap">
+                        <div className="flex items-center gap-2.5 justify-end flex-wrap">
                           <a
                             href={`/api/quotations/${q.id}/pdf`}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-xs text-wa-dark hover:underline"
+                            className="text-sm text-wa-dark hover:underline"
                           >
                             View PDF
                           </a>
                           {q.status === "draft" && q.contactPhone && (
                             <button
                               onClick={() => send(q)}
-                              className="text-xs text-blue-700 hover:underline"
+                              className="text-sm text-blue-700 hover:underline"
                             >
                               Send
                             </button>
@@ -468,7 +471,7 @@ export default function QuotationsClient({
                           {q.status === "sent" && (
                             <button
                               onClick={() => markStatus(q, "accepted")}
-                              className="text-xs text-emerald-700 hover:underline"
+                              className="text-sm text-emerald-700 hover:underline"
                             >
                               Mark accepted
                             </button>
@@ -476,7 +479,7 @@ export default function QuotationsClient({
                           {(q.status === "sent" || q.status === "accepted") && (
                             <button
                               onClick={() => convertToInvoice(q)}
-                              className="text-xs text-wa-dark hover:underline font-medium"
+                              className="text-sm text-wa-dark hover:underline font-medium"
                             >
                               Convert to invoice
                             </button>
@@ -484,7 +487,7 @@ export default function QuotationsClient({
                           {isAdmin && (
                             <button
                               onClick={() => remove(q)}
-                              className="text-xs text-red-600 hover:underline"
+                              className="text-sm text-red-600 hover:underline"
                             >
                               Delete
                             </button>
@@ -504,7 +507,7 @@ export default function QuotationsClient({
         <QuoteWizard
           open={showWizard}
           prefill={wizardPrefill}
-          onClose={() => { setShowWizard(false); setWizardPrefill(undefined); }}
+          onClose={() => { setShowWizard(false); setWizardPrefill(undefined); router.refresh(); }}
           onComplete={() => {
             setShowWizard(false);
             setWizardPrefill(undefined);

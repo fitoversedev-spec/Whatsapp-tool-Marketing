@@ -88,6 +88,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (parsed.data.validityDays !== undefined) data.validityDays = parsed.data.validityDays;
   if (parsed.data.status !== undefined) data.status = parsed.data.status;
   if (parsed.data.contactPhone !== undefined) data.contactPhone = parsed.data.contactPhone;
+  if (parsed.data.dealId !== undefined) data.dealId = parsed.data.dealId;
   if (parsed.data.lineItems) {
     const totals = recompute(parsed.data.lineItems as QuoteLineItem[]);
     data.lineItems = JSON.stringify(parsed.data.lineItems);

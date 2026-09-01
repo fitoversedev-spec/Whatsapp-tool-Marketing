@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import { postCrossTab } from "@/lib/cross-tab";
 
@@ -59,6 +60,18 @@ function ChannelBadge({ channel }: { channel: string }) {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+      <path
+        fillRule="evenodd"
+        d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482 41.03 41.03 0 0 0-2.365-.298V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
 export default function DealsClient({
   currentUserId,
   isAdmin,
@@ -92,12 +105,50 @@ export default function DealsClient({
   const [closeoutFor, setCloseoutFor] = useState<{ deal: Deal; stage: Stage } | null>(null);
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [channelFilter, setChannelFilter] = useState<"all" | "whatsapp" | "crm">("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const visible = deals.filter((d) => {
     const matchesOwner = ownerFilter === "all" || d.ownerName === users.find((u) => u.id === ownerFilter)?.name;
     const matchesChannel = channelFilter === "all" || d.dealChannel === channelFilter;
     return matchesOwner && matchesChannel;
   });
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Shared by both the per-row trash icon (ids.length === 1) and the
+  // toolbar's bulk "Delete (N)" button — same confirm -> PATCH-each ->
+  // refresh flow either way, admin-only (the API 403s for non-admins too).
+  async function deleteDeals(ids: string[]) {
+    if (ids.length === 0) return;
+    if (!window.confirm(`Delete ${ids.length} deal(s)?`)) return;
+    setDeleting(true);
+    const results = await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/deals/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deleted: true }),
+        })
+      )
+    );
+    setDeleting(false);
+    setSelected(new Set());
+    const failed = results.filter((r) => !r.ok).length;
+    if (failed > 0) {
+      toast.error(`${failed} of ${ids.length} deal(s) could not be deleted`);
+    } else {
+      toast.success(`${ids.length} deal${ids.length === 1 ? "" : "s"} deleted`);
+    }
+    router.refresh();
+  }
 
   async function changeStage(deal: Deal, stage: Stage, extra?: { wonValue?: number; lossReasonId?: string; lossReasonNote?: string; note?: string }) {
     const res = await fetch(`/api/deals/${deal.id}/stage`, {
@@ -168,30 +219,57 @@ export default function DealsClient({
             Clear date filter
           </button>
         )}
+        {isAdmin && selected.size > 0 && (
+          <button
+            type="button"
+            onClick={() => deleteDeals(Array.from(selected))}
+            disabled={deleting}
+            className="btn btn-danger !px-3 !py-1.5 !text-xs"
+          >
+            {deleting ? "Deleting…" : `Delete (${selected.size})`}
+          </button>
+        )}
       </div>
 
       <div className="card overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
+              {isAdmin && (
+                <th className="w-8">
+                  <SelectAllCheckbox ids={visible.map((d) => d.id)} selected={selected} onChange={setSelected} />
+                </th>
+              )}
               <th className="text-left">Deal</th>
               <th className="text-left">Account</th>
               <th className="text-left">Channel</th>
               <th className="text-left">Stage</th>
               <th className="text-left">Owner</th>
               <th className="!text-right">Value</th>
+              {isAdmin && <th className="w-8"><span className="sr-only">Actions</span></th>}
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-10 text-center text-slate-400">
+                <td colSpan={isAdmin ? 8 : 6} className="py-10 text-center text-slate-400">
                   No deals yet — click "New Deal" to create one.
                 </td>
               </tr>
             )}
             {visible.map((d) => (
               <tr key={d.id}>
+                {isAdmin && (
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(d.id)}
+                      onChange={() => toggleSelected(d.id)}
+                      aria-label={`Select ${d.code}`}
+                      className="rounded"
+                    />
+                  </td>
+                )}
                 <td>
                   <Link href={`/deals/${d.id}`} className="text-base font-medium text-slate-900 hover:text-court-700 hover:underline">
                     {d.title}
@@ -221,6 +299,20 @@ export default function DealsClient({
                 <td className="!text-right font-medium text-slate-900 font-mono">
                   {fmtInr(d.wonValue ?? d.quotedValue ?? d.estimatedValue)}
                 </td>
+                {isAdmin && (
+                  <td className="!text-right">
+                    <button
+                      type="button"
+                      onClick={() => deleteDeals([d.id])}
+                      disabled={deleting}
+                      aria-label={`Delete ${d.code}`}
+                      title="Delete deal"
+                      className="text-red-400 hover:text-red-600 disabled:opacity-50"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

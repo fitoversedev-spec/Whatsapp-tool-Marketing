@@ -65,8 +65,8 @@ function ScheduleRow({ r, showOwner, overdue }: { r: UpcomingReminder; showOwner
           )}
           <span className="text-slate-800">{r.message}</span>
         </div>
-        <div className={`text-xs font-mono mt-0.5 ${overdue ? "text-red-600" : "text-slate-400"}`}>
-          {r.typeName ?? "Reminder"} · {fmtWhen(r.dueAt)}
+        <div className={`text-sm mt-0.5 ${overdue ? "text-red-600" : "text-slate-400"}`}>
+          {r.typeName ?? "Reminder"} · <span className="font-mono">{fmtWhen(r.dueAt)}</span>
           {showOwner && <span className="text-slate-500"> · {r.ownerName}</span>}
         </div>
       </div>
@@ -92,7 +92,7 @@ export default function UpcomingSchedule({
 }) {
   return (
     <div className={`card p-4 ${className ?? ""}`}>
-      <h3 className="text-base font-semibold text-slate-900 mb-3">
+      <h3 className="text-lg font-bold text-slate-900 mb-3">
         Upcoming schedule <span className="text-slate-400 font-normal font-mono">{data.total}</span>
       </h3>
       {data.total === 0 ? (
@@ -105,7 +105,7 @@ export default function UpcomingSchedule({
             const isOverdue = key === "overdue";
             return (
               <div key={key}>
-                <div className={`text-[11px] font-semibold uppercase tracking-wide mb-1.5 ${isOverdue ? "text-red-600" : "text-slate-400"}`}>
+                <div className={`text-xs font-bold uppercase tracking-wide mb-1.5 ${isOverdue ? "text-red-600" : "text-slate-400"}`}>
                   {label} <span className="font-mono font-normal">{rows.length}</span>
                 </div>
                 <div className="space-y-2">

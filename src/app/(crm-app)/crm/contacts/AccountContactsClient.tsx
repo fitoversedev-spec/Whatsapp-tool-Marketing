@@ -558,19 +558,19 @@ function NewContactModal({
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-6">
               <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Contact details</h3>
-                <div><label className="text-xs font-medium text-slate-600">Name</label>
+                <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Contact details</h3>
+                <div><label className="text-sm font-medium text-slate-600">Name</label>
                   <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 input text-sm" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-xs font-medium text-slate-600">Phone</label>
+                  <div><label className="text-sm font-medium text-slate-600">Phone</label>
                     <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 input text-sm" />
                   </div>
-                  <div><label className="text-xs font-medium text-slate-600">Email</label>
+                  <div><label className="text-sm font-medium text-slate-600">Email</label>
                     <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 input text-sm" />
                   </div>
                 </div>
-                <div><label className="text-xs font-medium text-slate-600">Designation</label>
+                <div><label className="text-sm font-medium text-slate-600">Designation</label>
                   <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 input text-sm">
                     {DESIGNATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
@@ -581,8 +581,8 @@ function NewContactModal({
               </div>
 
               <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Location &amp; organization</h3>
-                <div><label className="text-xs font-medium text-slate-600">Location</label>
+                <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Location &amp; organization</h3>
+                <div><label className="text-sm font-medium text-slate-600">Location</label>
                   <input value={siteCity} onChange={(e) => setSiteCity(e.target.value)} placeholder="City / site location" className="mt-1 input text-sm" />
                 </div>
                 {!showOrgPicker ? (
@@ -592,7 +592,7 @@ function NewContactModal({
                 ) : (
                   <div>
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-medium text-slate-600">Organization</label>
+                      <label className="text-sm font-medium text-slate-600">Organization</label>
                       <button type="button" onClick={() => setShowOrgPicker(false)} className="text-xs text-slate-400 hover:text-slate-600">
                         Hide
                       </button>
@@ -617,9 +617,9 @@ function NewContactModal({
               </div>
 
               <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Classification</h3>
+                <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Classification</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-xs font-medium text-slate-600">Customer segment</label>
+                  <div><label className="text-sm font-medium text-slate-600">Customer segment</label>
                     <select value={customerProfileId} onChange={(e) => setCustomerProfileId(e.target.value)} className="mt-1 input text-sm">
                       <option value="">Unspecified</option>
                       {customerProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -628,7 +628,7 @@ function NewContactModal({
                       <input value={customerTypeOther} onChange={(e) => setCustomerTypeOther(e.target.value)} placeholder="Describe the customer segment" className="mt-1.5 input text-sm" />
                     )}
                   </div>
-                  <div><label className="text-xs font-medium text-slate-600">Business type</label>
+                  <div><label className="text-sm font-medium text-slate-600">Business type</label>
                     <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="mt-1 input text-sm">
                       <option value="">Unspecified</option>
                       <option value="B2B">B2B</option>
@@ -644,34 +644,34 @@ function NewContactModal({
               </div>
 
               <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Lead source &amp; pipeline</h3>
-                <div><label className="text-xs font-medium text-slate-600">Lead source</label>
+                <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Lead source &amp; pipeline</h3>
+                <div><label className="text-sm font-medium text-slate-600">Lead source</label>
                   <select value={leadSourceId} onChange={(e) => setLeadSourceId(e.target.value)} className="mt-1 input text-sm">
                     <option value="">Unspecified</option>
                     {leadSources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                   <input value={sourceDetail} onChange={(e) => setSourceDetail(e.target.value)} placeholder="Campaign / referrer name (optional)" className="mt-1.5 input text-sm" />
                 </div>
-                <div><label className="text-xs font-medium text-slate-600">Lead stage</label>
+                <div><label className="text-sm font-medium text-slate-600">Lead stage</label>
                   <select value={dealStageId} onChange={(e) => setDealStageId(e.target.value)} className="mt-1 input text-sm">
                     <option value="">Don't create a deal yet</option>
                     {funnelStages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
-                  {dealStageId && <p className="text-[11px] text-slate-400 mt-1">A deal will be created for this contact at this stage.</p>}
+                  {dealStageId && <p className="text-xs text-slate-400 mt-1">A deal will be created for this contact at this stage.</p>}
                 </div>
               </div>
             </div>
 
             <div className="mt-6 space-y-3">
-              <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Notes</h3>
+              <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Notes</h3>
               <div className="max-w-2xl">
-                <label className="text-xs font-medium text-slate-600">What does this lead want?</label>
+                <label className="text-sm font-medium text-slate-600">What does this lead want?</label>
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="e.g. Wants a football turf, ~10,000 sqft, budget around 8L" className="mt-1 input text-sm" />
               </div>
             </div>
 
             <div className="mt-6 space-y-3">
-              <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Custom fields</h3>
+              <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Custom fields</h3>
               <div className="max-w-2xl space-y-2">
                 {Object.keys(fields).map((k) => (
                   <div key={k} className="flex gap-2 items-center">

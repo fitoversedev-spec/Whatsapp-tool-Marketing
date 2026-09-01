@@ -81,11 +81,17 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
   // correctly when dealIds is empty.
   const dealIds = deals.map((d) => d.id);
   const [quotations, courtImages, productInterests, reminders] = await Promise.all([
-    prisma.quotation.findMany({
-      where: { dealId: { in: dealIds } },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, number: true, sport: true, grandTotal: true, status: true, contactPhone: true, sentAt: true, createdAt: true },
-    }),
+    (() => {
+      const or: object[] = [];
+      if (dealIds.length) or.push({ dealId: { in: dealIds } });
+      if (contact.phone) or.push({ contactPhone: contact.phone });
+      if (!or.length) return Promise.resolve([]);
+      return prisma.quotation.findMany({
+        where: or.length === 1 ? or[0] : { OR: or },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, number: true, sport: true, grandTotal: true, status: true, contactPhone: true, sentAt: true, createdAt: true },
+      });
+    })(),
     prisma.courtImage.findMany({
       where: { dealId: { in: dealIds } },
       orderBy: { createdAt: "desc" },

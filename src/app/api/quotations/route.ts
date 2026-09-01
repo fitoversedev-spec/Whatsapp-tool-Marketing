@@ -85,11 +85,30 @@ export async function GET(req: NextRequest) {
     where.createdByUserId = user.id;
   }
 
+  // Select only the columns the list needs — skips the large lineItems JSON
+  // blob (~2-10 KB per row × 200 rows) for a much faster query + response.
   const items = await prisma.quotation.findMany({
     where,
     orderBy: { createdAt: "desc" },
     take: 200,
-    include: { createdBy: { select: { name: true } } },
+    select: {
+      id: true,
+      number: true,
+      customerName: true,
+      sport: true,
+      lengthFt: true,
+      widthFt: true,
+      grandTotal: true,
+      status: true,
+      pdfUrl: true,
+      quoteDate: true,
+      validityDays: true,
+      sentAt: true,
+      contactPhone: true,
+      conversationId: true,
+      createdAt: true,
+      createdBy: { select: { name: true } },
+    },
   });
 
   return NextResponse.json({
@@ -195,7 +214,8 @@ export async function POST(req: NextRequest) {
         ),
     );
   }
-  if (sideEffects.length) await Promise.all(sideEffects);
+  // Fire-and-forget — these syncs don't affect the quote itself.
+  if (sideEffects.length) Promise.all(sideEffects).catch(() => {});
 
   let quotation;
   let lastError: unknown = null;
@@ -248,31 +268,33 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Phase 2 — DealLineItem rows: a real (not enquiry-only) row per included
-  // line item, so product-movement analytics can answer "what's sold" once
-  // Phase 4 ships. Best-effort — a failure here must never fail quote
-  // creation itself, since the quote's own JSON snapshot already saved fine.
-  try {
-    const sport = await prisma.sport.findUnique({ where: { slug: parsed.data.sport } });
-    const included = parsed.data.lineItems.filter((li) => li.included);
-    if (included.length) {
-      await prisma.dealLineItem.createMany({
-        data: included.map((li) => ({
-          dealId: dealId!,
-          quotationId: quotation!.id,
-          productId: li.productId ?? null,
-          sportId: sport?.id ?? null,
-          label: li.name,
-          quantity: li.areaSqFt,
-          unit: li.unit ?? null,
-          rate: li.ratePerSqFt,
-          amount: li.total,
-          isEnquiryOnly: false,
-        })),
-      });
-    }
-  } catch (err) {
-    console.error("[quotations] DealLineItem write failed", err);
+  // Fire-and-forget — DealLineItem rows for analytics. The quote's own JSON
+  // snapshot is already saved; this best-effort write must never delay the response.
+  if (dealId) {
+    (async () => {
+      try {
+        const sport = await prisma.sport.findUnique({ where: { slug: parsed.data.sport } });
+        const included = parsed.data.lineItems.filter((li) => li.included);
+        if (included.length) {
+          await prisma.dealLineItem.createMany({
+            data: included.map((li) => ({
+              dealId: dealId!,
+              quotationId: quotation!.id,
+              productId: li.productId ?? null,
+              sportId: sport?.id ?? null,
+              label: li.name,
+              quantity: li.areaSqFt,
+              unit: li.unit ?? null,
+              rate: li.ratePerSqFt,
+              amount: li.total,
+              isEnquiryOnly: false,
+            })),
+          });
+        }
+      } catch (err) {
+        console.error("[quotations] DealLineItem write failed", err);
+      }
+    })();
   }
 
   return NextResponse.json({

@@ -635,7 +635,7 @@ async function embedLineItemImages(
   const toFetch = items.filter((it) => it.included && it.imageUrl);
   const results = await Promise.allSettled(
     toFetch.map(async (it) => {
-      const res = await fetch(it.imageUrl!, { signal: AbortSignal.timeout(8000) });
+      const res = await fetch(it.imageUrl!, { signal: AbortSignal.timeout(4000) });
       if (!res.ok) return null;
       const raw = new Uint8Array(await res.arrayBuffer());
       // Downscale here (still inside the parallel fetch stage, so multiple
@@ -647,22 +647,24 @@ async function embedLineItemImages(
       return { id: it.id, bytes };
     }),
   );
-  for (const r of results) {
-    if (r.status !== "fulfilled" || !r.value) continue;
-    const { id, bytes } = r.value;
-    try {
-      let img: PDFImage | null = null;
-      if (isPng(bytes)) img = await doc.embedPng(bytes);
-      else if (isJpg(bytes)) img = await doc.embedJpg(bytes);
-      else {
-        const converted = await convertToPng(bytes);
-        if (converted) img = await doc.embedPng(converted);
+  await Promise.all(
+    results.map(async (r) => {
+      if (r.status !== "fulfilled" || !r.value) return;
+      const { id, bytes } = r.value;
+      try {
+        let img: PDFImage | null = null;
+        if (isPng(bytes)) img = await doc.embedPng(bytes);
+        else if (isJpg(bytes)) img = await doc.embedJpg(bytes);
+        else {
+          const converted = await convertToPng(bytes);
+          if (converted) img = await doc.embedPng(converted);
+        }
+        if (img) map.set(id, img);
+      } catch {
+        // ignore — the item just renders without a photo
       }
-      if (img) map.set(id, img);
-    } catch {
-      // ignore — the item just renders without a photo
-    }
-  }
+    }),
+  );
   return map;
 }
 

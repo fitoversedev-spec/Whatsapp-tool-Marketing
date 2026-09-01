@@ -82,10 +82,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       { status: 500 },
     );
   }
-  // Cache for next time so reloads skip re-rendering. Awaited so the pdfUrl
-  // is persisted before the response — a quick reload will hit cache instead
-  // of triggering a second full render. Failure still never fails the response.
-  await uploadToBlob({
+  // Fire-and-forget: cache the PDF in blob storage for future loads but
+  // return the response immediately — the user sees the PDF ~500-1000ms
+  // sooner. Next reload hits the cached pdfUrl.
+  uploadToBlob({
     bytes: Buffer.from(pdfBuffer),
     fileName: safeName,
     mimeType: "application/pdf",

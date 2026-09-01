@@ -654,19 +654,15 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         return;
       }
 
-      // Try to parse the response body as JSON. If the server returned an
-      // HTML error page (Vercel 502, Cloudflare block, etc.), .json()
-      // throws — capture the raw text instead so we can surface a useful
-      // message rather than silently failing.
+      // Parse once — read as text, then try JSON. Avoids the double-read
+      // (clone + json + text) that wastes time on large responses.
       let data: { quotation?: { id: string; number: string }; error?: string } | null = null;
       let rawText: string | null = null;
       try {
-        const cloned = res.clone();
-        data = await res.json();
-        // also keep raw in case we need it for debugging
-        rawText = await cloned.text().catch(() => null);
+        rawText = await res.text();
+        data = JSON.parse(rawText);
       } catch {
-        rawText = await res.text().catch(() => null);
+        // rawText already captured; data stays null
       }
 
       if (!res.ok || !data?.quotation) {

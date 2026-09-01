@@ -1040,9 +1040,9 @@ function drawConnectSection(ctx: Ctx) {
 
 function drawBullets(ctx: Ctx, lines: string[]) {
   for (const line of lines) {
-    const wrapped = wordWrap(ctx.font, line, 12, CONTENT_W - 18);
+    const plain = stripMarkers(line);
+    const wrapped = wordWrap(ctx.font, plain, 12, CONTENT_W - 18);
     ensureSpace(ctx, wrapped.length * 15 + 2);
-    // Bullet
     safeDraw(ctx.page, "•", {
       x: MARGIN + 6,
       y: yFromTop(ctx.y + 10),
@@ -1050,17 +1050,16 @@ function drawBullets(ctx: Ctx, lines: string[]) {
       font: ctx.font,
       color: COL.text,
     });
-    // Text
     let lineY = ctx.y;
-    for (const w of wrapped) {
-      safeDraw(ctx.page, w, {
-        x: MARGIN + 18,
-        y: yFromTop(lineY + 10),
-        size: 12,
-        font: ctx.font,
-        color: COL.text,
-      });
-      lineY += 15;
+    if (plain === line) {
+      for (const w of wrapped) {
+        safeDraw(ctx.page, w, { x: MARGIN + 18, y: yFromTop(lineY + 10), size: 12, font: ctx.font, color: COL.text });
+        lineY += 15;
+      }
+    } else {
+      const segs = parseRichText(line);
+      drawRichSegments(ctx, segs, MARGIN + 18, lineY, 12);
+      lineY += wrapped.length * 15;
     }
     ctx.y = lineY + 2;
   }
@@ -1777,21 +1776,107 @@ function bulletsHeight(ctx: Ctx, lines: string[]): number {
   return lines.reduce((h, line) => h + wordWrap(ctx.font, line, 12, CONTENT_W - 18).length * 15 + 2, 0);
 }
 
+type RichSegment = { text: string; bold?: boolean; highlight?: boolean };
+
+function parseRichText(raw: string): RichSegment[] {
+  const segs: RichSegment[] = [];
+  const re = /(\*\*(.+?)\*\*|==(.+?)==)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    if (m.index > last) segs.push({ text: raw.slice(last, m.index) });
+    if (m[2]) segs.push({ text: m[2], bold: true });
+    else if (m[3]) segs.push({ text: m[3], highlight: true });
+    last = m.index + m[0].length;
+  }
+  if (last < raw.length) segs.push({ text: raw.slice(last) });
+  if (segs.length === 0) segs.push({ text: raw });
+  return segs;
+}
+
+function stripMarkers(raw: string): string {
+  return raw.replace(/\*\*(.+?)\*\*/g, "$1").replace(/==(.+?)==/g, "$1");
+}
+
+function drawRichSegments(
+  ctx: Ctx,
+  segments: RichSegment[],
+  startX: number,
+  y: number,
+  size: number,
+) {
+  let cx = startX;
+  for (const seg of segments) {
+    const f = seg.bold ? ctx.bold : ctx.font;
+    const w = safeWidth(f, seg.text, size);
+    if (seg.highlight) {
+      ctx.page.drawRectangle({
+        x: cx - 0.5,
+        y: yFromTop(y + size + 1),
+        width: w + 1,
+        height: size + 3,
+        color: rgb(1, 0.92, 0.23),
+        opacity: 0.35,
+      });
+    }
+    safeDraw(ctx.page, seg.text, { x: cx, y: yFromTop(y + 10), size, font: f, color: COL.text });
+    cx += w;
+  }
+}
+
+function drawPlainLines(ctx: Ctx, lines: string[]) {
+  for (const line of lines) {
+    const plain = stripMarkers(line);
+    const wrapped = wordWrap(ctx.font, plain, 12, CONTENT_W);
+    ensureSpace(ctx, wrapped.length * 15 + 2);
+    let ly = ctx.y;
+    if (plain === line) {
+      for (const w of wrapped) {
+        safeDraw(ctx.page, w, { x: MARGIN, y: yFromTop(ly + 10), size: 12, font: ctx.font, color: COL.text });
+        ly += 15;
+      }
+    } else {
+      const segs = parseRichText(line);
+      drawRichSegments(ctx, segs, MARGIN, ly, 12);
+      ly += wrapped.length * 15;
+    }
+    ctx.y = ly + 2;
+  }
+}
+
+function plainLinesHeight(ctx: Ctx, lines: string[]): number {
+  return lines.reduce((h, line) => h + wordWrap(ctx.font, line, 12, CONTENT_W).length * 15 + 2, 0);
+}
+
+function drawListByStyle(ctx: Ctx, lines: string[], style: "bullet" | "numbered" | "none") {
+  if (style === "bullet") drawBullets(ctx, lines);
+  else if (style === "numbered") drawNumbered(ctx, lines);
+  else drawPlainLines(ctx, lines);
+}
+
+function listHeightByStyle(ctx: Ctx, lines: string[], style: "bullet" | "numbered" | "none"): number {
+  if (style === "bullet") return bulletsHeight(ctx, lines);
+  if (style === "numbered") return numberedListHeight(ctx, lines);
+  return plainLinesHeight(ctx, lines);
+}
+
 function drawNumbered(ctx: Ctx, lines: string[]) {
-  // Wrap everything up front and reserve the WHOLE list's height in one
-  // ensureSpace call — otherwise each item is paginated independently, so a
-  // page boundary falling mid-list orphans the first item(s) alone at the
-  // bottom of one page while the rest spill to the next. Reserving the full
-  // block keeps the list together, pushing all of it to a new page instead.
-  const wrapped = lines.map((line) => wordWrap(ctx.font, line, 12, CONTENT_W - 28));
-  ensureSpace(ctx, numberedListHeight(ctx, lines));
+  const stripped = lines.map(stripMarkers);
+  const wrapped = stripped.map((line) => wordWrap(ctx.font, line, 12, CONTENT_W - 28));
+  ensureSpace(ctx, numberedListHeight(ctx, stripped));
   lines.forEach((line, i) => {
     const num = `${i + 1}.`;
     safeDraw(ctx.page, num, { x: MARGIN + 4, y: yFromTop(ctx.y + 10), size: 12, font: ctx.font, color: COL.text });
     let ly = ctx.y;
-    for (const w of wrapped[i]) {
-      safeDraw(ctx.page, w, { x: MARGIN + 22, y: yFromTop(ly + 10), size: 12, font: ctx.font, color: COL.text });
-      ly += 15;
+    if (stripped[i] === line) {
+      for (const w of wrapped[i]) {
+        safeDraw(ctx.page, w, { x: MARGIN + 22, y: yFromTop(ly + 10), size: 12, font: ctx.font, color: COL.text });
+        ly += 15;
+      }
+    } else {
+      const segs = parseRichText(line);
+      drawRichSegments(ctx, segs, MARGIN + 22, ly, 12);
+      ly += wrapped[i].length * 15;
     }
     ctx.y = ly + 2;
   });
@@ -2235,22 +2320,19 @@ function renderSection(
 
     case "notes": {
       const notesData = sec as NotesSection;
-      // Reserve the title TOGETHER with the whole list (34 = drawSectionTitle's
-      // own vertical consumption) — otherwise the title alone can fit at a
-      // page's bottom while the list it introduces gets pushed to the next page.
-      ensureSpace(ctx, 34 + numberedListHeight(ctx, notesData.lines));
+      const nStyle = notesData.listStyle ?? "numbered";
+      ensureSpace(ctx, 34 + listHeightByStyle(ctx, notesData.lines, nStyle));
       drawSectionTitle(ctx, "Notes");
-      drawNumbered(ctx, notesData.lines);
+      drawListByStyle(ctx, notesData.lines, nStyle);
       break;
     }
 
     case "client_scope": {
       const scopeData = sec as ClientScopeSection;
-      // Keep the heading together with its bullets — a heading must never sit
-      // alone at a page bottom with its list on the next page.
-      ensureSpace(ctx, 6 + 19 + bulletsHeight(ctx, scopeData.lines));
+      const csStyle = scopeData.listStyle ?? "bullet";
+      ensureSpace(ctx, 6 + 19 + listHeightByStyle(ctx, scopeData.lines, csStyle));
       drawSubheading(ctx, "Client Work Scope");
-      drawBullets(ctx, scopeData.lines);
+      drawListByStyle(ctx, scopeData.lines, csStyle);
       break;
     }
 

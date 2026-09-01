@@ -29,14 +29,18 @@ export type ComparisonSection = PdfSectionBase & { type: "comparison" };
 export type TotalsSection = PdfSectionBase & { type: "totals" };
 export type SpecCardsSection = PdfSectionBase & { type: "spec_cards" };
 
+export type ListStyle = "bullet" | "numbered" | "none";
+
 export type NotesSection = PdfSectionBase & {
   type: "notes";
   lines: string[];
+  listStyle: ListStyle;
 };
 
 export type ClientScopeSection = PdfSectionBase & {
   type: "client_scope";
   lines: string[];
+  listStyle: ListStyle;
 };
 
 export type PaymentTermsSection = PdfSectionBase & {
@@ -201,6 +205,7 @@ export function buildDefaultSections(sport: string): PdfSection[] {
     {
       ...sec(5),
       type: "notes",
+      listStyle: "numbered",
       lines: [
         "Installation charges are included in the above rates.",
         "GST is charged extra as shown; ground preparation carries no GST.",
@@ -214,6 +219,7 @@ export function buildDefaultSections(sport: string): PdfSection[] {
     {
       ...sec(6),
       type: "client_scope",
+      listStyle: "bullet",
       lines: [
         "Site to be ready, clean and levelled before commencement.",
         "Power, water, unloading, shifting and storage support at site.",

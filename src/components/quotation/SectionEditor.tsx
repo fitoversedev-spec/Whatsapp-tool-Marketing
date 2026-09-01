@@ -21,6 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   type PdfSection,
   type PdfSectionType,
+  type ListStyle,
   SECTION_LABELS,
   sectionCategory,
 } from "@/lib/quotation/section-types";
@@ -54,6 +55,152 @@ function badgeLabel(type: PdfSectionType) {
   if (cat === "auto") return "Auto";
   if (cat === "custom") return type === "photo" ? "Photo" : "Custom";
   return "Editable";
+}
+
+// ── Rich textarea with formatting toolbar ──────────────────────────────────
+
+function RichTextarea({
+  value,
+  onChange,
+  rows = 4,
+  className = "input text-sm w-full resize-y font-mono",
+  placeholder,
+  listStyle,
+  onListStyleChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  rows?: number;
+  className?: string;
+  placeholder?: string;
+  listStyle?: ListStyle;
+  onListStyleChange?: (s: ListStyle) => void;
+}) {
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  function wrapSelection(pre: string, suf: string) {
+    const ta = taRef.current;
+    if (!ta) return;
+    const s = ta.selectionStart;
+    const e = ta.selectionEnd;
+    if (s === e) return;
+    const sel = value.slice(s, e);
+    if (sel.startsWith(pre) && sel.endsWith(suf)) {
+      const unwrapped = sel.slice(pre.length, -suf.length);
+      onChange(value.slice(0, s) + unwrapped + value.slice(e));
+      requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(s, s + unwrapped.length); });
+    } else {
+      onChange(value.slice(0, s) + pre + sel + suf + value.slice(e));
+      requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(s, e + pre.length + suf.length); });
+    }
+  }
+
+  function toggleListPrefix(
+    makePfx: (line: string, n: number) => string,
+    detect: (line: string) => boolean,
+  ) {
+    const ta = taRef.current;
+    if (!ta) return;
+    const s = ta.selectionStart;
+    const e = ta.selectionEnd;
+    const before = value.slice(0, s);
+    const startLine = (before.match(/\n/g) || []).length;
+    const endLine = startLine + ((value.slice(s, e).match(/\n/g) || []).length);
+    const lines = value.split("\n");
+    const sel = lines.slice(startLine, endLine + 1).filter((l) => l.trim());
+    const allPrefixed = sel.length > 0 && sel.every(detect);
+    let num = 1;
+    const out = lines.map((l, i) => {
+      if (i < startLine || i > endLine || !l.trim()) return l;
+      const stripped = l.replace(/^(• |\d+\.\s)/, "");
+      return allPrefixed ? stripped : makePfx(stripped, num++);
+    });
+    onChange(out.join("\n"));
+    requestAnimationFrame(() => ta.focus());
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-0.5 px-2 py-1 bg-slate-100/80 border border-slate-200 rounded-t-lg">
+        <button
+          type="button"
+          onClick={() => wrapSelection("**", "**")}
+          className="px-2 py-1 rounded text-xs font-bold text-slate-700 hover:bg-slate-200"
+          title="Bold (**text**)"
+        >
+          B
+        </button>
+        <button
+          type="button"
+          onClick={() => wrapSelection("==", "==")}
+          className="px-2 py-1 rounded text-xs hover:bg-yellow-100"
+          title="Highlight (==text==)"
+        >
+          <span className="bg-yellow-200/80 text-slate-700 px-1.5 rounded font-medium">H</span>
+        </button>
+
+        <div className="w-px h-4 bg-slate-300 mx-1" />
+
+        {/* Bullet list */}
+        <button
+          type="button"
+          onClick={() => toggleListPrefix((l) => `• ${l}`, (l) => l.startsWith("• "))}
+          className="p-1.5 rounded text-slate-600 hover:bg-slate-200"
+          title="Bullet list"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="4" cy="6" r="2" />
+            <circle cx="4" cy="12" r="2" />
+            <circle cx="4" cy="18" r="2" />
+            <line x1="10" y1="6" x2="21" y2="6" strokeWidth="2" />
+            <line x1="10" y1="12" x2="21" y2="12" strokeWidth="2" />
+            <line x1="10" y1="18" x2="21" y2="18" strokeWidth="2" />
+          </svg>
+        </button>
+
+        {/* Numbered list */}
+        <button
+          type="button"
+          onClick={() => toggleListPrefix((_l, n) => `${n}. ${_l}`, (l) => /^\d+\.\s/.test(l))}
+          className="p-1.5 rounded text-slate-600 hover:bg-slate-200"
+          title="Numbered list"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
+            <line x1="11" y1="6" x2="21" y2="6" />
+            <line x1="11" y1="12" x2="21" y2="12" />
+            <line x1="11" y1="18" x2="21" y2="18" />
+            <text x="1" y="9" fontSize="9" stroke="none" fontFamily="system-ui">1</text>
+            <text x="1" y="15" fontSize="9" stroke="none" fontFamily="system-ui">2</text>
+            <text x="1" y="21" fontSize="9" stroke="none" fontFamily="system-ui">3</text>
+          </svg>
+        </button>
+
+        {/* List style selector for notes/client_scope */}
+        {listStyle !== undefined && onListStyleChange && (
+          <>
+            <div className="w-px h-4 bg-slate-300 mx-1" />
+            <select
+              value={listStyle}
+              onChange={(e) => onListStyleChange(e.target.value as ListStyle)}
+              className="text-xs bg-transparent text-slate-600 border-none outline-none cursor-pointer py-1"
+            >
+              <option value="bullet">Bullets in PDF</option>
+              <option value="numbered">Numbered in PDF</option>
+              <option value="none">Plain in PDF</option>
+            </select>
+          </>
+        )}
+      </div>
+      <textarea
+        ref={taRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        className={`${className} rounded-t-none border-t-0`}
+        placeholder={placeholder}
+      />
+    </div>
+  );
 }
 
 // ── Sortable card ───────────────────────────────────────────────────────────
@@ -268,15 +415,14 @@ function LinesEditor({
   return (
     <div>
       <label className="block text-xs font-medium text-slate-600 mb-1">
-        One line per bullet point
+        One line per point — use toolbar to format
       </label>
-      <textarea
+      <RichTextarea
         value={text}
-        onChange={(e) =>
-          onUpdate({ ...section, lines: e.target.value.split("\n") })
-        }
+        onChange={(v) => onUpdate({ ...section, lines: v.split("\n") })}
         rows={Math.max(3, section.lines.length + 1)}
-        className="input text-sm w-full resize-y font-mono"
+        listStyle={section.listStyle ?? (section.type === "notes" ? "numbered" : "bullet")}
+        onListStyleChange={(s) => onUpdate({ ...section, listStyle: s })}
       />
     </div>
   );
@@ -388,7 +534,7 @@ function TermsEditor({
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
             </button>
           </div>
-          <textarea value={c.body} onChange={(e) => update(i, "body", e.target.value)} rows={3} className="input text-sm w-full resize-y" placeholder="Clause body" />
+          <RichTextarea value={c.body} onChange={(v) => update(i, "body", v)} rows={3} className="input text-sm w-full resize-y" placeholder="Clause body" />
         </div>
       ))}
       <button onClick={add} className="text-xs text-court-600 hover:text-court-800 font-medium">
@@ -437,9 +583,9 @@ function AdvantageEditor({
     <div className="space-y-3">
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">Paragraphs (double newline to separate)</label>
-        <textarea
+        <RichTextarea
           value={section.paragraphs.join("\n\n")}
-          onChange={(e) => onUpdate({ ...section, paragraphs: e.target.value.split("\n\n").filter(Boolean) })}
+          onChange={(v) => onUpdate({ ...section, paragraphs: v.split("\n\n").filter(Boolean) })}
           rows={6}
           className="input text-sm w-full resize-y"
         />
@@ -597,7 +743,7 @@ function CustomTextEditor({
       <label className="block text-xs font-medium text-slate-600">Section title</label>
       <input value={section.title} onChange={(e) => onUpdate({ ...section, title: e.target.value })} className="input text-sm font-medium" placeholder="Section title" />
       <label className="block text-xs font-medium text-slate-600">Content</label>
-      <textarea value={section.body} onChange={(e) => onUpdate({ ...section, body: e.target.value })} rows={4} className="input text-sm w-full resize-y" placeholder="Section content..." />
+      <RichTextarea value={section.body} onChange={(v) => onUpdate({ ...section, body: v })} rows={4} className="input text-sm w-full resize-y" placeholder="Section content..." />
     </div>
   );
 }

@@ -70,6 +70,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       validityDays: q.validityDays,
       driveLink: await driveLinkPromise,
       salespersonPhone: q.salespersonPhone ?? null,
+      sections: q.sections ? JSON.parse(q.sections) : null,
     });
   } catch (e) {
     // Surface the real error to the preview iframe instead of letting an

@@ -21,6 +21,8 @@ import {
   defaultUnitForAreaMode,
 } from "@/lib/quotation/units";
 import { extractHtmlTables } from "@/lib/products/format";
+import SectionEditor from "@/components/quotation/SectionEditor";
+import { type PdfSection, buildDefaultSections } from "@/lib/quotation/section-types";
 
 type RateSheetItem = {
   id: string;
@@ -321,6 +323,12 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
   const [contactPhone, setContactPhone] = useState(prefill?.contactPhone ?? "");
   const [salespersonPhone, setSalespersonPhone] = useState("");
 
+  // Full section editor toggle + state
+  const [fullEditor, setFullEditor] = useState(false);
+  const [sections, setSections] = useState<PdfSection[] | null>(null);
+  const totalSteps = fullEditor ? 5 : 4;
+  const previewStep = fullEditor ? 5 : 4;
+
   // Reset state when modal opens fresh
   useEffect(() => {
     if (open) {
@@ -342,6 +350,8 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
       setPicked([]);
       setProductFilter("");
       ratesLoadedForSport.current = null;
+      setFullEditor(false);
+      setSections(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -353,7 +363,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
     const sourceId = prefill.duplicateFrom;
     fetch(`/api/quotations/${sourceId}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { quotation: { customerName: string; sport: string; lengthFt: number; widthFt: number; lineItems: LineItem[]; notes: string | null; validityDays: number; contactPhone: string | null } } | null) => {
+      .then((data: { quotation: { customerName: string; sport: string; lengthFt: number; widthFt: number; lineItems: LineItem[]; notes: string | null; validityDays: number; contactPhone: string | null; sections?: PdfSection[] | null } } | null) => {
         if (!data?.quotation) return;
         const q = data.quotation;
         setCustomerName(q.customerName);
@@ -366,6 +376,10 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         if (q.lineItems?.length) {
           setLineItems(q.lineItems.map((li: LineItem, i: number) => ({ ...li, id: li.id ?? `dup-${i}` })));
           ratesLoadedForSport.current = q.sport;
+        }
+        if (q.sections) {
+          setSections(q.sections);
+          setFullEditor(true);
         }
       })
       .catch(() => null);
@@ -641,6 +655,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             dealId: prefill?.dealId ?? null,
             contactPhone: contactPhone.trim() || null,
             salespersonPhone: salespersonPhone.trim() || null,
+            sections: sections ? JSON.stringify(sections) : undefined,
           }),
         });
       } catch (err) {
@@ -686,7 +701,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
 
       setDraftId(data.quotation.id);
       setDraftNumber(data.quotation.number);
-      setStep(4);
+      setStep(previewStep);
     } finally {
       setSubmitting(false);
     }
@@ -746,19 +761,40 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             <h2 className="text-lg sm:text-xl font-bold text-slate-900">
               📄 New Quotation
             </h2>
-            <div className="text-xs text-slate-500 mt-0.5">Step {step} of 4</div>
+            <div className="text-xs text-slate-500 mt-0.5">Step {step} of {totalSteps}</div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <span className="text-xs font-medium text-slate-600">Full editor</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={fullEditor}
+                onClick={() => {
+                  const next = !fullEditor;
+                  setFullEditor(next);
+                  if (next && !sections) setSections(buildDefaultSections(sport));
+                  if (!next) setSections(null);
+                }}
+                className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                  fullEditor ? "bg-court-600" : "bg-slate-300"
+                }`}
+              >
+                <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${fullEditor ? "translate-x-4" : "translate-x-0"}`} />
+              </button>
+            </label>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Progress */}
         <div className="px-5 sm:px-6 py-2 flex gap-1.5">
-          {[1, 2, 3, 4].map((s) => (
+          {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
             <div
               key={s}
               className={`h-1 flex-1 rounded-full ${
@@ -1479,7 +1515,14 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             </div>
           )}
 
-          {step === 4 && draftId && (
+          {step === 4 && fullEditor && sections && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-slate-800">Customize PDF sections</h3>
+              <SectionEditor sections={sections} onChange={setSections} sport={sport} />
+            </div>
+          )}
+
+          {step === previewStep && draftId && (
             <div className="space-y-3">
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-900">
                 ✓ Draft <strong>{draftNumber}</strong> created. Preview below — if everything looks
@@ -1536,7 +1579,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
         {/* Footer */}
         <div className="px-5 sm:px-6 py-4 border-t border-slate-200 flex items-center justify-between gap-2 bg-white">
           <div>
-            {step > 1 && step < 4 && (
+            {step > 1 && step < previewStep && (
               <button
                 onClick={() => setStep(step - 1)}
                 className="btn btn-ghost"
@@ -1544,9 +1587,9 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                 ← Back
               </button>
             )}
-            {step === 4 && (
+            {step === previewStep && (
               <button
-                onClick={() => setStep(3)}
+                onClick={() => setStep(previewStep - 1)}
                 className="btn btn-ghost"
               >
                 ← Edit
@@ -1577,7 +1620,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                 {picked.length > 0 ? "Next →" : "Skip →"}
               </button>
             )}
-            {step === 3 && (
+            {step === 3 && !fullEditor && (
               <button
                 onClick={submitStep2}
                 disabled={submitting}
@@ -1586,7 +1629,24 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                 {submitting ? "Creating…" : "Generate Preview →"}
               </button>
             )}
-            {step === 4 && (
+            {step === 3 && fullEditor && (
+              <button
+                onClick={() => setStep(4)}
+                className="btn btn-primary"
+              >
+                Next: Sections →
+              </button>
+            )}
+            {step === 4 && fullEditor && (
+              <button
+                onClick={submitStep2}
+                disabled={submitting}
+                className="btn btn-primary"
+              >
+                {submitting ? "Creating…" : "Generate Preview →"}
+              </button>
+            )}
+            {step === previewStep && (
               <button
                 onClick={send}
                 disabled={submitting || !contactPhone.trim()}

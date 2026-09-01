@@ -28,6 +28,21 @@ import type { QuoteLineItem } from "./calculator";
 import { sectionOrder } from "./sections";
 import { sanitize } from "./sanitize";
 import { convertToPng, isPng, isJpg, resizeForEmbed } from "../pdf-image";
+import type {
+  PdfSection,
+  CoverSection,
+  NotesSection,
+  ClientScopeSection,
+  PaymentTermsSection,
+  BankDetailsSection,
+  TermsSection,
+  SignaturesSection,
+  AdvantageSection,
+  ConnectSection,
+  PhotoSection,
+  CustomTextSection,
+} from "./section-types";
+import { buildDefaultSections } from "./section-types";
 import fs from "fs";
 import path from "path";
 
@@ -1063,18 +1078,18 @@ function drawTerm(ctx: Ctx, title: string, body: string) {
   space(ctx, 5);
 }
 
-function drawBankBlock(ctx: Ctx) {
-  const blockH = 98;
-  ensureSpace(ctx, blockH);
-  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, blockH, { fill: COL.greenSoft, border: COL.border });
-  const startY = ctx.y + 10;
-  const rows = [
+function drawBankBlock(ctx: Ctx, customRows?: [string, string][]) {
+  const rows: [string, string][] = customRows ?? [
     ["Account Name", "FITOVERSE PVT LTD"],
     ["Bank Name", "HDFC BANK"],
     ["Branch", "BRINDHAVAN ROAD"],
     ["Account No", "50200066429411"],
     ["IFSC", "HDFC0001281"],
   ];
+  const blockH = rows.length * 16 + 18;
+  ensureSpace(ctx, blockH);
+  drawRect(ctx, MARGIN, ctx.y, CONTENT_W, blockH, { fill: COL.greenSoft, border: COL.border });
+  const startY = ctx.y + 10;
   rows.forEach(([label, value], i) => {
     const yTop = startY + i * 16;
     safeDraw(ctx.page, `${label}:`, {
@@ -1095,7 +1110,7 @@ function drawBankBlock(ctx: Ctx) {
   ctx.y += blockH + 4;
 }
 
-function drawSignatures(ctx: Ctx, customerName: string) {
+function drawSignatures(ctx: Ctx, customerName: string, directorName?: string, directorTitle?: string) {
   space(ctx, 24);
   ensureSpace(ctx, 80);
   const colW = CONTENT_W / 2 - 10;
@@ -1115,14 +1130,14 @@ function drawSignatures(ctx: Ctx, customerName: string) {
     color: COL.border,
     thickness: 0.5,
   });
-  safeDraw(ctx.page, "Vignesh Manikandan", {
+  safeDraw(ctx.page, directorName ?? "Vignesh Manikandan", {
     x: MARGIN,
     y: yFromTop(startY + 62),
     size: 10,
     font: ctx.bold,
     color: COL.text,
   });
-  safeDraw(ctx.page, "Director", {
+  safeDraw(ctx.page, directorTitle ?? "Director", {
     x: MARGIN,
     y: yFromTop(startY + 74),
     size: 9,
@@ -1789,8 +1804,8 @@ function drawSubheading(ctx: Ctx, title: string) {
   ctx.y += 22;
 }
 
-function drawPaymentTerms(ctx: Ctx, sport: string) {
-  const parts: Array<[string, string]> = [
+function drawPaymentTerms(ctx: Ctx, sport: string, milestones?: [string, string][]) {
+  const parts: Array<[string, string]> = milestones ?? [
     ["50%", "advance during purchase order"],
     ["30%", "during flooring work"],
     ["15%", `after ${installationMilestone(sport)}`],
@@ -1806,8 +1821,8 @@ function drawPaymentTerms(ctx: Ctx, sport: string) {
 }
 
 // ── Phase F: full-page "The Fitoverse Advantage" ──
-function drawAdvantagePage(ctx: Ctx) {
-  const paras = [
+function drawAdvantagePage(ctx: Ctx, content?: AdvantageSection) {
+  const paras = content?.paragraphs ?? [
     "Fitoverse Sports Infra is synonymous with world-class sports construction. We bridge the gap between natural playability and modern engineering, offering surfaces that replicate the best qualities of natural fields while significantly reducing maintenance costs and eliminating game cancellations due to weather or uneven terrain.",
     "We pride ourselves on being a single-source provider. When you partner with Fitoverse, you engage a team capable of handling the entire project lifecycle - from planning, design, and subfloor construction to professional lighting and precision installation.",
     "Our commitment to quality is validated by our adherence to the rigorous standards set by global governing bodies, including FIFA, World Rugby, FIH, ITF, and FIBA.",
@@ -1840,20 +1855,21 @@ function drawAdvantagePage(ctx: Ctx) {
   const top = ctx.y;
   drawRect(ctx, MARGIN, top, cardW, cardH, { fill: COL.light, border: COL.border });
   drawCentered(ctx, "PROUD MEMBERS OF", MARGIN, cardW, top + 16, 11, ctx.bold, COL.text);
-  drawCentered(ctx, "IAKS   ·   SFBA India", MARGIN, cardW, top + 42, 14, ctx.bold, COL.green);
+  drawCentered(ctx, content?.memberships ?? "IAKS   ·   SFBA India", MARGIN, cardW, top + 42, 14, ctx.bold, COL.green);
   const c2 = MARGIN + cardW + 16;
   drawRect(ctx, c2, top, cardW, cardH, { fill: COL.light, border: COL.border });
   drawCentered(ctx, "WE USE FLOORINGS AUTHORIZED BY", c2, cardW, top + 16, 11, ctx.bold, COL.text);
-  drawCentered(ctx, "FIFA Quality   ·   FIFA Quality Pro", c2, cardW, top + 42, 14, ctx.bold, COL.green);
+  drawCentered(ctx, content?.certifications ?? "FIFA Quality   ·   FIFA Quality Pro", c2, cardW, top + 42, 14, ctx.bold, COL.green);
   ctx.y = top + cardH;
   space(ctx, 18);
   drawRect(ctx, MARGIN, ctx.y, CONTENT_W, statH, { fill: COL.greenSoft });
   const statTop = ctx.y;
   const halfW = CONTENT_W / 2;
-  drawCentered(ctx, "65+", MARGIN, halfW, statTop + 18, 28, ctx.bold, COL.green);
-  drawCentered(ctx, "infra projects", MARGIN, halfW, statTop + 46, 11, ctx.font, COL.muted);
-  drawCentered(ctx, "4 Lakh+", MARGIN + halfW, halfW, statTop + 18, 28, ctx.bold, COL.green);
-  drawCentered(ctx, "Sq. Ft. Covered", MARGIN + halfW, halfW, statTop + 46, 11, ctx.font, COL.muted);
+  const stats = content?.stats ?? [["65+", "infra projects"], ["4 Lakh+", "Sq. Ft. Covered"]];
+  drawCentered(ctx, stats[0]?.[0] ?? "65+", MARGIN, halfW, statTop + 18, 28, ctx.bold, COL.green);
+  drawCentered(ctx, stats[0]?.[1] ?? "infra projects", MARGIN, halfW, statTop + 46, 11, ctx.font, COL.muted);
+  drawCentered(ctx, stats[1]?.[0] ?? "4 Lakh+", MARGIN + halfW, halfW, statTop + 18, 28, ctx.bold, COL.green);
+  drawCentered(ctx, stats[1]?.[1] ?? "Sq. Ft. Covered", MARGIN + halfW, halfW, statTop + 46, 11, ctx.font, COL.muted);
   ctx.y += statH;
 }
 
@@ -1908,7 +1924,7 @@ function drawShowcaseSection(
 }
 
 // ── Phase G: "Connect With Us" — shares the final page with Our Portfolio ──
-function drawConnectPage(ctx: Ctx, driveLink: string | null = null) {
+function drawConnectPage(ctx: Ctx, driveLink: string | null = null, content?: ConnectSection) {
   const GREEN = rgb(0x15 / 255, 0x93 / 255, 0x41 / 255);
   const LIGHT_GREEN = rgb(0.91, 0.97, 0.93);
 
@@ -1932,20 +1948,24 @@ function drawConnectPage(ctx: Ctx, driveLink: string | null = null) {
   const phoneBoxH = 38;
   const phoneX = (PAGE_W - phoneBoxW) / 2;
   drawRect(ctx, phoneX, ctx.y, phoneBoxW, phoneBoxH, { fill: LIGHT_GREEN, border: GREEN, borderWidth: 1 });
-  const phoneText = "+91 63815 02055";
+  const phoneText = content?.phone ?? "+91 63815 02055";
   const phoneW = safeWidth(ctx.bold, phoneText, 15);
   safeDraw(ctx.page, phoneText, { x: (PAGE_W - phoneW) / 2, y: yFromTop(ctx.y + (phoneBoxH + 15) / 2), size: 15, font: ctx.bold, color: GREEN });
   ctx.y += phoneBoxH;
   space(ctx, 22);
 
   // Links table — clean 2-column grid, all white rows
-  const linkRows: Array<[string, string, string]> = [
-    ["Portfolio", "View our projects", driveLink || "https://fitoverse.com/"],
-    ["Website", "fitoverse.com", "https://fitoverse.com/"],
-    ["Instagram", "fito.verse", "https://www.instagram.com/fito.verse/"],
-    ["LinkedIn", "Fitoverse", "https://www.linkedin.com/company/fitoverse/"],
-    ["Facebook", "Fitoverse", "https://www.facebook.com/profile.php?id=100077279349300"],
-  ];
+  const linkRows: Array<[string, string, string]> = content?.socialLinks
+    ? content.socialLinks.map((r, i) =>
+        i === 0 && driveLink ? [r[0], r[1], driveLink] as [string, string, string] : r
+      )
+    : [
+        ["Portfolio", "View our projects", driveLink || "https://fitoverse.com/"],
+        ["Website", "fitoverse.com", "https://fitoverse.com/"],
+        ["Instagram", "fito.verse", "https://www.instagram.com/fito.verse/"],
+        ["LinkedIn", "Fitoverse", "https://www.linkedin.com/company/fitoverse/"],
+        ["Facebook", "Fitoverse", "https://www.facebook.com/profile.php?id=100077279349300"],
+      ];
   const panelW = 400;
   const px = (PAGE_W - panelW) / 2;
   const lRowH = 26;
@@ -1983,6 +2003,51 @@ function drawConnectPage(ctx: Ctx, driveLink: string | null = null) {
   drawCentered(ctx, "GSTIN 33AAECF8905G1ZQ   ·   CIN U92490TZ2022PTC038004", MARGIN, CONTENT_W, ctx.y, 8, ctx.font, COL.muted);
 }
 
+// ── New section helpers ──────────────────────────────────────────────────────
+
+function drawPhotoSection(ctx: Ctx, image: PDFImage, caption?: string) {
+  const maxW = CONTENT_W;
+  const maxH = 400;
+  const sc = Math.min(maxW / image.width, maxH / image.height, 1);
+  const w = image.width * sc;
+  const h = image.height * sc;
+  ensureSpace(ctx, h + (caption ? 24 : 0) + 16);
+  const px = MARGIN + (CONTENT_W - w) / 2;
+  ctx.page.drawImage(image, { x: px, y: yFromTop(ctx.y + h), width: w, height: h });
+  ctx.page.drawRectangle({
+    x: px,
+    y: yFromTop(ctx.y + h),
+    width: w,
+    height: h,
+    borderColor: COL.border,
+    borderWidth: 1,
+  });
+  ctx.y += h;
+  if (caption) {
+    space(ctx, 4);
+    drawText(ctx, caption, { x: MARGIN, size: 10, maxWidth: CONTENT_W, align: "center" });
+  }
+  space(ctx, 8);
+}
+
+function drawCustomTextSection(ctx: Ctx, title: string, body: string) {
+  ensureSpace(ctx, 50);
+  drawSectionTitle(ctx, title);
+  drawText(ctx, body, { x: MARGIN, size: 11, maxWidth: CONTENT_W });
+  space(ctx, 8);
+}
+
+function drawHighlightStrip(page: PDFPage, startY: number, endY: number) {
+  const GREEN = rgb(0x15 / 255, 0x93 / 255, 0x41 / 255);
+  page.drawRectangle({
+    x: MARGIN - 10,
+    y: yFromTop(endY),
+    width: 4,
+    height: endY - startY,
+    color: GREEN,
+  });
+}
+
 // ─── Public entry point ─────────────────────────────────────────────────────
 
 export type QuotationPdfData = {
@@ -2005,6 +2070,10 @@ export type QuotationPdfData = {
   // this sport in SHOWCASE_PHOTO_BYTES, so a link with no photo is a no-op.
   driveLink?: string | null;
   salespersonPhone?: string | null;
+  // Ordered, toggleable sections that control the PDF layout. When null or
+  // omitted the renderer falls back to buildDefaultSections(sport), producing
+  // output identical to the pre-section-refactor PDF.
+  sections?: PdfSection[] | null;
 };
 
 // Sample-style COVER PAGE (page 1): company header top-right, big centered
@@ -2018,6 +2087,7 @@ function drawCoverPage(
   quoteDate: string,
   logoImage: PDFImage | null,
   boldItalic: PDFFont,
+  coverData?: CoverSection,
 ) {
   const GREEN = rgb(0x15 / 255, 0x93 / 255, 0x41 / 255);
   const BLUE = rgb(0x2e / 255, 0x9b / 255, 0xd6 / 255);
@@ -2029,11 +2099,11 @@ function drawCoverPage(
 
   // Company details, top-right (right-aligned).
   const headerLines = [
-    "Fitoverse Private Limited",
-    "Salem  ·  Chennai  ·  Bangalore",
-    "Phone: 6381502055",
-    "GSTIN: 33AAECF8905G1ZQ",
-    "CIN: U92490TZ2022PTC038004",
+    coverData?.companyName ?? "Fitoverse Private Limited",
+    coverData?.cities ?? "Salem  ·  Chennai  ·  Bangalore",
+    `Phone: ${coverData?.phone ?? "6381502055"}`,
+    `GSTIN: ${coverData?.gstin ?? "33AAECF8905G1ZQ"}`,
+    `CIN: ${coverData?.cin ?? "U92490TZ2022PTC038004"}`,
   ];
   let hy = MARGIN;
   for (const ln of headerLines) {
@@ -2103,6 +2173,202 @@ function drawCoverPage(
   centerText(quoteDate, 570, 14, ctx.bold, COL.text);
 }
 
+// ── Section dispatcher ────────────────────────────────────────────────────────
+
+function renderSection(
+  ctx: Ctx,
+  sec: PdfSection,
+  data: QuotationPdfData,
+  doc: PDFDocument,
+  itemImages: Map<string, PDFImage>,
+  photoImageMap: Map<string, PDFImage | null>,
+) {
+  switch (sec.type) {
+    case "cover":
+      // Handled separately before the loop
+      break;
+
+    case "particulars": {
+      space(ctx, 6);
+      const hasOptions = anyOptions(data.lineItems);
+      const projectTitle = `${titleForSport(data.sport).replace(/^Quotation for\s+/i, "")} - ${data.lengthFt} ft x ${data.widthFt} ft`;
+      drawSectionTitle(ctx, `${projectTitle} Quotation`);
+      // Matches drawComparisonTable's / drawTotals' own ensureSpace() cost
+      // (with a little headroom) — see drawParticularsTable's finalReserve.
+      const totalsReserve = hasOptions ? 185 : 105;
+      drawParticularsTable(ctx, data.lineItems, itemImages, totalsReserve);
+      break;
+    }
+
+    case "comparison": {
+      if (anyOptions(data.lineItems)) {
+        drawComparisonTable(ctx, data.lineItems);
+      }
+      break;
+    }
+
+    case "totals": {
+      if (!anyOptions(data.lineItems)) {
+        drawTotals(ctx, data.subtotal, data.gstAmount, data.grandTotal);
+      }
+      break;
+    }
+
+    case "spec_cards": {
+      const specItems = data.lineItems.filter(
+        (i) => i.included && i.specs && i.specs.length,
+      );
+      if (specItems.length) {
+        // Reserve space for the section title TOGETHER with its first row of
+        // cards (34 = drawSectionTitle's own vertical consumption: space(10) +
+        // 18 + space(6)) — otherwise a title that just fits at a page's bottom
+        // leaves the card(s) stranded on the next page.
+        ensureSpace(
+          ctx,
+          34 + firstSpecCardRowHeight(ctx, specItems, itemImages),
+        );
+        drawSectionTitle(ctx, specSectionTitle(data.sport));
+        drawSpecCards(ctx, specItems, itemImages);
+      }
+      break;
+    }
+
+    case "notes": {
+      const notesData = sec as NotesSection;
+      // Reserve the title TOGETHER with the whole list (34 = drawSectionTitle's
+      // own vertical consumption) — otherwise the title alone can fit at a
+      // page's bottom while the list it introduces gets pushed to the next page.
+      ensureSpace(ctx, 34 + numberedListHeight(ctx, notesData.lines));
+      drawSectionTitle(ctx, "Notes");
+      drawNumbered(ctx, notesData.lines);
+      break;
+    }
+
+    case "client_scope": {
+      const scopeData = sec as ClientScopeSection;
+      // Keep the heading together with its bullets — a heading must never sit
+      // alone at a page bottom with its list on the next page.
+      ensureSpace(ctx, 6 + 19 + bulletsHeight(ctx, scopeData.lines));
+      drawSubheading(ctx, "Client Work Scope");
+      drawBullets(ctx, scopeData.lines);
+      break;
+    }
+
+    case "payment_terms": {
+      const ptData = sec as PaymentTermsSection;
+      // Keep the whole Payment Terms block together (title + milestone lines +
+      // the RTGS note + the bank-details box) so it never splits across a page.
+      ensureSpace(ctx, 220);
+      drawSectionTitle(ctx, "Payment Terms");
+      drawPaymentTerms(ctx, data.sport, ptData.milestones);
+      space(ctx, 4);
+      drawText(
+        ctx,
+        "Payment by Demand Draft or At-Par Cheque in favour of FITOVERSE PRIVATE LIMITED. For RTGS/NEFT:",
+        { x: MARGIN, size: 10, maxWidth: CONTENT_W },
+      );
+      space(ctx, 6);
+      break;
+    }
+
+    case "bank_details": {
+      const bdData = sec as BankDetailsSection;
+      drawBankBlock(ctx, bdData.rows);
+      // Additional Notes (data.notes) — rendered right after bank block,
+      // matching the current hardcoded sequence.
+      if (data.notes && data.notes.trim()) {
+        // Reserve the heading + its first two lines so it can't orphan at a
+        // page bottom with the note text starting on the next page.
+        ensureSpace(ctx, 6 + 19 + 10 * 1.35 * 2);
+        drawSubheading(ctx, "Additional Notes");
+        drawText(ctx, data.notes.trim(), {
+          x: MARGIN,
+          size: 10,
+          maxWidth: CONTENT_W,
+        });
+      }
+      break;
+    }
+
+    case "terms": {
+      const tData = sec as TermsSection;
+      space(ctx, 8);
+      drawSectionTitle(ctx, "Terms & Conditions");
+      drawText(
+        ctx,
+        "FITOVERSE PRIVATE LIMITED     CIN: U92490TZ2022PTC038004     |     GSTIN: 33AAECF8905G1ZQ",
+        { x: MARGIN, size: 9.5, maxWidth: CONTENT_W, color: COL.muted },
+      );
+      space(ctx, 6);
+      for (const t of tData.clauses) drawTerm(ctx, t.title, t.body);
+      break;
+    }
+
+    case "signatures": {
+      const sigData = sec as SignaturesSection;
+      // Keep the signatures + Project Contact Points together so the contact
+      // line never orphans onto a near-empty page.
+      ensureSpace(ctx, 160);
+      drawSignatures(
+        ctx,
+        data.customerName,
+        sigData.directorName,
+        sigData.directorTitle,
+      );
+      space(ctx, 12);
+      drawLine(ctx, MARGIN, PAGE_W - MARGIN);
+      space(ctx, 6);
+      drawText(ctx, "Project Contact Points", {
+        x: MARGIN,
+        size: 9,
+        bold: true,
+      });
+      const contactLine = data.salespersonPhone
+        ? `Mr. Vignesh: +91 63815 02055      Salesperson: ${data.salespersonPhone}      www.fitoverse.com`
+        : "Mr. Vignesh: +91 63815 02055      www.fitoverse.com";
+      drawText(ctx, contactLine, {
+        x: MARGIN,
+        size: 9,
+        color: COL.muted,
+      });
+      break;
+    }
+
+    case "advantage": {
+      const advData = sec as AdvantageSection;
+      // Flows right after the signatures/contacts to fill the page rather than
+      // forcing a near-empty gap before it. Its own ensureSpace moves it to a
+      // fresh page only if it won't fit.
+      space(ctx, 14);
+      drawAdvantagePage(ctx, advData);
+      break;
+    }
+
+    case "connect": {
+      const connData = sec as ConnectSection;
+      drawFooter(ctx);
+      newPage(ctx);
+      drawConnectPage(ctx, data.driveLink ?? null, connData);
+      break;
+    }
+
+    case "photo": {
+      const photoData = sec as PhotoSection;
+      const img = photoImageMap.get(photoData.id) ?? null;
+      if (img) {
+        drawPhotoSection(ctx, img, photoData.caption);
+      }
+      break;
+    }
+
+    case "custom_text": {
+      const ctData = sec as CustomTextSection;
+      drawCustomTextSection(ctx, ctData.title, ctData.body);
+      break;
+    }
+  }
+}
+
 export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer> {
   const doc = await PDFDocument.create();
   doc.setTitle(`Quotation ${data.number}`);
@@ -2130,147 +2396,57 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
     .toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
     .replace(/\//g, " / ");
 
-  // ── PAGE 1: sample-style cover (logo + project + From + date) ──
-  drawCoverPage(ctx, data, quoteDateStr, logoImage, boldItalic);
+  // ── Section list ──
+  const secs = data.sections ?? buildDefaultSections(data.sport);
+  const visible = secs
+    .filter((s) => s.visible !== false)
+    .sort((a, b) => a.order - b.order);
 
-  // ── PAGE 2+: line items, totals, notes ──
-  newPage(ctx);
-  space(ctx, 6);
-  const hasOptions = anyOptions(data.lineItems);
-  const projectTitle = `${titleForSport(data.sport).replace(/^Quotation for\s+/i, "")} - ${data.lengthFt} ft x ${data.widthFt} ft`;
-  drawSectionTitle(ctx, `${projectTitle} Quotation`);
+  // ── PAGE 1: cover ──
+  const coverSec = visible.find((s) => s.type === "cover") as
+    | CoverSection
+    | undefined;
+  drawCoverPage(ctx, data, quoteDateStr, logoImage, boldItalic, coverSec);
+
+  // Pre-fetch photo section images in parallel
+  const photoSecs = visible.filter(
+    (s) => s.type === "photo",
+  ) as PhotoSection[];
+  const photoImageMap = new Map<string, PDFImage | null>();
+  await Promise.all(
+    photoSecs.map(async (ps) => {
+      try {
+        const resp = await fetch(ps.imageUrl, {
+          signal: AbortSignal.timeout(4000),
+        });
+        const buf = Buffer.from(await resp.arrayBuffer());
+        let img: PDFImage | null = null;
+        if (isPng(buf)) img = await doc.embedPng(buf);
+        else if (isJpg(buf)) img = await doc.embedJpg(buf);
+        else {
+          const converted = await convertToPng(buf);
+          if (converted) img = await doc.embedPng(converted);
+        }
+        photoImageMap.set(ps.id, img);
+      } catch {
+        photoImageMap.set(ps.id, null);
+      }
+    }),
+  );
+
+  // Line item images (same as current)
   const itemImages = await embedLineItemImages(doc, data.lineItems);
-  // Matches drawComparisonTable's / drawTotals' own ensureSpace() cost (with a
-  // little headroom) — see drawParticularsTable's finalReserve doc comment.
-  const totalsReserve = hasOptions ? 185 : 105;
-  drawParticularsTable(ctx, data.lineItems, itemImages, totalsReserve);
-  if (hasOptions) drawComparisonTable(ctx, data.lineItems);
-  else drawTotals(ctx, data.subtotal, data.gstAmount, data.grandTotal);
 
-  // Specifications (only when items carry structured specs)
-  const specItems = data.lineItems.filter((i) => i.included && i.specs && i.specs.length);
-  if (specItems.length) {
-    // Reserve space for the section title TOGETHER with its first row of
-    // cards (34 = drawSectionTitle's own vertical consumption: space(10) +
-    // 18 + space(6)) — otherwise a title that just fits at a page's bottom
-    // leaves the card(s) stranded on the next page. Solo products are the
-    // most visible case since there's only one row to keep together.
-    ensureSpace(ctx, 34 + firstSpecCardRowHeight(ctx, specItems, itemImages));
-    drawSectionTitle(ctx, specSectionTitle(data.sport));
-    drawSpecCards(ctx, specItems, itemImages);
-  }
-
-  // Notes / Client Work Scope / Payment Terms + bank
-  const notesLines = [
-    "Installation charges are included in the above rates.",
-    "GST is charged extra as shown; ground preparation carries no GST.",
-    "Freight / transport charges extra for materials at actuals.",
-    "Client's scope: levelled ground to be provided; power, water and handling support at site.",
-    "Food and stay for the installation team on client scope.",
-    "Unloading, shifting and storage at the project site on client scope.",
-    "Warranty as applicable to the selected surface, excluding damage from misuse, vandalism or natural calamities.",
-  ];
-  // Reserve the title TOGETHER with the whole list (34 = drawSectionTitle's
-  // own vertical consumption) — otherwise the title alone can fit at a
-  // page's bottom while the list it introduces gets pushed to the next page
-  // by itself.
-  ensureSpace(ctx, 34 + numberedListHeight(ctx, notesLines));
-  drawSectionTitle(ctx, "Notes");
-  drawNumbered(ctx, notesLines);
-  const clientScope = [
-    "Site to be ready, clean and levelled before commencement.",
-    "Power, water, unloading, shifting and storage support at site.",
-    "Food and stay for the installation team.",
-  ];
-  // Keep the "Client Work Scope" heading together with its bullets — a heading
-  // must never sit alone at a page bottom with its list on the next page
-  // (6 + 19 = drawSubheading's own space(6) + height).
-  ensureSpace(ctx, 6 + 19 + bulletsHeight(ctx, clientScope));
-  drawSubheading(ctx, "Client Work Scope");
-  drawBullets(ctx, clientScope);
-  // Keep the whole Payment Terms block together (title + milestone lines +
-  // the RTGS note + the bank-details box) so it never splits across a page.
-  ensureSpace(ctx, 220);
-  drawSectionTitle(ctx, "Payment Terms");
-  drawPaymentTerms(ctx, data.sport);
-  space(ctx, 4);
-  drawText(ctx, "Payment by Demand Draft or At-Par Cheque in favour of FITOVERSE PRIVATE LIMITED. For RTGS/NEFT:", { x: MARGIN, size: 10, maxWidth: CONTENT_W });
-  space(ctx, 6);
-  drawBankBlock(ctx);
-
-  if (data.notes && data.notes.trim()) {
-    // Reserve the heading + its first two lines so it can't orphan at a
-    // page bottom with the note text starting on the next page.
-    ensureSpace(ctx, 6 + 19 + 10 * 1.35 * 2);
-    drawSubheading(ctx, "Additional Notes");
-    drawText(ctx, data.notes.trim(), { x: MARGIN, size: 10, maxWidth: CONTENT_W });
-  }
-
-  // ── Terms & Conditions (flows after the bank block; paginates as needed) ──
-  space(ctx, 8);
-  drawSectionTitle(ctx, "Terms & Conditions");
-  drawText(ctx, "FITOVERSE PRIVATE LIMITED     CIN: U92490TZ2022PTC038004     |     GSTIN: 33AAECF8905G1ZQ", { x: MARGIN, size: 9.5, maxWidth: CONTENT_W, color: COL.muted });
-  space(ctx, 6);
-
-  const TERMS = [
-    {
-      title: "1. Commercial Terms & Payment",
-      body: "1.1 Instruments of Payment: All payments must be made in favor of 'FITOVERSE PRIVATE LIMITED' via Demand Draft or At-Par Cheque. 1.2 Validity of Offer: The rates outlined in this proposal are valid subject to the award of the minimum area indicated in the quotation. 1.3 Binding Agreement: This offer becomes a binding contract upon the receipt of a formal Purchase Order (PO) from the Client, accompanied by the stipulated Advance Payment. 1.4 Taxes & Duties: Any statutory upward or downward revision in tax rates, or the introduction of new applicable taxes, shall be borne by the Client.",
-    },
-    {
-      title: "2. Project Schedule & Execution",
-      body: "2.1 Lead Time: The project timeline shall be determined based on the total area and scope confirmed in the Purchase Order. 2.2 Commencement: Fitoverse agrees to commence Installation Services within a reasonable timeframe, subject to favorable weather conditions and site readiness. 2.3 Site Access: Upon commencement, the Client must provide 100% unhindered access to the site. 2.4 Delays: Any work stoppage caused by the Client or site conditions will attract proportionate hold-up costs.",
-    },
-    {
-      title: "3. Material Ownership",
-      body: "3.1 Surplus Material: Any surplus synthetic surfacing products or extra materials shipped to the site due to requirements shall remain the property of Fitoverse.",
-    },
-    {
-      title: "4. Warranty & Limitation of Liability",
-      body: "4.1 General Liability: The liability of Fitoverse regarding any breach of warranty or defect in labor/materials shall strictly not exceed the total value of the Installation Services paid by the Client to Fitoverse. 4.2 Exclusions: Under no circumstances shall Fitoverse be liable for any consequential, punitive, liquidated, or special damages.",
-    },
-    {
-      title: "5. Force Majeure",
-      body: "5.1 Fitoverse shall not be liable for any failure or delay in performance due to causes beyond its reasonable control, including acts of God, war, riots, strikes, labor disputes, floods, fire, explosions, shortage of water/power/transportation, government orders, or customs delays.",
-    },
-    {
-      title: "6. Dispute Resolution & Jurisdiction",
-      body: "6.1 Mediation & Arbitration: In the event of a dispute, both parties agree to first seek resolution through a mediator. Failing this, the dispute shall be referred to Arbitration. 6.2 Jurisdiction: Any and all unresolved disputes shall be subject to the exclusive jurisdiction of the courts in Salem, Tamil Nadu.",
-    },
-  ];
-  for (const t of TERMS) drawTerm(ctx, t.title, t.body);
-
-  // Keep the signatures + Project Contact Points together so the contact
-  // line never orphans onto a near-empty page.
-  ensureSpace(ctx, 160);
-  drawSignatures(ctx, data.customerName);
-  space(ctx, 12);
-  drawLine(ctx, MARGIN, PAGE_W - MARGIN);
-  space(ctx, 6);
-  drawText(ctx, "Project Contact Points", { x: MARGIN, size: 9, bold: true });
-  const contactLine = data.salespersonPhone
-    ? `Mr. Vignesh: +91 63815 02055      Salesperson: ${data.salespersonPhone}      www.fitoverse.com`
-    : "Mr. Vignesh: +91 63815 02055      www.fitoverse.com";
-  drawText(ctx, contactLine, {
-    x: MARGIN,
-    size: 9,
-    color: COL.muted,
-  });
-
-  // ── The Fitoverse Advantage — flows right after the signatures/contacts to
-  //    fill the page rather than forcing a near-empty gap before it. Its own
-  //    title-orphan guard (below) moves it to a fresh page only if it won't fit. ──
-  space(ctx, 14);
-  drawAdvantagePage(ctx);
-
-  // ── Final page: "Our Portfolio" (real photo + portfolio link) and
-  //    "Connect With Us", combined on ONE page. The portfolio photo only
-  //    shows for sports that have one; Connect always renders below it. ──
-  drawFooter(ctx);
+  // ── PAGE 2+: remaining sections in order ──
   newPage(ctx);
-  // "Our Portfolio" photo section removed (user request) — the per-project
-  // portfolio link now lives in the Connect With Us panel below.
-  drawConnectPage(ctx, data.driveLink ?? null);
+  for (const sec of visible.filter((s) => s.type !== "cover")) {
+    const yBefore = ctx.y;
+    const pageBefore = ctx.page;
+    renderSection(ctx, sec, data, doc, itemImages, photoImageMap);
+    if (sec.highlighted && ctx.page === pageBefore) {
+      drawHighlightStrip(ctx.page, yBefore, ctx.y);
+    }
+  }
 
   drawFooter(ctx);
   const bytes = await doc.save();

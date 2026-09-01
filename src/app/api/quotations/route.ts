@@ -38,6 +38,7 @@ const createSchema = z.object({
   customerProfileId: z.string().uuid().nullable().optional(),
   businessType: z.enum(["B2B", "B2C", "B2G"]).nullable().optional(),
   salespersonPhone: z.string().max(30).nullable().optional(),
+  sections: z.string().max(100_000).optional(),
 });
 
 const listFilterSchema = z.object({
@@ -240,6 +241,7 @@ export async function POST(req: NextRequest) {
           conversationId: parsed.data.conversationId ?? null,
           contactPhone: parsed.data.contactPhone ?? null,
           salespersonPhone: parsed.data.salespersonPhone ?? null,
+          sections: parsed.data.sections ?? null,
           createdByUserId: user.id,
           status: "draft",
           dealId,

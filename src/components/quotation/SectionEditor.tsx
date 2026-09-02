@@ -96,6 +96,7 @@ function RichTextarea({
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const lastHtml = useRef<string | null>(null);
+  const userEditing = useRef(false);
   const [showColors, setShowColors] = useState(false);
 
   function sanitizeHtml(html: string): string {
@@ -105,6 +106,10 @@ function RichTextarea({
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
+    if (userEditing.current) {
+      userEditing.current = false;
+      return;
+    }
     if (lastHtml.current === null || value !== lastHtml.current) {
       el.innerHTML = sanitizeHtml(value || "");
       lastHtml.current = value;
@@ -112,6 +117,7 @@ function RichTextarea({
   }, [value]);
 
   function emit() {
+    userEditing.current = true;
     const html = editorRef.current?.innerHTML ?? "";
     lastHtml.current = html;
     onChange(html);

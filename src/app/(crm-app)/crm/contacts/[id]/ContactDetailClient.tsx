@@ -25,7 +25,7 @@ type Deal = {
   nextActionNote: string | null; nextActionDueAt: string | null;
 };
 type ActivityRow = { id: string; subject: string; notes: string | null; occurredAt: string; typeName: string; ownerName: string };
-type QuotationRow = { id: string; number: string; sport: string; grandTotal: number; status: string; contactPhone: string | null; sentAt: string | null; createdAt: string };
+type QuotationRow = { id: string; number: string; customerName?: string; sport: string; grandTotal: number; status: string; contactPhone: string | null; sentAt: string | null; createdAt: string };
 type CourtImageRow = { id: string; number: string; status: string; imageUrl: string | null; contactPhone: string | null; sentAt: string | null; createdAt: string };
 type ProductInterestRow = { id: string; name: string; sportName: string | null };
 type ProductOption = { id: string; name: string; type: string };

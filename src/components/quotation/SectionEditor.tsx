@@ -122,6 +122,27 @@ function RichTextarea({
     emit();
   }
 
+  function removeHighlight() {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      setShowColors(false);
+      return;
+    }
+    let node: Node | null = sel.getRangeAt(0).commonAncestorContainer;
+    while (node && node !== editorRef.current) {
+      if (node instanceof HTMLElement && node.tagName === "MARK") {
+        const frag = document.createDocumentFragment();
+        while (node.firstChild) frag.appendChild(node.firstChild);
+        node.parentNode?.replaceChild(frag, node);
+        emit();
+        setShowColors(false);
+        return;
+      }
+      node = node.parentNode;
+    }
+    setShowColors(false);
+  }
+
   function applyHighlight(color: string) {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
@@ -231,6 +252,15 @@ function RichTextarea({
                   title={c.name}
                 />
               ))}
+              <button
+                type="button"
+                onMouseDown={prevent}
+                onClick={removeHighlight}
+                className="w-9 h-9 rounded-full border-2 border-slate-200 hover:border-red-400 hover:scale-110 transition-all shadow-sm bg-white flex items-center justify-center text-slate-400 hover:text-red-500"
+                title="Remove highlight"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" /></svg>
+              </button>
             </div>
           )}
         </div>

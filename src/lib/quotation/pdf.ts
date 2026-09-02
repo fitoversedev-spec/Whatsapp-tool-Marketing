@@ -1075,7 +1075,7 @@ function drawTerm(ctx: Ctx, title: string, body: string) {
   const bodyH = wordWrap(ctx.font, cleanBody, 11, CONTENT_W).length * (11 * 1.35);
   ensureSpace(ctx, titleH + bodyH + 5);
   drawText(ctx, cleanTitle, { x: MARGIN, size: 11.5, bold: true });
-  drawText(ctx, cleanBody, { x: MARGIN, size: 11, maxWidth: CONTENT_W, color: COL.text });
+  drawRichWrappedText(ctx, body, { x: MARGIN, size: 11, maxWidth: CONTENT_W });
   space(ctx, 5);
 }
 
@@ -1887,6 +1887,88 @@ function drawRichSegments(
   }
 }
 
+// Word-wrap a rich HTML string (bold + highlight) across multiple lines.
+// Parses into segments, splits into words preserving formatting, then wraps.
+function drawRichWrappedText(
+  ctx: Ctx,
+  html: string,
+  opts: { x: number; size?: number; maxWidth?: number; color?: ReturnType<typeof rgb> },
+): number {
+  const size = opts.size ?? 9;
+  const lh = size * 1.35;
+  const maxW = opts.maxWidth ?? CONTENT_W;
+  const segments = parseRichText(html);
+  const hasRich = segments.some((s) => s.bold || s.highlight);
+  if (!hasRich) {
+    return drawText(ctx, stripHtmlTags(html), { x: opts.x, size, maxWidth: maxW, color: opts.color });
+  }
+
+  // Split segments into word-level tokens, each carrying its formatting.
+  type WordSeg = RichSegment & { trailing: string };
+  const words: WordSeg[] = [];
+  for (const seg of segments) {
+    const parts = seg.text.split(/(\s+)/);
+    let accum = "";
+    for (let p = 0; p < parts.length; p++) {
+      if (/^\s+$/.test(parts[p])) {
+        accum += parts[p];
+      } else if (parts[p]) {
+        if (accum && words.length) words[words.length - 1].trailing += accum;
+        words.push({ text: parts[p], bold: seg.bold, highlight: seg.highlight, color: seg.color, trailing: "" });
+        accum = "";
+      }
+    }
+    if (accum && words.length) words[words.length - 1].trailing += accum;
+  }
+
+  // Wrap words into lines.
+  const lines: WordSeg[][] = [[]];
+  let lineW = 0;
+  for (const w of words) {
+    const f = w.bold ? ctx.bold : ctx.font;
+    const ww = safeWidth(f, w.text, size);
+    const sp = w.trailing ? safeWidth(ctx.font, w.trailing, size) : 0;
+    if (lineW > 0 && lineW + ww > maxW) {
+      lines.push([]);
+      lineW = 0;
+    }
+    lines[lines.length - 1].push(w);
+    lineW += ww + sp;
+  }
+
+  let totalH = 0;
+  for (const line of lines) {
+    ensureSpace(ctx, lh);
+    let cx = opts.x;
+    for (let i = 0; i < line.length; i++) {
+      const w = line[i];
+      const f = w.bold ? ctx.bold : ctx.font;
+      const ww = safeWidth(f, w.text, size);
+      if (w.highlight) {
+        const c = w.color ? hexToRgbNorm(w.color) : { r: 1, g: 0.92, b: 0.23 };
+        ctx.page.drawRectangle({
+          x: cx - 0.5,
+          y: yFromTop(ctx.y + size + 1),
+          width: ww + 1,
+          height: size + 3,
+          color: rgb(c.r, c.g, c.b),
+          opacity: 0.6,
+        });
+      }
+      safeDraw(ctx.page, w.text, { x: cx, y: yFromTop(ctx.y + size), size, font: f, color: opts.color ?? COL.text });
+      cx += ww;
+      if (w.trailing && i < line.length - 1) {
+        cx += safeWidth(ctx.font, w.trailing, size);
+      } else if (i < line.length - 1) {
+        cx += safeWidth(ctx.font, " ", size);
+      }
+    }
+    ctx.y += lh;
+    totalH += lh;
+  }
+  return totalH;
+}
+
 function drawPlainLines(ctx: Ctx, rawLines: string[]) {
   const lines = fixPartialTags(rawLines);
   for (const line of lines) {
@@ -1965,7 +2047,15 @@ function drawPaymentTerms(ctx: Ctx, sport: string, milestones?: [string, string]
     ensureSpace(ctx, 19);
     safeDraw(ctx.page, pct, { x: MARGIN + 4, y: yFromTop(ctx.y + 11), size: 12.5, font: ctx.bold, color: COL.green });
     const pw = safeWidth(ctx.bold, pct, 12.5);
-    safeDraw(ctx.page, "  " + rest, { x: MARGIN + 4 + pw, y: yFromTop(ctx.y + 11), size: 12.5, font: ctx.font, color: COL.text });
+    const descX = MARGIN + 4 + pw;
+    const segments = parseRichText(rest);
+    const hasRich = segments.some((s) => s.bold || s.highlight);
+    if (hasRich) {
+      // Prepend spacing segment
+      drawRichSegments(ctx, [{ text: "  ", bold: false, highlight: false }, ...segments], descX, ctx.y, 12.5);
+    } else {
+      safeDraw(ctx.page, "  " + stripHtmlTags(rest), { x: descX, y: yFromTop(ctx.y + 11), size: 12.5, font: ctx.font, color: COL.text });
+    }
     ctx.y += 19;
   }
 }
@@ -1998,7 +2088,7 @@ function drawAdvantagePage(ctx: Ctx, content?: AdvantageSection) {
   ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y) }, end: { x: MARGIN + 64, y: yFromTop(ctx.y) }, color: COL.accent, thickness: 2.5 });
   space(ctx, 16);
   for (const p of paras) {
-    drawText(ctx, stripHtmlTags(p), { x: MARGIN, size: 11, maxWidth: CONTENT_W, color: COL.text });
+    drawRichWrappedText(ctx, p, { x: MARGIN, size: 11, maxWidth: CONTENT_W });
     space(ctx, 8);
   }
   space(ctx, 14);
@@ -2185,7 +2275,7 @@ function drawPhotoSection(ctx: Ctx, image: PDFImage, caption?: string) {
 function drawCustomTextSection(ctx: Ctx, title: string, body: string) {
   ensureSpace(ctx, 50);
   drawSectionTitle(ctx, stripHtmlTags(title));
-  drawText(ctx, stripHtmlTags(body), { x: MARGIN, size: 11, maxWidth: CONTENT_W });
+  drawRichWrappedText(ctx, body, { x: MARGIN, size: 11, maxWidth: CONTENT_W });
   space(ctx, 8);
 }
 

@@ -21,6 +21,7 @@ const patchSchema = z.object({
   // previously had no field for this at all — see docs/DECISIONS.md) be
   // corrected from the /quotations list without recreating the quote.
   contactPhone: z.string().min(5).max(30).nullable().optional(),
+  sections: z.string().max(100_000).refine((s) => { try { JSON.parse(s); return true; } catch { return false; } }, "sections must be valid JSON").optional(),
 });
 
 async function loadAuthorized(id: string, userId: string, role: string) {
@@ -59,6 +60,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       sentAt: q.sentAt?.toISOString() ?? null,
       conversationId: q.conversationId,
       contactPhone: q.contactPhone,
+      sections: q.sections ? (() => { try { return JSON.parse(q.sections); } catch { return null; } })() : null,
       createdAt: q.createdAt.toISOString(),
     },
   });
@@ -89,6 +91,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (parsed.data.status !== undefined) data.status = parsed.data.status;
   if (parsed.data.contactPhone !== undefined) data.contactPhone = parsed.data.contactPhone;
   if (parsed.data.dealId !== undefined) data.dealId = parsed.data.dealId;
+  if (parsed.data.sections !== undefined) {
+    data.sections = parsed.data.sections;
+    // Clear cached PDF — must regenerate after section edits
+    data.pdfUrl = null;
+  }
   if (parsed.data.lineItems) {
     const totals = recompute(parsed.data.lineItems as QuoteLineItem[]);
     data.lineItems = JSON.stringify(parsed.data.lineItems);

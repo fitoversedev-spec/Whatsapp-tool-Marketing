@@ -1518,7 +1518,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
           {step === 4 && fullEditor && sections && (
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-slate-800">Customize PDF sections</h3>
-              <SectionEditor sections={sections} onChange={setSections} sport={sport} />
+              <SectionEditor sections={sections} onChange={setSections} sport={sport} lineItems={lineItemsForSubmit()} />
             </div>
           )}
 

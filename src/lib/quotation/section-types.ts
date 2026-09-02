@@ -27,7 +27,17 @@ export type CoverSection = PdfSectionBase & {
 export type ParticularsSection = PdfSectionBase & { type: "particulars" };
 export type ComparisonSection = PdfSectionBase & { type: "comparison" };
 export type TotalsSection = PdfSectionBase & { type: "totals" };
-export type SpecCardsSection = PdfSectionBase & { type: "spec_cards" };
+export type SpecCardData = {
+  lineItemId: string;
+  name: string;
+  imageUrl?: string | null;
+  specs: Array<{ label: string; value: string }>;
+};
+
+export type SpecCardsSection = PdfSectionBase & {
+  type: "spec_cards";
+  cards?: SpecCardData[] | null;
+};
 
 export type ListStyle = "bullet" | "numbered" | "none";
 

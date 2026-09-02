@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -22,6 +22,8 @@ import {
   type PdfSection,
   type PdfSectionType,
   type ListStyle,
+  type SpecCardsSection,
+  type SpecCardData,
   SECTION_LABELS,
   sectionCategory,
 } from "@/lib/quotation/section-types";
@@ -33,20 +35,28 @@ function genId(): string {
 
 // ── Props ───────────────────────────────────────────────────────────────────
 
+type LineItemForSpec = {
+  id: string;
+  name: string;
+  optionShort?: string | null;
+  imageUrl?: string | null;
+  included: boolean;
+  specs?: Array<{ label: string; value: string }> | null;
+};
+
 type Props = {
   sections: PdfSection[];
   onChange: (sections: PdfSection[]) => void;
   sport: string;
+  lineItems?: LineItemForSpec[];
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function badgeClass(type: PdfSectionType) {
   const cat = sectionCategory(type);
-  if (cat === "auto")
-    return "bg-blue-100 text-blue-700";
-  if (cat === "custom")
-    return "bg-emerald-100 text-emerald-700";
+  if (cat === "auto") return "bg-blue-100 text-blue-700";
+  if (cat === "custom") return "bg-emerald-100 text-emerald-700";
   return "bg-amber-100 text-amber-700";
 }
 
@@ -57,132 +67,211 @@ function badgeLabel(type: PdfSectionType) {
   return "Editable";
 }
 
-// ── Rich textarea with formatting toolbar ──────────────────────────────────
+// ── Highlight color presets ────────────────────────────────────────────────
+
+const HIGHLIGHT_COLORS = [
+  { name: "Yellow", value: "#fef08a" },
+  { name: "Green", value: "#bbf7d0" },
+  { name: "Blue", value: "#bfdbfe" },
+  { name: "Pink", value: "#fbcfe8" },
+  { name: "Orange", value: "#fed7aa" },
+];
+
+// ── Rich text editor (contenteditable) ─────────────────────────────────────
 
 function RichTextarea({
   value,
   onChange,
-  rows = 4,
-  className = "input text-sm w-full resize-y font-mono",
+  minHeight = "130px",
   placeholder,
   listStyle,
   onListStyleChange,
 }: {
   value: string;
-  onChange: (val: string) => void;
-  rows?: number;
-  className?: string;
+  onChange: (html: string) => void;
+  minHeight?: string;
   placeholder?: string;
   listStyle?: ListStyle;
   onListStyleChange?: (s: ListStyle) => void;
 }) {
-  const taRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const lastHtml = useRef<string | null>(null);
+  const [showColors, setShowColors] = useState(false);
 
-  function wrapSelection(pre: string, suf: string) {
-    const ta = taRef.current;
-    if (!ta) return;
-    const s = ta.selectionStart;
-    const e = ta.selectionEnd;
-    if (s === e) return;
-    const sel = value.slice(s, e);
-    if (sel.startsWith(pre) && sel.endsWith(suf)) {
-      const unwrapped = sel.slice(pre.length, -suf.length);
-      onChange(value.slice(0, s) + unwrapped + value.slice(e));
-      requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(s, s + unwrapped.length); });
-    } else {
-      onChange(value.slice(0, s) + pre + sel + suf + value.slice(e));
-      requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(s, e + pre.length + suf.length); });
+  function sanitizeHtml(html: string): string {
+    return html.replace(/\s*on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/gi, "");
+  }
+
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    if (lastHtml.current === null || value !== lastHtml.current) {
+      el.innerHTML = sanitizeHtml(value || "");
+      lastHtml.current = value;
+    }
+  }, [value]);
+
+  function emit() {
+    const html = editorRef.current?.innerHTML ?? "";
+    lastHtml.current = html;
+    onChange(html);
+  }
+
+  function applyBold() {
+    document.execCommand("bold", false);
+    emit();
+  }
+
+  function applyHighlight(color: string) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      setShowColors(false);
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    let node: Node | null = range.commonAncestorContainer;
+    while (node && node !== editorRef.current) {
+      if (node instanceof HTMLElement && node.tagName === "MARK") {
+        if (node.dataset.color === color) {
+          const frag = document.createDocumentFragment();
+          while (node.firstChild) frag.appendChild(node.firstChild);
+          node.parentNode?.replaceChild(frag, node);
+        } else {
+          node.style.backgroundColor = color;
+          node.dataset.color = color;
+        }
+        emit();
+        setShowColors(false);
+        return;
+      }
+      node = node.parentNode;
+    }
+    try {
+      const mark = document.createElement("mark");
+      mark.style.backgroundColor = color;
+      mark.style.borderRadius = "3px";
+      mark.style.padding = "1px 3px";
+      mark.dataset.color = color;
+      range.surroundContents(mark);
+    } catch {
+      const fragment = range.extractContents();
+      const mark = document.createElement("mark");
+      mark.style.backgroundColor = color;
+      mark.style.borderRadius = "3px";
+      mark.style.padding = "1px 3px";
+      mark.dataset.color = color;
+      mark.appendChild(fragment);
+      range.insertNode(mark);
+    }
+    emit();
+    setShowColors(false);
+  }
+
+  function toggleBullets() {
+    document.execCommand("insertUnorderedList", false);
+    emit();
+  }
+
+  function toggleNumbers() {
+    document.execCommand("insertOrderedList", false);
+    emit();
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, text);
+    emit();
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "b" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      applyBold();
     }
   }
 
-  function toggleListPrefix(
-    makePfx: (line: string, n: number) => string,
-    detect: (line: string) => boolean,
-  ) {
-    const ta = taRef.current;
-    if (!ta) return;
-    const s = ta.selectionStart;
-    const e = ta.selectionEnd;
-    const before = value.slice(0, s);
-    const startLine = (before.match(/\n/g) || []).length;
-    const endLine = startLine + ((value.slice(s, e).match(/\n/g) || []).length);
-    const lines = value.split("\n");
-    const sel = lines.slice(startLine, endLine + 1).filter((l) => l.trim());
-    const allPrefixed = sel.length > 0 && sel.every(detect);
-    let num = 1;
-    const out = lines.map((l, i) => {
-      if (i < startLine || i > endLine || !l.trim()) return l;
-      const stripped = l.replace(/^(• |\d+\.\s)/, "");
-      return allPrefixed ? stripped : makePfx(stripped, num++);
-    });
-    onChange(out.join("\n"));
-    requestAnimationFrame(() => ta.focus());
-  }
+  const isEmpty = !value || value.replace(/<[^>]*>/g, "").trim() === "";
+  const prevent = (e: React.MouseEvent) => e.preventDefault();
 
   return (
-    <div>
-      <div className="flex items-center gap-0.5 px-2 py-1 bg-slate-100/80 border border-slate-200 rounded-t-lg">
+    <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
+      {/* Toolbar */}
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 border-b border-slate-200">
         <button
           type="button"
-          onClick={() => wrapSelection("**", "**")}
-          className="px-2 py-1 rounded text-xs font-bold text-slate-700 hover:bg-slate-200"
-          title="Bold (**text**)"
+          onMouseDown={prevent}
+          onClick={applyBold}
+          className="w-9 h-9 flex items-center justify-center rounded-md text-base font-bold text-slate-700 hover:bg-slate-200 transition-colors"
+          title="Bold (Ctrl+B)"
         >
           B
         </button>
+
+        <div className="relative">
+          <button
+            type="button"
+            onMouseDown={prevent}
+            onClick={() => setShowColors(!showColors)}
+            className="h-9 px-2.5 flex items-center justify-center rounded-md hover:bg-slate-200 transition-colors"
+            title="Highlight text"
+          >
+            <span className="text-sm font-semibold bg-yellow-200 px-2 py-0.5 rounded">H</span>
+          </button>
+          {showColors && (
+            <div className="absolute top-full left-0 mt-1.5 p-2.5 bg-white rounded-xl shadow-lg border border-slate-200 flex gap-2.5 z-20">
+              {HIGHLIGHT_COLORS.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  onMouseDown={prevent}
+                  onClick={() => applyHighlight(c.value)}
+                  className="w-9 h-9 rounded-full border-2 border-slate-200 hover:border-slate-500 hover:scale-110 transition-all shadow-sm"
+                  style={{ backgroundColor: c.value }}
+                  title={c.name}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="w-px h-6 bg-slate-300 mx-1" />
+
         <button
           type="button"
-          onClick={() => wrapSelection("==", "==")}
-          className="px-2 py-1 rounded text-xs hover:bg-yellow-100"
-          title="Highlight (==text==)"
-        >
-          <span className="bg-yellow-200/80 text-slate-700 px-1.5 rounded font-medium">H</span>
-        </button>
-
-        <div className="w-px h-4 bg-slate-300 mx-1" />
-
-        {/* Bullet list */}
-        <button
-          type="button"
-          onClick={() => toggleListPrefix((l) => `• ${l}`, (l) => l.startsWith("• "))}
-          className="p-1.5 rounded text-slate-600 hover:bg-slate-200"
+          onMouseDown={prevent}
+          onClick={toggleBullets}
+          className="w-9 h-9 flex items-center justify-center rounded-md text-slate-600 hover:bg-slate-200 transition-colors"
           title="Bullet list"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="4" cy="6" r="2" />
-            <circle cx="4" cy="12" r="2" />
-            <circle cx="4" cy="18" r="2" />
-            <line x1="10" y1="6" x2="21" y2="6" strokeWidth="2" />
-            <line x1="10" y1="12" x2="21" y2="12" strokeWidth="2" />
-            <line x1="10" y1="18" x2="21" y2="18" strokeWidth="2" />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="4" cy="6" r="2" /><circle cx="4" cy="12" r="2" /><circle cx="4" cy="18" r="2" />
+            <line x1="10" y1="6" x2="21" y2="6" strokeWidth="2" /><line x1="10" y1="12" x2="21" y2="12" strokeWidth="2" /><line x1="10" y1="18" x2="21" y2="18" strokeWidth="2" />
           </svg>
         </button>
 
-        {/* Numbered list */}
         <button
           type="button"
-          onClick={() => toggleListPrefix((_l, n) => `${n}. ${_l}`, (l) => /^\d+\.\s/.test(l))}
-          className="p-1.5 rounded text-slate-600 hover:bg-slate-200"
+          onMouseDown={prevent}
+          onClick={toggleNumbers}
+          className="w-9 h-9 flex items-center justify-center rounded-md text-slate-600 hover:bg-slate-200 transition-colors"
           title="Numbered list"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
-            <line x1="11" y1="6" x2="21" y2="6" />
-            <line x1="11" y1="12" x2="21" y2="12" />
-            <line x1="11" y1="18" x2="21" y2="18" />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
+            <line x1="11" y1="6" x2="21" y2="6" /><line x1="11" y1="12" x2="21" y2="12" /><line x1="11" y1="18" x2="21" y2="18" />
             <text x="1" y="9" fontSize="9" stroke="none" fontFamily="system-ui">1</text>
             <text x="1" y="15" fontSize="9" stroke="none" fontFamily="system-ui">2</text>
             <text x="1" y="21" fontSize="9" stroke="none" fontFamily="system-ui">3</text>
           </svg>
         </button>
 
-        {/* List style selector for notes/client_scope */}
         {listStyle !== undefined && onListStyleChange && (
           <>
-            <div className="w-px h-4 bg-slate-300 mx-1" />
+            <div className="w-px h-6 bg-slate-300 mx-1" />
             <select
               value={listStyle}
               onChange={(e) => onListStyleChange(e.target.value as ListStyle)}
-              className="text-xs bg-transparent text-slate-600 border-none outline-none cursor-pointer py-1"
+              className="text-sm bg-transparent text-slate-600 border-none outline-none cursor-pointer py-1"
             >
               <option value="bullet">Bullets in PDF</option>
               <option value="numbered">Numbered in PDF</option>
@@ -191,16 +280,80 @@ function RichTextarea({
           </>
         )}
       </div>
-      <textarea
-        ref={taRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={rows}
-        className={`${className} rounded-t-none border-t-0`}
-        placeholder={placeholder}
-      />
+
+      {/* Contenteditable editor */}
+      <div className="relative">
+        {isEmpty && placeholder && (
+          <div className="absolute top-3 left-4 text-sm text-slate-400 pointer-events-none select-none">
+            {placeholder}
+          </div>
+        )}
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={emit}
+          onPaste={handlePaste}
+          onKeyDown={handleKeyDown}
+          onClick={() => setShowColors(false)}
+          className="px-4 py-3 text-base leading-relaxed text-slate-800 outline-none focus-within:ring-2 focus-within:ring-court-200"
+          style={{ minHeight }}
+        />
+      </div>
     </div>
   );
+}
+
+// ── HTML ↔ lines conversion ────────────────────────────────────────────────
+
+function linesToHtml(lines: string[]): string {
+  return lines.map((l) => l || "<br>").join("<br>");
+}
+
+function htmlToLines(html: string): string[] {
+  const normalized = html
+    .replace(/<div>/gi, "<br>")
+    .replace(/<\/div>/gi, "")
+    .replace(/<p>/gi, "<br>")
+    .replace(/<\/p>/gi, "");
+  const rawLines = normalized.split(/<br\s*\/?>/gi).map((l) => l.trim());
+  const result: string[] = [];
+  let openStack: string[] = [];
+
+  for (const raw of rawLines) {
+    const prefix = openStack.join("");
+    let line = prefix + raw;
+
+    const tags = [...raw.matchAll(/<(\/?)(mark|strong|b)\b([^>]*)>/gi)];
+    for (const t of tags) {
+      const name = t[2].toLowerCase();
+      if (t[1] === "/") {
+        for (let i = openStack.length - 1; i >= 0; i--) {
+          if (openStack[i].match(new RegExp(`^<${name}\\b`, "i"))) {
+            openStack.splice(i, 1);
+            break;
+          }
+        }
+      } else {
+        openStack.push(t[0]);
+      }
+    }
+
+    const suffix = [...openStack]
+      .reverse()
+      .map((tag) => {
+        const m = tag.match(/^<(\w+)/);
+        return m ? `</${m[1]}>` : "";
+      })
+      .join("");
+    line += suffix;
+    result.push(line);
+  }
+
+  while (result.length > 0 && result[result.length - 1].replace(/<[^>]*>/g, "").trim() === "") {
+    result.pop();
+  }
+  return result;
 }
 
 // ── Sortable card ───────────────────────────────────────────────────────────
@@ -213,6 +366,7 @@ function SortableSection({
   onMoveUp,
   onMoveDown,
   onRemove,
+  lineItems,
 }: {
   section: PdfSection;
   isFirst: boolean;
@@ -221,12 +375,13 @@ function SortableSection({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onRemove: () => void;
+  lineItems?: LineItemForSpec[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: section.id });
   const [expanded, setExpanded] = useState(false);
   const cat = sectionCategory(section.type);
-  const canEdit = cat !== "auto";
+  const canEdit = cat !== "auto" || section.type === "spec_cards";
   const canDelete = cat === "custom";
 
   const style = {
@@ -236,9 +391,9 @@ function SortableSection({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="mb-1.5">
+    <div ref={setNodeRef} style={style} className="mb-2">
       <div
-        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm
+        className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border
           ${section.highlighted ? "border-emerald-400 bg-emerald-50/40" : "border-slate-200 bg-white"}
           ${!section.visible ? "opacity-50" : ""}`}
       >
@@ -249,7 +404,7 @@ function SortableSection({
           className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 touch-none"
           aria-label="Drag to reorder"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="9" cy="5" r="1.5" />
             <circle cx="15" cy="5" r="1.5" />
             <circle cx="9" cy="12" r="1.5" />
@@ -260,26 +415,26 @@ function SortableSection({
         </button>
 
         {/* Name + badge */}
-        <span className="font-medium text-slate-800 flex-1 truncate">
+        <span className="font-medium text-base text-slate-800 flex-1 truncate">
           {SECTION_LABELS[section.type]}
           {section.type === "custom_text" && "title" in section
             ? `: ${(section as Extract<PdfSection, { type: "custom_text" }>).title || "Untitled"}`
             : ""}
         </span>
-        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${badgeClass(section.type)}`}>
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeClass(section.type)}`}>
           {badgeLabel(section.type)}
         </span>
 
         {/* Controls */}
-        <div className="flex items-center gap-1 ml-1">
+        <div className="flex items-center gap-1.5 ml-1">
           {/* Highlight toggle */}
           {canEdit && (
             <button
               onClick={() => onUpdate({ ...section, highlighted: !section.highlighted })}
-              className={`p-1 rounded ${section.highlighted ? "text-emerald-600" : "text-slate-400 hover:text-slate-600"}`}
+              className={`p-1.5 rounded-md ${section.highlighted ? "text-emerald-600 bg-emerald-50" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"}`}
               title="Highlight section"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill={section.highlighted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={section.highlighted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </svg>
             </button>
@@ -288,13 +443,13 @@ function SortableSection({
           {/* Visibility toggle */}
           <button
             onClick={() => onUpdate({ ...section, visible: !section.visible })}
-            className={`p-1 rounded ${section.visible ? "text-slate-500 hover:text-slate-700" : "text-slate-300"}`}
+            className={`p-1.5 rounded-md ${section.visible ? "text-slate-500 hover:text-slate-700 hover:bg-slate-100" : "text-slate-300 hover:bg-slate-100"}`}
             title={section.visible ? "Hide section" : "Show section"}
           >
             {section.visible ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
             ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
             )}
           </button>
 
@@ -302,25 +457,25 @@ function SortableSection({
           {canEdit && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className={`p-1 rounded ${expanded ? "text-court-600" : "text-slate-400 hover:text-slate-600"}`}
+              className={`p-1.5 rounded-md ${expanded ? "text-court-600 bg-court-50" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"}`}
               title="Edit section content"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
             </button>
           )}
 
           {/* Up/Down */}
-          <button onClick={onMoveUp} disabled={isFirst} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30" title="Move up">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15" /></svg>
+          <button onClick={onMoveUp} disabled={isFirst} className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent" title="Move up">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="18 15 12 9 6 15" /></svg>
           </button>
-          <button onClick={onMoveDown} disabled={isLast} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30" title="Move down">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+          <button onClick={onMoveDown} disabled={isLast} className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent" title="Move down">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
           </button>
 
           {/* Delete */}
           {canDelete && (
-            <button onClick={onRemove} className="p-1 rounded text-red-400 hover:text-red-600" title="Remove section">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+            <button onClick={onRemove} className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50" title="Remove section">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
             </button>
           )}
         </div>
@@ -328,8 +483,8 @@ function SortableSection({
 
       {/* Expanded editor */}
       {expanded && canEdit && (
-        <div className="mt-1 ml-6 mr-1 p-3 rounded-lg border border-court-200 bg-court-50/30">
-          <SectionInlineEditor section={section} onUpdate={onUpdate} />
+        <div className="mt-1.5 ml-8 mr-1 p-4 rounded-xl border border-court-200 bg-court-50/30">
+          <SectionInlineEditor section={section} onUpdate={onUpdate} lineItems={lineItems} />
         </div>
       )}
     </div>
@@ -341,9 +496,11 @@ function SortableSection({
 function SectionInlineEditor({
   section,
   onUpdate,
+  lineItems,
 }: {
   section: PdfSection;
   onUpdate: (s: PdfSection) => void;
+  lineItems?: LineItemForSpec[];
 }) {
   switch (section.type) {
     case "cover":
@@ -367,6 +524,8 @@ function SectionInlineEditor({
       return <PhotoEditor section={section} onUpdate={onUpdate} />;
     case "custom_text":
       return <CustomTextEditor section={section} onUpdate={onUpdate} />;
+    case "spec_cards":
+      return <SpecCardsEditor section={section} onUpdate={onUpdate} lineItems={lineItems} />;
     default:
       return null;
   }
@@ -385,19 +544,19 @@ function CoverEditor({
     onUpdate({ ...section, [field]: value });
 
   return (
-    <div className="space-y-2">
-      <label className="block text-xs font-medium text-slate-600">Company name</label>
-      <input value={section.companyName} onChange={(e) => up("companyName", e.target.value)} className="input text-sm" />
-      <label className="block text-xs font-medium text-slate-600">GSTIN</label>
-      <input value={section.gstin} onChange={(e) => up("gstin", e.target.value)} className="input text-sm" />
-      <label className="block text-xs font-medium text-slate-600">CIN</label>
-      <input value={section.cin} onChange={(e) => up("cin", e.target.value)} className="input text-sm" />
-      <label className="block text-xs font-medium text-slate-600">Phone</label>
-      <input value={section.phone} onChange={(e) => up("phone", e.target.value)} className="input text-sm" />
-      <label className="block text-xs font-medium text-slate-600">Cities</label>
-      <input value={section.cities} onChange={(e) => up("cities", e.target.value)} className="input text-sm" />
-      <label className="block text-xs font-medium text-slate-600">Project title override (optional)</label>
-      <input value={section.projectTitle ?? ""} onChange={(e) => up("projectTitle", e.target.value)} className="input text-sm" placeholder="Auto-generated from sport + dimensions" />
+    <div className="space-y-3">
+      <label className="block text-sm font-medium text-slate-600">Company name</label>
+      <input value={section.companyName} onChange={(e) => up("companyName", e.target.value)} className="input text-base" />
+      <label className="block text-sm font-medium text-slate-600">GSTIN</label>
+      <input value={section.gstin} onChange={(e) => up("gstin", e.target.value)} className="input text-base" />
+      <label className="block text-sm font-medium text-slate-600">CIN</label>
+      <input value={section.cin} onChange={(e) => up("cin", e.target.value)} className="input text-base" />
+      <label className="block text-sm font-medium text-slate-600">Phone</label>
+      <input value={section.phone} onChange={(e) => up("phone", e.target.value)} className="input text-base" />
+      <label className="block text-sm font-medium text-slate-600">Cities</label>
+      <input value={section.cities} onChange={(e) => up("cities", e.target.value)} className="input text-base" />
+      <label className="block text-sm font-medium text-slate-600">Project title override (optional)</label>
+      <input value={section.projectTitle ?? ""} onChange={(e) => up("projectTitle", e.target.value)} className="input text-base" placeholder="Auto-generated from sport + dimensions" />
     </div>
   );
 }
@@ -411,16 +570,17 @@ function LinesEditor({
   section: Extract<PdfSection, { type: "notes" | "client_scope" }>;
   onUpdate: (s: PdfSection) => void;
 }) {
-  const text = section.lines.join("\n");
+  const html = linesToHtml(section.lines);
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">
-        One line per point — use toolbar to format
+      <label className="block text-sm font-medium text-slate-600 mb-2">
+        One line per point — select text to format
       </label>
       <RichTextarea
-        value={text}
-        onChange={(v) => onUpdate({ ...section, lines: v.split("\n") })}
-        rows={Math.max(3, section.lines.length + 1)}
+        value={html}
+        onChange={(h) => onUpdate({ ...section, lines: htmlToLines(h) })}
+        minHeight="150px"
+        placeholder="Enter your points here..."
         listStyle={section.listStyle ?? (section.type === "notes" ? "numbered" : "bullet")}
         onListStyleChange={(s) => onUpdate({ ...section, listStyle: s })}
       />
@@ -449,17 +609,17 @@ function MilestoneEditor({
     onUpdate({ ...section, milestones: section.milestones.filter((_, j) => j !== i) });
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {section.milestones.map(([pct, desc], i) => (
         <div key={i} className="flex items-center gap-2">
-          <input value={pct} onChange={(e) => update(i, 0, e.target.value)} className="input text-sm w-20" placeholder="50%" />
-          <input value={desc} onChange={(e) => update(i, 1, e.target.value)} className="input text-sm flex-1" placeholder="Description" />
-          <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 p-1" title="Remove">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          <input value={pct} onChange={(e) => update(i, 0, e.target.value)} className="input text-base w-24" placeholder="50%" />
+          <input value={desc} onChange={(e) => update(i, 1, e.target.value)} className="input text-base flex-1" placeholder="Description" />
+          <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 p-1.5" title="Remove">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         </div>
       ))}
-      <button onClick={add} className="text-xs text-court-600 hover:text-court-800 font-medium">
+      <button onClick={add} className="text-sm text-court-600 hover:text-court-800 font-medium">
         + Add milestone
       </button>
     </div>
@@ -487,17 +647,17 @@ function KeyValueEditor({
     onUpdate({ ...section, rows: section.rows.filter((_, j) => j !== i) });
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {section.rows.map(([label, value], i) => (
         <div key={i} className="flex items-center gap-2">
-          <input value={label} onChange={(e) => update(i, 0, e.target.value)} className="input text-sm w-36" placeholder="Label" />
-          <input value={value} onChange={(e) => update(i, 1, e.target.value)} className="input text-sm flex-1" placeholder="Value" />
-          <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 p-1" title="Remove">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          <input value={label} onChange={(e) => update(i, 0, e.target.value)} className="input text-base w-40" placeholder="Label" />
+          <input value={value} onChange={(e) => update(i, 1, e.target.value)} className="input text-base flex-1" placeholder="Value" />
+          <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 p-1.5" title="Remove">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         </div>
       ))}
-      <button onClick={add} className="text-xs text-court-600 hover:text-court-800 font-medium">
+      <button onClick={add} className="text-sm text-court-600 hover:text-court-800 font-medium">
         + Add row
       </button>
     </div>
@@ -527,17 +687,17 @@ function TermsEditor({
   return (
     <div className="space-y-3">
       {section.clauses.map((c, i) => (
-        <div key={i} className="p-2 border border-slate-200 rounded-lg bg-white space-y-1.5">
+        <div key={i} className="p-3 border border-slate-200 rounded-xl bg-white space-y-2">
           <div className="flex items-center gap-2">
-            <input value={c.title} onChange={(e) => update(i, "title", e.target.value)} className="input text-sm flex-1 font-medium" placeholder="Clause title" />
-            <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 p-1" title="Remove clause">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <input value={c.title} onChange={(e) => update(i, "title", e.target.value)} className="input text-base flex-1 font-medium" placeholder="Clause title" />
+            <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 p-1.5" title="Remove clause">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
             </button>
           </div>
-          <RichTextarea value={c.body} onChange={(v) => update(i, "body", v)} rows={3} className="input text-sm w-full resize-y" placeholder="Clause body" />
+          <RichTextarea value={c.body} onChange={(v) => update(i, "body", v)} minHeight="80px" placeholder="Clause body..." />
         </div>
       ))}
-      <button onClick={add} className="text-xs text-court-600 hover:text-court-800 font-medium">
+      <button onClick={add} className="text-sm text-court-600 hover:text-court-800 font-medium">
         + Add clause
       </button>
     </div>
@@ -554,11 +714,11 @@ function SignatureEditor({
   onUpdate: (s: PdfSection) => void;
 }) {
   return (
-    <div className="space-y-2">
-      <label className="block text-xs font-medium text-slate-600">Director name</label>
-      <input value={section.directorName} onChange={(e) => onUpdate({ ...section, directorName: e.target.value })} className="input text-sm" />
-      <label className="block text-xs font-medium text-slate-600">Title</label>
-      <input value={section.directorTitle} onChange={(e) => onUpdate({ ...section, directorTitle: e.target.value })} className="input text-sm" />
+    <div className="space-y-3">
+      <label className="block text-sm font-medium text-slate-600">Director name</label>
+      <input value={section.directorName} onChange={(e) => onUpdate({ ...section, directorName: e.target.value })} className="input text-base" />
+      <label className="block text-sm font-medium text-slate-600">Title</label>
+      <input value={section.directorTitle} onChange={(e) => onUpdate({ ...section, directorTitle: e.target.value })} className="input text-base" />
     </div>
   );
 }
@@ -579,33 +739,38 @@ function AdvantageEditor({
     onUpdate({ ...section, stats: next });
   };
 
+  const parasHtml = section.paragraphs.join("<br><br>");
+
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Paragraphs (double newline to separate)</label>
+        <label className="block text-sm font-medium text-slate-600 mb-2">Paragraphs</label>
         <RichTextarea
-          value={section.paragraphs.join("\n\n")}
-          onChange={(v) => onUpdate({ ...section, paragraphs: v.split("\n\n").filter(Boolean) })}
-          rows={6}
-          className="input text-sm w-full resize-y"
+          value={parasHtml}
+          onChange={(h) => {
+            const text = h.replace(/<div>/gi, "<br>").replace(/<\/div>/gi, "").replace(/<p>/gi, "<br>").replace(/<\/p>/gi, "");
+            onUpdate({ ...section, paragraphs: text.split(/<br\s*\/?>\s*<br\s*\/?>/gi).filter(Boolean).map((p) => p.trim()) });
+          }}
+          minHeight="160px"
+          placeholder="Enter paragraphs..."
         />
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Memberships</label>
-          <input value={section.memberships} onChange={(e) => onUpdate({ ...section, memberships: e.target.value })} className="input text-sm" />
+          <label className="block text-sm font-medium text-slate-600 mb-1">Memberships</label>
+          <input value={section.memberships} onChange={(e) => onUpdate({ ...section, memberships: e.target.value })} className="input text-base" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Certifications</label>
-          <input value={section.certifications} onChange={(e) => onUpdate({ ...section, certifications: e.target.value })} className="input text-sm" />
+          <label className="block text-sm font-medium text-slate-600 mb-1">Certifications</label>
+          <input value={section.certifications} onChange={(e) => onUpdate({ ...section, certifications: e.target.value })} className="input text-base" />
         </div>
       </div>
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Stats</label>
+        <label className="block text-sm font-medium text-slate-600 mb-1">Stats</label>
         {section.stats.map(([val, label], i) => (
-          <div key={i} className="flex items-center gap-2 mb-1.5">
-            <input value={val} onChange={(e) => updateStat(i, 0, e.target.value)} className="input text-sm w-28 font-bold" placeholder="65+" />
-            <input value={label} onChange={(e) => updateStat(i, 1, e.target.value)} className="input text-sm flex-1" placeholder="infra projects" />
+          <div key={i} className="flex items-center gap-2 mb-2">
+            <input value={val} onChange={(e) => updateStat(i, 0, e.target.value)} className="input text-base w-32 font-bold" placeholder="65+" />
+            <input value={label} onChange={(e) => updateStat(i, 1, e.target.value)} className="input text-base flex-1" placeholder="infra projects" />
           </div>
         ))}
       </div>
@@ -636,23 +801,175 @@ function ConnectEditor({
     onUpdate({ ...section, socialLinks: section.socialLinks.filter((_, j) => j !== i) });
 
   return (
-    <div className="space-y-2">
-      <label className="block text-xs font-medium text-slate-600">Phone number</label>
-      <input value={section.phone} onChange={(e) => onUpdate({ ...section, phone: e.target.value })} className="input text-sm" />
-      <label className="block text-xs font-medium text-slate-600 mt-2">Social links</label>
+    <div className="space-y-2.5">
+      <label className="block text-sm font-medium text-slate-600">Phone number</label>
+      <input value={section.phone} onChange={(e) => onUpdate({ ...section, phone: e.target.value })} className="input text-base" />
+      <label className="block text-sm font-medium text-slate-600 mt-2">Social links</label>
       {section.socialLinks.map(([platform, handle, url], i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <input value={platform} onChange={(e) => updateLink(i, 0, e.target.value)} className="input text-sm w-24" placeholder="Platform" />
-          <input value={handle} onChange={(e) => updateLink(i, 1, e.target.value)} className="input text-sm w-32" placeholder="Handle" />
-          <input value={url} onChange={(e) => updateLink(i, 2, e.target.value)} className="input text-sm flex-1" placeholder="URL" />
-          <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 p-1" title="Remove">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        <div key={i} className="flex items-center gap-2">
+          <input value={platform} onChange={(e) => updateLink(i, 0, e.target.value)} className="input text-base w-28" placeholder="Platform" />
+          <input value={handle} onChange={(e) => updateLink(i, 1, e.target.value)} className="input text-base w-36" placeholder="Handle" />
+          <input value={url} onChange={(e) => updateLink(i, 2, e.target.value)} className="input text-base flex-1" placeholder="URL" />
+          <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600 p-1.5" title="Remove">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         </div>
       ))}
-      <button onClick={add} className="text-xs text-court-600 hover:text-court-800 font-medium">
+      <button onClick={add} className="text-sm text-court-600 hover:text-court-800 font-medium">
         + Add link
       </button>
+    </div>
+  );
+}
+
+// ── Spec cards editor ──────────────────────────────────────────────────
+
+function SpecCardsEditor({
+  section,
+  onUpdate,
+  lineItems,
+}: {
+  section: SpecCardsSection;
+  onUpdate: (s: PdfSection) => void;
+  lineItems?: LineItemForSpec[];
+}) {
+  const cards = section.cards ?? null;
+  const specItems = (lineItems ?? []).filter(
+    (li) => li.included && li.specs && li.specs.length,
+  );
+
+  function initFromLineItems() {
+    const built: SpecCardData[] = specItems.map((li) => ({
+      lineItemId: li.id,
+      name: li.optionShort ?? li.name,
+      imageUrl: li.imageUrl ?? null,
+      specs: (li.specs ?? []).map((s) => ({ ...s })),
+    }));
+    onUpdate({ ...section, cards: built });
+  }
+
+  function resetToAuto() {
+    onUpdate({ ...section, cards: null });
+  }
+
+  function updateCard(idx: number, patch: Partial<SpecCardData>) {
+    if (!cards) return;
+    const next = cards.map((c, i) => (i === idx ? { ...c, ...patch } : c));
+    onUpdate({ ...section, cards: next });
+  }
+
+  function updateSpec(cardIdx: number, specIdx: number, field: "label" | "value", val: string) {
+    if (!cards) return;
+    const next = cards.map((c, ci) => {
+      if (ci !== cardIdx) return c;
+      const specs = c.specs.map((s, si) => (si === specIdx ? { ...s, [field]: val } : s));
+      return { ...c, specs };
+    });
+    onUpdate({ ...section, cards: next });
+  }
+
+  function addSpec(cardIdx: number) {
+    if (!cards) return;
+    const next = cards.map((c, ci) =>
+      ci === cardIdx ? { ...c, specs: [...c.specs, { label: "", value: "" }] } : c,
+    );
+    onUpdate({ ...section, cards: next });
+  }
+
+  function removeSpec(cardIdx: number, specIdx: number) {
+    if (!cards) return;
+    const next = cards.map((c, ci) =>
+      ci === cardIdx ? { ...c, specs: c.specs.filter((_, si) => si !== specIdx) } : c,
+    );
+    onUpdate({ ...section, cards: next });
+  }
+
+  function removeCard(cardIdx: number) {
+    if (!cards) return;
+    onUpdate({ ...section, cards: cards.filter((_, i) => i !== cardIdx) });
+  }
+
+  if (!cards) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-slate-500">
+          Spec cards are auto-generated from your products ({specItems.length} with specs).
+        </p>
+        {specItems.length > 0 && (
+          <button
+            onClick={initFromLineItems}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-court-600 text-white hover:bg-court-700 transition-colors"
+          >
+            Customize spec cards
+          </button>
+        )}
+        {specItems.length === 0 && (
+          <p className="text-sm text-amber-600">No products with specs — add specs to your line items first.</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500">{cards.length} card{cards.length !== 1 ? "s" : ""}</p>
+        <button onClick={resetToAuto} className="text-xs text-slate-500 hover:text-red-600 underline">
+          Reset to auto
+        </button>
+      </div>
+
+      {cards.map((card, ci) => (
+        <div key={card.lineItemId + ci} className="border border-slate-200 rounded-lg p-3 bg-white space-y-2">
+          <div className="flex items-center gap-2">
+            {card.imageUrl && (
+              <img src={card.imageUrl} alt="" className="w-10 h-10 rounded object-cover border border-slate-200" />
+            )}
+            <input
+              value={card.name}
+              onChange={(e) => updateCard(ci, { name: e.target.value })}
+              className="input text-sm font-medium flex-1"
+              placeholder="Product name"
+            />
+            <button onClick={() => removeCard(ci)} className="text-red-400 hover:text-red-600 p-1" title="Remove card">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            </button>
+          </div>
+
+          <table className="w-full text-sm">
+            <tbody>
+              {card.specs.map((spec, si) => (
+                <tr key={si} className="border-b border-slate-100 last:border-0">
+                  <td className="py-1 pr-2 w-2/5">
+                    <input
+                      value={spec.label}
+                      onChange={(e) => updateSpec(ci, si, "label", e.target.value)}
+                      className="w-full px-2 py-1 text-sm border border-slate-200 rounded font-medium"
+                      placeholder="Label"
+                    />
+                  </td>
+                  <td className="py-1 pr-1">
+                    <input
+                      value={spec.value}
+                      onChange={(e) => updateSpec(ci, si, "value", e.target.value)}
+                      className="w-full px-2 py-1 text-sm border border-slate-200 rounded"
+                      placeholder="Value"
+                    />
+                  </td>
+                  <td className="py-1 w-8">
+                    <button onClick={() => removeSpec(ci, si)} className="text-red-300 hover:text-red-500 p-0.5">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button onClick={() => addSpec(ci)} className="text-xs text-court-600 hover:text-court-800 font-medium">
+            + Add spec row
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -677,7 +994,7 @@ function PhotoEditor({
       const res = await fetch("/api/media/upload", { method: "POST", body: fd });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
-      onUpdate({ ...section, imageUrl: data.url });
+      onUpdate({ ...section, imageUrl: data.media?.url ?? data.url });
     } catch {
       alert("Failed to upload image. Try again.");
     } finally {
@@ -686,23 +1003,23 @@ function PhotoEditor({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {section.imageUrl ? (
         <div className="relative">
-          <img src={section.imageUrl} alt="Section photo" className="max-h-40 rounded-lg border border-slate-200 object-contain" />
+          <img src={section.imageUrl} alt="Section photo" className="max-h-48 rounded-lg border border-slate-200 object-contain" />
           <button
             onClick={() => { onUpdate({ ...section, imageUrl: "" }); }}
-            className="absolute top-1 right-1 bg-white/90 rounded-full p-1 text-red-500 hover:text-red-700 shadow"
+            className="absolute top-2 right-2 bg-white/90 rounded-full p-1.5 text-red-500 hover:text-red-700 shadow"
             title="Remove photo"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         </div>
       ) : (
         <button
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          className="w-full py-6 border-2 border-dashed border-slate-300 rounded-lg text-sm text-slate-500 hover:border-court-400 hover:text-court-600 transition-colors"
+          className="w-full py-8 border-2 border-dashed border-slate-300 rounded-xl text-base text-slate-500 hover:border-court-400 hover:text-court-600 transition-colors"
         >
           {uploading ? "Uploading..." : "Click to upload photo"}
         </button>
@@ -718,11 +1035,11 @@ function PhotoEditor({
           e.target.value = "";
         }}
       />
-      <label className="block text-xs font-medium text-slate-600">Caption (optional)</label>
+      <label className="block text-sm font-medium text-slate-600">Caption (optional)</label>
       <input
         value={section.caption ?? ""}
         onChange={(e) => onUpdate({ ...section, caption: e.target.value })}
-        className="input text-sm"
+        className="input text-base"
         placeholder="Photo caption"
       />
     </div>
@@ -739,18 +1056,18 @@ function CustomTextEditor({
   onUpdate: (s: PdfSection) => void;
 }) {
   return (
-    <div className="space-y-2">
-      <label className="block text-xs font-medium text-slate-600">Section title</label>
-      <input value={section.title} onChange={(e) => onUpdate({ ...section, title: e.target.value })} className="input text-sm font-medium" placeholder="Section title" />
-      <label className="block text-xs font-medium text-slate-600">Content</label>
-      <RichTextarea value={section.body} onChange={(v) => onUpdate({ ...section, body: v })} rows={4} className="input text-sm w-full resize-y" placeholder="Section content..." />
+    <div className="space-y-3">
+      <label className="block text-sm font-medium text-slate-600">Section title</label>
+      <input value={section.title} onChange={(e) => onUpdate({ ...section, title: e.target.value })} className="input text-base font-medium" placeholder="Section title" />
+      <label className="block text-sm font-medium text-slate-600">Content</label>
+      <RichTextarea value={section.body} onChange={(v) => onUpdate({ ...section, body: v })} minHeight="120px" placeholder="Section content..." />
     </div>
   );
 }
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function SectionEditor({ sections, onChange, sport }: Props) {
+export default function SectionEditor({ sections, onChange, sport, lineItems }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -834,8 +1151,8 @@ export default function SectionEditor({ sections, onChange, sport }: Props) {
 
   return (
     <div>
-      <div className="mb-3 text-sm text-slate-600">
-        Drag to reorder, click edit to customize content. Hidden sections won't appear in the PDF.
+      <div className="mb-4 text-base text-slate-600">
+        Drag to reorder, click edit to customize content. Hidden sections won&apos;t appear in the PDF.
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -850,24 +1167,25 @@ export default function SectionEditor({ sections, onChange, sport }: Props) {
               onMoveUp={() => moveUp(i)}
               onMoveDown={() => moveDown(i)}
               onRemove={() => removeSection(section.id)}
+              lineItems={lineItems}
             />
           ))}
         </SortableContext>
       </DndContext>
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-4 flex gap-3">
         <button
           onClick={addPhoto}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-court-400 hover:text-court-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5 text-base border border-dashed border-slate-300 rounded-xl text-slate-600 hover:border-court-400 hover:text-court-700 transition-colors"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
           Add photo section
         </button>
         <button
           onClick={addCustomText}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-court-400 hover:text-court-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5 text-base border border-dashed border-slate-300 rounded-xl text-slate-600 hover:border-court-400 hover:text-court-700 transition-colors"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
           Add custom section
         </button>
       </div>

@@ -21,7 +21,7 @@ const patchSchema = z.object({
   // previously had no field for this at all — see docs/DECISIONS.md) be
   // corrected from the /quotations list without recreating the quote.
   contactPhone: z.string().min(5).max(30).nullable().optional(),
-  sections: z.string().max(100_000).optional(),
+  sections: z.string().max(100_000).refine((s) => { try { JSON.parse(s); return true; } catch { return false; } }, "sections must be valid JSON").optional(),
 });
 
 async function loadAuthorized(id: string, userId: string, role: string) {
@@ -60,7 +60,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       sentAt: q.sentAt?.toISOString() ?? null,
       conversationId: q.conversationId,
       contactPhone: q.contactPhone,
-      sections: q.sections ? JSON.parse(q.sections) : null,
+      sections: q.sections ? (() => { try { return JSON.parse(q.sections); } catch { return null; } })() : null,
       createdAt: q.createdAt.toISOString(),
     },
   });

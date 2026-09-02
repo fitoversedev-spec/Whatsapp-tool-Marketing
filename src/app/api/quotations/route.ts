@@ -38,7 +38,7 @@ const createSchema = z.object({
   customerProfileId: z.string().uuid().nullable().optional(),
   businessType: z.enum(["B2B", "B2C", "B2G"]).nullable().optional(),
   salespersonPhone: z.string().max(30).nullable().optional(),
-  sections: z.string().max(100_000).optional(),
+  sections: z.string().max(100_000).refine((s) => { try { JSON.parse(s); return true; } catch { return false; } }, "sections must be valid JSON").optional(),
 });
 
 const listFilterSchema = z.object({

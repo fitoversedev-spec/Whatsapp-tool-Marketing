@@ -41,6 +41,8 @@ import type {
   ConnectSection,
   PhotoSection,
   CustomTextSection,
+  SpecCardsSection,
+  SpecCardData,
 } from "./section-types";
 import { buildDefaultSections } from "./section-types";
 import fs from "fs";
@@ -1038,7 +1040,8 @@ function drawConnectSection(ctx: Ctx) {
   ctx.y += blockH;
 }
 
-function drawBullets(ctx: Ctx, lines: string[]) {
+function drawBullets(ctx: Ctx, rawLines: string[]) {
+  const lines = fixPartialTags(rawLines);
   for (const line of lines) {
     const plain = stripMarkers(line);
     const wrapped = wordWrap(ctx.font, plain, 12, CONTENT_W - 18);
@@ -1066,14 +1069,13 @@ function drawBullets(ctx: Ctx, lines: string[]) {
 }
 
 function drawTerm(ctx: Ctx, title: string, body: string) {
-  // Keep the whole clause (title + wrapped body) together — reserve its full
-  // height so a numbered point never splits across a page break, leaving an
-  // orphan line (e.g. point 6's tail) at the top of the next page.
+  const cleanTitle = stripHtmlTags(title);
+  const cleanBody = stripHtmlTags(body);
   const titleH = 11.5 * 1.35;
-  const bodyH = wordWrap(ctx.font, body, 11, CONTENT_W).length * (11 * 1.35);
+  const bodyH = wordWrap(ctx.font, cleanBody, 11, CONTENT_W).length * (11 * 1.35);
   ensureSpace(ctx, titleH + bodyH + 5);
-  drawText(ctx, title, { x: MARGIN, size: 11.5, bold: true });
-  drawText(ctx, body, { x: MARGIN, size: 11, maxWidth: CONTENT_W, color: COL.text });
+  drawText(ctx, cleanTitle, { x: MARGIN, size: 11.5, bold: true });
+  drawText(ctx, cleanBody, { x: MARGIN, size: 11, maxWidth: CONTENT_W, color: COL.text });
   space(ctx, 5);
 }
 
@@ -1776,26 +1778,86 @@ function bulletsHeight(ctx: Ctx, lines: string[]): number {
   return lines.reduce((h, line) => h + wordWrap(ctx.font, line, 12, CONTENT_W - 18).length * 15 + 2, 0);
 }
 
-type RichSegment = { text: string; bold?: boolean; highlight?: boolean };
+type RichSegment = { text: string; bold?: boolean; highlight?: boolean; color?: string };
+
+function stripHtmlTags(html: string): string {
+  return html.replace(/<[^>]*>/g, "");
+}
 
 function parseRichText(raw: string): RichSegment[] {
   const segs: RichSegment[] = [];
-  const re = /(\*\*(.+?)\*\*|==(.+?)==)/g;
+  const re = /<(strong|b)>([\s\S]*?)<\/\1>|<mark\b([^>]*)>([\s\S]*?)<\/mark>/gi;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(raw)) !== null) {
-    if (m.index > last) segs.push({ text: raw.slice(last, m.index) });
-    if (m[2]) segs.push({ text: m[2], bold: true });
-    else if (m[3]) segs.push({ text: m[3], highlight: true });
+    if (m.index > last) segs.push({ text: stripHtmlTags(raw.slice(last, m.index)) });
+    if (m[2] !== undefined) {
+      segs.push({ text: stripHtmlTags(m[2]), bold: true });
+    } else {
+      const attrs = m[3] || "";
+      const cm = attrs.match(/data-color="([^"]*)"/);
+      const color = cm?.[1] || "#fef08a";
+      segs.push({ text: stripHtmlTags(m[4]!), highlight: true, color });
+    }
     last = m.index + m[0].length;
   }
-  if (last < raw.length) segs.push({ text: raw.slice(last) });
-  if (segs.length === 0) segs.push({ text: raw });
-  return segs;
+  if (last < raw.length) segs.push({ text: stripHtmlTags(raw.slice(last)) });
+  if (segs.length === 0) segs.push({ text: stripHtmlTags(raw) });
+  return segs.filter(s => s.text.length > 0);
 }
 
 function stripMarkers(raw: string): string {
-  return raw.replace(/\*\*(.+?)\*\*/g, "$1").replace(/==(.+?)==/g, "$1");
+  return stripHtmlTags(raw);
+}
+
+function fixPartialTags(lines: string[]): string[] {
+  const needsFix = lines.some((line) => {
+    const opens = (line.match(/<mark\b/gi) || []).length +
+      (line.match(/<strong\b/gi) || []).length +
+      (line.match(/<b\b/gi) || []).length;
+    const closes = (line.match(/<\/mark>/gi) || []).length +
+      (line.match(/<\/strong>/gi) || []).length +
+      (line.match(/<\/b>/gi) || []).length;
+    return opens !== closes;
+  });
+  if (!needsFix) return lines;
+  const html = lines.join("<br>");
+  const rawLines = html.split(/<br\s*\/?>/gi).map((l) => l.trim());
+  const result: string[] = [];
+  let stack: string[] = [];
+  for (const raw of rawLines) {
+    let line = stack.join("") + raw;
+    const tags = [...raw.matchAll(/<(\/?)(mark|strong|b)\b([^>]*)>/gi)];
+    for (const t of tags) {
+      const name = t[2].toLowerCase();
+      if (t[1] === "/") {
+        for (let i = stack.length - 1; i >= 0; i--) {
+          if (stack[i].match(new RegExp(`^<${name}\\b`, "i"))) {
+            stack.splice(i, 1);
+            break;
+          }
+        }
+      } else {
+        stack.push(t[0]);
+      }
+    }
+    const suffix = [...stack]
+      .reverse()
+      .map((tag) => { const m = tag.match(/^<(\w+)/); return m ? `</${m[1]}>` : ""; })
+      .join("");
+    line += suffix;
+    result.push(line);
+  }
+  return result.filter((l) => stripHtmlTags(l).trim() !== "");
+}
+
+function hexToRgbNorm(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace("#", "");
+  return {
+    r: parseInt(h.substring(0, 2), 16) / 255,
+    g: parseInt(h.substring(2, 4), 16) / 255,
+    b: parseInt(h.substring(4, 6), 16) / 255,
+  };
 }
 
 function drawRichSegments(
@@ -1810,13 +1872,14 @@ function drawRichSegments(
     const f = seg.bold ? ctx.bold : ctx.font;
     const w = safeWidth(f, seg.text, size);
     if (seg.highlight) {
+      const c = seg.color ? hexToRgbNorm(seg.color) : { r: 1, g: 0.92, b: 0.23 };
       ctx.page.drawRectangle({
         x: cx - 0.5,
         y: yFromTop(y + size + 1),
         width: w + 1,
         height: size + 3,
-        color: rgb(1, 0.92, 0.23),
-        opacity: 0.35,
+        color: rgb(c.r, c.g, c.b),
+        opacity: 0.6,
       });
     }
     safeDraw(ctx.page, seg.text, { x: cx, y: yFromTop(y + 10), size, font: f, color: COL.text });
@@ -1824,7 +1887,8 @@ function drawRichSegments(
   }
 }
 
-function drawPlainLines(ctx: Ctx, lines: string[]) {
+function drawPlainLines(ctx: Ctx, rawLines: string[]) {
+  const lines = fixPartialTags(rawLines);
   for (const line of lines) {
     const plain = stripMarkers(line);
     const wrapped = wordWrap(ctx.font, plain, 12, CONTENT_W);
@@ -1860,7 +1924,8 @@ function listHeightByStyle(ctx: Ctx, lines: string[], style: "bullet" | "numbere
   return plainLinesHeight(ctx, lines);
 }
 
-function drawNumbered(ctx: Ctx, lines: string[]) {
+function drawNumbered(ctx: Ctx, rawLines: string[]) {
+  const lines = fixPartialTags(rawLines);
   const stripped = lines.map(stripMarkers);
   const wrapped = stripped.map((line) => wordWrap(ctx.font, line, 12, CONTENT_W - 28));
   ensureSpace(ctx, numberedListHeight(ctx, stripped));
@@ -1922,7 +1987,7 @@ function drawAdvantagePage(ctx: Ctx, content?: AdvantageSection) {
   const paraLH = 11 * 1.35;
   let parasH = 0;
   for (const p of paras) {
-    parasH += wordWrap(ctx.font, p, 11, CONTENT_W).length * paraLH + 8;
+    parasH += wordWrap(ctx.font, stripHtmlTags(p), 11, CONTENT_W).length * paraLH + 8;
   }
   const sectionH = 6 + 30 + 16 + parasH + 14 + cardH + 18 + statH;
   ensureSpace(ctx, sectionH);
@@ -1933,7 +1998,7 @@ function drawAdvantagePage(ctx: Ctx, content?: AdvantageSection) {
   ctx.page.drawLine({ start: { x: MARGIN, y: yFromTop(ctx.y) }, end: { x: MARGIN + 64, y: yFromTop(ctx.y) }, color: COL.accent, thickness: 2.5 });
   space(ctx, 16);
   for (const p of paras) {
-    drawText(ctx, p, { x: MARGIN, size: 11, maxWidth: CONTENT_W, color: COL.text });
+    drawText(ctx, stripHtmlTags(p), { x: MARGIN, size: 11, maxWidth: CONTENT_W, color: COL.text });
     space(ctx, 8);
   }
   space(ctx, 14);
@@ -2009,7 +2074,7 @@ function drawShowcaseSection(
 }
 
 // ── Phase G: "Connect With Us" — shares the final page with Our Portfolio ──
-function drawConnectPage(ctx: Ctx, driveLink: string | null = null, content?: ConnectSection) {
+function drawConnectPage(ctx: Ctx, driveLink: string | null = null, content?: ConnectSection, isLast: boolean = true) {
   const GREEN = rgb(0x15 / 255, 0x93 / 255, 0x41 / 255);
   const LIGHT_GREEN = rgb(0.91, 0.97, 0.93);
 
@@ -2082,10 +2147,12 @@ function drawConnectPage(ctx: Ctx, driveLink: string | null = null, content?: Co
     drawLink(ctx, value, url, { x: px + labelCol + 12, y: ry + 2, size: 10 });
   }
   ctx.y += panelH;
-  space(ctx, 24);
-  drawCentered(ctx, "Fitoverse Private Limited   ·   SALEM · CHENNAI · BANGALORE", MARGIN, CONTENT_W, ctx.y, 9, ctx.font, COL.muted);
-  ctx.y += 16;
-  drawCentered(ctx, "GSTIN 33AAECF8905G1ZQ   ·   CIN U92490TZ2022PTC038004", MARGIN, CONTENT_W, ctx.y, 8, ctx.font, COL.muted);
+  if (isLast) {
+    space(ctx, 24);
+    drawCentered(ctx, "Fitoverse Private Limited   ·   SALEM · CHENNAI · BANGALORE", MARGIN, CONTENT_W, ctx.y, 9, ctx.font, COL.muted);
+    ctx.y += 16;
+    drawCentered(ctx, "GSTIN 33AAECF8905G1ZQ   ·   CIN U92490TZ2022PTC038004", MARGIN, CONTENT_W, ctx.y, 8, ctx.font, COL.muted);
+  }
 }
 
 // ── New section helpers ──────────────────────────────────────────────────────
@@ -2117,8 +2184,8 @@ function drawPhotoSection(ctx: Ctx, image: PDFImage, caption?: string) {
 
 function drawCustomTextSection(ctx: Ctx, title: string, body: string) {
   ensureSpace(ctx, 50);
-  drawSectionTitle(ctx, title);
-  drawText(ctx, body, { x: MARGIN, size: 11, maxWidth: CONTENT_W });
+  drawSectionTitle(ctx, stripHtmlTags(title));
+  drawText(ctx, stripHtmlTags(body), { x: MARGIN, size: 11, maxWidth: CONTENT_W });
   space(ctx, 8);
 }
 
@@ -2267,6 +2334,7 @@ function renderSection(
   doc: PDFDocument,
   itemImages: Map<string, PDFImage>,
   photoImageMap: Map<string, PDFImage | null>,
+  isLast: boolean = true,
 ) {
   switch (sec.type) {
     case "cover":
@@ -2300,20 +2368,37 @@ function renderSection(
     }
 
     case "spec_cards": {
-      const specItems = data.lineItems.filter(
-        (i) => i.included && i.specs && i.specs.length,
-      );
-      if (specItems.length) {
-        // Reserve space for the section title TOGETHER with its first row of
-        // cards (34 = drawSectionTitle's own vertical consumption: space(10) +
-        // 18 + space(6)) — otherwise a title that just fits at a page's bottom
-        // leaves the card(s) stranded on the next page.
-        ensureSpace(
-          ctx,
-          34 + firstSpecCardRowHeight(ctx, specItems, itemImages),
-        );
+      const specSec = sec as SpecCardsSection;
+      if (specSec.cards && specSec.cards.length) {
+        // Custom edited cards — use overridden data
+        const customItems: QuoteLineItem[] = specSec.cards.map((c) => ({
+          id: c.lineItemId,
+          name: c.name,
+          description: "",
+          areaSqFt: 0,
+          ratePerSqFt: 0,
+          gstPercent: 0,
+          total: 0,
+          included: true,
+          imageUrl: c.imageUrl,
+          specs: c.specs,
+        }));
+        ensureSpace(ctx, 34 + firstSpecCardRowHeight(ctx, customItems, itemImages));
         drawSectionTitle(ctx, specSectionTitle(data.sport));
-        drawSpecCards(ctx, specItems, itemImages);
+        drawSpecCards(ctx, customItems, itemImages);
+      } else {
+        // Auto from line items
+        const specItems = data.lineItems.filter(
+          (i) => i.included && i.specs && i.specs.length,
+        );
+        if (specItems.length) {
+          ensureSpace(
+            ctx,
+            34 + firstSpecCardRowHeight(ctx, specItems, itemImages),
+          );
+          drawSectionTitle(ctx, specSectionTitle(data.sport));
+          drawSpecCards(ctx, specItems, itemImages);
+        }
       }
       break;
     }
@@ -2430,7 +2515,7 @@ function renderSection(
       const connData = sec as ConnectSection;
       drawFooter(ctx);
       newPage(ctx);
-      drawConnectPage(ctx, data.driveLink ?? null, connData);
+      drawConnectPage(ctx, data.driveLink ?? null, connData, isLast);
       break;
     }
 
@@ -2438,6 +2523,7 @@ function renderSection(
       const photoData = sec as PhotoSection;
       const img = photoImageMap.get(photoData.id) ?? null;
       if (img) {
+        space(ctx, 16);
         drawPhotoSection(ctx, img, photoData.caption);
       }
       break;
@@ -2445,6 +2531,7 @@ function renderSection(
 
     case "custom_text": {
       const ctData = sec as CustomTextSection;
+      space(ctx, 16);
       drawCustomTextSection(ctx, ctData.title, ctData.body);
       break;
     }
@@ -2521,12 +2608,21 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
 
   // ── PAGE 2+: remaining sections in order ──
   newPage(ctx);
-  for (const sec of visible.filter((s) => s.type !== "cover")) {
+  const remaining = visible.filter((s) => s.type !== "cover");
+  for (let i = 0; i < remaining.length; i++) {
+    const sec = remaining[i];
+    const isLast = i === remaining.length - 1;
     const yBefore = ctx.y;
     const pageBefore = ctx.page;
-    renderSection(ctx, sec, data, doc, itemImages, photoImageMap);
-    if (sec.highlighted && ctx.page === pageBefore) {
-      drawHighlightStrip(ctx.page, yBefore, ctx.y);
+    renderSection(ctx, sec, data, doc, itemImages, photoImageMap, isLast);
+    if (sec.highlighted) {
+      if (ctx.page === pageBefore) {
+        drawHighlightStrip(ctx.page, yBefore, ctx.y);
+      } else {
+        // Section crossed pages — strip on old page (yBefore → bottom) + new page (top → ctx.y)
+        drawHighlightStrip(pageBefore, yBefore, PAGE_H - FOOTER_RESERVE);
+        drawHighlightStrip(ctx.page, MARGIN, ctx.y);
+      }
     }
   }
 

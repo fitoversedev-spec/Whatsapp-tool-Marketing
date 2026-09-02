@@ -457,19 +457,6 @@ function SortableSection({
 
         {/* Controls */}
         <div className="flex items-center gap-1.5 ml-1">
-          {/* Highlight toggle */}
-          {canEdit && (
-            <button
-              onClick={() => onUpdate({ ...section, highlighted: !section.highlighted })}
-              className={`p-1.5 rounded-md ${section.highlighted ? "text-emerald-600 bg-emerald-50" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"}`}
-              title="Highlight section"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill={section.highlighted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            </button>
-          )}
-
           {/* Visibility toggle */}
           <button
             onClick={() => onUpdate({ ...section, visible: !section.visible })}

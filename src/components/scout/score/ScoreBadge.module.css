@@ -1,0 +1,54 @@
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-body);
+  flex-wrap: wrap;
+}
+
+.number {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  color: var(--ink);
+}
+
+.md .number {
+  font-size: var(--text-xl);
+}
+
+.sm .number {
+  font-size: var(--text-15);
+}
+
+/*
+ * Amber rather than a neutral grey: this is a caveat, not a category. Grey
+ * would read as "no survey yet, fine", and the whole point is that it changes
+ * how the number may be used.
+ */
+.deskOnly {
+  font-size: var(--text-10);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gray-700);
+  background: var(--white);
+  border: 1px solid var(--plot-amber);
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+  cursor: help;
+}
+
+.confidence {
+  font-size: var(--text-10-5);
+  color: var(--gray-500);
+  text-transform: capitalize;
+}
+
+.unscored {
+  font-size: var(--text-11);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+}

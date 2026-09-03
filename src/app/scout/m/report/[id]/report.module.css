@@ -1,0 +1,234 @@
+/*
+ * Screen 04 — Report and share.
+ *
+ * Mockup values: 20px/18px/24px scroll padding, 18px gaps, a 16px-radius
+ * summary card, a 130px-min field-notes textarea at 13.5px/1.6, the green
+ * success card on `--green-500`, and a `#25D366` WhatsApp button at 17px/20px
+ * padding and 15.5px/700 type.
+ */
+
+.body {
+  padding: 20px var(--m-pad-x) 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+/* ------------------------------------------------------- summary card */
+
+.summary {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-16);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summaryText {
+  margin: 0;
+  font-size: var(--text-13);
+  color: var(--m-muted-on-white);
+  line-height: 1.7;
+}
+
+/* --------------------------------------------------------- live score */
+
+/*
+ * The score strip.
+ *
+ * Not the score *card* — that is screen 02's. This is the running total while
+ * the checklist is being filled in, so the surveyor can see the fifteen
+ * practicals points arriving and the basis flip from desk_only to full.
+ */
+.scoreStrip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--black);
+  color: var(--on-dark);
+  border-radius: var(--radius-16);
+  padding: 14px 16px;
+}
+
+.scoreNumeral {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  flex: none;
+}
+
+.scoreMeta {
+  min-width: 0;
+  font-size: var(--text-11-5);
+  line-height: 1.5;
+  color: var(--on-dark-muted-strong);
+}
+
+.scoreBasis {
+  display: block;
+  color: var(--sky);
+  margin-top: 3px;
+}
+
+.scoreBasisFull {
+  display: block;
+  color: var(--green-100);
+  margin-top: 3px;
+}
+
+.scoreBusy {
+  opacity: 0.6;
+}
+
+/* ----------------------------------------------------------- notes */
+
+.notes {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 130px;
+  resize: vertical;
+  font-family: var(--font-body);
+  font-size: var(--text-13-5);
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-14);
+  padding: 14px;
+  outline: none;
+}
+
+.notes:focus-visible {
+  border-color: var(--accent);
+}
+
+/* Same box as the notes field, one line high. 48px keeps the touch target
+   above the 44px minimum every control in Field mode is held to. */
+.recipient {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 48px;
+  font-family: var(--font-body);
+  font-size: var(--text-13-5);
+  color: var(--ink);
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-14);
+  padding: 12px 14px;
+  outline: none;
+}
+
+.recipient:focus-visible {
+  border-color: var(--accent);
+}
+
+/* --------------------------------------------------------- generated */
+
+.generated {
+  background: var(--surface-card);
+  border: 1px solid var(--green-500);
+  border-radius: var(--radius-16);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: ssIn 0.22s var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generated {
+    animation: none;
+  }
+}
+
+.tick {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--green-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--green-500);
+}
+
+.generatedText {
+  min-width: 0;
+}
+
+.generatedTitle {
+  display: block;
+  font-size: var(--text-13-5);
+  font-weight: var(--weight-semibold);
+}
+
+.generatedSub {
+  display: block;
+  font-size: var(--text-11-5);
+  color: var(--m-muted-on-white);
+  margin-top: 2px;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------- WhatsApp */
+
+.whatsapp {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--whatsapp);
+  color: var(--black);
+  border: 0;
+  border-radius: var(--radius-14);
+  padding: 17px 20px;
+  min-height: var(--m-touch);
+  font-family: var(--font-body);
+  font-size: var(--text-15-5);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.whatsapp:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------- misc */
+
+.notice {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-12);
+  padding: 13px 14px;
+  font-size: var(--text-12-5);
+  line-height: 1.55;
+  color: var(--m-muted-on-white);
+}
+
+.hardFlag {
+  border-color: var(--red-500);
+  color: var(--ink);
+}
+
+.status {
+  font-size: var(--text-11-5);
+  color: var(--m-muted);
+  line-height: 1.5;
+}
+
+.statusError {
+  color: var(--red-600);
+}

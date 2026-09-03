@@ -1,0 +1,33 @@
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 13px;
+  border-radius: var(--radius-12);
+  background: var(--surface-card);
+  border: 1px solid var(--plot-amber);
+  color: var(--ink);
+  font-size: var(--text-12-5);
+  line-height: 1.5;
+}
+
+.icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--plot-amber);
+}
+
+.text {
+  min-width: 0;
+}
+
+.title {
+  display: block;
+  font-weight: var(--weight-semibold);
+}
+
+.detail {
+  display: block;
+  color: var(--m-muted-on-white);
+  margin-top: 2px;
+}

@@ -1,0 +1,73 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  font-weight: var(--weight-semibold);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    filter var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard);
+}
+
+.button:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Sizes — values transcribed from the design-system bundle. */
+.sm {
+  padding: 6px 14px;
+  font-size: var(--text-13);
+}
+.md {
+  padding: 10px 20px;
+  font-size: var(--text-sm);
+}
+.lg {
+  padding: 14px 28px;
+  font-size: var(--text-base);
+}
+
+/* Variants. */
+.primary {
+  background: var(--accent);
+  color: var(--white);
+  border: 1px solid var(--accent);
+}
+.secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+}
+.dark {
+  background: var(--black);
+  color: var(--white);
+  border: 1px solid var(--black);
+}
+.ghost {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid transparent;
+}
+.danger {
+  background: var(--danger);
+  color: var(--white);
+  border: 1px solid var(--danger);
+}
+
+/* Block CTA shape used by the mobile sticky footer and desktop panels. */
+.block {
+  width: 100%;
+  justify-content: center;
+  border-radius: var(--radius-14);
+  padding: 17px 20px;
+  font-size: var(--text-15-5);
+  font-weight: var(--weight-bold);
+}

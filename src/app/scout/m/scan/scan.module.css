@@ -1,0 +1,241 @@
+/*
+ * Screen 01 — Site check.
+ *
+ * Values transcribed from `design/SiteScoutPhone.dc.html`: 20px/18px/24px
+ * scroll padding, 22px section gap, 14px input radius, a 220px map, an 8px
+ * 4-up radius grid and 8px tag gaps. The density is deliberate — see
+ * DESIGN-ANALYSIS §6.
+ */
+
+.body {
+  padding: 20px var(--m-pad-x) 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.sectionWide {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.count {
+  font-size: var(--text-11-5);
+  color: var(--m-muted);
+}
+
+/* ------------------------------------------------------ address input */
+
+.addressRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-14);
+  padding: 13px 14px;
+  min-height: var(--m-touch);
+}
+
+.pinIcon {
+  flex: none;
+  color: var(--blue-500);
+}
+
+.addressInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  background: transparent;
+}
+
+.locateRow {
+  display: flex;
+  gap: 8px;
+}
+
+/*
+ * "Use my current location" — the highest-value control on this screen.
+ *
+ * The salesperson is physically standing on the plot; typing an address is the
+ * wrong interaction. It is full width and 48px tall because it is tapped with a
+ * thumb, in sunlight, often with one hand holding a site plan.
+ */
+.locate {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--black);
+  border-radius: var(--radius-12);
+  background: var(--black);
+  color: var(--on-dark);
+  font-family: var(--font-body);
+  font-size: var(--text-13-5);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.locate:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.locateSecondary {
+  flex: none;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-12);
+  background: var(--surface-card);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-13-5);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.hint {
+  font-size: var(--text-11-5);
+  line-height: 1.5;
+  color: var(--m-muted);
+}
+
+.warn {
+  font-size: var(--text-11-5);
+  line-height: 1.5;
+  color: var(--red-600);
+}
+
+/* ---------------------------------------------------------------- map */
+
+.mapFrame {
+  border-radius: var(--radius-16);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  position: relative;
+}
+
+.map {
+  height: 220px;
+  display: block;
+}
+
+.pinReadout {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--text-11-5);
+  color: var(--m-muted);
+}
+
+.pinReadout svg {
+  flex: none;
+}
+
+.coords {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------- radius */
+
+.radiusGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.radiusButton {
+  font-family: var(--font-body);
+  font-size: var(--text-13-5);
+  font-weight: var(--weight-semibold);
+  /* Mockup: 12px 0. Raised to clear a 44px target without changing the grid. */
+  padding: 14px 0;
+  min-height: var(--m-touch);
+  border-radius: var(--radius-12);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard);
+  background: var(--surface-card);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+}
+
+.radiusButtonOn {
+  background: var(--black);
+  color: var(--on-dark);
+  border-color: var(--black);
+}
+
+/* --------------------------------------------------------------- tags */
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  min-height: var(--m-touch);
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.presetLabel {
+  font-size: var(--text-11-5);
+  color: var(--m-muted);
+}
+
+.preset {
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: var(--radius-full);
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--m-muted);
+  cursor: pointer;
+}
+
+.presetOn {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--blue-700);
+  background: var(--blue-100);
+}
+
+/* ------------------------------------------------------------- footer */
+
+.error {
+  font-size: var(--text-12-5);
+  line-height: 1.5;
+  color: var(--red-600);
+  text-align: left;
+}

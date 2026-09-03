@@ -40,7 +40,7 @@ const nextConfig = {
     // ("Could not load the sharp module..."). Keep it as a plain Node
     // `require` instead of bundling it. Next 14's stable location for this
     // moved to the top-level `serverExternalPackages` in Next 15+.
-    serverComponentsExternalPackages: ["sharp"],
+    serverComponentsExternalPackages: ["sharp", "@sparticuz/chromium"],
   },
 
   webpack: (config, { dev }) => {

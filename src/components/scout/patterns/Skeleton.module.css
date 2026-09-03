@@ -1,0 +1,35 @@
+.skeleton {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--gray-100) 25%,
+    var(--gray-200) 37%,
+    var(--gray-100) 63%
+  );
+  background-size: 400% 100%;
+  border-radius: var(--radius-8);
+  animation: ssShimmer 1.4s ease infinite;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+}
+
+@keyframes ssShimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--gray-100);
+  }
+}

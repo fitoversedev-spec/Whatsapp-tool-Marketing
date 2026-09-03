@@ -1,0 +1,49 @@
+:root{
+/* Brand core — from Fit O Verse brand guidelines */
+--green:#159341;
+--sky:#73caf0;
+--red:#c81124;
+--blue-bright:#00aeef; /* guide heading/section accent */
+--navy:#2e3192; /* logo ribbon underside */
+/* Blue ramp derived from brand sky */
+--blue-100:#e3f4fc;
+--blue-200:#bfe6f9;
+--blue-300:#9adaf5;
+--blue-400:#73caf0;
+--blue-500:#00aeef;
+--blue-600:#0087c4;
+--blue-700:#00699a;
+/* Green ramp */
+--green-100:#e2f4e9;
+--green-500:#159341;
+--green-600:#0f7333;
+/* Red ramp */
+--red-100:#fae4e7;
+--red-500:#c81124;
+--red-600:#a30d1d;
+/* Neutrals — black-first brand */
+--black:#0a0a0a;
+--ink:#1c1c1e;
+--gray-700:#3a3a3c;
+--gray-500:#6e6e73;
+--gray-300:#c7c7cc;
+--gray-200:#e2e2e6;
+--gray-100:#ededed;
+--white:#ffffff;
+/* Semantic aliases */
+--text-body:var(--ink);
+--text-muted:var(--gray-500);
+--text-inverse:var(--white);
+--surface-page:var(--white);
+--surface-subtle:var(--gray-100);
+--surface-dark:var(--black);
+--surface-card:var(--white);
+--border-default:var(--gray-200);
+--border-strong:var(--gray-300);
+--accent:var(--blue-500);
+--accent-hover:var(--blue-600);
+--accent-soft:var(--blue-100);
+--success:var(--green-500);
+--danger:var(--red-500);
+--focus-ring:0 0 0 3px rgba(0,174,239,.35);
+}

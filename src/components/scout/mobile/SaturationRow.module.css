@@ -1,0 +1,69 @@
+/*
+ * The compact saturation row — the phone presentation of component 2.
+ *
+ * Phase 4 owns the desktop saturation panel. This is a single row because on a
+ * 390px screen the useful content is two numbers and their caveat, and a panel
+ * would push the count table below the fold for no gain.
+ */
+
+.row {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-14);
+  padding: 14px;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.label {
+  font-size: var(--text-10-5);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  color: var(--m-muted-on-white);
+}
+
+.points {
+  font-size: var(--text-11-5);
+  color: var(--m-muted-on-white);
+  flex: none;
+}
+
+.figures {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+}
+
+.value {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.02em;
+}
+
+.against {
+  font-size: var(--text-12-5);
+  color: var(--m-muted-on-white);
+}
+
+.note {
+  margin: 10px 0 0;
+  font-size: var(--text-11);
+  line-height: 1.55;
+  color: var(--m-muted-on-white);
+}
+
+.caveat {
+  margin: 6px 0 0;
+  font-size: var(--text-11);
+  line-height: 1.55;
+  color: var(--blue-700);
+}

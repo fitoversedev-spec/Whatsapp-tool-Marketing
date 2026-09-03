@@ -1,0 +1,136 @@
+/*
+ * Field mode — mobile-only globals.
+ *
+ * Loaded by `src/app/m/layout.tsx` and nothing else, so none of it can reach a
+ * desktop screen. Every value here either (a) comes straight out of
+ * `design/SiteScoutPhone.dc.html` or (b) is a documented deviation, and each
+ * deviation says why.
+ *
+ * Nothing below introduces a colour. Every value resolves to a token from
+ * `src/styles/tokens/`, which is the single source of truth.
+ */
+
+:root {
+  /*
+   * Muted text on a light surface, raised for outdoor legibility.
+   *
+   * The mockup uses `--gray-500` (#6e6e73) for section labels and secondary
+   * rows. On white that is 4.83:1 — AA by a whisker. But the phone's page
+   * background is `--gray-100` (#ededed), and #6e6e73 on #ededed is **4.41:1**,
+   * which fails AA for normal text. At 11px, in direct sunlight, on a screen
+   * dimmed to save battery, "fails by 0.09" is a label nobody can read.
+   *
+   * `--gray-700` (#3a3a3c) is 9.8:1 on the same background and reads as the
+   * same greyscale step. Phase 5's brief authorises exactly this:
+   * "raise contrast where WCAG AA is not met".
+   */
+  --m-muted: var(--gray-700);
+  /* Muted text on white specifically — the mockup's value already passes there. */
+  --m-muted-on-white: var(--gray-500);
+
+  /*
+   * Home-indicator clearance. The mockup hardcodes 22px; on a device that is
+   * whatever the notch cutout actually is, and on a browser tab it is nothing.
+   */
+  --m-safe-bottom: max(22px, env(safe-area-inset-bottom, 0px));
+  --m-safe-top: env(safe-area-inset-top, 0px);
+
+  /* Screen padding, from the mockup. */
+  --m-pad-x: 18px;
+
+  /* Minimum touch target. WCAG 2.5.5 / Apple HIG. */
+  --m-touch: 44px;
+}
+
+/*
+ * The phone shell: a fixed-height column, with the middle band as the only
+ * thing that scrolls.
+ *
+ * ## Why the height is fixed rather than a minimum
+ *
+ * With `min-height`, the column grows to fit its content and the *document*
+ * scrolls — which puts the primary action below the fold, exactly where a
+ * one-handed user cannot reach it. A fixed height makes `.mScroll` the scroll
+ * container, so the header and the footer are simply the first and last flex
+ * items and stay put without needing `position: sticky` at all.
+ *
+ * ## Why `dvh` and not `vh`
+ *
+ * On iOS Safari `vh` is the *largest* viewport — the one you get after the
+ * address bar has collapsed. Sizing to it puts the CTA underneath the address
+ * bar for as long as the bar is showing. `dvh` tracks the viewport as it
+ * actually is, including while the keyboard is open.
+ */
+.mScreen {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.mScroll {
+  flex: 1;
+  /* Without this a flex child refuses to shrink below its content height. */
+  min-height: 0;
+  overflow-y: auto;
+  /* Nothing may scroll sideways, at any width down to 320px. */
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* Keep momentum scrolling from rubber-banding the whole document. */
+  overscroll-behavior-y: contain;
+}
+
+/*
+ * Content inside the scrolling band never shrinks.
+ *
+ * Every screen makes this element both the scroll container **and** the flex
+ * column holding its sections. Flex items shrink by default, and a fixed-height
+ * column whose content is taller than it will shrink them — normally the
+ * automatic minimum size stops that at the content height, but `overflow:
+ * hidden` (which the count table, the spec tables and every rounded card need
+ * for their corners) sets that minimum to zero. The result is a card collapsed
+ * to a 2px line with its rows spilling out of it.
+ *
+ * Scrolling content must never shrink; that is what the scrollbar is for.
+ */
+.mScroll > * {
+  flex-shrink: 0;
+}
+
+/*
+ * Screen-enter animation, from the mockup: 6px rise + fade over .22s.
+ * `ssIn` itself is declared in globals.css; this is the mobile opt-in class.
+ */
+.mIn {
+  animation: ssIn 0.22s var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mIn {
+    animation: none;
+  }
+}
+
+/*
+ * Users who ask the OS for more contrast get it. This is the same lever a
+ * salesperson reaches for when they cannot read the screen outdoors.
+ */
+@media (prefers-contrast: more) {
+  :root {
+    --m-muted: var(--ink);
+    --m-muted-on-white: var(--ink);
+    --on-dark-muted: rgba(255, 255, 255, 0.85);
+    --on-dark-muted-soft: rgba(255, 255, 255, 0.85);
+    --on-dark-muted-strong: rgba(255, 255, 255, 0.9);
+  }
+}
+
+/*
+ * Leaflet renders its own controls and attribution; keep them from widening
+ * the document at 320px.
+ */
+.leaflet-container {
+  max-width: 100%;
+}

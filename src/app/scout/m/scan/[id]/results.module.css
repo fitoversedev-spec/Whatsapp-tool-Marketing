@@ -1,0 +1,330 @@
+/*
+ * Screen 02 — Results.
+ *
+ * Mockup values: 16px/18px/20px scroll padding, 20px section gap, a 10px 2×2
+ * stat grid at 14px padding with a 26px display numeral, the four-column count
+ * table at 12.5px, and a 190px map preview.
+ *
+ * The stat card is written here rather than reusing `patterns/StatCard`
+ * because the phone's version differs in three ways the shared one does not
+ * express — 14px padding, a 26px numeral and a coloured sub-line ("6 football
+ * turf") — and Phase 4 owns that component. A Field-mode shape belongs in
+ * Field mode.
+ */
+
+.body {
+  padding: 16px var(--m-pad-x) 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+/* ------------------------------------------------------------- progress */
+
+.progress {
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-14);
+  padding: 14px;
+}
+
+.progressLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: var(--text-12-5);
+  color: var(--ink);
+}
+
+.progressPct {
+  flex: none;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-12-5);
+}
+
+.progressTrack {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--gray-200);
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+  transition: width var(--dur-med) var(--ease-standard);
+}
+
+.progressNote {
+  margin: 10px 0 0;
+  font-size: var(--text-11-5);
+  line-height: 1.5;
+  color: var(--m-muted-on-white);
+}
+
+.resume {
+  margin-top: 10px;
+}
+
+/* ----------------------------------------------------------- stat grid */
+
+.statGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stat {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-14);
+  padding: 14px;
+  min-width: 0;
+}
+
+.statDark {
+  background: var(--black);
+  color: var(--on-dark);
+  border-color: var(--black);
+}
+
+.statLabel {
+  font-size: var(--text-10-5);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  color: var(--m-muted-on-white);
+}
+
+.statDark .statLabel {
+  color: var(--on-dark-muted);
+}
+
+.statValue {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.02em;
+  margin-top: 8px;
+  line-height: 1.1;
+}
+
+/* "at least 18" needs to fit; the mockup's 26px is for a bare integer. */
+.statValueLong {
+  font-size: var(--text-lg);
+}
+
+.statSub {
+  font-size: var(--text-11);
+  color: var(--m-muted-on-white);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.statSubGreen {
+  color: var(--green-600);
+}
+
+.statDark .statSub {
+  color: var(--sky);
+}
+
+/* --------------------------------------------------------- count table */
+
+.table {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-14);
+  overflow: hidden;
+}
+
+.tableHead,
+.tableRow {
+  display: grid;
+  grid-template-columns: 1.35fr 0.5fr 0.7fr 0.7fr;
+  gap: 6px;
+  padding: 12px 14px;
+  align-items: baseline;
+}
+
+.tableHead {
+  padding: 11px 14px;
+  background: var(--gray-100);
+  font-size: var(--text-10);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-stat-sm);
+  text-transform: uppercase;
+  color: var(--m-muted-on-white);
+}
+
+.tableRow {
+  font-size: var(--text-12-5);
+  border-top: 1px solid var(--border-default);
+}
+
+.tableRowDemand {
+  background: var(--blue-100);
+}
+
+.tableName {
+  font-weight: var(--weight-semibold);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tableNum {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tableMuted {
+  text-align: right;
+  color: var(--m-muted-on-white);
+  font-variant-numeric: tabular-nums;
+}
+
+.saturatedMark {
+  color: var(--blue-700);
+  font-weight: var(--weight-bold);
+}
+
+/* --------------------------------------------------- nearest facilities */
+
+.facilityList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.facility {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: var(--m-touch);
+  text-align: left;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-12);
+  padding: 12px 13px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  text-decoration: none;
+  color: inherit;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green-500);
+  flex: none;
+}
+
+.facilityText {
+  flex: 1;
+  min-width: 0;
+}
+
+.facilityName {
+  display: block;
+  font-size: var(--text-13);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.facilityMeta {
+  display: block;
+  font-size: var(--text-11-5);
+  color: var(--m-muted-on-white);
+  margin-top: 2px;
+}
+
+.facilityDistance {
+  font-size: var(--text-11-5);
+  color: var(--m-muted-on-white);
+  flex: none;
+}
+
+/* ------------------------------------------------------------- map */
+
+.mapFrame {
+  border-radius: var(--radius-14);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+}
+
+.map {
+  height: 190px;
+  display: block;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: var(--text-11);
+  color: var(--m-muted);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legendFacility {
+  background: var(--green-500);
+}
+.legendDemand {
+  background: var(--blue-500);
+}
+.legendPlot {
+  background: var(--red-500);
+}
+
+/* ----------------------------------------------------------- messages */
+
+.notice {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-12);
+  padding: 13px 14px;
+  font-size: var(--text-12-5);
+  line-height: 1.55;
+  color: var(--m-muted-on-white);
+}
+
+.error {
+  border-color: var(--red-500);
+  color: var(--ink);
+}
+
+.counts {
+  font-size: var(--text-11-5);
+  line-height: 1.5;
+  color: var(--m-muted);
+}

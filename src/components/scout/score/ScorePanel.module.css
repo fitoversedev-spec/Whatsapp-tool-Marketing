@@ -1,0 +1,360 @@
+/*
+ * The Site Score panel. New design work, built from the same recipe as the
+ * rest of the screens: 18px card radius, 12–16px inner radii, the 11px/.13em
+ * section label, `--font-display` at 700 for anything numeric and large.
+ */
+
+.panel {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-18);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: var(--font-body);
+}
+
+/* ---- headline: the inverted stat card from D2, scaled up ---------------- */
+
+.headline {
+  background: var(--black);
+  color: var(--on-dark);
+  border-radius: var(--radius-16);
+  padding: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.numberBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.number {
+  font-family: var(--font-display);
+  font-size: 52px;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.outOf {
+  font-size: 18px;
+  color: var(--on-dark-muted);
+  margin-left: 6px;
+}
+
+.headingLabel {
+  letter-spacing: var(--tracking-section);
+}
+
+.verdictBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  text-align: right;
+  max-width: 260px;
+}
+
+.confidence {
+  font-size: var(--text-11-5);
+  color: var(--on-dark-muted-strong);
+  letter-spacing: 0.02em;
+}
+
+/*
+ * The desk-only label is deliberately loud. It is the difference between a
+ * comparable score and one that is not, and the dashboard sorts by score.
+ */
+.basis {
+  font-size: var(--text-11);
+  line-height: 1.5;
+  color: var(--sky);
+  border: 1px solid rgba(115, 202, 240, 0.4);
+  border-radius: var(--radius-8);
+  padding: 5px 9px;
+}
+
+.statement {
+  margin: 0;
+  font-size: var(--text-13-5);
+  line-height: 1.7;
+  color: var(--gray-700);
+}
+
+/* ---- hard flags -------------------------------------------------------- */
+
+.hardFlags {
+  border: 1px solid var(--red-500);
+  background: var(--red-100);
+  border-radius: var(--radius-12);
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.hardFlag {
+  margin: 0;
+  font-size: var(--text-12-5);
+  line-height: 1.65;
+  color: var(--red-600);
+}
+
+/* ---- component bars ---------------------------------------------------- */
+
+.components {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.component {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-12);
+  overflow: hidden;
+}
+
+.componentButton {
+  width: 100%;
+  text-align: left;
+  background: var(--surface-card);
+  border: 0;
+  padding: 12px 13px 13px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.componentButton:hover {
+  background: var(--gray-100);
+}
+
+.componentTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.componentLabel {
+  font-size: var(--text-13);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+
+.componentPoints {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--gray-500);
+}
+
+.pointsAwarded {
+  font-family: var(--font-display);
+  font-size: var(--text-15);
+  font-weight: var(--weight-bold);
+  color: var(--ink);
+}
+
+.pointsAvailable {
+  font-size: var(--text-11-5);
+}
+
+.excluded {
+  font-size: var(--text-11);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+}
+
+.chevron {
+  align-self: center;
+  transition: transform 0.15s var(--ease-standard);
+  color: var(--gray-500);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* The blue ramp, as used by the comparison table's winning cells. */
+.track {
+  display: block;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--blue-100);
+  overflow: hidden;
+}
+
+.trackExcluded {
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  height: 8px;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--blue-500);
+  transition: width var(--dur-med) var(--ease-standard);
+}
+
+.detail {
+  border-top: 1px solid var(--border-default);
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  background: var(--gray-100);
+  animation: ssIn var(--dur-med) var(--ease-standard);
+}
+
+.justification {
+  margin: 0;
+  font-size: var(--text-12-5);
+  line-height: 1.7;
+  color: var(--gray-700);
+}
+
+.parts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.part {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  font-size: var(--text-11-5);
+}
+
+.partLabel {
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+
+.partPoints {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  color: var(--blue-700);
+}
+
+.partDetail {
+  grid-column: 1 / -1;
+  color: var(--gray-500);
+  line-height: 1.6;
+}
+
+.flags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--text-11-5);
+  line-height: 1.6;
+}
+
+.flag_info {
+  color: var(--gray-500);
+}
+.flag_warning {
+  color: var(--gray-700);
+}
+.flag_hard {
+  color: var(--red-600);
+  font-weight: var(--weight-semibold);
+}
+
+.inputs {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 14px;
+  font-size: var(--text-11);
+  color: var(--gray-500);
+  border-top: 1px solid var(--border-default);
+  padding-top: 10px;
+}
+
+.inputRow {
+  display: contents;
+}
+
+.inputRow dt {
+  margin: 0;
+}
+
+.inputRow dd {
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-display);
+  color: var(--gray-700);
+}
+
+/* ---- confidence + footer ----------------------------------------------- */
+
+.confidenceBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.reasons {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--text-12-5);
+  line-height: 1.7;
+  color: var(--gray-500);
+}
+
+.footer {
+  border-top: 1px solid var(--border-default);
+  padding-top: 12px;
+  font-size: var(--text-11);
+  color: var(--gray-500);
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pending {
+  color: var(--blue-700);
+}
+
+.refresh {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail {
+    animation: none;
+  }
+  .fill,
+  .chevron {
+    transition: none;
+  }
+}

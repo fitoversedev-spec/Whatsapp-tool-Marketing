@@ -1,0 +1,28 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: var(--text-13);
+  color: var(--ink);
+}
+
+.label {
+  font-weight: var(--weight-semibold);
+}
+
+.select {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--white);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.select:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}

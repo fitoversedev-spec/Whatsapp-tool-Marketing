@@ -52,6 +52,12 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         description: "Draw editable 2D layouts, send as WhatsApp image",
       },
       {
+        href: "/scout/dashboard",
+        label: "Site Scout",
+        icon: "📍",
+        description: "Scan an area for competitors & demand, score a plot",
+      },
+      {
         href: "/products",
         label: "Products",
         icon: "📦",

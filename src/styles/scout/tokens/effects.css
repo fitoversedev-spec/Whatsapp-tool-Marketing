@@ -1,0 +1,10 @@
+:root{
+--shadow-sm:0 1px 3px rgba(10,10,10,.08);
+--shadow-md:0 4px 16px rgba(10,10,10,.10);
+--shadow-lg:0 12px 40px rgba(10,10,10,.16);
+--gradient-ribbon:linear-gradient(120deg,#159341 0%,#73caf0 45%,#2e3192 80%,#c81124 100%); /* @kind color */
+--gradient-sky:linear-gradient(180deg,#73caf0 0%,#00aeef 100%); /* @kind color */
+--ease-standard:cubic-bezier(.4,0,.2,1); /* @kind other */
+--dur-fast:120ms; /* @kind other */
+--dur-med:220ms; /* @kind other */
+}

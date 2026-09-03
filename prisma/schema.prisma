@@ -2,12 +2,14 @@
 // Run: npx prisma db push (or migrate dev)
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
 }
 
 // NOTE: SQLite did not support native enums, so we use String fields.
@@ -90,6 +92,14 @@ model User {
   metaLeadNotes           MetaLeadNote[]   @relation("MetaLeadNoteAuthor")
   pushEnabled             Boolean          @default(false) @map("push_enabled")
   pushSubscriptions       PushSubscription[]
+
+  // ── Scout relations ──
+  scoutSites        Site[]
+  scoutScans        Scan[]
+  scoutReports      Report[]          @relation("ScoutReportAuthor")
+  scoutReportShares ReportShare[]     @relation("ScoutReportSharer")
+  scoutPlaceTags    PlaceTag[]        @relation("ScoutPlaceTagAuthor")
+  scoutApiUsage     ApiUsage[]        @relation("ScoutApiUsageUser")
 
   @@map("users")
 }
@@ -2101,4 +2111,479 @@ model MetaLeadToLabel {
   @@id([metaLeadId, labelId])
   @@index([labelId])
   @@map("meta_lead_to_labels")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SITE SCOUT — ported from D:\Project -Map, Stage B merge
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum ScanStatus {
+  draft
+  scanned
+  report_sent
+
+  @@map("scan_status")
+}
+
+enum PlaceSide {
+  competition
+  demand
+
+  @@map("place_side")
+}
+
+enum ReportChannel {
+  whatsapp
+  pdf
+  email
+
+  @@map("report_channel")
+}
+
+enum ScanJobStatus {
+  queued
+  running
+  paused
+  completed
+  failed
+  cancelled
+
+  @@map("scan_job_status")
+}
+
+enum ScanTaskStatus {
+  pending
+  running
+  done
+  failed
+  skipped
+
+  @@map("scan_task_status")
+}
+
+enum ReportStatus {
+  draft
+  generating
+  generated
+  delivered
+  failed
+
+  @@map("report_status")
+}
+
+enum ReportKind {
+  scan
+  comparison
+
+  @@map("report_kind")
+}
+
+model Site {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId      String  @map("owner_id")
+  name         String  @db.VarChar(200)
+  address      String?
+  city         String? @db.VarChar(120)
+  state        String? @db.VarChar(120)
+  location     Unsupported("geography(Point, 4326)")?
+  customerName  String?  @map("customer_name") @db.VarChar(200)
+  customerPhone String?  @map("customer_phone") @db.VarChar(40)
+  landOwnerName String?  @map("land_owner_name") @db.VarChar(200)
+  areaSqft      Int?     @map("area_sqft")
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  owner User   @relation(fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "sites_owner_id_users_id_fk")
+  scans Scan[]
+
+  @@index([ownerId], map: "sites_owner_idx")
+  @@index([city], map: "sites_city_idx")
+  @@map("sites")
+}
+
+model ScoreModel {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  version            String   @unique(map: "score_models_version_idx") @db.VarChar(20)
+  name               String   @db.VarChar(160)
+  description        String?
+  weights            Json
+  isActive           Boolean  @default(false) @map("is_active")
+  includesPopulation Boolean  @default(false) @map("includes_population")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  scans Scan[]
+
+  @@map("score_models")
+}
+
+model Scan {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId          String     @map("owner_id")
+  siteId           String?    @map("site_id") @db.Uuid
+  areaLabel        String     @map("area_label") @db.VarChar(200)
+  customerName     String?    @map("customer_name") @db.VarChar(200)
+  address          String?
+  centre           Unsupported("geography(Point, 4326)")
+  radiusM          Int        @map("radius_m")
+  searchTerms      Json       @default("{}") @map("search_terms")
+  status           ScanStatus @default(draft)
+  scoreModelId     String?    @map("score_model_id") @db.Uuid
+  scoreModelVersion String?   @map("score_model_version") @db.VarChar(20)
+  scoreTotal       Decimal?   @map("score_total") @db.Decimal(5, 2)
+  scoreVerdict     String?    @map("score_verdict") @db.VarChar(20)
+  scoreBasis       String?    @map("score_basis") @db.VarChar(16)
+  scoreConfidence  String?    @map("score_confidence") @db.VarChar(10)
+  scoreBreakdown   Json?      @map("score_breakdown")
+  scoredAt         DateTime?  @map("scored_at") @db.Timestamptz(6)
+  surveyorInputs   Json?      @map("surveyor_inputs")
+  fieldNotes       String?    @map("field_notes")
+  sweep            Json?
+  facilityCount    Int?       @map("facility_count")
+  demandCount      Int?       @map("demand_count")
+  reviewCount      Int?       @map("review_count")
+  avgRating        Float?     @map("avg_rating") @db.Real
+  saturation       Json?
+  stats            Json?
+  scannedAt        DateTime?  @map("scanned_at") @db.Timestamptz(6)
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  owner        User          @relation(fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "scans_owner_id_users_id_fk")
+  site         Site?         @relation(fields: [siteId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "scans_site_id_sites_id_fk")
+  scoreModel   ScoreModel?   @relation(fields: [scoreModelId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "scans_score_model_id_score_models_id_fk")
+  scanPlaces   ScanPlace[]
+  reports      Report[]
+  reportShares ReportShare[]
+  reviewThemes ReviewTheme[]
+  apiUsage     ApiUsage[]
+  job          ScanJob?
+
+  @@index([ownerId], map: "scans_owner_idx")
+  @@index([siteId], map: "scans_site_idx")
+  @@index([status], map: "scans_status_idx")
+  @@index([createdAt], map: "scans_created_at_idx")
+  @@map("scans")
+}
+
+model Place {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  placeId                String   @unique(map: "places_place_id_idx") @map("place_id") @db.VarChar(255)
+  name                   String   @db.VarChar(300)
+  location               Unsupported("geography(Point, 4326)")
+  rating                 Float?   @db.Real
+  reviewCount            Int?     @map("review_count")
+  address                String?
+  hours                  Json?
+  priceLevel             Int?     @map("price_level") @db.SmallInt
+  website                String?
+  phone                  String?  @db.VarChar(60)
+  googleTypes            String[] @map("google_types")
+  businessStatus         String?  @map("business_status") @db.VarChar(40)
+  primaryType            String?  @map("primary_type") @db.VarChar(80)
+  primaryTypeDisplayName String?  @map("primary_type_display_name") @db.VarChar(160)
+  googleMapsUri          String?  @map("google_maps_uri")
+  operatingWindow        Json?    @map("operating_window")
+  fieldTier              String?  @map("field_tier") @db.VarChar(32)
+  cachedAt               DateTime @default(now()) @map("cached_at") @db.Timestamptz(6)
+  cacheExpiresAt         DateTime @map("cache_expires_at") @db.Timestamptz(6)
+  reviewsCachedAt        DateTime? @map("reviews_cached_at") @db.Timestamptz(6)
+  reviewsCacheExpiresAt  DateTime? @map("reviews_cache_expires_at") @db.Timestamptz(6)
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  scanPlaces   ScanPlace[]
+  tags         PlaceTag[]
+  reviews      PlaceReview[]
+  reviewThemes ReviewTheme[]
+
+  @@index([cacheExpiresAt], map: "places_cache_expires_idx")
+  @@map("places")
+}
+
+model ScanPlace {
+  scanId       String   @map("scan_id") @db.Uuid
+  placeId      String   @map("place_id") @db.Uuid
+  categories   String[] @default([])
+  side         PlaceSide
+  distanceM    Float?   @map("distance_m")
+  anchorWeight Float?   @map("anchor_weight") @db.Real
+  matchedTerms String[] @default([]) @map("matched_terms")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  scan  Scan  @relation(fields: [scanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_places_scan_id_scans_id_fk")
+  place Place @relation(fields: [placeId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_places_place_id_places_id_fk")
+
+  @@id([scanId, placeId], map: "scan_places_scan_id_place_id_pk")
+  @@index([placeId], map: "scan_places_place_idx")
+  @@index([scanId, side], map: "scan_places_side_idx")
+  @@index([categories], map: "scan_places_categories_gin", type: Gin)
+  @@map("scan_places")
+}
+
+model PlaceTag {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  placeId   String   @map("place_id") @db.Uuid
+  key       String   @db.VarChar(80)
+  value     String?
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  place  Place @relation(fields: [placeId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "place_tags_place_id_places_id_fk")
+  author User? @relation("ScoutPlaceTagAuthor", fields: [createdBy], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "place_tags_created_by_users_id_fk")
+
+  @@unique([placeId, key], map: "place_tags_place_key_idx")
+  @@map("place_tags")
+}
+
+model PlaceReview {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  placeId        String    @map("place_id") @db.Uuid
+  googleReviewId String?   @unique(map: "place_reviews_google_id_idx") @map("google_review_id") @db.VarChar(255)
+  authorName     String?   @map("author_name") @db.VarChar(200)
+  rating         Int?      @db.SmallInt
+  text           String?
+  languageCode   String?   @map("language_code") @db.VarChar(16)
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz(6)
+  cachedAt       DateTime  @default(now()) @map("cached_at") @db.Timestamptz(6)
+  cacheExpiresAt DateTime? @map("cache_expires_at") @db.Timestamptz(6)
+
+  place Place @relation(fields: [placeId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "place_reviews_place_id_places_id_fk")
+
+  @@index([placeId], map: "place_reviews_place_idx")
+  @@map("place_reviews")
+}
+
+model ReviewTheme {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scanId       String?  @map("scan_id") @db.Uuid
+  placeId      String?  @map("place_id") @db.Uuid
+  reviewHash   String?  @map("review_hash") @db.VarChar(64)
+  theme        String   @db.VarChar(120)
+  sentiment    String?  @db.VarChar(20)
+  mentionCount Int      @default(0) @map("mention_count")
+  evidence     Json?
+  modelVersion String?  @map("model_version") @db.VarChar(60)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  scan  Scan?  @relation(fields: [scanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "review_themes_scan_id_scans_id_fk")
+  place Place? @relation(fields: [placeId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "review_themes_place_id_places_id_fk")
+
+  @@unique([placeId, reviewHash, theme], map: "review_themes_place_hash_theme_idx")
+  @@index([scanId], map: "review_themes_scan_idx")
+  @@index([placeId], map: "review_themes_place_idx")
+  @@map("review_themes")
+}
+
+model ScanJob {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scanId           String        @unique(map: "scan_jobs_scan_idx") @map("scan_id") @db.Uuid
+  status           ScanJobStatus @default(queued)
+  totalTasks       Int           @default(0) @map("total_tasks")
+  completedTasks   Int           @default(0) @map("completed_tasks")
+  failedTasks      Int           @default(0) @map("failed_tasks")
+  progressLabel    String?       @map("progress_label")
+  tileCount        Int           @default(0) @map("tile_count")
+  leaseToken       String?       @map("lease_token") @db.Uuid
+  leaseExpiresAt   DateTime?     @map("lease_expires_at") @db.Timestamptz(6)
+  callCount        Int           @default(0) @map("call_count")
+  cacheHits        Int           @default(0) @map("cache_hits")
+  estimatedCostUsd Decimal       @default("0") @map("estimated_cost_usd") @db.Decimal(10, 4)
+  lastError        String?       @map("last_error")
+  startedAt        DateTime?     @map("started_at") @db.Timestamptz(6)
+  finishedAt       DateTime?     @map("finished_at") @db.Timestamptz(6)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  scan  Scan          @relation(fields: [scanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_jobs_scan_id_scans_id_fk")
+  tasks ScanJobTask[]
+
+  @@index([status], map: "scan_jobs_status_idx")
+  @@index([leaseExpiresAt], map: "scan_jobs_lease_idx")
+  @@map("scan_jobs")
+}
+
+model ScanJobTask {
+  id          String                                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId       String                                @map("job_id") @db.Uuid
+  tileIndex   Int                                   @map("tile_index")
+  tileCentre  Unsupported("geography(Point, 4326)") @map("tile_centre")
+  tileRadiusM Int                                   @map("tile_radius_m")
+  categoryId  String                                @map("category_id") @db.VarChar(60)
+  termId      String                                @map("term_id") @db.VarChar(60)
+  termLabel   String                                @map("term_label") @db.VarChar(120)
+  side        PlaceSide
+  mode        String                                @db.VarChar(16)
+  fieldTier   String                                @map("field_tier") @db.VarChar(32)
+  status      ScanTaskStatus                        @default(pending)
+  attempts    Int                                   @default(0)
+  resultCount Int?                                  @map("result_count")
+  saturated   Boolean                               @default(false)
+  callCount   Int                                   @default(0) @map("call_count")
+  lastError   String?                               @map("last_error")
+  completedAt DateTime?                             @map("completed_at") @db.Timestamptz(6)
+  createdAt   DateTime                              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  job ScanJob @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_job_tasks_job_id_scan_jobs_id_fk")
+
+  @@unique([jobId, tileIndex, termId], map: "scan_job_tasks_unique_idx")
+  @@index([jobId, status, tileIndex], map: "scan_job_tasks_claim_idx")
+  @@map("scan_job_tasks")
+}
+
+model PlaceSearchCache {
+  id             String                                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cacheKey       String                                @unique(map: "place_search_cache_key_idx") @map("cache_key") @db.VarChar(80)
+  tileCentre     Unsupported("geography(Point, 4326)") @map("tile_centre")
+  tileRadiusM    Int                                   @map("tile_radius_m")
+  termId         String                                @map("term_id") @db.VarChar(60)
+  mode           String                                @db.VarChar(16)
+  fieldTier      String                                @map("field_tier") @db.VarChar(32)
+  googlePlaceIds String[]                              @default([]) @map("google_place_ids")
+  resultCount    Int                                   @default(0) @map("result_count")
+  saturated      Boolean                               @default(false)
+  callCount      Int                                   @default(1) @map("call_count")
+  cachedAt       DateTime                              @default(now()) @map("cached_at") @db.Timestamptz(6)
+  cacheExpiresAt DateTime                              @map("cache_expires_at") @db.Timestamptz(6)
+
+  @@index([cacheExpiresAt], map: "place_search_cache_expires_idx")
+  @@map("place_search_cache")
+}
+
+model ApiUsage {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String?  @map("user_id")
+  scanId           String?  @map("scan_id") @db.Uuid
+  endpoint         String   @db.VarChar(40)
+  skuTier          String   @map("sku_tier") @db.VarChar(32)
+  callCount        Int      @default(1) @map("call_count")
+  cacheHits        Int      @default(0) @map("cache_hits")
+  estimatedCostUsd Decimal  @default("0") @map("estimated_cost_usd") @db.Decimal(10, 6)
+  latencyMs        Int?     @map("latency_ms")
+  outcome          String   @default("ok") @db.VarChar(24)
+  usageDate        String   @map("usage_date") @db.VarChar(10)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation("ScoutApiUsageUser", fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "api_usage_user_id_users_id_fk")
+  scan Scan? @relation(fields: [scanId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "api_usage_scan_id_scans_id_fk")
+
+  @@index([userId, usageDate], map: "api_usage_user_date_idx")
+  @@index([scanId], map: "api_usage_scan_idx")
+  @@index([createdAt], map: "api_usage_created_at_idx")
+  @@map("api_usage")
+}
+
+model PopulationGrid {
+  id          String                                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  location    Unsupported("geography(Point, 4326)")
+  population  Float
+  source      String                                @db.VarChar(80)
+  vintageYear Int                                   @map("vintage_year")
+  cellSizeM   Int                                   @default(100) @map("cell_size_m")
+  createdAt   DateTime                              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([source, vintageYear], map: "population_grid_source_vintage_idx")
+  @@map("population_grid")
+}
+
+model CensusDistrict {
+  id               String                                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  censusCode       String                                 @unique(map: "census_district_code_idx") @map("census_code") @db.VarChar(40)
+  districtName     String                                 @map("district_name") @db.VarChar(160)
+  stateName        String                                 @map("state_name") @db.VarChar(160)
+  centroid         Unsupported("geography(Point, 4326)")?
+  totalPopulation  Int?                                   @map("total_population")
+  ageRatios        Json?                                  @map("age_ratios")
+  householdSizeAvg Float?                                 @map("household_size_avg") @db.Real
+  urbanShare       Float?                                 @map("urban_share") @db.Real
+  source           String                                 @default("census-india-2011") @db.VarChar(80)
+  vintageYear      Int                                    @default(2011) @map("vintage_year")
+  createdAt        DateTime                               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("census_district")
+}
+
+model CityBenchmark {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  city                String   @db.VarChar(120)
+  state               String?  @db.VarChar(120)
+  sportFormat         String?  @map("sport_format") @db.VarChar(80)
+  facilitiesPerAnchor Float?   @map("facilities_per_anchor") @db.Real
+  medianRating        Float?   @map("median_rating") @db.Real
+  medianReviewCount   Float?   @map("median_review_count") @db.Real
+  sampleCount         Int      @default(0) @map("sample_count")
+  computedAt          DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  @@unique([city, sportFormat], map: "city_benchmarks_city_format_idx")
+  @@map("city_benchmarks")
+}
+
+model Report {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scanId            String        @map("scan_id") @db.Uuid
+  createdBy         String        @map("created_by")
+  title             String?       @db.VarChar(240)
+  kind              ReportKind    @default(scan)
+  subjectScanIds    Json?         @map("subject_scan_ids")
+  includedBlocks    Json?         @map("included_blocks")
+  fieldNotes        String?       @map("field_notes")
+  scoreModelVersion String?       @map("score_model_version") @db.VarChar(20)
+  version           Int           @default(1)
+  pdfBlobKey        String?       @map("pdf_blob_key")
+  pdfBytes          Int?          @map("pdf_bytes")
+  pdfSha256         String?       @map("pdf_sha256") @db.VarChar(64)
+  pageCount         Int?          @map("page_count")
+  pdfEngine         String?       @map("pdf_engine") @db.VarChar(40)
+  generatedAt       DateTime?     @map("generated_at") @db.Timestamptz(6)
+  expiresAt         DateTime?     @map("expires_at") @db.Timestamptz(6)
+  error             String?
+  status            ReportStatus  @default(draft)
+  channel           ReportChannel?
+  sentTo            String?       @map("sent_to") @db.VarChar(200)
+  sentAt            DateTime?     @map("sent_at") @db.Timestamptz(6)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  scan   Scan          @relation(fields: [scanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "reports_scan_id_scans_id_fk")
+  author User          @relation("ScoutReportAuthor", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "reports_created_by_users_id_fk")
+  file   ReportFile?
+  shares ReportShare[]
+
+  @@index([scanId], map: "reports_scan_idx")
+  @@index([createdBy], map: "reports_created_by_idx")
+  @@index([status], map: "reports_status_idx")
+  @@map("reports")
+}
+
+model ReportFile {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId    String   @unique(map: "report_files_report_idx") @map("report_id") @db.Uuid
+  contentType String   @default("application/pdf") @map("content_type") @db.VarChar(100)
+  byteSize    Int      @map("byte_size")
+  sha256      String   @db.VarChar(64)
+  data        Bytes
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "report_files_report_id_reports_id_fk")
+
+  @@map("report_files")
+}
+
+model ReportShare {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId      String        @map("report_id") @db.Uuid
+  scanId        String        @map("scan_id") @db.Uuid
+  sharedBy      String        @map("shared_by")
+  channel       ReportChannel
+  recipientName String?       @map("recipient_name") @db.VarChar(200)
+  linkExpiresAt DateTime?     @map("link_expires_at") @db.Timestamptz(6)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "report_shares_report_id_reports_id_fk")
+  scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "report_shares_scan_id_scans_id_fk")
+  sharer User   @relation("ScoutReportSharer", fields: [sharedBy], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "report_shares_shared_by_users_id_fk")
+
+  @@index([reportId], map: "report_shares_report_idx")
+  @@index([scanId], map: "report_shares_scan_idx")
+  @@map("report_shares")
 }

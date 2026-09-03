@@ -12,6 +12,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { fetchAdNames } from "./client";
+import { extractArea } from "./fieldMap";
 
 export type AdCampaignKpis = {
   totalSpend: number; // rupees
@@ -205,6 +206,13 @@ type MetaLeadSelected = {
 };
 
 function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
+  let area = l.area;
+  if (!area && l.fieldData) {
+    try {
+      const fd = JSON.parse(l.fieldData);
+      if (Array.isArray(fd)) area = extractArea(fd);
+    } catch {}
+  }
   return {
     id: l.id,
     fullName: l.fullName,
@@ -214,7 +222,7 @@ function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
     campaignName: l.campaignName,
     city: l.city,
     sport: l.sport,
-    area: l.area,
+    area,
     fieldData: l.fieldData,
     stage: l.stage,
     labels: l.labels.map((j) => j.label),

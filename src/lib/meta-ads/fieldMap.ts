@@ -23,6 +23,7 @@ const AREA_ALIASES = [
   "square_feet",
   "square feet",
   "sq_ft",
+  "sq.ft",
   "dimensions",
   "available_space",
   "available space",

@@ -73,7 +73,9 @@ function BreakdownList({
 
 const FILTER_STORAGE_PREFIX = "leads-filter-";
 
-function DropdownFilter({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+type DropdownOption = { label: string; count: number };
+
+function DropdownFilter({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: DropdownOption[] }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -86,7 +88,7 @@ function DropdownFilter({ label, value, onChange, options }: { label: string; va
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const filtered = search ? options.filter((o) => o.toLowerCase().includes(search.toLowerCase())) : options;
+  const filtered = search ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase())) : options;
 
   return (
     <div ref={ref} className="relative">
@@ -114,7 +116,10 @@ function DropdownFilter({ label, value, onChange, options }: { label: string; va
               <div className="px-3 py-2 text-xs text-slate-400">No matches</div>
             ) : (
               filtered.map((o) => (
-                <button key={o} type="button" onClick={() => { onChange(o); setOpen(false); }} className={`w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50 transition-colors ${o === value ? "bg-slate-100 font-medium text-slate-900" : "text-slate-700"}`}>{o}</button>
+                <button key={o.label} type="button" onClick={() => { onChange(o.label); setOpen(false); }} className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors ${o.label === value ? "bg-slate-100 font-medium text-slate-900" : "text-slate-700"}`}>
+                  <span className="truncate text-left">{o.label}</span>
+                  <span className="shrink-0 text-xs font-mono text-slate-400">{o.count}</span>
+                </button>
               ))
             )}
           </div>
@@ -318,9 +323,9 @@ export default function LeadsTable({
       <div className="space-y-3">
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3">
-          <DropdownFilter label="City" value={cityQuery} onChange={setCityQuery} options={allCities.filter((c) => c.label !== "—").map((c) => c.label)} />
-          <DropdownFilter label="Sport" value={sportQuery} onChange={setSportQuery} options={allSports.filter((s) => s.label !== "—").map((s) => s.label)} />
-          <DropdownFilter label="Area" value={areaQuery} onChange={setAreaQuery} options={allAreas.filter((a) => a.label !== "—").map((a) => a.label)} />
+          <DropdownFilter label="City" value={cityQuery} onChange={setCityQuery} options={allCities.filter((c) => c.label !== "—")} />
+          <DropdownFilter label="Sport" value={sportQuery} onChange={setSportQuery} options={allSports.filter((s) => s.label !== "—")} />
+          <DropdownFilter label="Area" value={areaQuery} onChange={setAreaQuery} options={allAreas.filter((a) => a.label !== "—")} />
           <div>
             <label className="block text-[11px] font-medium text-slate-600 mb-1">Stage</label>
             <select

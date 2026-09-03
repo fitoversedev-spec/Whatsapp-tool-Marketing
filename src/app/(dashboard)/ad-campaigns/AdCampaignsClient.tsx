@@ -106,10 +106,11 @@ export default function AdCampaignsClient({
   // Export mirrors the bespoke Campaigns table below (lifetime roster). "Insight
   // leads" = AdInsight.leads KPI; "Captured leads" = count of ingested MetaLeads
   // — deliberately two separate numbers.
-  const campaignHeaders = ["Campaign", "Status", "Spend", "Insight leads", "Captured leads", "Cost / lead"];
+  const campaignHeaders = ["Campaign", "Status", "Sport", "Spend", "Insight leads", "Captured leads", "Cost / lead"];
   const campaignRows: (string | number)[][] = campaigns.map((c) => [
     c.name,
     c.status ?? "—",
+    c.sport ?? "—",
     fmtInr(c.spend),
     c.insightLeads,
     c.capturedLeads,
@@ -196,7 +197,10 @@ export default function AdCampaignsClient({
                           {c.objective && <div className="text-xs text-slate-400 font-normal">{c.objective}</div>}
                         </td>
                         <td className="whitespace-nowrap">
-                          <StatusBadge status={c.status} />
+                          <div className="flex items-center gap-1.5">
+                            <StatusBadge status={c.status} />
+                            {c.sport && <span className="chip text-xs">{c.sport}</span>}
+                          </div>
                         </td>
                         <td className="whitespace-nowrap !text-right font-mono text-slate-700">{fmtInr(c.spend)}</td>
                         <td className="whitespace-nowrap !text-right font-mono text-slate-700">{fmtInt(c.insightLeads)}</td>

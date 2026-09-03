@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
@@ -10,6 +10,8 @@ import { StatusBadge } from "@/components/meta/StatusBadge";
 import LeadsTable from "@/components/meta/LeadsTable";
 import type { Rep } from "@/components/meta/MoveToCrmDialog";
 import type { CampaignDetail, MetaLeadRow, AdLeadBreakdownRow, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
+
+const SPORT_PRESETS = ["Basketball", "Tennis", "Pickleball", "Badminton", "Volleyball"];
 
 // Cost per lead is plain rupees — there is no fmtCpl, so it's formatted with
 // fmtInr like every other money figure. CTR arrives as a fraction (0..1), so it
@@ -105,6 +107,25 @@ export default function CampaignDetailClient({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [sport, setSport] = useState(detail.sport ?? "");
+  const [customSport, setCustomSport] = useState(
+    detail.sport && !SPORT_PRESETS.includes(detail.sport) ? detail.sport : "",
+  );
+  const [sportSaving, setSportSaving] = useState(false);
+
+  async function saveSport(value: string) {
+    const resolved = value === "__custom" ? customSport.trim() : value;
+    if (value === "__custom" && !resolved) return;
+    setSport(resolved);
+    setSportSaving(true);
+    await fetch(`/api/ad-campaigns/${detail.metaId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sport: resolved || null }),
+    }).catch(() => {});
+    setSportSaving(false);
+    startTransition(() => router.refresh());
+  }
 
   // Applying a range pushes ?from/?to on THIS campaign's URL; the server page
   // re-fetches on the new query string. useTransition keeps the old data
@@ -139,9 +160,54 @@ export default function CampaignDetailClient({
       />
 
       <div className={`mt-4 space-y-4 ${pending ? "opacity-60 transition-opacity" : ""}`}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <StatusBadge status={detail.status} />
           {detail.objective && <span className="text-sm text-slate-500">{detail.objective}</span>}
+
+          <div className="w-px h-5 bg-slate-200 mx-1" />
+
+          <div className="flex items-center gap-1.5">
+            <label className="text-sm text-slate-500">Sport:</label>
+            <select
+              value={SPORT_PRESETS.includes(sport) ? sport : sport ? "__custom" : ""}
+              onChange={(e) => {
+                if (e.target.value === "__custom") {
+                  setSport("__custom");
+                } else {
+                  saveSport(e.target.value);
+                }
+              }}
+              className="text-sm border border-slate-200 rounded-md px-2 py-1 bg-white"
+              disabled={sportSaving}
+            >
+              <option value="">Not set</option>
+              {SPORT_PRESETS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+              <option value="__custom">Custom...</option>
+            </select>
+            {(sport === "__custom" || (sport && !SPORT_PRESETS.includes(sport))) && (
+              <div className="flex items-center gap-1">
+                <input
+                  value={customSport}
+                  onChange={(e) => setCustomSport(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && saveSport("__custom")}
+                  placeholder="Enter sport"
+                  className="text-sm border border-slate-200 rounded-md px-2 py-1 w-32"
+                  autoFocus
+                />
+                <button
+                  onClick={() => saveSport("__custom")}
+                  disabled={!customSport.trim() || sportSaving}
+                  className="text-xs bg-court-600 text-white px-2 py-1 rounded-md hover:bg-court-700 disabled:opacity-50"
+                >
+                  Save
+                </button>
+              </div>
+            )}
+            {sportSaving && <span className="text-xs text-slate-400">Saving…</span>}
+          </div>
+
           {pending && <span className="text-xs text-slate-400">Updating…</span>}
         </div>
 

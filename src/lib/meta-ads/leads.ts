@@ -58,7 +58,14 @@ export async function upsertMetaLead(
   const phone = pickField(fieldData, ["phone_number", "phone"]);
   const email = pickField(fieldData, ["email"]);
   const city = extractCity(fieldData);
-  const sport = extractSport(fieldData);
+  let sport = extractSport(fieldData);
+  if (!sport && lead.campaign_id) {
+    const campaign = await prisma.metaCampaign.findUnique({
+      where: { metaId: lead.campaign_id },
+      select: { sport: true },
+    });
+    if (campaign?.sport) sport = campaign.sport;
+  }
   const normalizedPhone = phone ? normalizePhone(phone) : null;
   const createdAtMeta = lead.created_time ? new Date(lead.created_time) : null;
 

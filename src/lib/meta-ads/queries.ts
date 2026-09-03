@@ -368,6 +368,7 @@ export type CampaignListRow = {
   name: string;
   status: string | null;
   objective: string | null;
+  sport: string | null;
   spend: number; // rupees
   impressions: number;
   clicks: number;
@@ -394,6 +395,7 @@ export async function getCampaignList(range?: { from: Date; to: Date }): Promise
         name: true,
         status: true,
         objective: true,
+        sport: true,
         insights: { where: insightWhere, select: { spend: true, impressions: true, clicks: true, leads: true } },
       },
     }),
@@ -423,6 +425,7 @@ export async function getCampaignList(range?: { from: Date; to: Date }): Promise
         name: c.name,
         status: c.status,
         objective: c.objective,
+        sport: c.sport,
         spend: Math.round(spend),
         impressions,
         clicks,
@@ -454,6 +457,7 @@ export type CampaignDetail = {
   name: string;
   status: string | null;
   objective: string | null;
+  sport: string | null;
   spend: number; // rupees
   impressions: number;
   reach: number; // summed per-day (upper-bound approximation of unique reach)
@@ -473,7 +477,7 @@ export async function getCampaignById(
 ): Promise<CampaignDetail | null> {
   const campaign = await prisma.metaCampaign.findUnique({
     where: { metaId },
-    select: { metaId: true, name: true, status: true, objective: true },
+    select: { metaId: true, name: true, status: true, objective: true, sport: true },
   });
   if (!campaign) return null;
 
@@ -517,6 +521,7 @@ export async function getCampaignById(
     name: campaign.name,
     status: campaign.status,
     objective: campaign.objective,
+    sport: campaign.sport,
     spend: Math.round(spend),
     impressions,
     reach,

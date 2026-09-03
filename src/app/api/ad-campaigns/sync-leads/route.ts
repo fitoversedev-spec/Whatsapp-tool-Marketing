@@ -8,7 +8,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { metaAdsConfigured } from "@/lib/meta-ads/config";
-import { syncMetaLeads } from "@/lib/meta-ads/leads";
+import { syncMetaLeads, backfillLeadAreas } from "@/lib/meta-ads/leads";
 
 export async function POST() {
   const user = await getCurrentUser();
@@ -21,8 +21,11 @@ export async function POST() {
   }
 
   try {
-    const result = await syncMetaLeads({ limit: 200 });
-    return NextResponse.json({ ok: true, ...result });
+    const [result, areaBackfill] = await Promise.all([
+      syncMetaLeads({ limit: 200 }),
+      backfillLeadAreas(),
+    ]);
+    return NextResponse.json({ ok: true, ...result, areasBackfilled: areaBackfill.updated });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Lead sync failed." },

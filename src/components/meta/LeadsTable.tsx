@@ -180,25 +180,26 @@ export default function LeadsTable({
 
   // Filter persistence via sessionStorage
   const storageKey = FILTER_STORAGE_PREFIX + exportFilename;
-  function readSavedFilters(): { city: string; sport: string; stage: string } {
+  function readSavedFilters(): { city: string; sport: string; area: string; stage: string } {
     try {
       const raw = sessionStorage.getItem(storageKey);
       if (raw) return JSON.parse(raw);
     } catch { /* ignore */ }
-    return { city: "", sport: "", stage: "" };
+    return { city: "", sport: "", area: "", stage: "" };
   }
 
   const saved = readSavedFilters();
   const [cityQuery, setCityQuery] = useState(saved.city);
   const [sportQuery, setSportQuery] = useState(saved.sport);
+  const [areaQuery, setAreaQuery] = useState(saved.area);
   const [stageFilter, setStageFilter] = useState(saved.stage);
 
   // Persist filters to sessionStorage on change
   useEffect(() => {
     try {
-      sessionStorage.setItem(storageKey, JSON.stringify({ city: cityQuery, sport: sportQuery, stage: stageFilter }));
+      sessionStorage.setItem(storageKey, JSON.stringify({ city: cityQuery, sport: sportQuery, area: areaQuery, stage: stageFilter }));
     } catch { /* ignore */ }
-  }, [cityQuery, sportQuery, stageFilter, storageKey]);
+  }, [cityQuery, sportQuery, areaQuery, stageFilter, storageKey]);
 
   // Fetch sidebar detail when a lead is selected
   const fetchSidebarDetail = useCallback(async (leadId: string) => {
@@ -258,32 +259,36 @@ export default function LeadsTable({
 
   const cq = cityQuery.trim().toLowerCase();
   const sq = sportQuery.trim().toLowerCase();
+  const aq = areaQuery.trim().toLowerCase();
 
   const filtered = useMemo(
     () =>
       localLeads.filter((l) => {
         const cityOk = !cq || (l.city ?? "").toLowerCase().includes(cq);
         const sportOk = !sq || (l.sport ?? "").toLowerCase().includes(sq);
+        const areaOk = !aq || (l.area ?? "").toLowerCase().includes(aq);
         const stageOk = !stageFilter || l.stage === stageFilter;
-        return cityOk && sportOk && stageOk;
+        return cityOk && sportOk && areaOk && stageOk;
       }),
-    [localLeads, cq, sq, stageFilter],
+    [localLeads, cq, sq, aq, stageFilter],
   );
 
   const allCities = useMemo(() => tally(localLeads, (l) => l.city), [localLeads]);
   const allSports = useMemo(() => tally(localLeads, (l) => l.sport), [localLeads]);
+  const allAreas = useMemo(() => tally(localLeads, (l) => l.area), [localLeads]);
   const cityBreakdown = useMemo(() => tally(filtered, (l) => l.city), [filtered]);
   const sportBreakdown = useMemo(() => tally(filtered, (l) => l.sport), [filtered]);
+  const areaBreakdown = useMemo(() => tally(filtered, (l) => l.area), [filtered]);
 
-  const hasFilter = !!(cityQuery || sportQuery || stageFilter);
+  const hasFilter = !!(cityQuery || sportQuery || areaQuery || stageFilter);
 
   const headers = [
-    "Name", "Phone", "Email", "City", "Sport", "Form",
+    "Name", "Phone", "Email", "City", "Sport", "Area", "Form",
     ...(showCampaignColumn ? ["Campaign"] : []),
     "Stage", "Labels", "Captured", "CRM",
   ];
   const exportHeaders = [
-    "Name", "Phone", "Email", "City", "Sport", "Form",
+    "Name", "Phone", "Email", "City", "Sport", "Area", "Form",
     ...(showCampaignColumn ? ["Campaign"] : []),
     "Stage", "Captured", "CRM",
   ];
@@ -293,6 +298,7 @@ export default function LeadsTable({
     l.email ?? "—",
     l.city ?? "—",
     l.sport ?? "—",
+    l.area ?? "—",
     l.formName ?? "—",
     ...(showCampaignColumn ? [l.campaignName ?? "—"] : []),
     stageLabel(l.stage),
@@ -314,6 +320,7 @@ export default function LeadsTable({
         <div className="flex flex-wrap items-end gap-3">
           <DropdownFilter label="City" value={cityQuery} onChange={setCityQuery} options={allCities.filter((c) => c.label !== "—").map((c) => c.label)} />
           <DropdownFilter label="Sport" value={sportQuery} onChange={setSportQuery} options={allSports.filter((s) => s.label !== "—").map((s) => s.label)} />
+          <DropdownFilter label="Area" value={areaQuery} onChange={setAreaQuery} options={allAreas.filter((a) => a.label !== "—").map((a) => a.label)} />
           <div>
             <label className="block text-[11px] font-medium text-slate-600 mb-1">Stage</label>
             <select
@@ -339,6 +346,7 @@ export default function LeadsTable({
               onClick={() => {
                 setCityQuery("");
                 setSportQuery("");
+                setAreaQuery("");
                 setStageFilter("");
               }}
               className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
@@ -352,7 +360,7 @@ export default function LeadsTable({
         </div>
 
         {/* Breakdown — click a value to filter by it */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <BreakdownList
             title="Leads by city"
             items={cityBreakdown}
@@ -364,6 +372,12 @@ export default function LeadsTable({
             items={sportBreakdown}
             activeKey={sq}
             onPick={(label) => setSportQuery((v) => (v.trim().toLowerCase() === label.toLowerCase() ? "" : label))}
+          />
+          <BreakdownList
+            title="Leads by area"
+            items={areaBreakdown}
+            activeKey={aq}
+            onPick={(label) => setAreaQuery((v) => (v.trim().toLowerCase() === label.toLowerCase() ? "" : label))}
           />
         </div>
 
@@ -412,6 +426,7 @@ export default function LeadsTable({
                     <td className="whitespace-nowrap text-slate-700">{l.email ?? "—"}</td>
                     <td className="whitespace-nowrap text-slate-700">{l.city ?? "—"}</td>
                     <td className="whitespace-nowrap text-slate-700">{l.sport ?? "—"}</td>
+                    <td className="whitespace-nowrap text-slate-700">{l.area ?? "—"}</td>
                     <td className="whitespace-nowrap text-slate-700">{l.formName ?? "—"}</td>
                     {showCampaignColumn && (
                       <td className="whitespace-nowrap text-slate-700">{l.campaignName ?? "—"}</td>

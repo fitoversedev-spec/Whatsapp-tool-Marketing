@@ -154,6 +154,7 @@ export type MetaLeadRow = {
   campaignName: string | null;
   city: string | null; // extracted at ingest from the form's city question
   sport: string | null; // extracted at ingest from the form's sport question
+  area: string | null; // extracted at ingest from the form's area/dimensions question
   fieldData: string; // raw JSON string of all form answers — client parses defensively
   stage: string; // lead pipeline stage (NEW|CONTACTED|QUALIFIED|CONVERTED|LOST); shown + filtered in the list
   labels: { id: string; name: string; color: string }[]; // applied label chips (for the list view)
@@ -173,6 +174,7 @@ const META_LEAD_SELECT = {
   campaignName: true,
   city: true,
   sport: true,
+  area: true,
   fieldData: true,
   stage: true,
   accountContactId: true,
@@ -193,6 +195,7 @@ type MetaLeadSelected = {
   campaignName: string | null;
   city: string | null;
   sport: string | null;
+  area: string | null;
   fieldData: string;
   stage: string;
   accountContactId: string | null;
@@ -211,6 +214,7 @@ function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
     campaignName: l.campaignName,
     city: l.city,
     sport: l.sport,
+    area: l.area,
     fieldData: l.fieldData,
     stage: l.stage,
     labels: l.labels.map((j) => j.label),

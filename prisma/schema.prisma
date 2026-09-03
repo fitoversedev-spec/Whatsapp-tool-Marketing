@@ -2027,6 +2027,7 @@ model MetaLead {
   email         String?
   city          String?   // extracted from field_data (form's city question) for lead analytics
   sport         String?   // extracted from field_data (form's sport question) for lead analytics
+  area          String?   // extracted from field_data (form's area/dimensions question) for lead analytics
   fieldData     String    @map("field_data") // JSON string of all form answers (Setting-style: stringify, value is String)
   rawPayload    String?   @map("raw_payload")
   createdAtMeta DateTime? @map("created_at_meta")

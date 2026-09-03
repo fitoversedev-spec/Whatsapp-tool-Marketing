@@ -19,6 +19,15 @@ const SPORT_ALIASES = [
   "game",
   "interest",
 ];
+const AREA_ALIASES = [
+  "square_feet",
+  "square feet",
+  "sq_ft",
+  "dimensions",
+  "available_space",
+  "available space",
+  "space_in_square",
+];
 
 function findByAlias(fieldData: MetaLeadFieldDatum[], aliases: string[]): string | null {
   // Prefer an EXACT name match anywhere in the form; only fall back to the first
@@ -45,6 +54,11 @@ export function extractCity(fieldData: MetaLeadFieldDatum[]): string | null {
 /** Raw (trimmed) sport as the lead selected/typed it. */
 export function extractSport(fieldData: MetaLeadFieldDatum[]): string | null {
   return findByAlias(fieldData, SPORT_ALIASES);
+}
+
+/** Raw area/dimensions as entered by the lead (e.g. "400×100", "800"). */
+export function extractArea(fieldData: MetaLeadFieldDatum[]): string | null {
+  return findByAlias(fieldData, AREA_ALIASES);
 }
 
 /** Title-case a free-text value so analytics groups "salem"/"SALEM"/"Salem" together. */

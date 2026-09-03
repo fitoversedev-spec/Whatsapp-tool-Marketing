@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { fetchLead, fetchFormName, fetchFormLeads, fetchLeadForms } from "./client";
 import type { MetaLeadFieldDatum, MetaLeadRaw } from "./client";
 import { getMetaAdsConfig } from "./config";
-import { extractCity, extractSport } from "./fieldMap";
+import { extractCity, extractSport, extractArea } from "./fieldMap";
 import { normalizePhone } from "@/lib/phone";
 
 // The shape of a `leadgen` webhook change value (ids only — no field answers).
@@ -59,6 +59,7 @@ export async function upsertMetaLead(
   const email = pickField(fieldData, ["email"]);
   const city = extractCity(fieldData);
   let sport = extractSport(fieldData);
+  const area = extractArea(fieldData);
   if (!sport && lead.campaign_id) {
     const campaign = await prisma.metaCampaign.findUnique({
       where: { metaId: lead.campaign_id },
@@ -80,6 +81,7 @@ export async function upsertMetaLead(
     email,
     city,
     sport,
+    area,
     normalizedPhone,
     fieldData: JSON.stringify(fieldData),
     rawPayload: JSON.stringify(hints.rawPayload ?? lead),
@@ -186,4 +188,27 @@ export async function syncMetaLeads(
   }
 
   return { forms: formIds.length, fetched, created, errors };
+}
+
+export async function backfillLeadAreas(): Promise<{ updated: number }> {
+  const leads = await prisma.metaLead.findMany({
+    where: { area: null },
+    select: { id: true, fieldData: true },
+  });
+  let updated = 0;
+  for (const lead of leads) {
+    let fieldData: MetaLeadFieldDatum[];
+    try {
+      fieldData = JSON.parse(lead.fieldData);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(fieldData)) continue;
+    const area = extractArea(fieldData);
+    if (area) {
+      await prisma.metaLead.update({ where: { id: lead.id }, data: { area } });
+      updated++;
+    }
+  }
+  return { updated };
 }

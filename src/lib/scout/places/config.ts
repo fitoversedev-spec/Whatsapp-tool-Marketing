@@ -70,8 +70,8 @@ export const GOOGLE_GEOCODE_BASE_URL = "https://maps.googleapis.com/maps/api/geo
 
 /** Fallbacks, exported so tests and the handoff quote the same numbers. */
 export const PLACES_DEFAULTS = {
-  tileRadiusM: 800,
-  tileOverlap: DEFAULT_TILE_OVERLAP,
+  tileRadiusM: 1200,
+  tileOverlap: 0.2,
   maxTilesPerScan: 400,
   requestTimeoutMs: 12_000,
   maxRetries: 3,

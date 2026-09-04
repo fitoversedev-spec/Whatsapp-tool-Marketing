@@ -231,6 +231,17 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
     setSuggestions([]);
   }
 
+  const handlePinMove = useCallback((pos: { lat: number; lng: number }) => {
+    setCentre(pos);
+    fetch(`/api/scout/geocode?lat=${pos.lat}&lng=${pos.lng}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const addr = json?.results?.[0]?.formattedAddress;
+        if (addr) setAddress(addr);
+      })
+      .catch(() => undefined);
+  }, []);
+
   /* ------------------------------------------------------------- run scan */
 
   const runScan = useCallback(async () => {
@@ -761,7 +772,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
           markers={markers}
           interactive
           pin={isSaved ? "fixed" : "drag"}
-          onPinMove={isSaved ? undefined : setCentre}
+          onPinMove={isSaved ? undefined : handlePinMove}
           onMarkerTap={selectFromMap}
           ariaLabel="Catchment map. Facilities and demand anchors are plotted around the scan centre."
         />

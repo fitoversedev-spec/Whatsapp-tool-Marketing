@@ -268,6 +268,14 @@ export function SiteMap({
         });
       }
 
+      if (g.pin === "drag" && g.showPin) {
+        map.on("click", (e: LeafletNS.LeafletMouseEvent) => {
+          pinRef.current?.setLatLng(e.latlng);
+          circleRef.current?.setLatLng(e.latlng);
+          onPinMoveRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng });
+        });
+      }
+
       fit();
       onReadyRef.current?.(map);
       // Leaflet mis-measures inside flex containers; re-measure twice.

@@ -283,7 +283,7 @@ export async function dashboardSummary(
   // a BigInt that `Number()` would then have to unwrap.
   const ownedOnly = canAccessAllScans(identity)
     ? Prisma.empty
-    : Prisma.sql`WHERE owner_id = ${identity.userId}::uuid`;
+    : Prisma.sql`WHERE owner_id = ${identity.userId}`;
 
   const [row] = await prisma.$queryRaw<Array<{ scansThisMonth: number; owners: number }>>(Prisma.sql`
     SELECT

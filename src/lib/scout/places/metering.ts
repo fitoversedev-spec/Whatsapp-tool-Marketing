@@ -146,7 +146,7 @@ export async function getDailyUsage(
       COALESCE(SUM(cache_hits), 0)::int AS "cacheHits",
       COALESCE(SUM(estimated_cost_usd), 0)::float8 AS "costUsd"
     FROM api_usage
-    WHERE user_id = ${userId}::uuid AND usage_date = ${usageDate(at)}
+    WHERE user_id = ${userId} AND usage_date = ${usageDate(at)}
   `);
 
   const cap = placesConfig.dailyCallCap;

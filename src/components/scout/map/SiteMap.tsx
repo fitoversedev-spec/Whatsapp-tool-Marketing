@@ -127,6 +127,7 @@ export function SiteMap({
   const layerRef = useRef<LeafletNS.LayerGroup | null>(null);
   const pinRef = useRef<LeafletNS.Marker | null>(null);
   const tileRef = useRef<LeafletNS.TileLayer | null>(null);
+  const overlayRef = useRef<LeafletNS.TileLayer | null>(null);
   const leafletRef = useRef<Leaflet | null>(null);
 
   // Callbacks are read through refs so changing a handler never rebuilds the map.
@@ -337,6 +338,7 @@ export function SiteMap({
       layerRef.current = null;
       pinRef.current = null;
       tileRef.current = null;
+      overlayRef.current = null;
     };
     // Built once, with an empty dependency list on purpose: prop changes are
     // applied by the effects below, mirroring the original custom element's
@@ -384,6 +386,14 @@ export function SiteMap({
     }).addTo(map);
     tileRef.current = next;
     if (previous) map.removeLayer(previous);
+
+    if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
+    if (tileLayer) {
+      overlayRef.current = L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
+        { attribution: "", maxZoom: 19, subdomains: "abcd", pane: "overlayPane" },
+      ).addTo(map);
+    }
   }, [tileLayer, baseLayer]);
 
   useEffect(() => {

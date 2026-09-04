@@ -84,7 +84,7 @@ export async function createScanWithJob(
     const [scan] = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       INSERT INTO scans (owner_id, site_id, area_label, customer_name, address,
                          centre, radius_m, search_terms, status)
-      VALUES (${input.ownerId}::uuid, ${input.siteId ?? null}::uuid, ${input.areaLabel},
+      VALUES (${input.ownerId}, ${input.siteId ?? null}::uuid, ${input.areaLabel},
               ${input.customerName ?? null}, ${input.address ?? null},
               ${pointSql(input.centre)}, ${Math.round(input.radiusM)},
               ${JSON.stringify(searchTerms)}::jsonb, 'draft'::scan_status)

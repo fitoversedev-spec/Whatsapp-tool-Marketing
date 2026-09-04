@@ -373,7 +373,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                 onClick={() => void lookupAddress()}
                 disabled={geocoding || address.trim().length === 0}
               >
-                {geocoding ? "…" : "Find"}
+                {geocoding ? "…" : "Attach"}
               </button>
             ) : null}
           </div>

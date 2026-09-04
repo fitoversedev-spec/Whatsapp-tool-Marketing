@@ -390,7 +390,7 @@ export function SiteMap({
     if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; }
     if (tileLayer) {
       overlayRef.current = L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
+        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png",
         { attribution: "", maxZoom: 19, subdomains: "abcd", pane: "overlayPane" },
       ).addTo(map);
     }

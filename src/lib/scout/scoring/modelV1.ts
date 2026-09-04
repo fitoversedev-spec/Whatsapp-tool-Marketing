@@ -46,13 +46,11 @@ const TERM_WEIGHTS: Record<string, number> = {
   coworking: 1.0,
   /* Colleges and universities — evenings and weekends, high volume. */
   college: 0.9,
-  university: 0.9,
   /* Apartments and gated communities — weekend mornings, family memberships. */
   "apartment-complex": 0.8,
   "gated-community": 0.8,
   /* Schools — 4–6 pm weekdays, plus academy contracts. */
   school: 0.7,
-  "international-school": 0.7,
   /* Sports coaching — partner or competitor by format. See the note above. */
   "sports-academy": 0.6,
   /* Hostels — volume, low spend. */

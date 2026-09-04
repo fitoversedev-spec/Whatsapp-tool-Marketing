@@ -56,6 +56,8 @@ export interface SiteMapProps {
   onReady?: (map: LeafletNS.Map) => void;
   className?: string;
   style?: CSSProperties;
+  /** Show popups with place details when a marker is clicked. */
+  popups?: boolean;
   /** Accessible name for the map region. */
   ariaLabel?: string;
 }
@@ -73,6 +75,29 @@ function dotIcon(L: Leaflet, type: SiteMapMarker["type"]): LeafletNS.DivIcon {
       c +
       ';box-shadow:0 0 0 2.5px #fff,0 1px 3px rgba(0,0,0,.35)"></span>',
   });
+}
+
+function markerPopupHtml(m: SiteMapMarker): string {
+  const name = String(m.name ?? "Unknown");
+  const typeLabel = m.primaryTypeDisplayName ? String(m.primaryTypeDisplayName) : "";
+  const rating = typeof m.rating === "number" ? m.rating : null;
+  const reviews = typeof m.reviewCount === "number" ? m.reviewCount : null;
+  const dist = typeof m.distanceM === "number" ? m.distanceM : null;
+  const mapsUri = typeof m.googleMapsUri === "string" ? m.googleMapsUri : null;
+  const dirUrl = `https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lng}`;
+
+  let meta = typeLabel;
+  if (rating !== null) meta += `${meta ? " · " : ""}${rating.toFixed(1)} ★`;
+  if (reviews !== null) meta += ` (${reviews})`;
+  if (dist !== null) meta += `${meta ? " · " : ""}${dist < 1000 ? `${Math.round(dist)} m` : `${(dist / 1000).toFixed(1)} km`}`;
+
+  return `<div style="font-family:system-ui,sans-serif;min-width:160px;max-width:240px">` +
+    `<div style="font-weight:600;font-size:13px;line-height:1.3;margin-bottom:3px">${name.replace(/</g, "&lt;")}</div>` +
+    (meta ? `<div style="font-size:11.5px;color:#64748b;margin-bottom:6px">${meta}</div>` : "") +
+    `<div style="display:flex;gap:6px;margin-top:4px">` +
+    (mapsUri ? `<a href="${mapsUri}" target="_blank" rel="noreferrer" style="font-size:11px;color:#0369a1;text-decoration:none">View on Maps</a>` : "") +
+    `<a href="${dirUrl}" target="_blank" rel="noreferrer" style="font-size:11px;color:#0369a1;text-decoration:none">Get Directions</a>` +
+    `</div></div>`;
 }
 
 function pinIcon(L: Leaflet): LeafletNS.DivIcon {
@@ -115,6 +140,7 @@ export function SiteMap({
   showPin = true,
   scrollWheelZoom = false,
   zoomControl = false,
+  popups = false,
   onReady,
   className,
   style,
@@ -170,6 +196,9 @@ export function SiteMap({
     zoomControl,
   };
 
+  const popupsRef = useRef(popups);
+  popupsRef.current = popups;
+
   const markersRef = useRef<SiteMapMarker[]>(markers ?? []);
   markersRef.current = markers ?? [];
 
@@ -200,9 +229,12 @@ export function SiteMap({
       if (!layer) return;
       layer.clearLayers();
       for (const m of markersRef.current) {
-        L.marker([m.lat, m.lng], { icon: dotIcon(L, m.type) })
+        const marker = L.marker([m.lat, m.lng], { icon: dotIcon(L, m.type) })
           .addTo(layer)
           .on("click", () => onMarkerTapRef.current?.(m));
+        if (popupsRef.current && m.name) {
+          marker.bindPopup(markerPopupHtml(m), { maxWidth: 260, className: "ss-popup" });
+        }
       }
     }
 
@@ -402,9 +434,12 @@ export function SiteMap({
     if (!L || !layer) return;
     layer.clearLayers();
     for (const m of markersRef.current) {
-      L.marker([m.lat, m.lng], { icon: dotIcon(L, m.type) })
+      const marker = L.marker([m.lat, m.lng], { icon: dotIcon(L, m.type) })
         .addTo(layer)
         .on("click", () => onMarkerTapRef.current?.(m));
+      if (popupsRef.current && m.name) {
+        marker.bindPopup(markerPopupHtml(m), { maxWidth: 260, className: "ss-popup" });
+      }
     }
   }, [markers]);
 

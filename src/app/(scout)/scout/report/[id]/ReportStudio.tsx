@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button } from "@/components/scout/ui";
 import { SectionLabel, StateBlock } from "@/components/scout/patterns";
 import { SiteMap, type SiteMapMarker } from "@/components/scout/map";
-import { SaturationPanel, ScorePanel, SurveyorChecklist } from "@/components/scout/score";
+import { SaturationPanel, ScorePanel } from "@/components/scout/score";
 import {
   atLeast,
   formatCount,
@@ -16,7 +16,7 @@ import {
   verdictTone,
 } from "@/lib/scout/display/format";
 import { POPULATION_LIMITATION_TEXT, populationLimitations } from "@/lib/scout/census/disclosure";
-import { REPORT_BLOCKS, TOGGLEABLE_REPORT_BLOCKS, type ReportBlockState } from "@/lib/scout/reports/blocks";
+import { REPORT_BLOCKS, type ReportBlockState } from "@/lib/scout/reports/blocks";
 import { deliveryNote, reportDelivery } from "@/lib/scout/reports/delivery";
 import type { ScanScreenData } from "@/lib/scout/scans/dto";
 import type { ScoreResult } from "@/lib/scout/scoring/types";
@@ -69,12 +69,8 @@ export function ReportStudio({
 }: ReportStudioProps) {
   const [blocks, setBlocks] = useState<ReportBlockState>(initialBlocks);
   const [notes, setNotes] = useState(initialNotes);
-  const [answers, setAnswers] = useState<Record<string, number>>({ ...scan.surveyorInputs });
   const [score, setScore] = useState<ScoreResult | null>(scan.score);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [surveyState, setSurveyState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [rescoreNeeded, setRescoreNeeded] = useState(false);
-  const [scoring, setScoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [report, setReport] = useState<GeneratedReport | null>(initialReport);
@@ -106,52 +102,6 @@ export function ReportStudio({
       controller.abort();
     };
   }, [blocks, notes, scan.scanId]);
-
-  const loadedAnswers = useRef(JSON.stringify(scan.surveyorInputs));
-  useEffect(() => {
-    if (JSON.stringify(answers) === loadedAnswers.current) return;
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setSurveyState("saving");
-      try {
-        const res = await fetch(`/api/scout/scans/${scan.scanId}/survey`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({ answers }),
-        });
-        if (!res.ok) throw new Error(String(res.status));
-        const json = (await res.json()) as { rescoreRequired?: boolean; rejected?: string[] };
-        setSurveyState("saved");
-        if (json.rescoreRequired) setRescoreNeeded(true);
-      } catch (e) {
-        if ((e as Error).name !== "AbortError") setSurveyState("error");
-      }
-    }, SAVE_DEBOUNCE_MS);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [answers, scan.scanId]);
-
-  const rescore = useCallback(async () => {
-    setScoring(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/scout/scans/${scan.scanId}/score`, { method: "POST" });
-      const json = (await res.json()) as { score?: ScoreResult; error?: string };
-      if (res.ok && json.score) {
-        setScore(json.score);
-        setRescoreNeeded(false);
-      } else {
-        setError(json.error ?? "The score could not be recomputed.");
-      }
-    } catch {
-      setError("The scoring request failed. Try again in a moment.");
-    } finally {
-      setScoring(false);
-    }
-  }, [scan.scanId]);
 
   const generate = useCallback(async () => {
     setGenerating(true);
@@ -211,15 +161,6 @@ export function ReportStudio({
     }
   }, [report, recipient]);
 
-  const setAnswer = useCallback((fieldId: string, rating: number | null) => {
-    setAnswers((prev) => {
-      const next = { ...prev };
-      if (rating === null) delete next[fieldId];
-      else next[fieldId] = rating;
-      return next;
-    });
-  }, []);
-
   const on = useCallback((id: string) => blocks[id] === true, [blocks]);
 
   const markers = useMemo<SiteMapMarker[]>(
@@ -228,6 +169,13 @@ export function ReportStudio({
         lat: p.lat,
         lng: p.lng,
         type: p.side === "competition" ? "facility" : "demand",
+        placeId: p.placeId,
+        name: p.name,
+        rating: p.rating,
+        reviewCount: p.reviewCount,
+        distanceM: p.distanceM,
+        primaryTypeDisplayName: p.primaryTypeDisplayName,
+        googleMapsUri: p.googleMapsUri,
       })),
     [scan.places],
   );
@@ -245,74 +193,44 @@ export function ReportStudio({
           </div>
         </div>
 
-        <SurveyorChecklist answers={answers} onChange={setAnswer} />
-        <div className="text-[10.5px] text-slate-500" aria-live="polite">
-          {surveyState === "saving"
-            ? "Saving the survey…"
-            : surveyState === "saved"
-              ? "Survey saved"
-              : surveyState === "error"
-                ? "The survey did not save. Your answers are still on screen."
-                : ""}
+        {/* AI Analysis — based on scan data */}
+        <div className="flex flex-col gap-3">
+          <SectionLabel weight={700}>AI analysis</SectionLabel>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 flex flex-col gap-2.5">
+            <div className="flex items-start gap-2">
+              <svg className="w-4 h-4 text-court-600 mt-0.5 flex-none" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" /></svg>
+              <p className="m-0 text-xs leading-[1.6] text-slate-700">
+                The report will be generated with AI analysis covering: <strong>best sport for this area</strong>, <strong>revenue potential</strong>, <strong>existing competition</strong>, and <strong>area suitability</strong> — all based on the scan data.
+              </p>
+            </div>
+            {scan.competitionCount > 0 || scan.demandCount > 0 ? (
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded bg-white border border-slate-200 px-3 py-2">
+                  <div className="text-slate-500 text-[10.5px]">Facilities found</div>
+                  <div className="font-semibold text-slate-900">{atLeast(scan.competitionCount ?? 0, scan.anySaturated)}</div>
+                </div>
+                <div className="rounded bg-white border border-slate-200 px-3 py-2">
+                  <div className="text-slate-500 text-[10.5px]">Demand anchors</div>
+                  <div className="font-semibold text-slate-900">{atLeast(scan.demandCount ?? 0, scan.anySaturated)}</div>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
-
-        {rescoreNeeded ? (
-          <StateBlock
-            eyebrow="Survey changed"
-            title="The score has not moved yet"
-            body="Observations do not reach the score until it is recomputed. The stored score is the one anyone has already been shown, so it is never changed behind you."
-            action={
-              <Button onClick={() => void rescore()} disabled={scoring}>
-                {scoring ? "Recomputing…" : "Recompute the score"}
-              </Button>
-            }
-          />
-        ) : null}
 
         {error ? <StateBlock tone="error" title="Something failed" body={error} /> : null}
 
         <div className="flex flex-col gap-[9px]">
-          <SectionLabel weight={700}>Field notes</SectionLabel>
+          <SectionLabel weight={700}>Custom notes</SectionLabel>
           <textarea
-            className="w-full box-border min-h-[190px] resize-y font-sans text-[13.5px] leading-[1.65] text-slate-900 border border-slate-300 rounded-lg p-[14px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
+            className="w-full box-border min-h-[140px] resize-y font-sans text-[13.5px] leading-[1.65] text-slate-900 border border-slate-300 rounded-lg p-[14px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            aria-label="Field notes"
-            placeholder="What you saw that the data can't — parking, lighting, drainage, footfall at 7pm."
+            aria-label="Custom notes for the report"
+            placeholder="Add any custom points you want included in the report — e.g. nearby upcoming developments, land cost observations, footfall patterns at 7pm, lighting and parking notes."
           />
           <p className="m-0 text-[11px] leading-[1.65] text-slate-500">
-            Colour for the report. The checklist above is what the score reads; this is what the
-            customer reads.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-[9px]">
-          <SectionLabel weight={700}>Include</SectionLabel>
-          {TOGGLEABLE_REPORT_BLOCKS.map((block) => (
-            <label
-              key={block.id}
-              className={`flex items-start gap-[10px] text-[13px] px-[11px] py-[9px] border rounded-md cursor-pointer ${
-                on(block.id) ? "border-wa-green" : "border-slate-200"
-              }`}
-            >
-              <input
-                type="checkbox"
-                className="w-[15px] h-[15px] accent-wa-green mt-[2px] flex-none"
-                checked={on(block.id)}
-                onChange={(e) =>
-                  setBlocks((prev) => ({ ...prev, [block.id]: e.target.checked }))
-                }
-              />
-              <span className="flex flex-col gap-[3px]">
-                <span>{block.label}</span>
-                <span className="text-[10.5px] text-slate-500 leading-[1.55]">{block.help}</span>
-              </span>
-            </label>
-          ))}
-          <p className="m-0 text-[11px] leading-[1.65] text-slate-500">
-            The area header and the limitations paragraph are always printed. The limitations
-            paragraph is what stops a reader inferring a catchment population from a saturation
-            figure, so it is not a composition choice.
+            These notes will be included in the AI-generated report alongside the scan data analysis.
           </p>
           <div className="text-[10.5px] text-slate-500" aria-live="polite">
             {saveState === "saving"
@@ -522,6 +440,8 @@ export function ReportStudio({
                 lng={scan.centre.lng}
                 radius={scan.radiusM / 1000}
                 markers={markers}
+                popups
+                interactive
                 ariaLabel={`Catchment map for ${scan.areaLabel}`}
               />
             </div>

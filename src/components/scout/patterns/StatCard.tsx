@@ -24,13 +24,13 @@ export function StatCard({
     size === "sm" ? "text-xl mt-[3px]" : "text-2xl mt-[7px]";
   const labelSizeClass =
     size === "sm"
-      ? "text-[10.5px] tracking-[0.08em] font-normal"
-      : "text-[10px] tracking-[0.1em] font-bold";
+      ? "text-xs font-normal"
+      : "text-xs font-bold";
 
   return (
     <div
       className={[
-        "border rounded-[12px] p-[13px] font-sans",
+        "border rounded-xl p-3 font-sans",
         inverted ? "bg-black text-white border-black" : "bg-white",
         className,
       ]
@@ -39,16 +39,15 @@ export function StatCard({
     >
       <div
         className={[
-          "uppercase",
           labelSizeClass,
-          inverted ? "text-white/55" : "text-slate-500",
+          inverted ? "text-white/55" : "text-slate-600",
         ].join(" ")}
       >
         {label}
       </div>
       <div
         className={[
-          "font-heading font-bold leading-tight",
+          "font-mono font-semibold leading-tight",
           valueSizeClass,
           accent && "text-court-700",
         ]

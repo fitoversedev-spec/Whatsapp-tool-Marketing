@@ -399,7 +399,7 @@ export function SweepScreen({
               <button
                 key={cell.id}
                 type="button"
-                className={`absolute pointer-events-auto font-sans text-[11px] font-bold tracking-[0.06em] flex items-start justify-start py-[7px] px-[9px] cursor-pointer transition-[background] duration-150 overflow-hidden border ${
+                className={`absolute pointer-events-auto font-sans text-xs font-bold tracking-[0.06em] flex items-start justify-start py-[7px] px-[9px] cursor-pointer transition-[background] duration-150 overflow-hidden border ${
                   cell.status === "plot"
                     ? "border-solid border-amber-400 bg-amber-400/55 text-slate-900"
                     : cell.status === "terrace"
@@ -440,18 +440,18 @@ export function SweepScreen({
         </div>
 
         {satellite && !satellite.available ? (
-          <div className="absolute right-5 top-5 z-[500] max-w-[340px] bg-[rgba(10,10,10,0.78)] text-white/80 rounded py-[7px] px-[11px] text-[11px] tracking-[0.02em] leading-[1.55]" role="note">
+          <div className="absolute right-5 top-5 z-[500] max-w-[340px] bg-[rgba(10,10,10,0.78)] text-white/80 rounded py-[7px] px-[11px] text-xs tracking-[0.02em] leading-[1.55]" role="note">
             Street map — satellite imagery unavailable. {satellite.reason}
           </div>
         ) : null}
 
         {gridError ? (
-          <div className="absolute left-5 top-5 z-[500] max-w-[360px] bg-white border border-amber-400 rounded-[12px] py-3 px-3.5 text-[12px] leading-[1.6] text-slate-700 shadow-[0_6px_18px_rgba(0,0,0,0.12)]" role="alert">
+          <div className="absolute left-5 top-5 z-[500] max-w-[360px] bg-white border border-amber-400 rounded-xl py-3 px-3.5 text-xs leading-[1.6] text-slate-700 shadow-[0_6px_18px_rgba(0,0,0,0.12)]" role="alert">
             {gridError}
           </div>
         ) : null}
 
-        <div className="absolute left-5 bottom-5 z-[500] bg-white/95 border border-slate-200 rounded-[12px] py-[13px] px-[15px] flex gap-[18px] flex-wrap shadow-[0_6px_18px_rgba(0,0,0,0.12)]">
+        <div className="absolute left-5 bottom-5 z-[500] bg-white/95 border border-slate-200 rounded-xl py-3 px-[15px] flex gap-[18px] flex-wrap shadow-[0_6px_18px_rgba(0,0,0,0.12)]">
           <span className="flex items-center gap-2 text-xs">
             <span
               className="w-[11px] h-[11px] rounded-[3px] bg-amber-400"
@@ -482,10 +482,10 @@ export function SweepScreen({
         </div>
       </div>
 
-      <aside className="w-[400px] flex-none bg-white border-l border-slate-200 overflow-y-auto pt-6 px-[22px] pb-8 flex flex-col gap-5 max-[900px]:w-full max-[900px]:border-l-0 max-[900px]:border-t max-[900px]:border-slate-200 ss-scroll">
+      <aside className="w-[400px] flex-none bg-white border-l border-slate-200 overflow-y-auto pt-6 px-5 pb-8 flex flex-col gap-5 max-[900px]:w-full max-[900px]:border-l-0 max-[900px]:border-t max-[900px]:border-slate-200 ss-scroll">
         <div>
           <h1 className="m-0 text-base">Spaces sweep</h1>
-          <div className="text-[12.5px] text-slate-500 mt-[9px] leading-[1.6] font-sans tracking-normal normal-case">
+          <div className="text-sm text-slate-500 mt-[9px] leading-[1.6] font-sans tracking-normal normal-case">
             {areaLabel}. Pan to the ground you want to cover, lay a grid, then click a cell to cycle
             its state: empty plot, terrace, rejected. Double-click — or press S — to split a cell
             into four for a closer look.
@@ -493,21 +493,21 @@ export function SweepScreen({
         </div>
 
         <div className="grid grid-cols-3 gap-2.5">
-          <div className="border border-slate-200 rounded-[12px] p-3">
-            <div className="font-heading text-[22px] font-bold text-amber-400">{counts.plot}</div>
-            <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[5px]">Empty plots</div>
+          <div className="border border-slate-200 rounded-xl p-3">
+            <div className="font-mono text-xl font-semibold text-amber-400">{counts.plot}</div>
+            <div className="text-xs text-slate-600 mt-[5px]">Empty plots</div>
           </div>
-          <div className="border border-slate-200 rounded-[12px] p-3">
-            <div className="font-heading text-[22px] font-bold text-turf-500">
+          <div className="border border-slate-200 rounded-xl p-3">
+            <div className="font-mono text-xl font-semibold text-turf-500">
               {counts.terrace}
             </div>
-            <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[5px]">Terraces</div>
+            <div className="text-xs text-slate-600 mt-[5px]">Terraces</div>
           </div>
-          <div className="border border-slate-200 rounded-[12px] p-3">
-            <div className="font-heading text-[22px] font-bold text-track-500">
+          <div className="border border-slate-200 rounded-xl p-3">
+            <div className="font-mono text-xl font-semibold text-track-500">
               {counts.rejected}
             </div>
-            <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[5px]">Rejected</div>
+            <div className="text-xs text-slate-600 mt-[5px]">Rejected</div>
           </div>
         </div>
 
@@ -533,11 +533,11 @@ export function SweepScreen({
               Lay grid
             </Button>
           </div>
-          <p className="m-0 text-[11px] leading-[1.65] text-slate-500">
+          <p className="m-0 text-xs leading-[1.65] text-slate-500">
             Cells are sized in real metres on the ground, so C3 is the same square of earth every
             time you come back to it. Marks survive a resize.
           </p>
-          <div className="text-[10.5px] text-slate-500 text-right" aria-live="polite">
+          <div className="text-xs text-slate-500 text-right" aria-live="polite">
             {saveState === "saving"
               ? "Saving…"
               : saveState === "saved"
@@ -546,7 +546,7 @@ export function SweepScreen({
                   ? "Not saved"
                   : ""}
           </div>
-          {saveError ? <p className="text-[11px] text-track-600 leading-[1.6]">{saveError}</p> : null}
+          {saveError ? <p className="text-xs text-track-600 leading-[1.6]">{saveError}</p> : null}
         </div>
 
         <div className="flex flex-col gap-[9px]">
@@ -568,13 +568,13 @@ export function SweepScreen({
               return (
                 <div
                   key={cell.id}
-                  className={`border rounded-[12px] py-3 px-[13px] flex gap-[11px] items-start ${
+                  className={`border rounded-xl py-3 px-3 flex gap-[11px] items-start ${
                     selectedId === cell.id ? "border-court-500 bg-court-100" : "border-slate-200"
                   }`}
                 >
                   <button
                     type="button"
-                    className={`flex-none font-heading text-[11px] font-bold tracking-[0.06em] py-1.5 px-[9px] rounded border-0 cursor-pointer ${
+                    className={`flex-none font-heading text-xs font-bold tracking-[0.06em] py-1.5 px-[9px] rounded border-0 cursor-pointer ${
                       cell.status === "plot"
                         ? "bg-amber-400 text-slate-900"
                         : cell.status === "terrace"
@@ -590,19 +590,19 @@ export function SweepScreen({
                     {cell.id}
                   </button>
                   <div className="flex-1 min-w-0 flex flex-col gap-[5px]">
-                    <span className="text-[12.5px] font-semibold">{sweepStatusLabel(cell.status)}</span>
-                    <span className="text-[10.5px] text-slate-500">
+                    <span className="text-sm font-semibold">{sweepStatusLabel(cell.status)}</span>
+                    <span className="text-xs text-slate-500">
                       {size.widthM} m × {size.heightM} m · {centrePoint.lat.toFixed(5)},{" "}
                       {centrePoint.lng.toFixed(5)}
                     </span>
                     <textarea
-                      className="w-full font-sans text-[11.5px] leading-[1.6] text-slate-900 border border-slate-200 rounded py-[7px] px-[9px] outline-none resize-y min-h-[46px] focus:border-court-500 focus:ring-1 focus:ring-court-500/20"
+                      className="w-full font-sans text-xs leading-[1.6] text-slate-900 border border-slate-200 rounded py-[7px] px-[9px] outline-none resize-y min-h-[46px] focus:border-court-500 focus:ring-1 focus:ring-court-500/20"
                       value={cell.note}
                       placeholder={sweepNotePlaceholder(cell.status)}
                       aria-label={`Note for cell ${cell.id}`}
                       onChange={(e) => setNote(cell.id, e.target.value)}
                     />
-                    <span className="flex gap-3 text-[10.5px]">
+                    <span className="flex gap-3 text-xs">
                       <a
                         href={satelliteLink(centrePoint.lat, centrePoint.lng)}
                         target="_blank"
@@ -628,7 +628,7 @@ export function SweepScreen({
         <Button variant="secondary" block onClick={exportCsv} disabled={marked.length === 0}>
           Export marked cells (CSV)
         </Button>
-        <p className="m-0 text-[11px] leading-[1.65] text-slate-500">
+        <p className="m-0 text-xs leading-[1.65] text-slate-500">
           Marked from satellite imagery only. Imagery is typically one to three years old — walk the
           plot before anyone commits to it.
         </p>

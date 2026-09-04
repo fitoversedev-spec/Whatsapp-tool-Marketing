@@ -20,7 +20,7 @@ export function SectionLabel({
   return (
     <Tag
       className={[
-        "font-sans text-[11px] tracking-[0.13em] uppercase",
+        "font-sans text-xs font-semibold uppercase tracking-wider",
         weight === 700 ? "font-bold" : "font-semibold",
         onDark ? "text-white/55" : "text-slate-500",
         className,

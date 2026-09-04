@@ -81,11 +81,11 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
   const gridTemplate = `1.4fr repeat(${Math.max(columns, 1)}, 1fr)`;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-10 pt-8 pb-12 max-[900px]:px-[18px] max-[900px]:pt-5 max-[900px]:pb-6 ssIn">
+    <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 ssIn">
       <div className="flex items-baseline justify-between mb-[22px] gap-5 flex-wrap">
         <div>
           <h1 className="m-0 text-xl">Compare areas</h1>
-          <div className="text-[13px] text-slate-500 mt-2 font-sans tracking-normal normal-case">
+          <div className="text-sm text-slate-500 mt-2 font-sans tracking-normal normal-case">
             {columns === 0
               ? "Pick two or three saved scans."
               : `${columns} scan${columns === 1 ? "" : "s"} side by side. Best value in each row is highlighted.`}
@@ -130,7 +130,7 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
                 <div
                   key={warning.code}
                   role={warning.severity === "warning" ? "alert" : "note"}
-                  className={`rounded-lg px-[15px] py-3 text-[12.5px] leading-[1.65] ${
+                  className={`rounded-lg px-[15px] py-3 text-sm leading-[1.65] ${
                     warning.severity === "warning"
                       ? "border border-amber-500 bg-white text-slate-700"
                       : "border border-slate-200 bg-white text-slate-500"
@@ -145,13 +145,13 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <div className="grid min-w-[720px]" style={{ gridTemplateColumns: gridTemplate }}>
-                <div className="bg-slate-900 text-white/50 px-5 py-4 text-[10.5px] font-bold tracking-[0.12em] uppercase">
+                <div className="bg-slate-900 text-white/50 px-5 py-4 text-xs font-semibold uppercase">
                   Category
                 </div>
                 {comparison.subjects.map((subject) => (
                   <div key={subject.scanId} className="bg-slate-900 text-white px-5 py-4 font-heading text-xs tracking-wider uppercase">
                     {subject.areaLabel}
-                    <span className="block font-sans text-[10.5px] tracking-normal normal-case text-white/40 mt-1">
+                    <span className="block font-sans text-xs tracking-normal normal-case text-white/40 mt-1">
                       {formatRadius(subject.radiusM)}
                     </span>
                   </div>
@@ -160,13 +160,13 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
                 {comparison.rows.map((row, index) => (
                   <div key={row.id} style={{ display: "contents" }}>
                     <div
-                      className={`px-5 py-[15px] text-[13.5px] font-semibold border-t border-slate-200 ${
+                      className={`px-5 py-[15px] text-sm font-semibold border-t border-slate-200 ${
                         index % 2 === 1 ? "bg-[#fbfbfc]" : ""
                       }`}
                     >
                       {row.label}
                       {row.note ? (
-                        <span className="block text-[10.5px] font-normal text-slate-500 leading-[1.55] mt-1">
+                        <span className="block text-xs font-normal text-slate-500 leading-[1.55] mt-1">
                           {row.note}
                         </span>
                       ) : null}
@@ -174,7 +174,7 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
                     {row.values.map((value, columnIndex) => (
                       <div
                         key={`${row.id}-${columnIndex}`}
-                        className={`px-5 py-[15px] text-[13.5px] text-slate-700 border-t border-slate-200 ${
+                        className={`px-5 py-[15px] text-sm text-slate-700 border-t border-slate-200 ${
                           index % 2 === 1 ? "bg-[#fbfbfc]" : ""
                         } ${row.bestIndex === columnIndex ? "font-bold !text-blue-700 !bg-blue-100" : ""}`}
                       >
@@ -190,12 +190,12 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
           <div className="flex gap-4 mt-[22px] items-start flex-wrap">
             <div className="flex-1 min-w-[320px] bg-white border border-slate-200 rounded-2xl px-5 py-[18px]">
               <SectionLabel weight={700}>Read</SectionLabel>
-              <div className="text-[13.5px] leading-[1.7] text-slate-700 mt-[10px] flex flex-col gap-[10px] [&>p]:m-0">
+              <div className="text-sm leading-[1.7] text-slate-700 mt-[10px] flex flex-col gap-[10px] [&>p]:m-0">
                 {comparison.narrative.map((paragraph) => (
                   <p key={paragraph}>{paragraph}</p>
                 ))}
               </div>
-              <p className="text-[11px] leading-[1.65] text-slate-500 mt-[14px] border-t border-slate-200 pt-[11px]">
+              <p className="text-xs leading-[1.65] text-slate-500 mt-[14px] border-t border-slate-200 pt-[11px]">
                 {POPULATION_LIMITATION_TEXT}
               </p>
             </div>
@@ -206,7 +206,7 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
                 </Button>
                 {report?.link ? (
                   <a
-                    className="text-[11px] leading-[1.65] text-slate-500 break-words"
+                    className="text-xs leading-[1.65] text-slate-500 break-words"
                     href={report.link.url}
                     target="_blank"
                     rel="noreferrer"
@@ -216,7 +216,7 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
                   </a>
                 ) : null}
                 {reportError ? (
-                  <p className="text-[11px] leading-[1.65] text-slate-500 break-words">
+                  <p className="text-xs leading-[1.65] text-slate-500 break-words">
                     {reportError}
                   </p>
                 ) : null}

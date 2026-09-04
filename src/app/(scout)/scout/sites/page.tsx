@@ -56,20 +56,20 @@ export default async function Page() {
               className="flex items-center gap-[18px] py-[15px] px-5 border-t border-slate-200 no-underline text-slate-900 font-sans first:border-t-0 hover:bg-slate-100"
             >
               <span className="flex-1 min-w-0">
-                <span className="block text-[15px] font-semibold">{scan.areaLabel}</span>
-                <span className="block text-[11.5px] text-slate-500 mt-[3px]">
+                <span className="block text-sm font-semibold">{scan.areaLabel}</span>
+                <span className="block text-xs text-slate-500 mt-[3px]">
                   {formatRadius(scan.radiusM)} · {formatDayMonth(scan.createdAt)} ·{" "}
                   {scan.ownerName}
                   {scan.customerName ? ` · ${scan.customerName}` : ""}
                 </span>
               </span>
               <span className="flex-none text-right min-w-[90px]">
-                <span className="block font-heading text-lg font-bold">
+                <span className="block font-mono text-lg font-semibold">
                   {scan.facilityCount === null
                     ? "—"
                     : atLeast(scan.facilityCount, scan.saturated)}
                 </span>
-                <span className="block text-[10px] tracking-[0.08em] uppercase text-slate-500 mt-[3px]">Facilities</span>
+                <span className="block text-xs text-slate-600 mt-[3px]">Facilities</span>
               </span>
               <ScoreBadge
                 total={scan.scoreTotal}

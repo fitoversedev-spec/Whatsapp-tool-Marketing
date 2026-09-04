@@ -40,17 +40,17 @@ export function ScoreBadge({
 
   return (
     <span className={["inline-flex items-center gap-[7px] font-sans flex-wrap", className].filter(Boolean).join(" ")}>
-      <span className={`font-heading font-bold leading-none text-ink ${size === "md" ? "text-[length:var(--text-xl)]" : "text-[length:var(--text-15)]"}`}>{Math.round(total)}</span>
+      <span className={`font-heading font-bold leading-none text-ink ${size === "md" ? "text-xl" : "text-base"}`}>{Math.round(total)}</span>
       <Badge tone={verdictTone(verdict)}>{verdictLabel(verdict)}</Badge>
       {basis === "desk_only" ? (
         <span
-          className="text-[length:var(--text-10)] font-bold tracking-[0.08em] uppercase text-slate-700 bg-white border border-amber-400 rounded-full py-0.5 px-2 cursor-help"
+          className="text-xs font-bold tracking-[0.08em] uppercase text-slate-700 bg-white border border-amber-400 rounded-full py-0.5 px-2 cursor-help"
           title="No site survey recorded. The site-practicals component was excluded and the remaining 85 points rescaled to 100, so this score is not comparable with a surveyed site's."
         >
           {DESK_ONLY_SHORT}
         </span>
       ) : null}
-      {confidence ? <span className="text-[length:var(--text-10-5)] text-slate-500 capitalize">{confidence} conf.</span> : null}
+      {confidence ? <span className="text-xs text-slate-500 capitalize">{confidence} conf.</span> : null}
     </span>
   );
 }

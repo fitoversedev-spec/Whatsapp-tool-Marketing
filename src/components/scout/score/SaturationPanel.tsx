@@ -66,7 +66,7 @@ export function SaturationPanel({
 
   return (
     <section
-      className={["bg-white border border-slate-200 rounded-[18px] p-[18px] flex flex-col gap-3.5 font-sans", className].filter(Boolean).join(" ")}
+      className={["bg-white border border-slate-200 rounded-2xl p-4 flex flex-col gap-3.5 font-sans", className].filter(Boolean).join(" ")}
       aria-labelledby="saturation-heading"
     >
       <SectionLabel weight={700} as="h2">
@@ -74,29 +74,29 @@ export function SaturationPanel({
       </SectionLabel>
 
       <div className="grid grid-cols-1 min-[1100px]:grid-cols-[1.3fr_1fr] gap-2.5">
-        <div className="bg-[var(--black)] text-[color:var(--on-dark)] rounded-lg p-[15px]">
+        <div className="bg-[var(--black)] text-[color:var(--on-dark)] rounded-lg p-4">
           <div className="font-heading text-[30px] font-bold leading-[1.1] flex items-baseline gap-[7px]">
             {figures.anchorsPerFacility === null ? (
               "—"
             ) : (
               <>
-                1<span className="font-sans text-[length:var(--text-11)] font-semibold tracking-[var(--tracking-stat)] uppercase text-[color:var(--on-dark-muted)]">per</span>
+                1<span className="font-sans text-xs font-semibold tracking-[var(--tracking-stat)] uppercase text-[color:var(--on-dark-muted)]">per</span>
                 {figures.anchorsPerFacility.toFixed(1)}
               </>
             )}
           </div>
-          <div className="text-[length:var(--text-10-5)] tracking-[var(--tracking-stat-sm)] uppercase text-[color:var(--on-dark-muted)] mt-[9px] leading-normal">
+          <div className="text-xs tracking-[var(--tracking-stat-sm)] uppercase text-[color:var(--on-dark-muted)] mt-[9px] leading-normal">
             Google-listed facility per weighted demand anchor
           </div>
         </div>
 
-        <div className="border border-slate-200 rounded-lg p-[15px]">
+        <div className="border border-slate-200 rounded-lg p-4">
           <div className="font-heading text-[22px] font-bold leading-[1.1] text-blue-700">
             {figures.benchmarkAnchorsPerFacility === null
               ? "—"
               : `1 per ${figures.benchmarkAnchorsPerFacility.toFixed(1)}`}
           </div>
-          <div className="text-[length:var(--text-10-5)] tracking-[var(--tracking-stat-sm)] uppercase text-slate-500 mt-[9px] leading-normal">
+          <div className="text-xs tracking-[var(--tracking-stat-sm)] uppercase text-slate-500 mt-[9px] leading-normal">
             {figures.benchmarkIsModelDefault
               ? "Scoring model default — no city benchmark yet"
               : `${figures.benchmarkCity ?? "City"} median`}
@@ -105,7 +105,7 @@ export function SaturationPanel({
       </div>
 
       {standing ? (
-        <p className="m-0 text-[length:var(--text-13)] leading-[1.7] text-slate-700">
+        <p className="m-0 text-sm leading-[1.7] text-slate-700">
           This catchment is <strong>{standing}</strong>{" "}
           {figures.benchmarkIsModelDefault ? "the model’s stated default" : "the city median"}
           {figures.facilityCount !== null && figures.weightedAnchorTotal !== null
@@ -115,10 +115,10 @@ export function SaturationPanel({
       ) : null}
 
       {/* The sample count, made visible. */}
-      <div className="border border-slate-200 rounded-[12px] p-[13px] flex flex-col gap-[9px] bg-slate-100">
+      <div className="border border-slate-200 rounded-xl p-3 flex flex-col gap-[9px] bg-slate-100">
         <div className="flex items-baseline justify-between gap-2.5">
           <SectionLabel>Benchmark rests on</SectionLabel>
-          <span className="font-heading text-[length:var(--text-13-5)] font-bold text-ink" data-testid="benchmark-sample-count">
+          <span className="font-heading text-sm font-bold text-ink" data-testid="benchmark-sample-count">
             {figures.benchmarkIsModelDefault
               ? "0 scans"
               : `${figures.benchmarkSampleCount} scan${figures.benchmarkSampleCount === 1 ? "" : "s"}`}
@@ -144,10 +144,10 @@ export function SaturationPanel({
             />
           ))}
           {figures.benchmarkSampleCount > SAMPLE_DOTS ? (
-            <span className="text-[length:var(--text-10-5)] font-semibold text-blue-700 ml-[3px]">+{figures.benchmarkSampleCount - SAMPLE_DOTS}</span>
+            <span className="text-xs font-semibold text-blue-700 ml-[3px]">+{figures.benchmarkSampleCount - SAMPLE_DOTS}</span>
           ) : null}
         </div>
-        <p className="m-0 text-[length:var(--text-11-5)] leading-[1.65] text-slate-700">
+        <p className="m-0 text-xs leading-[1.65] text-slate-700">
           {caveat ??
             "No city benchmark exists yet, so saturation is measured against the scoring model’s " +
               "stated default. That is a default, not a measurement. Benchmarks build themselves " +
@@ -155,9 +155,9 @@ export function SaturationPanel({
         </p>
       </div>
 
-      <p className="m-0 text-[length:var(--text-11)] leading-[1.65] text-slate-500">{SATURATION_METHOD_NOTE}</p>
+      <p className="m-0 text-xs leading-[1.65] text-slate-500">{SATURATION_METHOD_NOTE}</p>
 
-      <div className="flex gap-[18px] flex-wrap border-t border-slate-200 pt-[11px] text-[length:var(--text-11)] text-slate-500">
+      <div className="flex gap-[18px] flex-wrap border-t border-slate-200 pt-[11px] text-xs text-slate-500">
         <span>
           Catchment area {areaKm2.toFixed(2)} km<sup>2</sup>
         </span>
@@ -167,9 +167,9 @@ export function SaturationPanel({
       </div>
 
       {saturatedTerms.length > 0 ? (
-        <div className="border border-amber-400 rounded-[12px] py-3 px-[13px] flex flex-col gap-[7px]" role="note">
+        <div className="border border-amber-400 rounded-xl py-3 px-3 flex flex-col gap-[7px]" role="note">
           <SectionLabel weight={700}>Counts below are floors, not a census</SectionLabel>
-          <ul className="m-0 pl-[17px] text-[length:var(--text-11-5)] leading-[1.7] text-slate-700">
+          <ul className="m-0 pl-[17px] text-xs leading-[1.7] text-slate-700">
             {saturatedTerms.map((term) => (
               <li key={term.termLabel}>
                 <strong>{term.termLabel}</strong> hit the per-search result ceiling on{" "}

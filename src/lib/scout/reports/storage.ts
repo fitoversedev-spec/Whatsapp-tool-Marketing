@@ -128,12 +128,36 @@ const postgresStorage: ReportStorage = {
 /**
  * Which implementation is installed.
  *
- * Returns Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set, otherwise falls
- * back to the Postgres `report_files` table so report generation works in
- * environments that have not configured a Blob store yet.
+ * Tries Vercel Blob first, falls back to the Postgres `report_files` table
+ * if Blob is not configured or fails at runtime. The wrapper catches blob
+ * errors on `put` and retries with postgres so a misconfigured Blob store
+ * does not block report generation entirely.
  */
 export function reportStorage(): ReportStorage {
-  return env.hasBlobReadWriteToken ? blobStorage() : postgresStorage;
+  if (!env.hasBlobReadWriteToken) return postgresStorage;
+
+  const blob = blobStorage();
+  return {
+    name: "blob-with-pg-fallback",
+    async put(reportId, bytes, contentType) {
+      try {
+        return await blob.put(reportId, bytes, contentType);
+      } catch {
+        return postgresStorage.put(reportId, bytes, contentType);
+      }
+    },
+    async get(reportId) {
+      try {
+        const result = await blob.get(reportId);
+        if (result) return result;
+      } catch { /* fall through */ }
+      return postgresStorage.get(reportId);
+    },
+    async remove(reportId) {
+      try { await blob.remove(reportId); } catch { /* ignore */ }
+      try { await postgresStorage.remove(reportId); } catch { /* ignore */ }
+    },
+  };
 }
 
 /* ------------------------------------------------------------------------- *

@@ -310,3 +310,10 @@ html.dark pre, html.dark code {
   background: var(--panel);
   border-color: rgb(var(--line));
 }
+
+/* Leaflet map — zoom controls positioned bottom-right, attribution small */
+.leaflet-control-zoom { border-radius: 8px !important; overflow: hidden; }
+.leaflet-control-attribution { font-size: 9px; }
+html.dark .leaflet-control-zoom a { background: var(--panel); color: rgb(var(--tx)); border-color: rgb(var(--line)); }
+html.dark .leaflet-control-attribution { background: rgba(20,20,23,0.7) !important; color: rgb(var(--dim)); }
+html.dark .leaflet-control-attribution a { color: rgb(var(--sub)); }

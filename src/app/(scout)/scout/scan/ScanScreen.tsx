@@ -771,6 +771,8 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
           radius={radiusKm}
           markers={markers}
           interactive
+          scrollWheelZoom
+          zoomControl
           pin={isSaved ? "fixed" : "drag"}
           onPinMove={isSaved ? undefined : handlePinMove}
           onMarkerTap={selectFromMap}

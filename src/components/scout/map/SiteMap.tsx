@@ -1,5 +1,6 @@
 "use client";
 
+import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, type CSSProperties } from "react";
 import type * as LeafletNS from "leaflet";
 import {

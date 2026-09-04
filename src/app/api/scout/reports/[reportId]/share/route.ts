@@ -41,12 +41,19 @@ export async function POST(request: Request, context: { params: { reportId: stri
     return NextResponse.json({ error: "Unknown share channel." }, { status: 400 });
   }
 
-  const result = await recordShare({
-    user: author,
-    reportId,
-    channel: channel as "whatsapp" | "pdf" | "email",
-    recipientName: payload.recipientName,
-  });
+  let result;
+  try {
+    result = await recordShare({
+      user: author,
+      reportId,
+      channel: channel as "whatsapp" | "pdf" | "email",
+      recipientName: payload.recipientName,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown share error.";
+    console.error(JSON.stringify({ tag: "report.share.failed", reportId, error: message }));
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 
   if (!result) {
     return NextResponse.json({ error: "Report not found." }, { status: 404 });

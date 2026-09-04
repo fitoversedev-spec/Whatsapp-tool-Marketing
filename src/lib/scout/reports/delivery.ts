@@ -125,6 +125,10 @@ export const waMeDelivery: ReportDelivery = {
  * and `"email"` shares).
  */
 export function reportDelivery(): ReportDelivery {
+  if (!envValue("WHATSAPP_PHONE_NUMBER_ID") || !envValue("WHATSAPP_REPORT_TEMPLATE")) {
+    return waMeDelivery;
+  }
+
   const send: WhatsAppDocumentSender = async (message) => {
     const { sendTemplate } = await import("@/lib/whatsapp");
 

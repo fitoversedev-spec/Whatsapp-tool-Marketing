@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Tag } from "@/components/scout/ui";
 import { SectionLabel, SkeletonBlock, StatCard, StateBlock } from "@/components/scout/patterns";
-import { MARKER_COLORS, SiteMap, type SiteMapMarker } from "@/components/scout/map";
+import { MapLayerToggle, MARKER_COLORS, SiteMap, type BaseLayerSpec, type MapMode, type SatelliteLayerResponse, type SiteMapMarker } from "@/components/scout/map";
 import { SaturationPanel, ScorePanel } from "@/components/scout/score";
 import {
   atLeast,
@@ -103,6 +103,23 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
   const [scoring, setScoring] = useState(false);
   const [score, setScore] = useState<ScoreResult | null>(initial?.score ?? null);
   const [themesPending, setThemesPending] = useState(false);
+
+  /* ---------------------------------------------------------- map layer */
+
+  const [mapMode, setMapMode] = useState<MapMode>("2d");
+  const [satellite, setSatellite] = useState<SatelliteLayerResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/scout/map/satellite")
+      .then((r) => r.json())
+      .then((json: SatelliteLayerResponse) => { if (!cancelled) setSatellite(json); })
+      .catch(() => { if (!cancelled) setSatellite({ available: false, reason: "Satellite unavailable" }); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const tileLayer: BaseLayerSpec | null =
+    mapMode === "satellite" && satellite?.available ? satellite.layer : null;
 
   /* ------------------------------------------------------------- estimate */
 
@@ -773,13 +790,20 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
           interactive
           scrollWheelZoom
           zoomControl
+          tileLayer={tileLayer}
           pin={isSaved ? "fixed" : "drag"}
           onPinMove={isSaved ? undefined : handlePinMove}
           onMarkerTap={selectFromMap}
           ariaLabel="Catchment map. Facilities and demand anchors are plotted around the scan centre."
         />
 
-        <div className="absolute left-5 top-5 z-[500] bg-white/95 border border-slate-200 rounded-lg py-[13px] px-[15px] flex flex-col gap-2 shadow-[0_6px_18px_rgba(0,0,0,0.1)]">
+        <div className="absolute left-5 top-5 z-[500] flex flex-col gap-2">
+          <MapLayerToggle
+            mode={mapMode}
+            onChange={setMapMode}
+            disabled={!satellite?.available && mapMode === "2d"}
+          />
+          <div className="bg-white/95 border border-slate-200 rounded-lg py-[13px] px-[15px] flex flex-col gap-2 shadow-[0_6px_18px_rgba(0,0,0,0.1)]">
           <SectionLabel weight={700}>Legend</SectionLabel>
           <span className="flex items-center gap-2 text-xs">
             <span
@@ -805,6 +829,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
             />
             Customer plot
           </span>
+          </div>
         </div>
 
         {selectedPlace ? (

@@ -151,6 +151,7 @@ export default function Sidebar({
     { href: "/admin/taxonomies", label: "Taxonomies" },
     { href: "/admin/audit-log", label: "Audit log" },
     { href: "/admin/ai-usage", label: "AI usage" },
+    { href: "/scout", label: "Site Scout" },
   ];
   const currentLabel =
     ALL_PAGES.find((n) => pathname.startsWith(n.href))?.label ?? "WhatsApp Tool";
@@ -337,6 +338,28 @@ export default function Sidebar({
             <span className="text-base shrink-0">🧭</span>
             <span className={`flex-1 text-left font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>
               CRM
+            </span>
+            {!collapsed && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            )}
+          </button>
+
+          {/* Site Scout — opens in a named tab like CRM */}
+          <button
+            type="button"
+            onClick={() => window.open("/scout/dashboard", "fitoverse-scout")}
+            title={collapsed ? "Site Scout" : undefined}
+            className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition ${
+              collapsed ? "lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5" : "px-3 py-2.5"
+            } text-[rgb(var(--sub))] hover:bg-[rgb(var(--p2))] hover:text-[rgb(var(--tx))] active:bg-[rgb(var(--line))]`}
+          >
+            <span className="text-base shrink-0">📍</span>
+            <span className={`flex-1 text-left font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>
+              Site Scout
             </span>
             {!collapsed && (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-60">

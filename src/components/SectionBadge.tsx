@@ -15,7 +15,7 @@ import { ALL_TOOLS_GROUPS } from "./AllToolsPanel";
 // /crm). /pipeline isn't in any group but is conceptually CRM, so it's added.
 const SECTION_ROUTES: { href: string; title: string }[] = ALL_TOOLS_GROUPS
   .flatMap((g) => g.items.map((it) => ({ href: it.href, title: g.title })))
-  .concat([{ href: "/pipeline", title: "CRM" }])
+  .concat([{ href: "/pipeline", title: "CRM" }, { href: "/scout", title: "Site Scout" }])
   .sort((a, b) => b.href.length - a.href.length);
 
 // Per-section pill colours. MUST be complete literal class strings — Tailwind's
@@ -26,6 +26,7 @@ const SECTION_STYLE: Record<string, { pill: string; dot: string }> = {
   "Marketing & Sales": { pill: "bg-[#7c3aed]/10 text-[#7c3aed]", dot: "bg-[#7c3aed]" }, // accent (orthogonal — no palette token)
   Organization: { pill: "bg-slate-100 text-slate-600", dot: "bg-slate-500" },
   Admin: { pill: "bg-track-500/10 text-track-700", dot: "bg-track-500" }, // track
+  "Site Scout": { pill: "bg-court-500/10 text-court-700", dot: "bg-court-500" },
 };
 const DEFAULT_STYLE = { pill: "bg-wa-green/10 text-wa-dark", dot: "bg-wa-green" };
 

@@ -82,7 +82,9 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
   const [centre, setCentre] = useState(initial?.centre ?? { lat: 12.9784, lng: 77.6408 });
   const [radiusKm, setRadiusKm] = useState((initial?.radiusM ?? 2000) / 1000);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    initial ? [...initial.categoryIds] : taxonomy.categories.map((c) => c.id),
+    initial
+      ? [...initial.categoryIds]
+      : (taxonomy.presets[1]?.categoryIds ?? taxonomy.categories.map((c) => c.id)).slice(),
   );
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);

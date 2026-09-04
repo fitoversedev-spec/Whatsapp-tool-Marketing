@@ -76,11 +76,15 @@ export function confidenceLabel(level: "high" | "medium" | "low"): string {
 /** Short label for a desk-only score, for places too narrow for the full one. */
 export const DESK_ONLY_SHORT = "Desk only";
 
-/** USD cost band, as the estimator quotes it: never the floor alone. */
+const USD_TO_INR = 85;
+
+/** Cost band in INR, converted from the USD estimate Google bills at. */
 export function formatCostBand(minUsd: number, maxUsd: number): string {
-  const f = (n: number) => `$${n.toFixed(n < 10 ? 2 : 0)}`;
-  if (Math.abs(maxUsd - minUsd) < 0.005) return f(minUsd);
-  return `${f(minUsd)}–${f(maxUsd)}`;
+  const minInr = minUsd * USD_TO_INR;
+  const maxInr = maxUsd * USD_TO_INR;
+  const f = (n: number) => `Rs. ${Math.round(n).toLocaleString("en-IN")}`;
+  if (Math.abs(maxInr - minInr) < 1) return f(minInr);
+  return `${f(minInr)}–${f(maxInr)}`;
 }
 
 export function formatCallBand(minCalls: number, maxCalls: number): string {

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     ? categoriesForPreset(presetId).map((c) => c.id)
     : (params.get("categoryIds")?.split(",").map((s) => s.trim()).filter(Boolean) ?? []);
 
-  const estimate = estimateScan({ categoryIds, radiusM });
+  const estimate = estimateScan({ categoryIds, radiusM, cacheHitRate: 0.15 });
 
   return NextResponse.json({
     ...estimate,

@@ -2,6 +2,7 @@ export { SiteMap, type SiteMapProps } from "./SiteMap";
 export { MapLayerToggle, type MapMode } from "./MapLayerToggle";
 export {
   BASE_LAYERS,
+  ESRI_SATELLITE,
   MARKER_COLORS,
   resolveBaseLayer,
   type BaseLayerId,

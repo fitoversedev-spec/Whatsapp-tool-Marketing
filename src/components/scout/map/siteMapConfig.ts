@@ -98,6 +98,14 @@ export function resolveBaseLayer(id: BaseLayerId): BaseLayerSpec {
   return spec;
 }
 
+/** Free Esri World Imagery — fallback when Google satellite key is missing. */
+export const ESRI_SATELLITE: BaseLayerSpec = {
+  url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  attribution: "Tiles &copy; Esri",
+  maxZoom: 19,
+  requiresKey: false,
+};
+
 /** What `GET /api/scout/map/satellite` answers with. */
 export type SatelliteLayerResponse =
   | { readonly available: true; readonly layer: BaseLayerSpec; readonly expiresAt: string | null }

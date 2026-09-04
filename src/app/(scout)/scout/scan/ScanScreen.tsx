@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Tag } from "@/components/scout/ui";
 import { SectionLabel, SkeletonBlock, StatCard, StateBlock } from "@/components/scout/patterns";
-import { MapLayerToggle, MARKER_COLORS, SiteMap, type BaseLayerSpec, type MapMode, type SatelliteLayerResponse, type SiteMapMarker } from "@/components/scout/map";
+import { ESRI_SATELLITE, MapLayerToggle, MARKER_COLORS, SiteMap, type BaseLayerSpec, type MapMode, type SatelliteLayerResponse, type SiteMapMarker } from "@/components/scout/map";
 import { SaturationPanel, ScorePanel } from "@/components/scout/score";
 import {
   atLeast,
@@ -24,7 +24,7 @@ import type {
 import type { ScoreResult } from "@/lib/scout/scoring/types";
 
 
-const RADII_KM = [1, 2, 5, 10] as const;
+const PRESET_RADII = [1, 2, 5, 10, 15, 20] as const;
 const RESULTS_PER_GROUP = 4;
 /** Poll cadence while a job is running. One indexed row per call. */
 const PROGRESS_POLL_MS = 1500;
@@ -119,7 +119,9 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
   }, []);
 
   const tileLayer: BaseLayerSpec | null =
-    mapMode === "satellite" && satellite?.available ? satellite.layer : null;
+    mapMode === "satellite"
+      ? (satellite?.available ? satellite.layer : ESRI_SATELLITE)
+      : null;
 
   /* ------------------------------------------------------------- estimate */
 
@@ -431,25 +433,31 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
           </p>
 
           <div className="mt-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-slate-500">Radius</span>
+              <span className="text-sm font-semibold text-slate-900">
+                {Number.isInteger(radiusKm) ? radiusKm : radiusKm.toFixed(1)} km
+              </span>
+            </div>
             <input
               type="range"
-              min={0}
-              max={RADII_KM.length - 1}
-              step={1}
-              value={RADII_KM.indexOf(radiusKm as (typeof RADII_KM)[number])}
+              min={1}
+              max={20}
+              step={0.1}
+              value={radiusKm}
               disabled={isSaved}
-              onChange={(e) => setRadiusKm(RADII_KM[Number(e.target.value)]!)}
+              onChange={(e) => setRadiusKm(Math.round(Number(e.target.value) * 10) / 10)}
               className="w-full accent-slate-800 cursor-pointer"
               aria-label="Scan radius"
             />
             <div className="flex justify-between text-xs text-slate-500 mt-1 px-0.5">
-              {RADII_KM.map((r) => (
+              {PRESET_RADII.map((r) => (
                 <span
                   key={r}
-                  className={`cursor-pointer ${radiusKm === r ? "text-slate-900 font-semibold" : ""}`}
+                  className={`cursor-pointer transition-colors ${radiusKm === r ? "text-slate-900 font-semibold" : "hover:text-slate-700"}`}
                   onClick={() => !isSaved && setRadiusKm(r)}
                 >
-                  {r} km
+                  {r}
                 </span>
               ))}
             </div>
@@ -808,7 +816,6 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
           <MapLayerToggle
             mode={mapMode}
             onChange={setMapMode}
-            disabled={!satellite?.available && mapMode === "2d"}
           />
           <div className="bg-white/95 border border-slate-200 rounded-lg py-[13px] px-[15px] flex flex-col gap-2 shadow-[0_6px_18px_rgba(0,0,0,0.1)]">
           <SectionLabel weight={700}>Legend</SectionLabel>

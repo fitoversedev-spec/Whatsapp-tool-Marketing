@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/scout/ui";
 import { SectionLabel, StateBlock } from "@/components/scout/patterns";
 import { SiteMap } from "@/components/scout/map";
-import type { BaseLayerSpec, SatelliteLayerResponse } from "@/components/scout/map/siteMapConfig";
+import { ESRI_SATELLITE, type BaseLayerSpec, type SatelliteLayerResponse } from "@/components/scout/map/siteMapConfig";
 import {
   cellCentre,
   cellSizeMetres,
@@ -129,7 +129,7 @@ export function SweepScreen({
     };
   }, []);
 
-  const tileLayer: BaseLayerSpec | null = satellite?.available ? satellite.layer : null;
+  const tileLayer: BaseLayerSpec | null = satellite?.available ? satellite.layer : ESRI_SATELLITE;
 
   /**
    * Open on the ground the sweep actually covers.

@@ -221,7 +221,7 @@ export function SiteMap({
       const map = L.map(canvasRef.current, {
         center: [g.lat, g.lng],
         zoom: g.zoom,
-        zoomControl: g.zoomControl,
+        zoomControl: false,
         attributionControl: true,
         dragging: g.interactive,
         scrollWheelZoom: g.scrollWheelZoom,
@@ -230,6 +230,7 @@ export function SiteMap({
         boxZoom: false,
         keyboard: false,
       });
+      if (g.zoomControl) L.control.zoom({ position: "bottomright" }).addTo(map);
       mapRef.current = map;
 
       tileRef.current = L.tileLayer(layerSpec.url, {

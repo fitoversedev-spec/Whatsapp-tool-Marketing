@@ -19,10 +19,10 @@ export const env = {
 
   /** Session cookie signing/derivation secret. 32+ random bytes, base64. */
   get authSecret(): string {
-    const value = process.env.AUTH_SECRET;
+    const value = process.env.AUTH_SECRET || process.env.SESSION_SECRET;
     if (!value || value.length < 32) {
       throw new Error(
-        "AUTH_SECRET must be set to at least 32 characters. Generate one with: openssl rand -base64 48",
+        "AUTH_SECRET (or SESSION_SECRET) must be set to at least 32 characters. Generate one with: openssl rand -base64 48",
       );
     }
     return value;

@@ -48,7 +48,7 @@ export function StatCard({
       </div>
       <div
         className={[
-          "font-display font-bold leading-tight",
+          "font-heading font-bold leading-tight",
           valueSizeClass,
           accent && "text-court-700",
         ]

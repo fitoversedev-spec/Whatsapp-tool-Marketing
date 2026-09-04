@@ -401,7 +401,7 @@ export function SweepScreen({
                 type="button"
                 className={`absolute pointer-events-auto font-sans text-[11px] font-bold tracking-[0.06em] flex items-start justify-start py-[7px] px-[9px] cursor-pointer transition-[background] duration-150 overflow-hidden border ${
                   cell.status === "plot"
-                    ? "border-solid border-[var(--plot-amber)] bg-[rgba(232,163,61,0.55)] text-slate-900"
+                    ? "border-solid border-amber-400 bg-amber-400/55 text-slate-900"
                     : cell.status === "terrace"
                       ? "border-solid border-turf-500 bg-[rgba(21,147,65,0.5)] text-white"
                       : cell.status === "rejected"
@@ -446,16 +446,15 @@ export function SweepScreen({
         ) : null}
 
         {gridError ? (
-          <div className="absolute left-5 top-5 z-[500] max-w-[360px] bg-[var(--surface-card)] border border-[var(--plot-amber)] rounded-[12px] py-3 px-3.5 text-[12px] leading-[1.6] text-slate-700 shadow-[0_6px_18px_rgba(0,0,0,0.12)]" role="alert">
+          <div className="absolute left-5 top-5 z-[500] max-w-[360px] bg-white border border-amber-400 rounded-[12px] py-3 px-3.5 text-[12px] leading-[1.6] text-slate-700 shadow-[0_6px_18px_rgba(0,0,0,0.12)]" role="alert">
             {gridError}
           </div>
         ) : null}
 
-        <div className="absolute left-5 bottom-5 z-[500] bg-white/95 border border-[var(--border-default)] rounded-[12px] py-[13px] px-[15px] flex gap-[18px] flex-wrap shadow-[0_6px_18px_rgba(0,0,0,0.12)]">
+        <div className="absolute left-5 bottom-5 z-[500] bg-white/95 border border-slate-200 rounded-[12px] py-[13px] px-[15px] flex gap-[18px] flex-wrap shadow-[0_6px_18px_rgba(0,0,0,0.12)]">
           <span className="flex items-center gap-2 text-xs">
             <span
-              className="w-[11px] h-[11px] rounded-[3px]"
-              style={{ background: "var(--plot-amber)" }}
+              className="w-[11px] h-[11px] rounded-[3px] bg-amber-400"
               aria-hidden="true"
             />
             Empty plot
@@ -483,7 +482,7 @@ export function SweepScreen({
         </div>
       </div>
 
-      <aside className="w-[400px] flex-none bg-[var(--surface-card)] border-l border-[var(--border-default)] overflow-y-auto pt-6 px-[22px] pb-8 flex flex-col gap-5 max-[900px]:w-full max-[900px]:border-l-0 max-[900px]:border-t max-[900px]:border-[var(--border-default)] ss-scroll">
+      <aside className="w-[400px] flex-none bg-white border-l border-slate-200 overflow-y-auto pt-6 px-[22px] pb-8 flex flex-col gap-5 max-[900px]:w-full max-[900px]:border-l-0 max-[900px]:border-t max-[900px]:border-slate-200 ss-scroll">
         <div>
           <h1 className="m-0 text-base">Spaces sweep</h1>
           <div className="text-[12.5px] text-slate-500 mt-[9px] leading-[1.6] font-sans tracking-normal normal-case">
@@ -494,17 +493,17 @@ export function SweepScreen({
         </div>
 
         <div className="grid grid-cols-3 gap-2.5">
-          <div className="border border-[var(--border-default)] rounded-[12px] p-3">
-            <div className="font-heading text-[22px] font-bold text-[var(--plot-amber)]">{counts.plot}</div>
+          <div className="border border-slate-200 rounded-[12px] p-3">
+            <div className="font-heading text-[22px] font-bold text-amber-400">{counts.plot}</div>
             <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[5px]">Empty plots</div>
           </div>
-          <div className="border border-[var(--border-default)] rounded-[12px] p-3">
+          <div className="border border-slate-200 rounded-[12px] p-3">
             <div className="font-heading text-[22px] font-bold text-turf-500">
               {counts.terrace}
             </div>
             <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[5px]">Terraces</div>
           </div>
-          <div className="border border-[var(--border-default)] rounded-[12px] p-3">
+          <div className="border border-slate-200 rounded-[12px] p-3">
             <div className="font-heading text-[22px] font-bold text-track-500">
               {counts.rejected}
             </div>
@@ -520,7 +519,7 @@ export function SweepScreen({
             </label>
             <select
               id="cell-size"
-              className="flex-1 font-sans text-[13px] py-[9px] px-[11px] rounded-md border border-[var(--border-strong)] bg-[var(--surface-card)] text-slate-900 cursor-pointer"
+              className="flex-1 font-sans text-[13px] py-[9px] px-[11px] rounded-md border border-slate-300 bg-white text-slate-900 cursor-pointer"
               value={cellSizeM}
               onChange={(e) => setCellSizeM(Number(e.target.value))}
             >
@@ -570,14 +569,14 @@ export function SweepScreen({
                 <div
                   key={cell.id}
                   className={`border rounded-[12px] py-3 px-[13px] flex gap-[11px] items-start ${
-                    selectedId === cell.id ? "border-court-500 bg-court-100" : "border-[var(--border-default)]"
+                    selectedId === cell.id ? "border-court-500 bg-court-100" : "border-slate-200"
                   }`}
                 >
                   <button
                     type="button"
                     className={`flex-none font-heading text-[11px] font-bold tracking-[0.06em] py-1.5 px-[9px] rounded border-0 cursor-pointer ${
                       cell.status === "plot"
-                        ? "bg-[var(--plot-amber)] text-slate-900"
+                        ? "bg-amber-400 text-slate-900"
                         : cell.status === "terrace"
                           ? "bg-turf-500 text-white"
                           : "bg-track-500 text-white"
@@ -597,7 +596,7 @@ export function SweepScreen({
                       {centrePoint.lng.toFixed(5)}
                     </span>
                     <textarea
-                      className="w-full font-sans text-[11.5px] leading-[1.6] text-slate-900 border border-[var(--border-default)] rounded py-[7px] px-[9px] outline-none resize-y min-h-[46px] focus:border-court-500 focus:shadow-[var(--focus-ring)]"
+                      className="w-full font-sans text-[11.5px] leading-[1.6] text-slate-900 border border-slate-200 rounded py-[7px] px-[9px] outline-none resize-y min-h-[46px] focus:border-court-500 focus:ring-1 focus:ring-court-500/20"
                       value={cell.note}
                       placeholder={sweepNotePlaceholder(cell.status)}
                       aria-label={`Note for cell ${cell.id}`}

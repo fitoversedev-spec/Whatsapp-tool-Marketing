@@ -341,7 +341,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
         {/* ---------------------------------------------------- customer plot */}
         <div className="flex flex-col gap-[9px]">
           <SectionLabel weight={700}>Customer plot</SectionLabel>
-          <div className="flex items-center gap-[9px] border border-slate-300 rounded-[10px] py-[11px] px-[13px] focus-within:border-court-500 focus-within:shadow-[var(--focus-ring)]">
+          <div className="flex items-center gap-[9px] border border-slate-300 rounded-[10px] py-[11px] px-[13px] focus-within:border-court-500 focus-within:ring-1 focus-within:ring-court-500/20">
             <svg
               width="15"
               height="15"
@@ -483,7 +483,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
             <div className="border border-slate-200 rounded-lg p-[13px] flex flex-col gap-[9px] bg-slate-100" aria-live="polite">
               <div className="flex items-baseline justify-between gap-[10px]">
                 <SectionLabel weight={700}>Before you spend it</SectionLabel>
-                <span className="font-display text-xl font-bold text-slate-900">
+                <span className="font-heading text-xl font-bold text-slate-900">
                   {estimate ? formatCostBand(estimate.minCostUsd, estimate.maxCostUsd) : "—"}
                 </span>
               </div>
@@ -631,7 +631,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                       {atLeast(c.count, c.saturated)}
                       {c.saturated ? (
                         <span
-                          className="text-[color:var(--plot-amber)] font-bold cursor-help"
+                          className="text-amber-400 font-bold cursor-help"
                           title="A search for this category returned the maximum results a single query can, so the count is a floor."
                         >
                           {" "}

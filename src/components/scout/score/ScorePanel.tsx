@@ -57,12 +57,12 @@ export function ScorePanel({
 
   return (
     <section
-      className={["bg-[var(--surface-card)] border border-[color:var(--border-default)] rounded-[18px] p-[18px] flex flex-col gap-4 font-sans", className].filter(Boolean).join(" ")}
+      className={["bg-white border border-slate-200 rounded-[18px] p-[18px] flex flex-col gap-4 font-sans", className].filter(Boolean).join(" ")}
       aria-labelledby="score-heading"
     >
       <div className="bg-[var(--black)] text-[color:var(--on-dark)] rounded-[16px] p-[22px] flex items-center justify-between gap-[18px] flex-wrap">
         <div className="flex flex-col gap-1.5">
-          <div className="font-display text-[52px] font-bold leading-none tracking-normal">
+          <div className="font-heading text-[52px] font-bold leading-none tracking-normal">
             {score.totalRounded}
             <span className="text-[18px] text-[color:var(--on-dark-muted)] ml-1.5">/100</span>
           </div>
@@ -74,7 +74,7 @@ export function ScorePanel({
           <Badge tone={verdictTone(score.verdict)}>{verdictLabel(score.verdict)}</Badge>
           <div className="text-[length:var(--text-11-5)] text-[color:var(--on-dark-muted-strong)] tracking-[0.02em]">{confidenceLabel(score.confidence.level)}</div>
           {score.basis === "desk_only" ? (
-            <div className="text-[length:var(--text-11)] leading-normal text-[color:var(--sky)] border border-[rgba(115,202,240,0.4)] rounded py-[5px] px-[9px]" data-testid="score-basis-label">
+            <div className="text-[11px] leading-normal text-court-400 border border-court-400/40 rounded py-[5px] px-[9px]" data-testid="score-basis-label">
               {score.basisLabel}
             </div>
           ) : null}
@@ -87,7 +87,7 @@ export function ScorePanel({
         <div className="border border-red-500 bg-red-100 rounded-[12px] py-[13px] px-[15px] flex flex-col gap-[7px]" role="alert">
           <SectionLabel weight={700}>Must be read whatever the score says</SectionLabel>
           {score.hardFlags.map((flag) => (
-            <p key={flag.code} className="m-0 text-[length:var(--text-12-5)] leading-[1.65] text-red-600">
+            <p key={flag.code} className="m-0 text-[12.5px] leading-[1.65] text-red-600">
               {flag.message}
             </p>
           ))}
@@ -103,10 +103,10 @@ export function ScorePanel({
               ? Math.max(0, Math.min(100, (component.points / component.available) * 100))
               : 0;
           return (
-            <div key={component.id} className="border border-[color:var(--border-default)] rounded-[12px] overflow-hidden">
+            <div key={component.id} className="border border-slate-200 rounded-[12px] overflow-hidden">
               <button
                 type="button"
-                className="w-full text-left bg-[var(--surface-card)] border-0 py-3 px-[13px] pb-[13px] cursor-pointer font-sans flex flex-col gap-[9px] hover:bg-slate-100"
+                className="w-full text-left bg-white border-0 py-3 px-[13px] pb-[13px] cursor-pointer font-sans flex flex-col gap-[9px] hover:bg-slate-100"
                 aria-expanded={expanded}
                 aria-controls={`component-${component.id}`}
                 onClick={() => setOpen(expanded ? null : component.id)}
@@ -116,7 +116,7 @@ export function ScorePanel({
                   <span className="flex items-baseline gap-1.5 text-slate-500">
                     {component.included ? (
                       <>
-                        <span className="font-display text-[length:var(--text-15)] font-bold text-ink">
+                        <span className="font-heading text-[length:var(--text-15)] font-bold text-ink">
                           {component.points.toFixed(1)}
                         </span>
                         <span className="text-[length:var(--text-11-5)]">
@@ -124,13 +124,13 @@ export function ScorePanel({
                         </span>
                       </>
                     ) : (
-                      <span className="text-[length:var(--text-11)] font-semibold tracking-[0.08em] uppercase text-slate-500">Excluded</span>
+                      <span className="text-[11px] font-semibold tracking-[0.08em] uppercase text-slate-500">Excluded</span>
                     )}
                     <Chevron open={expanded} />
                   </span>
                 </span>
                 <span
-                  className={component.included ? "block h-2 rounded-full bg-blue-100 overflow-hidden" : "block h-2 rounded-full bg-transparent border border-dashed border-[color:var(--border-strong)]"}
+                  className={component.included ? "block h-2 rounded-full bg-blue-100 overflow-hidden" : "block h-2 rounded-full bg-transparent border border-dashed border-slate-300"}
                   role="img"
                   aria-label={
                     component.included
@@ -139,25 +139,25 @@ export function ScorePanel({
                   }
                 >
                   {component.included ? (
-                    <span className="block h-full rounded-full bg-blue-500 transition-[width] duration-[var(--dur-med)] ease-[var(--ease-standard)] motion-reduce:transition-none" style={{ width: `${pct}%` }} />
+                    <span className="block h-full rounded-full bg-blue-500 transition-[width] duration-[var(--dur-med)] ease-out motion-reduce:transition-none" style={{ width: `${pct}%` }} />
                   ) : null}
                 </span>
               </button>
 
               <div
                 id={`component-${component.id}`}
-                className="border-t border-[color:var(--border-default)] p-[13px] flex flex-col gap-[11px] bg-slate-100 motion-reduce:!animate-none"
+                className="border-t border-slate-200 p-[13px] flex flex-col gap-[11px] bg-slate-100 motion-reduce:!animate-none"
                 style={{ animation: "ssIn var(--dur-med) var(--ease-standard)" }}
                 hidden={!expanded}
               >
-                <p className="m-0 text-[length:var(--text-12-5)] leading-[1.7] text-slate-700">{component.justification}</p>
+                <p className="m-0 text-[12.5px] leading-[1.7] text-slate-700">{component.justification}</p>
 
                 {component.parts.length > 0 ? (
                   <ul className="list-none m-0 p-0 flex flex-col gap-[7px]">
                     {component.parts.map((part) => (
                       <li key={part.id} className="grid grid-cols-[1fr_auto] gap-x-2.5 gap-y-0.5 text-[length:var(--text-11-5)]">
                         <span className="font-semibold text-ink">{part.label}</span>
-                        <span className="font-display font-bold text-blue-700">
+                        <span className="font-heading font-bold text-blue-700">
                           {part.available === null
                             ? part.points.toFixed(2)
                             : `${part.points.toFixed(1)}/${part.available.toFixed(0)}`}
@@ -178,11 +178,11 @@ export function ScorePanel({
                   </ul>
                 ) : null}
 
-                <dl className="m-0 grid grid-cols-[1fr_auto] gap-x-3.5 gap-y-1 text-[length:var(--text-11)] text-slate-500 border-t border-[color:var(--border-default)] pt-2.5">
+                <dl className="m-0 grid grid-cols-[1fr_auto] gap-x-3.5 gap-y-1 text-[11px] text-slate-500 border-t border-slate-200 pt-2.5">
                   {Object.entries(component.inputs).map(([key, value]) => (
                     <div key={key} className="contents">
                       <dt className="m-0">{humanise(key)}</dt>
-                      <dd className="m-0 text-right font-display text-slate-700">{renderInput(value)}</dd>
+                      <dd className="m-0 text-right font-heading text-slate-700">{renderInput(value)}</dd>
                     </div>
                   ))}
                 </dl>
@@ -197,7 +197,7 @@ export function ScorePanel({
           <SectionLabel weight={700}>
             Why confidence is {score.confidence.level}
           </SectionLabel>
-          <ul className="m-0 pl-[18px] text-[length:var(--text-12-5)] leading-[1.7] text-slate-500">
+          <ul className="m-0 pl-[18px] text-[12.5px] leading-[1.7] text-slate-500">
             {score.confidence.reasons.map((reason) => (
               <li key={reason}>{reason}</li>
             ))}
@@ -205,7 +205,7 @@ export function ScorePanel({
         </div>
       ) : null}
 
-      <footer className="border-t border-[color:var(--border-default)] pt-3 text-[length:var(--text-11)] text-slate-500 leading-[1.6] flex flex-col gap-1.5">
+      <footer className="border-t border-slate-200 pt-3 text-[11px] text-slate-500 leading-[1.6] flex flex-col gap-1.5">
         <span>
           Model v{score.modelVersion} · checklist v{score.checklistVersion}
           {scoredAt ? ` · scored ${new Date(scoredAt).toLocaleString("en-GB")}` : ""} ·{" "}
@@ -237,7 +237,7 @@ function Chevron({ open }: { open: boolean }) {
       strokeWidth="2.6"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`self-center transition-transform duration-150 ease-[var(--ease-standard)] text-slate-500 motion-reduce:transition-none${open ? " rotate-180" : ""}`}
+      className={`self-center transition-transform duration-150 ease-out text-slate-500 motion-reduce:transition-none${open ? " rotate-180" : ""}`}
       aria-hidden="true"
     >
       <path d="M6 9l6 6 6-6" />

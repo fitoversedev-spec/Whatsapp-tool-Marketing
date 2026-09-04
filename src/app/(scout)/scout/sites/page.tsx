@@ -64,7 +64,7 @@ export default async function Page() {
                 </span>
               </span>
               <span className="flex-none text-right min-w-[90px]">
-                <span className="block font-display text-lg font-bold">
+                <span className="block font-heading text-lg font-bold">
                   {scan.facilityCount === null
                     ? "—"
                     : atLeast(scan.facilityCount, scan.saturated)}

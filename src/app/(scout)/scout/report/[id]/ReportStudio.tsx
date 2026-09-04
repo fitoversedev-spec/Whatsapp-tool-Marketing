@@ -425,14 +425,14 @@ export function ReportStudio({
                 <defs>
                   <linearGradient id="ss-report-mark" x1="0" y1="0" x2="1" y2="1">
                     <stop offset="0%" stopColor="var(--green)" />
-                    <stop offset="45%" stopColor="var(--sky)" />
+                    <stop offset="45%" stopColor="#4DC6F4" />
                     <stop offset="80%" stopColor="var(--navy)" />
                     <stop offset="100%" stopColor="var(--red)" />
                   </linearGradient>
                 </defs>
                 <rect x="0" y="0" width="28" height="28" rx="7" fill="url(#ss-report-mark)" />
               </svg>
-              <span className="font-display uppercase tracking-[0.12em] text-[13px] font-bold">Site Scout report</span>
+              <span className="font-heading uppercase tracking-[0.12em] text-[13px] font-bold">Site Scout report</span>
             </div>
             <span className="text-[11.5px] text-slate-500">{formatFullDate(new Date())}</span>
           </div>
@@ -458,21 +458,21 @@ export function ReportStudio({
           {on("stat-cards") ? (
             <div className="grid grid-cols-4 gap-[14px]">
               <div className="border border-slate-200 rounded-lg p-[14px]">
-                <div className="font-display text-[22px] font-bold">
+                <div className="font-heading text-[22px] font-bold">
                   {atLeast(scan.competitionCount, scan.anySaturated)}
                 </div>
                 <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[6px]">Facilities</div>
               </div>
               <div className="border border-slate-200 rounded-lg p-[14px]">
-                <div className="font-display text-[22px] font-bold">{formatCount(scan.reviewTotal)}</div>
+                <div className="font-heading text-[22px] font-bold">{formatCount(scan.reviewTotal)}</div>
                 <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[6px]">Reviews</div>
               </div>
               <div className="border border-slate-200 rounded-lg p-[14px]">
-                <div className="font-display text-[22px] font-bold">{formatRating(scan.avgRating)}</div>
+                <div className="font-heading text-[22px] font-bold">{formatRating(scan.avgRating)}</div>
                 <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[6px]">Avg rating</div>
               </div>
               <div className="bg-slate-900 text-white rounded-lg p-[14px]">
-                <div className="font-display text-[22px] font-bold">
+                <div className="font-heading text-[22px] font-bold">
                   {atLeast(scan.demandCount, scan.anySaturated)}
                 </div>
                 <div className="text-[10px] tracking-[0.09em] uppercase text-white/40 mt-[6px]">Demand places</div>

@@ -33,18 +33,18 @@ export function ScoreBadge({
   if (total === null || verdict === null) {
     return (
       <span className={["inline-flex items-center gap-[7px] font-sans flex-wrap", className].filter(Boolean).join(" ")}>
-        <span className="text-[length:var(--text-11)] font-semibold tracking-[0.08em] uppercase text-slate-500">Not scored</span>
+        <span className="text-[11px] font-semibold tracking-[0.08em] uppercase text-slate-500">Not scored</span>
       </span>
     );
   }
 
   return (
     <span className={["inline-flex items-center gap-[7px] font-sans flex-wrap", className].filter(Boolean).join(" ")}>
-      <span className={`font-display font-bold leading-none text-ink ${size === "md" ? "text-[length:var(--text-xl)]" : "text-[length:var(--text-15)]"}`}>{Math.round(total)}</span>
+      <span className={`font-heading font-bold leading-none text-ink ${size === "md" ? "text-[length:var(--text-xl)]" : "text-[length:var(--text-15)]"}`}>{Math.round(total)}</span>
       <Badge tone={verdictTone(verdict)}>{verdictLabel(verdict)}</Badge>
       {basis === "desk_only" ? (
         <span
-          className="text-[length:var(--text-10)] font-bold tracking-[0.08em] uppercase text-slate-700 bg-white border border-[color:var(--plot-amber)] rounded-full py-0.5 px-2 cursor-help"
+          className="text-[length:var(--text-10)] font-bold tracking-[0.08em] uppercase text-slate-700 bg-white border border-amber-400 rounded-full py-0.5 px-2 cursor-help"
           title="No site survey recorded. The site-practicals component was excluded and the remaining 85 points rescaled to 100, so this score is not comparable with a surveyed site's."
         >
           {DESK_ONLY_SHORT}

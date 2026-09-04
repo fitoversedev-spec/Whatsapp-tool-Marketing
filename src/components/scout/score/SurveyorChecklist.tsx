@@ -58,7 +58,7 @@ export function SurveyorChecklist({
     <div className={["flex flex-col gap-4 font-sans", className].filter(Boolean).join(" ")}>
       <div className="flex items-baseline justify-between gap-2.5">
         <SectionLabel weight={700}>Site survey</SectionLabel>
-        <span className="font-display text-[length:var(--text-13)] font-bold text-ink">
+        <span className="font-heading text-[length:var(--text-13)] font-bold text-ink">
           {answered} of {SURVEYOR_CHECKLIST.length} answered
         </span>
       </div>
@@ -74,7 +74,7 @@ export function SurveyorChecklist({
         const fields = SURVEYOR_CHECKLIST.filter((f) => f.group === group.id);
         if (fields.length === 0) return null;
         return (
-          <fieldset key={group.id} className="border border-[color:var(--border-default)] rounded-lg p-3.5 m-0 flex flex-col gap-3">
+          <fieldset key={group.id} className="border border-slate-200 rounded-lg p-3.5 m-0 flex flex-col gap-3">
             <legend className="text-[length:var(--text-11)] font-bold tracking-[var(--tracking-section)] uppercase text-slate-500 py-0 px-1.5">{group.label}</legend>
             <p className="m-0 text-[length:var(--text-11-5)] leading-[1.6] text-slate-500">{group.description}</p>
 
@@ -82,7 +82,7 @@ export function SurveyorChecklist({
               const value = answers[field.id];
               const name = `survey-${field.id}`;
               return (
-                <div key={field.id} className="border-t border-[color:var(--border-default)] pt-3 flex flex-col gap-[7px] [&:first-of-type]:border-t-0 [&:first-of-type]:pt-0" role="group" aria-labelledby={`${name}-label`}>
+                <div key={field.id} className="border-t border-slate-200 pt-3 flex flex-col gap-[7px] [&:first-of-type]:border-t-0 [&:first-of-type]:pt-0" role="group" aria-labelledby={`${name}-label`}>
                   <div className="flex items-baseline justify-between gap-2.5">
                     <span className="text-[length:var(--text-13)] font-semibold text-ink" id={`${name}-label`}>
                       {field.label}
@@ -102,8 +102,8 @@ export function SurveyorChecklist({
                       <label
                         key={anchor}
                         className={value === rating
-                          ? "flex items-center gap-[9px] border border-[color:var(--accent)] bg-blue-100 rounded-md py-2 px-[11px] cursor-pointer text-[length:var(--text-12-5)] text-blue-700 font-semibold transition-colors duration-[var(--dur-fast)] ease-[var(--ease-standard)]"
-                          : "flex items-center gap-[9px] border border-[color:var(--border-default)] rounded-md py-2 px-[11px] cursor-pointer text-[length:var(--text-12-5)] text-slate-700 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-standard)] hover:bg-slate-100"
+                          ? "flex items-center gap-[9px] border border-[color:var(--accent)] bg-blue-100 rounded-md py-2 px-[11px] cursor-pointer text-[12.5px] text-blue-700 font-semibold transition-colors duration-150 ease-out"
+                          : "flex items-center gap-[9px] border border-slate-200 rounded-md py-2 px-[11px] cursor-pointer text-[12.5px] text-slate-700 transition-colors duration-150 ease-out hover:bg-slate-100"
                         }
                       >
                         <input
@@ -115,7 +115,7 @@ export function SurveyorChecklist({
                           onChange={() => onChange(field.id, rating)}
                           className="w-3.5 h-3.5 accent-[var(--accent)] flex-none m-0"
                         />
-                        <span className={`font-display text-[length:var(--text-11)] font-bold flex-none w-3 ${value === rating ? "text-blue-700" : "text-slate-500"}`}>{rating}</span>
+                        <span className={`font-heading text-[length:var(--text-11)] font-bold flex-none w-3 ${value === rating ? "text-blue-700" : "text-slate-500"}`}>{rating}</span>
                         <span className="leading-[1.4]">{anchor}</span>
                       </label>
                     ))}

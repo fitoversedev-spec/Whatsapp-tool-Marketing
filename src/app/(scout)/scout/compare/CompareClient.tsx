@@ -149,7 +149,7 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
                   Category
                 </div>
                 {comparison.subjects.map((subject) => (
-                  <div key={subject.scanId} className="bg-slate-900 text-white px-5 py-4 font-display text-xs tracking-wider uppercase">
+                  <div key={subject.scanId} className="bg-slate-900 text-white px-5 py-4 font-heading text-xs tracking-wider uppercase">
                     {subject.areaLabel}
                     <span className="block font-sans text-[10.5px] tracking-normal normal-case text-white/40 mt-1">
                       {formatRadius(subject.radiusM)}

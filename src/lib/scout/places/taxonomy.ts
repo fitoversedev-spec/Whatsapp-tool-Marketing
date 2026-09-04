@@ -282,9 +282,12 @@ const DEMAND: readonly CategoryDef[] = [
         mode: "nearby",
         googleTypes: ["school", "primary_school", "secondary_school"],
       },
-      { id: "international-school", label: "International schools", mode: "text", queries: ["international school"] },
-      { id: "college", label: "Colleges", mode: "text", queries: ["college"] },
-      { id: "university", label: "Universities", mode: "nearby", googleTypes: ["university"] },
+      {
+        id: "college",
+        label: "Colleges & Universities",
+        mode: "nearby",
+        googleTypes: ["university"],
+      },
     ],
   },
   {

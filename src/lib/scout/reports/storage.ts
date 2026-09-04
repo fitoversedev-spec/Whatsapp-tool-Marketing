@@ -128,13 +128,12 @@ const postgresStorage: ReportStorage = {
 /**
  * Which implementation is installed.
  *
- * Returns the Vercel Blob implementation. `postgresStorage` above remains
- * available as a fallback for environments that have not configured
- * `BLOB_READ_WRITE_TOKEN` yet; the factory can be pointed back at it by
- * changing this one line.
+ * Returns Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set, otherwise falls
+ * back to the Postgres `report_files` table so report generation works in
+ * environments that have not configured a Blob store yet.
  */
 export function reportStorage(): ReportStorage {
-  return blobStorage();
+  return env.hasBlobReadWriteToken ? blobStorage() : postgresStorage;
 }
 
 /* ------------------------------------------------------------------------- *

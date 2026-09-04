@@ -276,14 +276,15 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
           address: address.trim() || null,
         }),
       });
-      const json = (await res.json()) as { scanId?: string; error?: string };
+      let json: { scanId?: string; error?: string };
+      try { json = await res.json(); } catch { json = {}; }
       if (!res.ok || !json.scanId) {
-        setRunError(json.error ?? "The scan could not be created.");
+        setRunError(json.error ?? `Server returned ${res.status}. Check Vercel logs for details.`);
         return;
       }
       router.push(`/scout/scan/${json.scanId}`);
-    } catch {
-      setRunError("The scan request did not reach the server. Check the connection and try again.");
+    } catch (err) {
+      setRunError(`The scan request failed: ${err instanceof Error ? err.message : "network error"}`);
     } finally {
       setRunning(false);
     }
@@ -429,23 +430,29 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
               : `Drag the pin to fine-tune. Centre ${centre.lat.toFixed(5)}, ${centre.lng.toFixed(5)}.`}
           </p>
 
-          <div className="grid grid-cols-4 gap-2 mt-1">
-            {RADII_KM.map((r) => (
-              <button
-                key={r}
-                type="button"
-                aria-pressed={radiusKm === r}
-                disabled={isSaved}
-                className={`font-sans text-sm font-semibold py-2 rounded-lg cursor-pointer border ${
-                  radiusKm === r
-                    ? "bg-black text-white border-black"
-                    : "bg-white text-slate-900 border-slate-300"
-                }`}
-                onClick={() => setRadiusKm(r)}
-              >
-                {r} km
-              </button>
-            ))}
+          <div className="mt-1">
+            <input
+              type="range"
+              min={0}
+              max={RADII_KM.length - 1}
+              step={1}
+              value={RADII_KM.indexOf(radiusKm as (typeof RADII_KM)[number])}
+              disabled={isSaved}
+              onChange={(e) => setRadiusKm(RADII_KM[Number(e.target.value)]!)}
+              className="w-full accent-slate-800 cursor-pointer"
+              aria-label="Scan radius"
+            />
+            <div className="flex justify-between text-xs text-slate-500 mt-1 px-0.5">
+              {RADII_KM.map((r) => (
+                <span
+                  key={r}
+                  className={`cursor-pointer ${radiusKm === r ? "text-slate-900 font-semibold" : ""}`}
+                  onClick={() => !isSaved && setRadiusKm(r)}
+                >
+                  {r} km
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 

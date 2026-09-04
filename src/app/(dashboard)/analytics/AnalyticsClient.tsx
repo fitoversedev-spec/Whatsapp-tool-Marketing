@@ -165,18 +165,21 @@ export default function AnalyticsClient({
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={timeline} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#D5E0E3" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
                   <XAxis
                     dataKey="date"
-                    stroke="#566268"
+                    stroke="rgb(var(--dim))"
                     fontSize={11}
                     tickFormatter={shortDate}
                   />
-                  <YAxis stroke="#566268" fontSize={11} allowDecimals={false} />
+                  <YAxis stroke="rgb(var(--dim))" fontSize={11} allowDecimals={false} />
                   <Tooltip
                     contentStyle={{
-                      borderRadius: 3,
-                      border: "1px solid #D5E0E3",
+                      borderRadius: 8,
+                      border: "1px solid rgb(var(--line))",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                      background: "var(--panel)",
+                      color: "rgb(var(--tx))",
                       fontSize: 12,
                     }}
                     labelFormatter={(label) => `Date: ${label}`}
@@ -306,7 +309,7 @@ export default function AnalyticsClient({
                           <Cell key={i} fill={FAILURE_PALETTE[i % FAILURE_PALETTE.length]} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ fontSize: 12 }} />
+                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid rgb(var(--line))", boxShadow: "0 2px 8px rgba(0,0,0,0.12)", background: "var(--panel)", color: "rgb(var(--tx))" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>

@@ -15,6 +15,16 @@ import { Cell } from "recharts/es6/component/Cell";
 import { ResponsiveContainer } from "recharts/es6/component/ResponsiveContainer";
 import { Tooltip } from "recharts/es6/component/Tooltip";
 
+const TT: React.CSSProperties = {
+  fontSize: 12, borderRadius: 8,
+  border: "1px solid rgb(var(--line))",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+  background: "var(--panel)",
+  color: "rgb(var(--tx))",
+  padding: "8px 12px",
+};
+const CURSOR_FILL = "rgba(148,163,184,0.12)";
+
 export function fmtInr(n: number): string {
   return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
@@ -56,12 +66,12 @@ export function HorizontalBarChart<T extends Record<string, unknown>>({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 28, bottom: 4, left: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-        <XAxis type="number" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
-        <YAxis type="category" dataKey={labelKey as any} width={140} tick={{ fontSize: 12, fill: "#334155" }} axisLine={false} tickLine={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" horizontal={false} />
+        <XAxis type="number" tick={{ fontSize: 11, fill: "rgb(var(--dim))" }} axisLine={false} tickLine={false} allowDecimals={false} />
+        <YAxis type="category" dataKey={labelKey as any} width={140} tick={{ fontSize: 12, fill: "rgb(var(--sub))" }} axisLine={false} tickLine={false} />
         <Tooltip
-          cursor={{ fill: "#f8fafc" }}
-          contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(15,23,42,0.08)" }}
+          cursor={{ fill: CURSOR_FILL }}
+          contentStyle={TT}
           formatter={((_value: unknown, _name: string, item: { payload: T }) => [tooltipFormatter(item.payload), ""]) as any}
           labelFormatter={() => ""}
         />
@@ -107,16 +117,16 @@ export function StackedBarChart<T extends Record<string, unknown>>({
       </div>
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 4, right: 12, bottom: 4, left: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-          <XAxis dataKey={dataKey as any} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-          <YAxis type="number" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" vertical={false} />
+          <XAxis dataKey={dataKey as any} tick={{ fontSize: 11, fill: "rgb(var(--dim))" }} axisLine={false} tickLine={false} />
+          <YAxis type="number" tick={{ fontSize: 11, fill: "rgb(var(--dim))" }} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip
-            cursor={{ fill: "#f8fafc" }}
+            cursor={{ fill: CURSOR_FILL }}
             content={({ active, payload }) => {
               if (!active || !payload?.[0]) return null;
               const d = payload[0].payload as T;
               return (
-                <div style={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(15,23,42,0.08)", background: "#fff", padding: "8px 12px" }}>
+                <div style={TT}>
                   {tooltipFormatter(d)}
                 </div>
               );
@@ -162,8 +172,8 @@ export function DonutChart<T extends Record<string, unknown>>({
       <ResponsiveContainer width="100%" height={height ?? 220}>
         <PieChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
           <Tooltip
-            cursor={{ fill: "#f8fafc" }}
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(15,23,42,0.08)" }}
+            cursor={{ fill: CURSOR_FILL }}
+            contentStyle={TT}
             formatter={((_value: unknown, _name: string, item: { payload: T }) => [tooltipFormatter ? tooltipFormatter(item.payload) : String(item.payload[dataKey]), ""]) as any}
             labelFormatter={() => ""}
           />
@@ -227,14 +237,14 @@ export function QuadrantScatter<T extends Record<string, unknown>>({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ScatterChart margin={{ top: 4, right: 28, bottom: 4, left: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis type="number" dataKey={xKey as any} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-        <YAxis type="number" dataKey={yKey as any} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-        <ReferenceLine x={xBenchmark} stroke="#cbd5e1" strokeDasharray="3 3" />
-        <ReferenceLine y={yBenchmark} stroke="#cbd5e1" strokeDasharray="3 3" />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
+        <XAxis type="number" dataKey={xKey as any} tick={{ fontSize: 11, fill: "rgb(var(--dim))" }} axisLine={false} tickLine={false} />
+        <YAxis type="number" dataKey={yKey as any} tick={{ fontSize: 11, fill: "rgb(var(--dim))" }} axisLine={false} tickLine={false} />
+        <ReferenceLine x={xBenchmark} stroke="rgb(var(--dim))" strokeDasharray="3 3" />
+        <ReferenceLine y={yBenchmark} stroke="rgb(var(--dim))" strokeDasharray="3 3" />
         <Tooltip
           cursor={{ strokeDasharray: "3 3" }}
-          contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(15,23,42,0.08)" }}
+          contentStyle={TT}
           formatter={((_value: unknown, _name: string, item: { payload: T }) => [tooltipFormatter(item.payload), ""]) as any}
           labelFormatter={() => ""}
         />
@@ -281,13 +291,13 @@ export function BubbleChart<T extends Record<string, unknown>>({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ScatterChart margin={{ top: 4, right: 28, bottom: 4, left: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis type="number" dataKey={xKey as any} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-        <YAxis type="number" dataKey={yKey as any} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
+        <XAxis type="number" dataKey={xKey as any} tick={{ fontSize: 11, fill: "rgb(var(--dim))" }} axisLine={false} tickLine={false} />
+        <YAxis type="number" dataKey={yKey as any} tick={{ fontSize: 11, fill: "rgb(var(--dim))" }} axisLine={false} tickLine={false} />
         <ZAxis type="number" dataKey={zKey as any} range={[60, 600]} />
         <Tooltip
           cursor={{ strokeDasharray: "3 3" }}
-          contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(15,23,42,0.08)" }}
+          contentStyle={TT}
           formatter={((_value: unknown, _name: string, item: { payload: T }) => [tooltipFormatter(item.payload), ""]) as any}
           labelFormatter={() => ""}
         />

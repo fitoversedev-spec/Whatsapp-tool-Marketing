@@ -1,34 +1,19 @@
 /**
  * How a finished report reaches the person it was written for.
  *
- * ## Why this is an interface rather than a `wa.me` call
+ * Two implementations live side by side:
  *
- * Client answer **E1** was "share link", so the shipped implementation is a
- * `wa.me` deep link: the salesperson opens WhatsApp with the message already
- * written, picks the recipient themselves, and sends from their own number.
- * Nothing is sent on anyone's behalf, no Business API, no Meta verification, no
- * template approval — and that was the right call for a build with no messaging
- * infrastructure.
+ * - **`cloudApiDelivery`** sends the report from the company WhatsApp number
+ *   via the Cloud API. `reportDelivery()` returns this one, wired to the
+ *   host's `sendTemplate` through a dynamic-import adapter.
  *
- * The host application Site Scout is being folded into **already has the
- * WhatsApp Cloud API wired up and sending**. That changes what is possible:
- * a report could be delivered from a company number, programmatically, with a
- * delivery receipt — the thing originally costed as out of scope.
+ * - **`waMeDelivery`** opens a `wa.me` deep link so the salesperson picks the
+ *   recipient and sends from their own number. It is the automatic fallback
+ *   for non-WhatsApp channels and remains available for cases where the Cloud
+ *   API cannot serve — no approved template, no recipient number, a token
+ *   outage mid-demo.
  *
- * `cloudApiDelivery` below is that implementation, written against a one-function
- * injection seam (`WhatsAppDocumentSender`) rather than against the host's
- * module directly, because this repository cannot see that module and inventing
- * an import path for it would be shipping code nobody can compile. The host
- * supplies the function in Stage B.
- *
- * **`reportDelivery()` still returns `waMeDelivery`, and the swap happens in the
- * host, not here.** Flipping the factory in this repository would leave the
- * whole suite exercising a code path with no credentials behind it. And
- * `waMeDelivery` is not a stepping stone to be deleted afterwards: it is the
- * fallback for every case the Cloud API cannot serve — no approved template, a
- * recipient whose number nobody has, a token outage mid-demo.
- *
- * ## The one thing the interface has to make visible
+ * ## The one thing the interface makes visible
  *
  * `mode`. A handoff and a send are different promises. With `wa.me` the
  * application has **not** delivered anything — it has opened a compose window,
@@ -37,19 +22,6 @@
  * will eventually write "Sent to Deepa" on a dashboard for a message nobody
  * sent. So `mode` is on the result, not implied by which implementation
  * happens to be installed, and the UI wording keys off it.
- *
- * ## What a `CloudApiDelivery` has to do that this one does not
- *
- * - Send to a phone number, which means collecting and validating one. Today
- *   the recipient is a *name*, recorded for the dashboard; a number is a
- *   different field with different consent implications.
- * - Handle the 24-hour customer-service window: outside it, only an approved
- *   template may be sent, which means a template per report type and an
- *   approval round with Meta.
- * - Persist the provider message id and reconcile delivery webhooks against it.
- *
- * None of that changes the report, the PDF or the signed link, which is the
- * point of putting the boundary here.
  */
 
 import { shareMessage, whatsappShareUrl, type ShareMessageInput } from "./share";
@@ -141,25 +113,110 @@ export const waMeDelivery: ReportDelivery = {
 /**
  * Which implementation is installed.
  *
- * A function, not a constant, so a host application can swap it without this
- * module's importers changing.
+ * Returns the Cloud API implementation. The sender adapter uses a dynamic
+ * import of `@/lib/whatsapp` — never a module-scope import — because this
+ * file is imported by two `"use client"` components for
+ * `deliveryNote(reportDelivery().mode)`, and a static import of the server-only
+ * WhatsApp module would break the browser bundle. The dynamic import runs only
+ * inside `deliver()`, which is server-side.
  *
- * There are two implementations below and this returns the handoff one, on
- * purpose. `cloudApiDelivery` needs a sender only the host can supply and
- * credentials this repository does not have, so installing it here would leave
- * the suite exercising a path that cannot run. **The swap is a Stage B change,
- * made in the host.**
+ * `waMeDelivery` remains available as the automatic fallback for non-WhatsApp
+ * channels (the `cloudApiDelivery` implementation delegates to it for `"pdf"`
+ * and `"email"` shares).
  */
 export function reportDelivery(): ReportDelivery {
-  return waMeDelivery;
+  const send: WhatsAppDocumentSender = async (message) => {
+    const { sendTemplate } = await import("@/lib/whatsapp");
+
+    // The host stores phone numbers in Meta format (E.164 without the
+    // leading `+`); the Scout interface uses E.164 with the `+`.
+    const to = message.to.replace(/^\+/, "");
+
+    try {
+      const result = await sendTemplate({
+        to,
+        templateName: message.template.name,
+        language: message.template.language,
+        components: [
+          {
+            type: "header" as const,
+            parameters: [
+              {
+                type: "document",
+                document: {
+                  link: message.document.link,
+                  filename: message.document.filename,
+                },
+              },
+            ],
+          },
+          ...(message.template.bodyVariables.length > 0
+            ? [
+                {
+                  type: "body" as const,
+                  parameters: message.template.bodyVariables.map((v) => ({
+                    type: "text" as const,
+                    text: v,
+                  })),
+                },
+              ]
+            : []),
+        ],
+      });
+
+      return { ok: true as const, messageId: result.waMessageId };
+    } catch (err: unknown) {
+      // Resolve with a structured failure rather than rejecting — the
+      // contract documented on WhatsAppDocumentSender. Extracts Meta's
+      // error body when the shape is an AxiosError.
+      return { ok: false as const, failure: extractAxiosMetaFailure(err) };
+    }
+  };
+
+  return cloudApiDelivery({ send });
+}
+
+/**
+ * Pull a `WhatsAppApiFailure` out of the host's axios error shape.
+ *
+ * The host's `sendTemplate` throws an `AxiosError` whose
+ * `response.data.error` carries Meta's structured error body. This maps it
+ * into the Scout `WhatsAppApiFailure` shape so `cloudApiDelivery` gets the
+ * code / subcode / fbtrace_id discrimination it needs.
+ */
+function extractAxiosMetaFailure(err: unknown): WhatsAppApiFailure {
+  if (typeof err === "object" && err !== null) {
+    const record = err as Record<string, unknown>;
+    const response = record.response as Record<string, unknown> | undefined;
+    const data = response?.data as Record<string, unknown> | undefined;
+    const metaError = data?.error as Record<string, unknown> | undefined;
+
+    if (metaError) {
+      const num = (v: unknown): number | undefined =>
+        typeof v === "number" && Number.isFinite(v) ? v : undefined;
+      const str = (v: unknown): string | undefined =>
+        typeof v === "string" && v.length > 0 ? v : undefined;
+      const errorData =
+        typeof metaError.error_data === "object" && metaError.error_data !== null
+          ? (metaError.error_data as Record<string, unknown>)
+          : undefined;
+
+      return {
+        httpStatus: num(response?.status),
+        code: num(metaError.code),
+        subcode: num(metaError.error_subcode),
+        type: str(metaError.type),
+        message: str(metaError.message) ?? (err instanceof Error ? err.message : String(err)),
+        details: str(errorData?.details),
+        fbtraceId: str(metaError.fbtrace_id),
+      };
+    }
+  }
+  return { message: err instanceof Error ? err.message : String(err) };
 }
 
 /* ------------------------------------------------------------------------- *
  *  WhatsApp Cloud API
- *
- *  Written now, installed later. `reportDelivery()` above still returns
- *  `waMeDelivery` and must keep doing so until the host wires this up in
- *  Stage B — that is what keeps this repository's test suite meaningful.
  * ------------------------------------------------------------------------- */
 
 /**
@@ -173,35 +230,21 @@ export function reportDelivery(): ReportDelivery {
  * browser bundle and fail the build.
  *
  * The drift that invites is closed at the wiring point instead:
- * `cloudApiDelivery` takes `maxDocumentBytes`, and Stage B should pass the real
- * `MAX_PDF_BYTES` there, from a server module that may legally import it.
+ * `cloudApiDelivery` takes `maxDocumentBytes`, and the factory can pass the
+ * real `MAX_PDF_BYTES` from a server module that may legally import it.
  */
 export const MAX_WHATSAPP_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 /* -------------------------------------------------------- the injection seam */
 
 /**
- * ## What the host must implement in Stage B
+ * The one function the host supplies to `cloudApiDelivery`.
  *
- * The whole seam is one function. The host has its own `whatsapp-delivery.ts`
- * with the Cloud API access token, the Graph endpoint, retries and whatever
- * else it already does; this module has no business knowing any of it, and
- * pointedly does not — see the "no secrets" note below.
+ * The adapter in `reportDelivery()` above bridges the host's `sendTemplate`
+ * from `@/lib/whatsapp` into this shape, using a dynamic import so the
+ * server-only module is never pulled into the client bundle.
  *
- * ```ts
- * // in the host, at the wiring point — NOT in this file
- * import { sendWhatsAppMessage } from "@/lib/scout/whatsapp-delivery";
- * import { cloudApiDelivery, type WhatsAppDocumentSender } from "@/lib/scout/reports/delivery";
- *
- * const send: WhatsAppDocumentSender = async (message) => {
- *   // …translate `message` into whatever shape the host module takes,
- *   // await it, and map the outcome onto WhatsAppSendResult.
- * };
- *
- * export const delivery = cloudApiDelivery({ send });
- * ```
- *
- * ### The contract, precisely
+ * ### The contract
  *
  * - **Resolve, do not reject, on a Cloud API error.** Return
  *   `{ ok: false, failure }` carrying Meta's own `error` object. A rejection is
@@ -493,7 +536,7 @@ export interface CloudApiDeliveryOptions {
    *
    * Overridable because the approved template does not exist yet, so its shape
    * is genuinely unknown; the default below is a guess at a sensible one and
-   * must be checked against the real template before Stage B ships. Guessing
+   * must be checked against the real template before going live. Guessing
    * wrong is not silent — Meta rejects a mismatched parameter count with code
    * 132000, which `describeFailure` names.
    */
@@ -516,9 +559,6 @@ function defaultTemplateVariables(request: DeliveryRequest): readonly string[] {
  * `mode` is `"sent"`, and that is a stronger claim than `waMeDelivery` makes:
  * there is a provider message id on the result and a dashboard may honestly say
  * the thing was delivered.
- *
- * **Not installed.** `reportDelivery()` returns `waMeDelivery`. This is wired up
- * in the host, in Stage B, against the host's own Cloud API module.
  *
  * A channel other than `"whatsapp"` falls through to `waMeDelivery` rather than
  * failing: the Cloud API is not the right sender for a `"pdf"` or `"email"`

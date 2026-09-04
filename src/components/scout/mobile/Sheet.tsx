@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
-import styles from "./Sheet.module.css";
+
 
 export interface SheetProps {
   open: boolean;
@@ -52,21 +52,23 @@ export function Sheet({ open, onClose, heading, children }: SheetProps) {
 
   return (
     <>
-      <button type="button" className={styles.scrim} aria-label="Close" onClick={onClose} />
+      <style>{`@keyframes sheetUp{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}`}</style>
+      <button type="button" className="fixed inset-0 z-40 border-0 p-0 bg-[rgba(10,10,10,0.35)] cursor-pointer" aria-label="Close" onClick={onClose} />
       <div
-        className={styles.sheet}
+        className="fixed left-0 right-0 bottom-0 z-[41] max-h-[88dvh] flex flex-col bg-[var(--surface-card)] rounded-t-[18px] shadow-lg motion-reduce:!animate-none"
+        style={{ animation: "sheetUp 0.22s var(--ease-standard)" }}
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
         ref={panelRef}
         tabIndex={-1}
       >
-        <div className={styles.head}>
-          <span className={styles.grabber} aria-hidden="true" />
-          <h2 className={styles.heading} id={headingId}>
+        <div className="flex-none flex items-start gap-3 px-[var(--m-pad-x)] pt-4 pb-3 border-b border-[color:var(--border-default)]">
+          <span className="absolute top-[7px] left-1/2 -translate-x-1/2 w-[38px] h-1 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
+          <h2 className="flex-1 min-w-0 text-[length:var(--text-15)] font-semibold leading-[1.3] mt-1" id={headingId}>
             {heading}
           </h2>
-          <button type="button" className={styles.close} onClick={onClose} aria-label="Close">
+          <button type="button" className="flex-none w-[var(--m-touch)] h-[var(--m-touch)] -mt-1.5 -mr-2 -mb-1.5 ml-0 border-0 bg-transparent text-[color:var(--m-muted)] rounded-full flex items-center justify-center cursor-pointer" onClick={onClose} aria-label="Close">
             <svg
               width="18"
               height="18"
@@ -81,7 +83,7 @@ export function Sheet({ open, onClose, heading, children }: SheetProps) {
             </svg>
           </button>
         </div>
-        <div className={styles.body}>{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-[var(--m-pad-x)] pt-4 pb-[calc(20px+var(--m-safe-bottom))]">{children}</div>
       </div>
     </>
   );

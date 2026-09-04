@@ -26,7 +26,6 @@ import { SectionLabel } from "@/components/scout/patterns";
 import { Button } from "@/components/scout/ui";
 import type { ScanProgress, ScanResult, ScanResultPlace } from "@/lib/scout/places/scanResult";
 import type { ScoreResult } from "@/lib/scout/scoring";
-import styles from "./results.module.css";
 
 interface ScoreResponse {
   readonly score: ScoreResult;
@@ -226,24 +225,24 @@ export function ResultsScreen({ scanId }: { scanId: string }) {
         navContext={{ scanId }}
       />
 
-      <div className={`mScroll ss-scroll ${styles.body} mIn`}>
+      <div className="mScroll ss-scroll pt-4 px-[var(--m-pad-x)] pb-5 flex flex-col gap-5 mIn">
         {staleAt ? <OfflineBanner cachedAt={staleAt} subject="these scan results" /> : null}
 
         {error && !result ? (
-          <p className={`${styles.notice} ${styles.error}`} role="alert">
+          <p className="bg-[var(--surface-card)] border border-track-500 rounded-[var(--radius-12)] py-[13px] px-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[var(--ink)]" role="alert">
             {error}
           </p>
         ) : null}
 
         {progress && jobRunning ? (
-          <div className={styles.progress}>
-            <div className={styles.progressLabel}>
+          <div className="bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-lg p-3.5">
+            <div className="flex items-baseline justify-between gap-2.5 text-[length:var(--text-12-5)] text-[var(--ink)]">
               {/* Phase 1 writes this sentence; it is rendered verbatim. */}
               <span>{progress.label || "Scanning…"}</span>
-              <span className={styles.progressPct}>{`${Math.round(progress.fraction * 100)}%`}</span>
+              <span className="flex-none font-display font-bold text-[length:var(--text-12-5)]">{`${Math.round(progress.fraction * 100)}%`}</span>
             </div>
             <div
-              className={styles.progressTrack}
+              className="h-1.5 rounded-full bg-slate-200 overflow-hidden mt-2.5"
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
@@ -251,16 +250,16 @@ export function ResultsScreen({ scanId }: { scanId: string }) {
               aria-label="Scan progress"
             >
               <span
-                className={styles.progressFill}
+                className="block h-full bg-[var(--accent)] rounded-full transition-[width] duration-[var(--dur-med)] ease-[var(--ease-standard)]"
                 style={{ width: `${Math.round(progress.fraction * 100)}%` }}
               />
             </div>
-            <p className={styles.progressNote}>
+            <p className="mt-2.5 text-[length:var(--text-11-5)] leading-normal text-[var(--m-muted-on-white)]">
               Results fill in as tiles complete — you can read what is here already. The scan runs on
               the server, so leaving this screen does not stop it.
             </p>
             {progress.resumeRequired ? (
-              <div className={styles.resume}>
+              <div className="mt-2.5">
                 <Button variant="dark" block onClick={() => void resume()} disabled={resuming || !online}>
                   {resuming ? "Resuming…" : "Resume from where it stopped"}
                 </Button>
@@ -270,12 +269,12 @@ export function ResultsScreen({ scanId }: { scanId: string }) {
         ) : null}
 
         {progress?.jobStatus === "failed" ? (
-          <div className={`${styles.notice} ${styles.error}`}>
+          <div className="bg-[var(--surface-card)] border border-track-500 rounded-[var(--radius-12)] py-[13px] px-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[var(--ink)]">
             <p>
               {progress.error ??
                 "The scan stopped before it finished. The tiles it already covered are kept."}
             </p>
-            <div className={styles.resume}>
+            <div className="mt-2.5">
               <Button variant="dark" block onClick={() => void resume()} disabled={resuming || !online}>
                 {resuming ? "Resuming…" : "Try the remaining tiles again"}
               </Button>
@@ -309,7 +308,7 @@ export function ResultsScreen({ scanId }: { scanId: string }) {
         {/* --------------------------------------------- stat grid */}
         {result ? (
           <>
-            <div className={styles.statGrid}>
+            <div className="grid grid-cols-2 gap-2.5">
               <Stat
                 label="Sports facilities"
                 value={formatCount(result.competitionCount, exact)}
@@ -338,38 +337,35 @@ export function ResultsScreen({ scanId }: { scanId: string }) {
               />
             </div>
 
-            <p className={styles.counts}>
+            <p className="text-[length:var(--text-11-5)] leading-normal text-[var(--m-muted)]">
               {`${result.distinctPlaces} distinct places, counted across ${Object.values(
                 result.categoryCounts,
               ).reduce((a, b) => a + b, 0)} category memberships — a venue can belong to more than one.`}
               {exact
                 ? ""
-                : " Some searches hit Google's result ceiling, so every count here is a floor."}
+                : " Some searches hit Google’s result ceiling, so every count here is a floor."}
             </p>
 
             {/* ------------------------------------ count table */}
-            <div className={styles.table}>
-              <div className={styles.tableHead}>
+            <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-lg overflow-hidden">
+              <div className="grid grid-cols-[1.35fr_0.5fr_0.7fr_0.7fr] gap-1.5 py-[11px] px-3.5 items-baseline bg-slate-100 text-[length:var(--text-10)] font-bold tracking-[var(--tracking-stat-sm)] uppercase text-[var(--m-muted-on-white)]">
                 <span>Category</span>
-                <span className={styles.tableNum}>Count</span>
-                <span className={styles.tableMuted}>Reviews</span>
-                <span className={styles.tableMuted}>Nearest</span>
+                <span className="text-right tabular-nums">Count</span>
+                <span className="text-right text-[var(--m-muted-on-white)] tabular-nums">Reviews</span>
+                <span className="text-right text-[var(--m-muted-on-white)] tabular-nums">Nearest</span>
               </div>
               {result.categories.map((category) => (
                 <div
                   key={category.categoryId}
-                  className={[
-                    styles.tableRow,
-                    category.side === "demand" && styles.tableRowDemand,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
+                  className={`grid grid-cols-[1.35fr_0.5fr_0.7fr_0.7fr] gap-1.5 py-3 px-3.5 items-baseline text-[length:var(--text-12-5)] border-t border-[var(--border-default)]${
+                    category.side === "demand" ? " bg-court-100" : ""
+                  }`}
                 >
-                  <span className={styles.tableName}>{category.label}</span>
-                  <span className={styles.tableNum}>
+                  <span className="font-semibold min-w-0 [overflow-wrap:anywhere]">{category.label}</span>
+                  <span className="text-right tabular-nums">
                     {category.saturated ? (
                       <>
-                        <span className={styles.saturatedMark} title="Google's result ceiling was reached — this is a floor">
+                        <span className="text-court-700 font-bold" title="Google's result ceiling was reached — this is a floor">
                           ≥
                         </span>
                         {category.count}
@@ -378,10 +374,10 @@ export function ResultsScreen({ scanId }: { scanId: string }) {
                       category.count
                     )}
                   </span>
-                  <span className={styles.tableMuted}>
+                  <span className="text-right text-[var(--m-muted-on-white)] tabular-nums">
                     {category.side === "demand" ? "—" : formatNumber(category.reviewTotal)}
                   </span>
-                  <span className={styles.tableMuted}>
+                  <span className="text-right text-[var(--m-muted-on-white)] tabular-nums">
                     {formatDistance(category.nearest?.distanceM ?? null)}
                   </span>
                 </div>
@@ -390,21 +386,21 @@ export function ResultsScreen({ scanId }: { scanId: string }) {
 
             {/* -------------------------------- nearest facilities */}
             {nearest.length > 0 ? (
-              <div className={styles.section}>
+              <div className="flex flex-col gap-[9px]">
                 <SectionLabel as="h2">Nearest facilities</SectionLabel>
-                <div className={styles.facilityList}>
+                <div className="flex flex-col gap-2">
                   {nearest.map((place) => (
                     <Link
                       key={place.placeId}
                       href={`/scout/m/place/${encodeURIComponent(place.placeId)}?scan=${scanId}`}
-                      className={styles.facility}
+                      className="flex items-center gap-[11px] w-full min-h-[var(--m-touch)] text-left bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-3 px-[13px] cursor-pointer font-sans no-underline text-inherit"
                     >
-                      <span className={styles.dot} aria-hidden="true" />
-                      <span className={styles.facilityText}>
-                        <span className={styles.facilityName}>{place.name}</span>
-                        <span className={styles.facilityMeta}>{facilityMeta(place)}</span>
+                      <span className="w-[9px] h-[9px] rounded-full bg-turf-500 flex-none" aria-hidden="true" />
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-[length:var(--text-13)] font-semibold text-[var(--ink)] overflow-hidden text-ellipsis whitespace-nowrap">{place.name}</span>
+                        <span className="block text-[length:var(--text-11-5)] text-[var(--m-muted-on-white)] mt-0.5">{facilityMeta(place)}</span>
                       </span>
-                      <span className={styles.facilityDistance}>
+                      <span className="text-[length:var(--text-11-5)] text-[var(--m-muted-on-white)] flex-none">
                         {formatDistance(place.distanceMRounded)}
                       </span>
                     </Link>
@@ -414,11 +410,11 @@ export function ResultsScreen({ scanId }: { scanId: string }) {
             ) : null}
 
             {/* ------------------------------------ map preview */}
-            <div className={styles.section}>
+            <div className="flex flex-col gap-[9px]">
               <SectionLabel as="h2">Map preview</SectionLabel>
-              <div className={styles.mapFrame}>
+              <div className="rounded-lg overflow-hidden border border-[var(--border-strong)]">
                 <SiteMap
-                  className={styles.map}
+                  className="h-[190px] block"
                   lat={result.centre.lat}
                   lng={result.centre.lng}
                   zoom={14}
@@ -427,17 +423,17 @@ export function ResultsScreen({ scanId }: { scanId: string }) {
                   ariaLabel={`Map of ${result.areaLabel} showing facilities and demand anchors`}
                 />
               </div>
-              <div className={styles.legend}>
-                <span className={styles.legendItem}>
-                  <span className={`${styles.legendDot} ${styles.legendFacility}`} />
+              <div className="flex flex-wrap gap-3.5 text-[length:var(--text-11)] text-[var(--m-muted)]">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-turf-500" />
                   Sports facility
                 </span>
-                <span className={styles.legendItem}>
-                  <span className={`${styles.legendDot} ${styles.legendDemand}`} />
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-court-500" />
                   School / college / workplace
                 </span>
-                <span className={styles.legendItem}>
-                  <span className={`${styles.legendDot} ${styles.legendPlot}`} />
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-track-500" />
                   Customer plot
                 </span>
               </div>
@@ -484,14 +480,22 @@ function Stat({
   subGreen?: boolean;
 }) {
   return (
-    <div className={[styles.stat, dark && styles.statDark].filter(Boolean).join(" ")}>
-      <div className={styles.statLabel}>{label}</div>
-      <div className={[styles.statValue, value.length > 4 && styles.statValueLong].filter(Boolean).join(" ")}>
+    <div className={`rounded-lg p-3.5 min-w-0 border ${
+      dark
+        ? "bg-black text-[var(--on-dark)] border-black"
+        : "bg-[var(--surface-card)] border-[var(--border-default)]"
+    }`}>
+      <div className={`text-[length:var(--text-10-5)] font-semibold tracking-[var(--tracking-stat)] uppercase ${
+        dark ? "text-[var(--on-dark-muted)]" : "text-[var(--m-muted-on-white)]"
+      }`}>{label}</div>
+      <div className={`flex items-center gap-1.5 font-display font-bold tracking-[0.02em] mt-2 leading-[1.1] ${
+        value.length > 4 ? "text-lg" : "text-2xl"
+      }`}>
         {value}
       </div>
-      <div
-        className={[styles.statSub, subGreen && !dark && styles.statSubGreen].filter(Boolean).join(" ")}
-      >
+      <div className={`text-[length:var(--text-11)] mt-1 leading-[1.4] ${
+        dark ? "text-[var(--sky)]" : subGreen ? "text-turf-600" : "text-[var(--m-muted-on-white)]"
+      }`}>
         {sub}
       </div>
     </div>

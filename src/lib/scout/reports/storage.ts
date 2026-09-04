@@ -12,20 +12,17 @@ import { env } from "@/lib/scout/env";
  *
  * ## Why this is an interface with one implementation
  *
- * Client requirement **B7** — object storage — has not been answered for this
- * repo. Rather than block the whole phase on it, or guess a provider and ship
- * an unexercised SDK integration, the bytes go into Postgres behind a
- * three-method interface.
+ * Two implementations:
  *
- * The host application Site Scout is being folded into **already has
- * `@vercel/blob` configured**, so the replacement is written: `blobStorage()`,
- * at the bottom of this file. It is not installed — see `reportStorage()`.
+ * - **`blobStorage`** — Vercel Blob, private, behind the application's signed
+ *   link. This is what `reportStorage()` returns.
+ * - **`postgresStorage`** — bytes in a `report_files` `bytea` column. Kept as
+ *   a fallback for environments that have not configured Blob yet.
  *
- * Nothing else in the codebase changes when it is: the report row already
- * stores a `pdf_blob_key`, and the customer-facing link is signed by *this*
- * application rather than by the storage provider (see `signing.ts`), so
- * swapping the backend does not change any URL a customer already holds, and
- * the expiry keeps working.
+ * The report row stores a `pdf_blob_key`, and the customer-facing link is
+ * signed by *this* application rather than by the storage provider (see
+ * `signing.ts`), so swapping the backend does not change any URL a customer
+ * already holds, and the expiry keeps working.
  *
  * ## Is Postgres a reasonable place for this?
  *
@@ -131,23 +128,17 @@ const postgresStorage: ReportStorage = {
 /**
  * Which implementation is installed.
  *
- * There are two below and this returns the Postgres one, on purpose.
- * `blobStorage()` needs a Blob store and a credential this repository does not
- * have, so installing it here would leave the whole suite — the report
- * pipeline, the `/r/{id}` route, the digest round trip — exercising a path that
- * cannot run. **The swap is a Stage B change, made in the host, after the
- * physical move.** Mirrors `reportDelivery()` in `./delivery.ts`, which is
- * deferred for the same reason.
+ * Returns the Vercel Blob implementation. `postgresStorage` above remains
+ * available as a fallback for environments that have not configured
+ * `BLOB_READ_WRITE_TOKEN` yet; the factory can be pointed back at it by
+ * changing this one line.
  */
 export function reportStorage(): ReportStorage {
-  return postgresStorage;
+  return blobStorage();
 }
 
 /* ------------------------------------------------------------------------- *
  *  Vercel Blob
- *
- *  Written now, installed later. `reportStorage()` above still returns
- *  `postgresStorage` and must keep doing so until the host wires this up.
  * ------------------------------------------------------------------------- */
 
 /**
@@ -380,14 +371,11 @@ export interface BlobStorageOptions {
 /**
  * Report PDFs in Vercel Blob, private, behind the application's signed link.
  *
- * **Not installed.** `reportStorage()` returns `postgresStorage`. This is wired
- * up in the host, in Stage B.
- *
  * `put` returns the blob URL as `key`, so `reports.pdf_blob_key` holds a URL
- * rather than a `pg:` locator once this is installed. Nothing reads that column
- * to fetch the file — `get` and `remove` take a report id and recompute the
- * pathname — so the column is a record of where the bytes went, and an old
- * `pg:` value in a row generated before the swap does not break anything.
+ * rather than a `pg:` locator. Nothing reads that column to fetch the file —
+ * `get` and `remove` take a report id and recompute the pathname — so the
+ * column is a record of where the bytes went, and an old `pg:` value in a
+ * row generated before the swap does not break anything.
  */
 export function blobStorage(options: BlobStorageOptions = {}): ReportStorage {
   const client = options.client ?? vercelBlobClient;

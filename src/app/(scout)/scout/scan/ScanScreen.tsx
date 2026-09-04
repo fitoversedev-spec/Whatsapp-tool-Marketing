@@ -22,7 +22,7 @@ import type {
   TaxonomyDto,
 } from "@/lib/scout/scans/dto";
 import type { ScoreResult } from "@/lib/scout/scoring/types";
-import styles from "./Scan.module.css";
+
 
 const RADII_KM = [1, 2, 3, 5] as const;
 const RESULTS_PER_GROUP = 4;
@@ -336,12 +336,12 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
   }, []);
 
   return (
-    <div className={`${styles.split} ssIn`}>
-      <aside className={`${styles.panel} ss-scroll`} ref={scrollTargetRef}>
+    <div className="flex-1 flex min-h-0 max-[900px]:flex-col ssIn">
+      <aside className="w-[400px] flex-none bg-white border-r border-slate-200 overflow-y-auto pt-6 px-[22px] pb-8 flex flex-col gap-[22px] max-[900px]:w-full max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:border-slate-200 ss-scroll" ref={scrollTargetRef}>
         {/* ---------------------------------------------------- customer plot */}
-        <div className={styles.sectionTight}>
+        <div className="flex flex-col gap-[9px]">
           <SectionLabel weight={700}>Customer plot</SectionLabel>
-          <div className={styles.addressRow}>
+          <div className="flex items-center gap-[9px] border border-slate-300 rounded-[10px] py-[11px] px-[13px] focus-within:border-court-500 focus-within:shadow-[var(--focus-ring)]">
             <svg
               width="15"
               height="15"
@@ -357,7 +357,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
               <circle cx="12" cy="10" r="3" />
             </svg>
             <input
-              className={styles.addressInput}
+              className="flex-1 min-w-0 border-0 outline-none font-sans text-[13.5px] bg-transparent text-slate-900"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               onKeyDown={(e) => {
@@ -373,7 +373,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
             {!isSaved ? (
               <button
                 type="button"
-                className={styles.addressGo}
+                className="bg-transparent border-0 p-0 font-sans text-[11px] font-semibold tracking-[0.06em] uppercase text-court-500 cursor-pointer flex-none disabled:text-slate-300 disabled:cursor-not-allowed"
                 onClick={() => void lookupAddress()}
                 disabled={geocoding || address.trim().length === 0}
               >
@@ -383,12 +383,12 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
           </div>
 
           {suggestions.length > 0 ? (
-            <ul className={styles.suggestions}>
+            <ul className="list-none m-0 p-0 border border-slate-200 rounded-[10px] overflow-hidden divide-y divide-slate-200">
               {suggestions.map((s) => (
                 <li key={s.formattedAddress}>
                   <button
                     type="button"
-                    className={styles.suggestion}
+                    className="block w-full text-left bg-white border-0 py-[10px] px-3 font-sans text-[12.5px] text-slate-900 cursor-pointer hover:bg-slate-100"
                     onClick={() => applySuggestion(s)}
                   >
                     {s.formattedAddress}
@@ -398,23 +398,25 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
             </ul>
           ) : null}
 
-          {geocodeError ? <p className={styles.error}>{geocodeError}</p> : null}
-          <p className={styles.hint}>
+          {geocodeError ? <p className="m-0 text-[11.5px] leading-[1.6] text-red-600">{geocodeError}</p> : null}
+          <p className="m-0 text-[11px] leading-[1.6] text-slate-500">
             {isSaved
               ? `Scan centre ${centre.lat.toFixed(5)}, ${centre.lng.toFixed(5)}.`
               : `Drag the pin to fine-tune. Centre ${centre.lat.toFixed(5)}, ${centre.lng.toFixed(5)}.`}
           </p>
 
-          <div className={styles.radiusGrid}>
+          <div className="grid grid-cols-4 gap-[7px] mt-1">
             {RADII_KM.map((r) => (
               <button
                 key={r}
                 type="button"
                 aria-pressed={radiusKm === r}
                 disabled={isSaved}
-                className={[styles.radiusBtn, radiusKm === r && styles.radiusBtnOn]
-                  .filter(Boolean)
-                  .join(" ")}
+                className={`font-sans text-[12.5px] font-semibold py-[9px] rounded-[9px] cursor-pointer border ${
+                  radiusKm === r
+                    ? "bg-black text-white border-black"
+                    : "bg-white text-slate-900 border-slate-300"
+                }`}
                 onClick={() => setRadiusKm(r)}
               >
                 {r} km
@@ -426,9 +428,9 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
         {/* ------------------------------------------------- category picker */}
         {!isSaved ? (
           <>
-            <div className={styles.section}>
+            <div className="flex flex-col gap-[10px]">
               <SectionLabel weight={700}>Preset</SectionLabel>
-              <div className={styles.presets}>
+              <div className="flex gap-[7px] flex-wrap">
                 {taxonomy.presets.map((preset) => (
                   <Tag
                     key={preset.id}
@@ -439,15 +441,15 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                   </Tag>
                 ))}
               </div>
-              <p className={styles.presetNote}>
+              <p className="m-0 text-[11px] leading-[1.6] text-slate-500">
                 {activePreset?.description ??
                   "A custom selection. Pick a preset to reset it, or tick categories below."}
               </p>
             </div>
 
-            <div className={styles.section}>
+            <div className="flex flex-col gap-[10px]">
               <SectionLabel weight={700}>Competition</SectionLabel>
-              <div className={styles.tagRow}>
+              <div className="flex flex-wrap gap-[7px]">
                 {competition.map((c) => (
                   <Tag
                     key={c.id}
@@ -455,15 +457,15 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                     onClick={() => toggleCategory(setSelectedCategories, c.id)}
                   >
                     {c.label}
-                    <span className={styles.termCount}>{c.termCount}</span>
+                    <span className="text-[10px] text-slate-500 ml-[5px]">{c.termCount}</span>
                   </Tag>
                 ))}
               </div>
             </div>
 
-            <div className={styles.section}>
+            <div className="flex flex-col gap-[10px]">
               <SectionLabel weight={700}>Demand pool</SectionLabel>
-              <div className={styles.tagRow}>
+              <div className="flex flex-wrap gap-[7px]">
                 {demand.map((c) => (
                   <Tag
                     key={c.id}
@@ -471,25 +473,25 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                     onClick={() => toggleCategory(setSelectedCategories, c.id)}
                   >
                     {c.label}
-                    <span className={styles.termCount}>{c.termCount}</span>
+                    <span className="text-[10px] text-slate-500 ml-[5px]">{c.termCount}</span>
                   </Tag>
                 ))}
               </div>
             </div>
 
             {/* ------------------------------------------------- live estimate */}
-            <div className={styles.estimate} aria-live="polite">
-              <div className={styles.estimateTop}>
+            <div className="border border-slate-200 rounded-lg p-[13px] flex flex-col gap-[9px] bg-slate-100" aria-live="polite">
+              <div className="flex items-baseline justify-between gap-[10px]">
                 <SectionLabel weight={700}>Before you spend it</SectionLabel>
-                <span className={styles.estimateCost}>
+                <span className="font-display text-xl font-bold text-slate-900">
                   {estimate ? formatCostBand(estimate.minCostUsd, estimate.maxCostUsd) : "—"}
                 </span>
               </div>
               {selectedCategories.length === 0 ? (
-                <p className={styles.hint}>Pick at least one category to see the cost.</p>
+                <p className="m-0 text-[11px] leading-[1.6] text-slate-500">Pick at least one category to see the cost.</p>
               ) : estimate ? (
                 <>
-                  <div className={styles.estimateGrid}>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500 [&_strong]:text-slate-700 [&_strong]:font-semibold">
                     <span>
                       Tiles <strong>{formatCount(estimate.tiles)}</strong>
                     </span>
@@ -504,12 +506,12 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                       Duration <strong>{estimate.durationLabel}</strong>
                     </span>
                   </div>
-                  <p className={styles.hint}>
+                  <p className="m-0 text-[11px] leading-[1.6] text-slate-500">
                     A band, not a floor: a text term is one call per query string and may paginate
                     three times per tile. A warm cache costs nothing.
                   </p>
                   {estimate.exceedsTileLimit ? (
-                    <p className={styles.estimateWarn}>
+                    <p className="m-0 text-[11px] leading-[1.6] text-red-600">
                       This plan needs more tiles than the configured ceiling allows and will be
                       refused. Reduce the radius.
                     </p>
@@ -545,15 +547,15 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
 
         {/* ----------------------------------------------------- live progress */}
         {progress && ["queued", "running", "paused"].includes(progress.jobStatus) ? (
-          <div className={styles.progress} aria-live="polite">
-            <div className={styles.progressLabel}>{progress.label}</div>
-            <div className={styles.progressTrack}>
+          <div className="border border-court-500 rounded-lg p-[13px] flex flex-col gap-[9px] bg-court-100" aria-live="polite">
+            <div className="text-[12.5px] font-semibold text-court-700">{progress.label}</div>
+            <div className="h-2 rounded-full bg-white overflow-hidden">
               <span
-                className={styles.progressFill}
+                className="block h-full bg-court-500 rounded-full transition-[width] duration-200"
                 style={{ width: `${Math.round(progress.fraction * 100)}%` }}
               />
             </div>
-            <div className={styles.progressMeta}>
+            <div className="flex justify-between gap-[10px] text-[10.5px] text-slate-700">
               <span>
                 {progress.completed} of {progress.total} searches · {progress.tileCount} tiles
               </span>
@@ -561,7 +563,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                 {progress.calls} calls · {progress.cacheHits} cached
               </span>
             </div>
-            <p className={styles.hint}>
+            <p className="m-0 text-[11px] leading-[1.6] text-slate-500">
               Results appear below as they land. You can leave this screen — the scan is a job in the
               database and picks up where it stopped.
             </p>
@@ -594,7 +596,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
         {/* --------------------------------------------------------- results */}
         {data ? (
           <>
-            <div className={styles.statGrid}>
+            <div className="grid grid-cols-2 gap-[10px]">
               <StatCard
                 label="Facilities"
                 value={atLeast(data.competitionCount, data.anySaturated)}
@@ -608,28 +610,28 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
               />
             </div>
 
-            <p className={styles.hint}>
+            <p className="m-0 text-[11px] leading-[1.6] text-slate-500">
               {formatCount(data.distinctPlaces)} distinct places, counted across{" "}
               {formatCount(Object.values(data.categoryCounts).reduce((a, b) => a + b, 0))} category
               memberships — a venue can be both a turf and an academy, so the two do not sum.
             </p>
 
             {data.categories.length > 0 ? (
-              <div className={styles.table}>
-                <div className={styles.tableHead}>
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <div className="grid grid-cols-[1.3fr_0.5fr_0.7fr_0.7fr] gap-[6px] py-[10px] px-[13px] bg-slate-100 text-[9.5px] font-bold tracking-[0.09em] uppercase text-slate-500">
                   <span>Category</span>
-                  <span className={styles.num}>Count</span>
-                  <span className={styles.num}>Reviews</span>
-                  <span className={styles.num}>Nearest</span>
+                  <span className="text-right">Count</span>
+                  <span className="text-right">Reviews</span>
+                  <span className="text-right">Nearest</span>
                 </div>
                 {data.categories.map((c) => (
-                  <div key={c.categoryId} className={styles.tableRow}>
+                  <div key={c.categoryId} className="grid grid-cols-[1.3fr_0.5fr_0.7fr_0.7fr] gap-[6px] py-[10px] px-[13px] text-xs border-t border-slate-200 [&>span:first-child]:font-semibold">
                     <span>{c.label}</span>
-                    <span className={styles.num}>
+                    <span className="text-right">
                       {atLeast(c.count, c.saturated)}
                       {c.saturated ? (
                         <span
-                          className={styles.saturatedMark}
+                          className="text-[color:var(--plot-amber)] font-bold cursor-help"
                           title="A search for this category returned the maximum results a single query can, so the count is a floor."
                         >
                           {" "}
@@ -637,10 +639,10 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                         </span>
                       ) : null}
                     </span>
-                    <span className={styles.muted}>
+                    <span className="text-right text-slate-500">
                       {c.reviewTotal > 0 ? formatCount(c.reviewTotal) : "—"}
                     </span>
-                    <span className={styles.muted}>
+                    <span className="text-right text-slate-500">
                       {c.nearestM === null ? "—" : formatDistance(c.nearestM)}
                     </span>
                   </div>
@@ -678,16 +680,16 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
 
             {/* ------------------------------------------------ result groups */}
             {groups.length > 0 ? (
-              <div className={styles.sectionTight}>
+              <div className="flex flex-col gap-[9px]">
                 <SectionLabel weight={700}>Results</SectionLabel>
                 {groups.map((group) => {
                   const expanded = expandedGroups[group.id] === true;
                   const shown = expanded ? group.places : group.places.slice(0, RESULTS_PER_GROUP);
                   return (
-                    <div key={group.id} className={styles.group}>
-                      <div className={styles.groupHead}>
+                    <div key={group.id} className="flex flex-col gap-[6px] mb-[6px]">
+                      <div className="flex items-center gap-2 text-xs font-semibold">
                         <span
-                          className={styles.dot}
+                          className="w-2 h-2 rounded-full flex-none"
                           style={{
                             background:
                               group.side === "competition"
@@ -696,7 +698,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                           }}
                         />
                         {group.label}
-                        <span className={styles.groupCount}>
+                        <span className="text-slate-500 font-normal">
                           {atLeast(group.places.length, group.saturated)} shown
                         </span>
                       </div>
@@ -705,12 +707,11 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                           key={place.placeId}
                           type="button"
                           data-place-row={place.placeId}
-                          className={[
-                            styles.result,
-                            selectedPlaceId === place.placeId && styles.resultOn,
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
+                          className={`flex items-center gap-[10px] border rounded-[10px] py-[9px] px-[11px] w-full text-left bg-white font-sans cursor-pointer ${
+                            selectedPlaceId === place.placeId
+                              ? "border-court-500 bg-court-100"
+                              : "border-slate-200 hover:border-slate-300"
+                          }`}
                           aria-pressed={selectedPlaceId === place.placeId}
                           onClick={() =>
                             setSelectedPlaceId((current) =>
@@ -718,9 +719,9 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                             )
                           }
                         >
-                          <span className={styles.resultText}>
-                            <span className={styles.resultName}>{place.name}</span>
-                            <span className={styles.resultMeta}>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-[12.5px] font-semibold text-slate-900">{place.name}</span>
+                            <span className="block text-[11px] text-slate-500 mt-0.5">
                               {[
                                 place.primaryTypeDisplayName,
                                 place.rating === null
@@ -734,7 +735,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                                 .join(" · ") || "No detail from Google"}
                             </span>
                           </span>
-                          <span className={styles.resultDistance}>
+                          <span className="text-[11.5px] text-slate-500 flex-none">
                             {formatDistance(place.distanceM)}
                           </span>
                         </button>
@@ -742,7 +743,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                       {group.places.length > RESULTS_PER_GROUP ? (
                         <button
                           type="button"
-                          className={styles.moreButton}
+                          className="bg-transparent border-0 py-1 px-0 font-sans text-[11.5px] text-court-500 cursor-pointer text-left"
                           onClick={() =>
                             setExpandedGroups((prev) => ({ ...prev, [group.id]: !expanded }))
                           }
@@ -774,9 +775,9 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
         ) : null}
       </aside>
 
-      <div className={styles.mapWrap}>
+      <div className="flex-1 min-w-0 relative max-[900px]:min-h-[320px]">
         <SiteMap
-          className={styles.map}
+          className="absolute inset-0 block"
           lat={centre.lat}
           lng={centre.lng}
           radius={radiusKm}
@@ -788,27 +789,27 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
           ariaLabel="Catchment map. Facilities and demand anchors are plotted around the scan centre."
         />
 
-        <div className={styles.legend}>
+        <div className="absolute left-5 top-5 z-[500] bg-white/95 border border-slate-200 rounded-lg py-[13px] px-[15px] flex flex-col gap-[9px] shadow-[0_6px_18px_rgba(0,0,0,0.1)]">
           <SectionLabel weight={700}>Legend</SectionLabel>
-          <span className={styles.legendRow}>
+          <span className="flex items-center gap-2 text-xs">
             <span
-              className={styles.legendDot}
+              className="w-[9px] h-[9px] rounded-full"
               style={{ background: MARKER_COLORS.facility }}
               aria-hidden="true"
             />
             Sports facility
           </span>
-          <span className={styles.legendRow}>
+          <span className="flex items-center gap-2 text-xs">
             <span
-              className={styles.legendDot}
+              className="w-[9px] h-[9px] rounded-full"
               style={{ background: MARKER_COLORS.demand }}
               aria-hidden="true"
             />
             Demand anchor
           </span>
-          <span className={styles.legendRow}>
+          <span className="flex items-center gap-2 text-xs">
             <span
-              className={styles.legendDot}
+              className="w-[9px] h-[9px] rounded-full"
               style={{ background: MARKER_COLORS.plot }}
               aria-hidden="true"
             />
@@ -817,17 +818,17 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
         </div>
 
         {selectedPlace ? (
-          <div className={styles.selected}>
+          <div className="absolute right-5 top-5 z-[500] max-w-[300px] bg-white border border-slate-200 rounded-lg py-[13px] px-[15px] shadow-[0_6px_18px_rgba(0,0,0,0.12)] flex flex-col gap-[6px] animate-[ssIn_var(--dur-med)_var(--ease-standard)]">
             <button
               type="button"
-              className={styles.selectedClose}
+              className="absolute right-2 top-[6px] bg-transparent border-0 text-slate-500 text-[13px] cursor-pointer leading-none p-1"
               aria-label="Close"
               onClick={() => setSelectedPlaceId(null)}
             >
               ✕
             </button>
-            <span className={styles.selectedName}>{selectedPlace.name}</span>
-            <span className={styles.selectedMeta}>
+            <span className="text-[13.5px] font-semibold">{selectedPlace.name}</span>
+            <span className="text-[11.5px] text-slate-500 leading-[1.6]">
               {formatDistance(selectedPlace.distanceM)} from the centre ·{" "}
               {selectedPlace.side === "competition" ? "competition" : "demand anchor"}
               {selectedPlace.rating !== null
@@ -839,7 +840,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
             </Badge>
             {selectedPlace.googleMapsUri ? (
               <a
-                className={styles.selectedLink}
+                className="text-[11.5px]"
                 href={selectedPlace.googleMapsUri}
                 target="_blank"
                 rel="noopener noreferrer"

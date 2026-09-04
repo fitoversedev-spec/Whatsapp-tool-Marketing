@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, type SelectHTMLAttributes } from "react";
-import styles from "./Select.module.css";
 
 export type SelectOption = string | { value: string; label: string };
 
@@ -24,15 +23,24 @@ export function Select({
   const selectId = id ?? generated;
 
   return (
-    <div className={[styles.wrap, wrapClassName].filter(Boolean).join(" ")}>
+    <div
+      className={["flex flex-col gap-1.5 font-sans text-[13px] text-slate-900", wrapClassName]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {label ? (
-        <label className={styles.label} htmlFor={selectId}>
+        <label className="font-semibold" htmlFor={selectId}>
           {label}
         </label>
       ) : null}
       <select
         id={selectId}
-        className={[styles.select, className].filter(Boolean).join(" ")}
+        className={[
+          "font-sans text-sm py-2.5 px-3.5 rounded-md border border-slate-300 bg-white text-slate-900 cursor-pointer focus-visible:border-court-500 focus-visible:ring-2 focus-visible:ring-court-500/20",
+          className,
+        ]
+          .filter(Boolean)
+          .join(" ")}
         {...rest}
       >
         {options.map((o) =>

@@ -7,7 +7,6 @@ import { SectionLabel, StateBlock } from "@/components/scout/patterns";
 import { ScoreBadge } from "@/components/scout/score";
 import { atLeast, formatDayMonth, formatRadius, formatRating } from "@/lib/scout/display/format";
 import type { DashboardScan, RecentReport } from "@/lib/scout/scans/queries";
-import styles from "./Dashboard.module.css";
 
 export interface DashboardClientProps {
   scans: DashboardScan[];
@@ -77,22 +76,22 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
   const compareChips = scans.slice(0, 3);
 
   return (
-    <div className={`${styles.screen} ss-scroll ssIn`}>
-      <div className={styles.columns}>
-        <div className={styles.main}>
-          <div className={styles.head}>
+    <div className="flex-1 min-h-0 overflow-y-auto pt-8 px-10 pb-12 max-[900px]:pt-5 max-[900px]:px-[18px] max-[900px]:pb-6 ss-scroll ssIn">
+      <div className="flex gap-8 items-start max-[1100px]:flex-col">
+        <div className="flex-1 min-w-0 flex flex-col gap-5">
+          <div className="flex items-baseline justify-between gap-5 flex-wrap">
             <div>
-              <h1 className={styles.title}>Saved scans</h1>
-              <div className={styles.lede}>
+              <h1 className="m-0 text-[22px]">Saved scans</h1>
+              <div className="text-[13px] text-slate-500 mt-2 tracking-normal normal-case font-sans">
                 {summary.scansThisMonth} area{summary.scansThisMonth === 1 ? "" : "s"} scanned this
                 month across {summary.owners} salesp{summary.owners === 1 ? "erson" : "eople"}
               </div>
             </div>
-            <div className={styles.controls}>
-              <label className={styles.sort}>
+            <div className="flex items-center gap-2.5">
+              <label className="flex items-center gap-[7px] text-[11.5px] text-slate-500">
                 <span className="srOnly">Sort scans by</span>
                 <select
-                  className={styles.sortSelect}
+                  className="font-sans text-[13px] py-[9px] px-[11px] rounded-md border border-[var(--border-strong)] bg-[var(--surface-card)] text-slate-900 cursor-pointer"
                   value={sort}
                   onChange={(e) => setSort(e.target.value as SortKey)}
                 >
@@ -103,7 +102,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                   ))}
                 </select>
               </label>
-              <div className={styles.search}>
+              <div className="flex items-center gap-[9px] bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-md py-[9px] px-[13px] w-[280px] focus-within:border-court-500 focus-within:shadow-[var(--focus-ring)] max-[900px]:w-full">
                 <svg
                   width="14"
                   height="14"
@@ -119,7 +118,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                   <path d="M20 20l-3.5-3.5" />
                 </svg>
                 <input
-                  className={styles.searchInput}
+                  className="flex-1 min-w-0 border-0 outline-none font-sans text-[13px] bg-transparent text-slate-900"
                   placeholder="Search area, customer or owner"
                   aria-label="Search area, customer or owner"
                   value={query}
@@ -130,7 +129,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
           </div>
 
           {mixedBasis ? (
-            <p className={styles.mixedBasis} role="note">
+            <p className="border border-[var(--plot-amber)] rounded-[12px] bg-[var(--surface-card)] py-3 px-3.5 text-[12.5px] leading-[1.65] text-slate-700" role="note">
               This ranking mixes desk-only scores with surveyed ones. A desk-only score excludes the
               site-practicals component and is rescaled to 100 without it, so an unvisited site can
               out-rank a surveyed one here. Survey the sites marked <strong>Desk only</strong> before
@@ -144,7 +143,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
               title={
                 scans.length === 0
                   ? "No scans on this desk yet"
-                  : `Nothing matches “${query.trim()}”`
+                  : `Nothing matches "${query.trim()}"`
               }
               body={
                 scans.length === 0
@@ -164,36 +163,36 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
               }
             />
           ) : (
-            <div className={styles.grid}>
+            <div className="grid grid-cols-3 gap-4 max-[1280px]:grid-cols-2 max-[900px]:grid-cols-1">
               {filtered.map((scan) => (
-                <Link key={scan.id} href={`/scout/scan/${scan.id}`} className={styles.card}>
-                  <span className={styles.cardTop}>
-                    <span className={styles.area}>{scan.areaLabel}</span>
-                    <span className={styles.radius}>{formatRadius(scan.radiusM)}</span>
+                <Link key={scan.id} href={`/scout/scan/${scan.id}`} className="text-left bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[16px] p-[18px] cursor-pointer font-sans flex flex-col gap-3 no-underline text-slate-900 transition-colors hover:border-[var(--border-strong)]">
+                  <span className="flex items-center justify-between gap-2.5">
+                    <span className="text-[15px] font-semibold text-slate-900">{scan.areaLabel}</span>
+                    <span className="text-[11px] text-slate-500 whitespace-nowrap">{formatRadius(scan.radiusM)}</span>
                   </span>
 
-                  <span className={styles.stats}>
-                    <span className={styles.stat}>
-                      <span className={styles.statValue}>
+                  <span className="flex gap-[18px]">
+                    <span className="block">
+                      <span className="block [font-family:var(--font-display)] text-[22px] font-bold">
                         {scan.facilityCount === null
                           ? "—"
                           : atLeast(scan.facilityCount, scan.saturated)}
                       </span>
-                      <span className={styles.statLabel}>Facilities</span>
+                      <span className="block text-[10.5px] tracking-[0.08em] uppercase text-slate-500 mt-[3px]">Facilities</span>
                     </span>
-                    <span className={styles.stat}>
-                      <span className={`${styles.statValue} ${styles.statValueAccent}`}>
+                    <span className="block">
+                      <span className="block [font-family:var(--font-display)] text-[22px] font-bold text-court-700">
                         {scan.demandCount === null ? "—" : atLeast(scan.demandCount, scan.saturated)}
                       </span>
-                      <span className={styles.statLabel}>Demand</span>
+                      <span className="block text-[10.5px] tracking-[0.08em] uppercase text-slate-500 mt-[3px]">Demand</span>
                     </span>
-                    <span className={styles.stat}>
-                      <span className={styles.statValue}>{formatRating(scan.avgRating)}</span>
-                      <span className={styles.statLabel}>Avg rating</span>
+                    <span className="block">
+                      <span className="block [font-family:var(--font-display)] text-[22px] font-bold">{formatRating(scan.avgRating)}</span>
+                      <span className="block text-[10.5px] tracking-[0.08em] uppercase text-slate-500 mt-[3px]">Avg rating</span>
                     </span>
                   </span>
 
-                  <span className={styles.cardScore}>
+                  <span className="border-t border-[var(--border-default)] pt-[11px]">
                     <ScoreBadge
                       total={scan.scoreTotal}
                       verdict={scan.scoreVerdict}
@@ -203,8 +202,8 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                     />
                   </span>
 
-                  <span className={styles.cardFoot}>
-                    <span className={styles.owner}>
+                  <span className="flex items-center justify-between gap-2.5 border-t border-[var(--border-default)] pt-[11px] text-[11.5px] text-slate-500 mt-auto">
+                    <span className="truncate">
                       {formatDayMonth(scan.createdAt)} · {scan.ownerName}
                       {scan.customerName ? ` · ${scan.customerName}` : ""}
                     </span>
@@ -216,21 +215,21 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
           )}
         </div>
 
-        <div className={styles.rail}>
-          <div className={styles.compareCard}>
-            <div className={styles.compareEyebrow}>Compare areas</div>
-            <div className={styles.compareBody}>
+        <div className="w-[360px] flex-none flex flex-col gap-5 max-[1100px]:w-full">
+          <div className="bg-black text-white rounded-[18px] p-[22px] flex flex-col gap-3.5">
+            <div className="[font-family:var(--font-display)] uppercase tracking-[0.1em] text-xs text-[color:var(--sky)]">Compare areas</div>
+            <div className="text-[14px] leading-[1.6] text-white/75">
               Put two or three saved scans side by side before the pricing call.
             </div>
-            <div className={styles.chips}>
+            <div className="flex gap-2 flex-wrap">
               {compareChips.length > 0 ? (
                 compareChips.map((s) => (
-                  <span key={s.id} className={styles.chip}>
+                  <span key={s.id} className="text-[11.5px] bg-[var(--on-dark-fill)] py-[5px] px-[11px] rounded-full text-white">
                     {s.areaLabel}
                   </span>
                 ))
               ) : (
-                <span className={styles.chip}>No scans yet</span>
+                <span className="text-[11.5px] bg-[var(--on-dark-fill)] py-[5px] px-[11px] rounded-full text-white">No scans yet</span>
               )}
             </div>
             <Link
@@ -244,12 +243,12 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
             </Link>
           </div>
 
-          <div className={styles.reportsCard}>
-            <div className={styles.reportsHead}>
+          <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[18px] overflow-hidden">
+            <div className="pt-4 px-[18px] pb-3">
               <SectionLabel weight={700}>Recent reports</SectionLabel>
             </div>
             {reports.length === 0 ? (
-              <p className={styles.railEmpty}>
+              <p className="pt-3.5 px-[18px] pb-[18px] text-[12.5px] leading-[1.65] text-slate-500 border-t border-[var(--border-default)]">
                 No reports yet. Open a scan and choose <strong>Create report</strong> to compose one.
               </p>
             ) : (
@@ -257,9 +256,9 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                 <Link
                   key={report.id}
                   href={`/scout/report/${report.scanId}`}
-                  className={styles.reportRow}
+                  className="flex items-center gap-3 w-full text-left bg-[var(--surface-card)] border-0 border-t border-[var(--border-default)] py-3.5 px-[18px] cursor-pointer font-sans no-underline text-slate-900 hover:bg-slate-100"
                 >
-                  <span className={styles.reportIcon}>
+                  <span className="w-[30px] h-[30px] rounded bg-slate-100 flex items-center justify-center flex-none text-slate-500">
                     <svg
                       width="14"
                       height="14"
@@ -275,15 +274,17 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                       <path d="M14 3v5h5" />
                     </svg>
                   </span>
-                  <span className={styles.reportText}>
-                    <span className={styles.reportName}>{report.title}</span>
-                    <span className={styles.reportMeta}>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[13px] font-semibold text-slate-900 truncate">{report.title}</span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5">
                       {report.sentTo ? `Sent to ${report.sentTo} · ` : ""}
                       {formatDayMonth(report.sentAt ?? report.createdAt)}
                     </span>
                   </span>
                   <span
-                    className={report.channel === "whatsapp" ? styles.tagWhatsapp : styles.tagOther}
+                    className={`text-[10.5px] font-semibold py-[3px] px-[9px] rounded-full flex-none ${
+                      report.channel === "whatsapp" ? "bg-turf-100 text-turf-600" : "bg-slate-100 text-slate-700"
+                    }`}
                   >
                     {channelLabel(report.channel, report.status)}
                   </span>
@@ -310,10 +311,10 @@ function statusLabel(scan: DashboardScan): string {
 
 function statusClass(scan: DashboardScan): string {
   if (scan.jobStatus === "running" || scan.jobStatus === "queued" || scan.jobStatus === "paused") {
-    return styles.statusRunning ?? "";
+    return "font-semibold text-court-700 whitespace-nowrap";
   }
-  if (scan.status === "report_sent") return styles.statusSent ?? "";
-  return styles.statusOnly ?? "";
+  if (scan.status === "report_sent") return "font-semibold text-turf-600 whitespace-nowrap";
+  return "font-semibold text-slate-500 whitespace-nowrap";
 }
 
 function channelLabel(channel: RecentReport["channel"], status: string): string {

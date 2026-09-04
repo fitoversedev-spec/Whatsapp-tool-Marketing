@@ -94,9 +94,9 @@ export async function getScoreModelByVersion(
 /** Every published model, newest version first. Phase 7's tuning screen. */
 export async function listScoreModels(
   database: Database = prisma,
-): Promise<Array<{ id: string; version: string; name: string; isActive: boolean }>> {
+): Promise<Array<{ id: string; version: string; name: string; isActive: boolean; createdAt: Date }>> {
   const rows = await database.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
-    SELECT id::text AS id, version, name, is_active
+    SELECT id::text AS id, version, name, is_active, created_at
     FROM score_models
     ORDER BY created_at DESC
   `);
@@ -105,5 +105,58 @@ export async function listScoreModels(
     version: String(r.version),
     name: String(r.name),
     isActive: Boolean(r.is_active),
+    createdAt: new Date(r.created_at as string),
   }));
+}
+
+/**
+ * Insert a new score model version and activate it in one transaction.
+ *
+ * The previous active model is deactivated so exactly one row has
+ * `is_active = TRUE` at any time. The new model is validated through
+ * `parseScoreModel` before insertion — if the weights do not total 100 or
+ * any cross-field rule is violated the call throws and no row is written.
+ */
+export async function createScoreModel(
+  model: ScoreModel,
+  database: Database = prisma,
+): Promise<{ id: string }> {
+  // Validate before touching the database.
+  parseScoreModel(model);
+
+  const weightsJson = JSON.stringify(model.weights);
+
+  const rows = await database.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
+    WITH deactivate AS (
+      UPDATE score_models SET is_active = FALSE WHERE is_active = TRUE
+    )
+    INSERT INTO score_models (version, name, description, weights, is_active, includes_population)
+    VALUES (
+      ${model.version},
+      ${model.name},
+      ${model.description || ""},
+      ${weightsJson}::jsonb,
+      TRUE,
+      ${model.includesPopulation}
+    )
+    RETURNING id::text AS id
+  `);
+  const row = rows[0];
+  if (!row) throw new Error("Insert returned no rows.");
+  return { id: String(row.id) };
+}
+
+/**
+ * Activate a specific model version, deactivating all others.
+ */
+export async function activateScoreModel(
+  id: string,
+  database: Database = prisma,
+): Promise<void> {
+  await database.$queryRaw(Prisma.sql`
+    UPDATE score_models SET is_active = FALSE WHERE is_active = TRUE
+  `);
+  await database.$queryRaw(Prisma.sql`
+    UPDATE score_models SET is_active = TRUE WHERE id = ${id}::uuid
+  `);
 }

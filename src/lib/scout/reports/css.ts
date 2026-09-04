@@ -49,7 +49,7 @@ export const REPORT_PAGE = {
 } as const;
 
 export const REPORT_FONT_LINK =
-  "https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap";
+  "https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap";
 
 export function reportCss(): string {
   return `

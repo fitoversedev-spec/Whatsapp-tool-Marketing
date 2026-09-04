@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import styles from "./StickyFooter.module.css";
+
 
 export interface StickyFooterProps {
   /** Optional line above the CTA (cost band, resume prompt, offline notice). */
@@ -13,8 +13,8 @@ export interface StickyFooterProps {
  */
 export function StickyFooter({ note, children }: StickyFooterProps) {
   return (
-    <div className={styles.footer}>
-      {note ? <p className={styles.note}>{note}</p> : null}
+    <div className="flex-none z-10 px-[var(--m-pad-x)] pb-[var(--m-safe-bottom)] pt-3 bg-[var(--sticky-footer-bg)] backdrop-blur-[8px] border-t border-[color:var(--border-default)] flex flex-col gap-2.5">
+      {note ? <p className="text-[length:var(--text-11-5)] text-[color:var(--m-muted)] leading-[1.45] text-center">{note}</p> : null}
       {children}
     </div>
   );

@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { SectionLabel } from "./SectionLabel";
-import styles from "./ScreenScaffold.module.css";
 
 export interface ScreenScaffoldProps {
   eyebrow?: string;
@@ -16,12 +15,16 @@ export interface ScreenScaffoldProps {
  */
 export function ScreenScaffold({ eyebrow, title, lede, actions, children }: ScreenScaffoldProps) {
   return (
-    <div className={`${styles.screen} ss-scroll ssIn`}>
-      <div className={styles.head}>
+    <div className="flex-1 min-h-0 overflow-y-auto pt-8 px-10 pb-12 flex flex-col gap-5 max-[900px]:pt-5 max-[900px]:px-[18px] max-[900px]:pb-6 max-[900px]:gap-[22px] ss-scroll ssIn">
+      <div className="flex items-baseline justify-between gap-5 flex-wrap">
         <div>
           {eyebrow ? <SectionLabel>{eyebrow}</SectionLabel> : null}
-          <h1 className={styles.title}>{title}</h1>
-          {lede ? <div className={styles.lede}>{lede}</div> : null}
+          <h1 className="m-0 text-xl">{title}</h1>
+          {lede ? (
+            <div className="text-[13px] text-slate-500 mt-2 tracking-normal normal-case font-sans">
+              {lede}
+            </div>
+          ) : null}
         </div>
         {actions}
       </div>
@@ -42,9 +45,9 @@ export interface PhasePlaceholderProps {
  */
 export function PhasePlaceholder({ phase, children }: PhasePlaceholderProps) {
   return (
-    <div className={styles.placeholder}>
+    <div className="border border-dashed border-slate-300 rounded-[16px] bg-white p-6 flex flex-col gap-3 items-start">
       <SectionLabel weight={700}>Arrives in {phase}</SectionLabel>
-      <p className={styles.placeholderBody}>{children}</p>
+      <p className="text-[13.5px] text-slate-500 leading-snug max-w-[62ch] m-0">{children}</p>
     </div>
   );
 }

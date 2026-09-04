@@ -19,7 +19,6 @@ import {
 import { SectionLabel } from "@/components/scout/patterns";
 import { Badge, Button } from "@/components/scout/ui";
 import { payAndPlayLabel, type VenueFieldDef } from "@/lib/scout/venueSurvey";
-import styles from "./place.module.css";
 
 interface OperatingWindow {
   earliestOpenMinute?: number | null;
@@ -185,11 +184,11 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
         navContext={{ scanId, placeId }}
       />
 
-      <div className={`mScroll ss-scroll ${styles.body} mIn`}>
+      <div className="mScroll ss-scroll pt-5 pb-6 px-[var(--m-pad-x)] flex flex-col gap-[18px] mIn">
         {staleAt ? <OfflineBanner cachedAt={staleAt} subject="this competitor" /> : null}
 
         {error && !data ? (
-          <p className={styles.notice} role="alert">
+          <p className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-[13px] px-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--m-muted-on-white)]" role="alert">
             {error}
           </p>
         ) : null}
@@ -197,15 +196,15 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
         {observed ? (
           <>
             {/* ------------------------------------------ name card */}
-            <section className={styles.nameCard}>
-              <h1 className={styles.name}>{observed.name}</h1>
+            <section className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-18)] py-5 px-[18px] flex flex-col gap-3.5">
+              <h1 className="m-0 font-sans text-[21px] font-semibold leading-[1.25] normal-case tracking-normal [text-wrap:pretty]">{observed.name}</h1>
 
-              <div className={styles.ratingRow}>
+              <div className="flex items-center gap-[9px] flex-wrap">
                 {typeof observed.rating === "number" ? (
                   <>
-                    <span className={styles.rating}>
+                    <span className="flex items-center gap-[5px] text-[length:var(--text-15)] font-semibold">
                       <svg
-                        className={styles.star}
+                        className="text-court-500"
                         width="16"
                         height="16"
                         viewBox="0 0 24 24"
@@ -216,17 +215,17 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
                       </svg>
                       {formatRating(observed.rating)}
                     </span>
-                    <span className={styles.dividerDot}>·</span>
+                    <span className="text-[color:var(--border-strong)]">·</span>
                   </>
                 ) : null}
-                <span className={styles.reviews}>
+                <span className="text-[length:var(--text-13)] text-[color:var(--m-muted-on-white)]">
                   {typeof observed.reviewCount === "number"
                     ? `${formatNumber(observed.reviewCount)} reviews on Google`
                     : "Not rated on Google"}
                 </span>
               </div>
 
-              <div className={styles.badges}>
+              <div className="flex flex-wrap gap-[7px]">
                 {(membership?.categoryLabels ?? []).map((label) => (
                   <Badge key={label} tone="neutral">
                     {label}
@@ -237,21 +236,21 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
               </div>
 
               {observed.businessStatus && observed.businessStatus !== "OPERATIONAL" ? (
-                <p className={styles.closed}>
+                <p className="text-[length:var(--text-12-5)] text-track-600 font-semibold">
                   {`Google reports this venue as ${observed.businessStatus.replace(/_/g, " ").toLowerCase()}.`}
                 </p>
               ) : null}
             </section>
 
             {/* -------------------------------------- distance card */}
-            <section className={styles.distanceCard}>
+            <section className="bg-[var(--black)] text-[color:var(--on-dark)] rounded-[var(--radius-18)] p-[18px] flex items-center justify-between gap-3.5">
               <div>
-                <div className={styles.distanceLabel}>From customer&rsquo;s plot</div>
-                <div className={styles.distanceValue}>
+                <div className="text-[length:var(--text-10-5)] font-semibold tracking-[var(--tracking-stat)] uppercase text-[color:var(--on-dark-muted)]">From customer&rsquo;s plot</div>
+                <div className="font-display text-[24px] font-bold tracking-[0.02em] mt-[7px]">
                   {formatDistance(membership?.distanceM ?? null)}
                 </div>
               </div>
-              <div className={styles.distanceMeta}>
+              <div className="text-right text-[length:var(--text-11-5)] text-[color:var(--on-dark-muted-soft)] leading-normal flex-none">
                 {membership?.direction ?? "—"}
                 <br />
                 {/*
@@ -261,7 +260,7 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
                  * every figure tracing to something real. The slot carries the
                  * thing that actually gets a surveyor there instead.
                  */}
-                <a className={styles.distanceLink} href={mapsHref} target="_blank" rel="noreferrer">
+                <a className="text-[color:var(--sky)] underline" href={mapsHref} target="_blank" rel="noreferrer">
                   Directions
                 </a>
               </div>
@@ -270,7 +269,7 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
             {/* ------------------------------------- entered fields */}
             <div>
               <SectionLabel as="h2">Recorded on site</SectionLabel>
-              <p className={styles.provenance}>
+              <p className="flex items-center gap-[7px] text-[length:var(--text-11)] text-[color:var(--m-muted)] leading-[1.45]">
                 <svg
                   width="13"
                   height="13"
@@ -287,27 +286,22 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
               </p>
             </div>
 
-            <div className={styles.card}>
+            <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-18)] overflow-hidden">
               {(data?.fields ?? []).map((field) => (
                 <button
                   key={field.id}
                   type="button"
-                  className={`${styles.row} ${styles.rowButton}`}
+                  className="flex items-center justify-between gap-3 w-full py-[13px] px-4 min-h-[var(--m-touch)] text-[length:var(--text-13)] bg-[var(--surface-card)] font-sans text-left text-[color:var(--ink)] border-0 cursor-pointer"
                   onClick={() => setEditing(field)}
                 >
-                  <span className={styles.rowLabel}>{field.label}</span>
+                  <span className="text-[color:var(--m-muted-on-white)] flex-none">{field.label}</span>
                   <span
-                    className={[
-                      styles.rowValue,
-                      !enteredDisplay(field, entered) && styles.rowValueEmpty,
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
+                    className={`text-right min-w-0 [overflow-wrap:anywhere] ${enteredDisplay(field, entered) ? "font-semibold" : "font-normal text-[color:var(--accent)]"}`}
                   >
                     {enteredDisplay(field, entered) ?? "Add"}
                   </span>
                   <svg
-                    className={styles.rowEdit}
+                    className="flex-none text-[color:var(--border-strong)]"
                     width="15"
                     height="15"
                     viewBox="0 0 24 24"
@@ -325,14 +319,12 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
             </div>
 
             {payAndPlayLabel(entered) ? (
-              <p className={styles.status}>{`Pay and play: ${payAndPlayLabel(entered)}`}</p>
+              <p className="text-[length:var(--text-11-5)] text-[color:var(--m-muted)] leading-normal">{`Pay and play: ${payAndPlayLabel(entered)}`}</p>
             ) : null}
 
             {status ? (
               <p
-                className={[styles.status, statusIsError && styles.statusError]
-                  .filter(Boolean)
-                  .join(" ")}
+                className={`text-[length:var(--text-11-5)] leading-normal ${statusIsError ? "text-track-600" : "text-[color:var(--m-muted)]"}`}
                 role="status"
               >
                 {status}
@@ -342,29 +334,29 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
             {/* ------------------------------------ observed fields */}
             <div>
               <SectionLabel as="h2">From Google</SectionLabel>
-              <p className={styles.provenance}>
+              <p className="flex items-center gap-[7px] text-[length:var(--text-11)] text-[color:var(--m-muted)] leading-[1.45]">
                 Observed data, as Google last returned it. Not editable here.
               </p>
             </div>
 
-            <div className={styles.card}>
-              <div className={styles.row}>
-                <span className={styles.rowLabel}>Type</span>
-                <span className={styles.rowValue}>{observed.primaryTypeDisplayName ?? "—"}</span>
+            <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-18)] overflow-hidden">
+              <div className="flex items-center justify-between gap-3 w-full py-[13px] px-4 min-h-[var(--m-touch)] text-[length:var(--text-13)] border-b border-[var(--border-default)] bg-[var(--surface-card)] font-sans text-left text-[color:var(--ink)] last:border-b-0">
+                <span className="text-[color:var(--m-muted-on-white)] flex-none">Type</span>
+                <span className="font-semibold text-right min-w-0 [overflow-wrap:anywhere]">{observed.primaryTypeDisplayName ?? "—"}</span>
               </div>
-              <div className={styles.row}>
-                <span className={styles.rowLabel}>Price level</span>
-                <span className={styles.rowValue}>{priceLevelLabel(observed.priceLevel)}</span>
+              <div className="flex items-center justify-between gap-3 w-full py-[13px] px-4 min-h-[var(--m-touch)] text-[length:var(--text-13)] border-b border-[var(--border-default)] bg-[var(--surface-card)] font-sans text-left text-[color:var(--ink)] last:border-b-0">
+                <span className="text-[color:var(--m-muted-on-white)] flex-none">Price level</span>
+                <span className="font-semibold text-right min-w-0 [overflow-wrap:anywhere]">{priceLevelLabel(observed.priceLevel)}</span>
               </div>
-              <div className={styles.row}>
-                <span className={styles.rowLabel}>Phone</span>
-                <span className={styles.rowValue}>
+              <div className="flex items-center justify-between gap-3 w-full py-[13px] px-4 min-h-[var(--m-touch)] text-[length:var(--text-13)] border-b border-[var(--border-default)] bg-[var(--surface-card)] font-sans text-left text-[color:var(--ink)] last:border-b-0">
+                <span className="text-[color:var(--m-muted-on-white)] flex-none">Phone</span>
+                <span className="font-semibold text-right min-w-0 [overflow-wrap:anywhere]">
                   {observed.phone ? <a href={`tel:${observed.phone}`}>{observed.phone}</a> : "—"}
                 </span>
               </div>
-              <div className={styles.row}>
-                <span className={styles.rowLabel}>Website</span>
-                <span className={styles.rowValue}>
+              <div className="flex items-center justify-between gap-3 w-full py-[13px] px-4 min-h-[var(--m-touch)] text-[length:var(--text-13)] border-b border-[var(--border-default)] bg-[var(--surface-card)] font-sans text-left text-[color:var(--ink)] last:border-b-0">
+                <span className="text-[color:var(--m-muted-on-white)] flex-none">Website</span>
+                <span className="font-semibold text-right min-w-0 [overflow-wrap:anywhere]">
                   {observed.website ? (
                     <a href={observed.website} target="_blank" rel="noreferrer">
                       Open
@@ -374,9 +366,9 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
                   )}
                 </span>
               </div>
-              <div className={styles.row}>
-                <span className={styles.rowLabel}>Address</span>
-                <span className={styles.rowValue}>{observed.address ?? "—"}</span>
+              <div className="flex items-center justify-between gap-3 w-full py-[13px] px-4 min-h-[var(--m-touch)] text-[length:var(--text-13)] border-b border-[var(--border-default)] bg-[var(--surface-card)] font-sans text-left text-[color:var(--ink)] last:border-b-0">
+                <span className="text-[color:var(--m-muted-on-white)] flex-none">Address</span>
+                <span className="font-semibold text-right min-w-0 [overflow-wrap:anywhere]">{observed.address ?? "—"}</span>
               </div>
             </div>
 
@@ -384,12 +376,12 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
             <div>
               <SectionLabel as="h2">Opening hours</SectionLabel>
             </div>
-            <div className={styles.card}>
-              <div className={styles.hours}>
+            <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-18)] overflow-hidden">
+              <div className="py-[13px] px-4 text-[length:var(--text-12-5)] leading-[1.6] text-[color:var(--ink)]">
                 {observed.hours?.weekdayDescriptions?.length ? (
                   observed.hours.weekdayDescriptions.map((line) => <div key={line}>{line}</div>)
                 ) : (
-                  <span className={styles.hoursMuted}>Google returned no opening hours.</span>
+                  <span className="text-[color:var(--m-muted-on-white)]">Google returned no opening hours.</span>
                 )}
                 <OperatingWindowNote window={observed.operatingWindow} />
               </div>
@@ -399,39 +391,39 @@ export function PlaceScreen({ placeId, scanId }: { placeId: string; scanId: stri
             <div>
               <SectionLabel as="h2">What reviewers complain about</SectionLabel>
             </div>
-            <div className={styles.card}>
+            <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-18)] overflow-hidden">
               {!data?.themes.analysed ? (
-                <p className={styles.hours}>
-                  <span className={styles.hoursMuted}>
+                <p className="py-[13px] px-4 text-[length:var(--text-12-5)] leading-[1.6] text-[color:var(--ink)]">
+                  <span className="text-[color:var(--m-muted-on-white)]">
                     This venue&rsquo;s reviews have not been analysed yet. That is different from
                     &ldquo;no complaints&rdquo; — nobody has looked.
                   </span>
                 </p>
               ) : data.themes.complaints.length === 0 ? (
-                <p className={styles.hours}>
-                  <span className={styles.hoursMuted}>
+                <p className="py-[13px] px-4 text-[length:var(--text-12-5)] leading-[1.6] text-[color:var(--ink)]">
+                  <span className="text-[color:var(--m-muted-on-white)]">
                     Its reviews were analysed and raised no recurring complaint.
                   </span>
                 </p>
               ) : (
                 data.themes.complaints.map((theme) => (
-                  <div key={theme.theme} className={styles.theme}>
-                    <div className={styles.themeHead}>
+                  <div key={theme.theme} className="border-t border-[var(--border-default)] py-[13px] px-4 first:border-t-0">
+                    <div className="flex items-baseline justify-between gap-2.5 text-[length:var(--text-13)] font-semibold">
                       <span>{theme.label}</span>
-                      <span className={styles.themeCount}>
+                      <span className="flex-none text-[length:var(--text-11-5)] font-normal text-[color:var(--m-muted-on-white)]">
                         {`${theme.mentionCount} mention${theme.mentionCount === 1 ? "" : "s"}`}
                       </span>
                     </div>
                     {theme.quotes.map((quote) => (
-                      <p key={quote} className={styles.quote}>{`“${quote}”`}</p>
+                      <p key={quote} className="mt-[7px] text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--m-muted-on-white)] italic">{`“${quote}”`}</p>
                     ))}
                   </div>
                 ))
               )}
             </div>
 
-            <a className={styles.mapsLink} href={mapsHref} target="_blank" rel="noreferrer">
-              <span className={styles.mapsLinkInner}>
+            <a className="flex items-center justify-between gap-2.5 bg-[var(--surface-card)] border border-[var(--border-default)] rounded-lg py-[15px] px-4 min-h-[var(--m-touch)] text-[length:var(--text-13-5)] font-semibold text-[color:var(--accent)] no-underline" href={mapsHref} target="_blank" rel="noreferrer">
+              <span className="flex items-center gap-2.5">
                 <svg
                   width="16"
                   height="16"
@@ -512,17 +504,15 @@ function FieldEditor({
 
   return (
     <div>
-      <p className={styles.editHelp}>{field.help}</p>
+      <p className="m-0 mb-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--m-muted-on-white)]">{field.help}</p>
 
       {field.kind === "choice" ? (
-        <div className={styles.choices}>
+        <div className="flex flex-col gap-2">
           {(field.options ?? []).map((option) => (
             <button
               key={option}
               type="button"
-              className={[styles.choice, draft === option && styles.choiceOn]
-                .filter(Boolean)
-                .join(" ")}
+              className={`flex items-center gap-2.5 min-h-[var(--m-touch)] py-2.5 px-3 border rounded-[var(--radius-10)] font-sans text-[length:var(--text-13)] text-[color:var(--ink)] cursor-pointer text-left ${draft === option ? "border-[var(--accent)] bg-court-100 font-semibold" : "border-[var(--border-strong)] bg-[var(--surface-card)]"}`}
               onClick={() => onSave(option)}
             >
               {option}
@@ -531,7 +521,7 @@ function FieldEditor({
         </div>
       ) : (
         <input
-          className={styles.textField}
+          className="w-full min-h-[var(--m-touch)] py-3 px-[13px] border border-[var(--border-strong)] rounded-[var(--radius-12)] font-sans text-sm text-[color:var(--ink)] bg-[var(--surface-card)]"
           aria-label={field.label}
           inputMode={field.kind === "currency" ? "numeric" : "text"}
           placeholder={field.placeholder}
@@ -541,7 +531,7 @@ function FieldEditor({
         />
       )}
 
-      <div className={styles.editActions}>
+      <div className="flex gap-2.5 mt-4">
         {field.kind === "choice" ? null : (
           <Button block onClick={() => onSave(draft.trim())}>
             Save
@@ -583,7 +573,7 @@ function OperatingWindowNote({ window: w }: { window: OperatingWindow | null }) 
   const close = formatMinuteOfDay(w.latestCloseMinute ?? null);
 
   return (
-    <span className={styles.peak}>
+    <span className="inline-block mt-1.5 text-[length:var(--text-11-5)] text-court-700 font-semibold">
       {w.alwaysOpen
         ? "Open 24 hours."
         : open && close

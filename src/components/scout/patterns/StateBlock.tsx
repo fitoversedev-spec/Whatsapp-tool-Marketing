@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { SectionLabel } from "./SectionLabel";
-import styles from "./StateBlock.module.css";
 
 export interface StateBlockProps {
   /** Small uppercase label above the headline. */
@@ -30,17 +29,27 @@ export function StateBlock({
   tone = "neutral",
   className,
 }: StateBlockProps) {
+  const isError = tone === "error";
+
   return (
     <div
-      className={[styles.block, tone === "error" && styles.error, className]
+      className={[
+        "rounded-[16px] p-[22px] flex flex-col gap-2.5 items-start font-sans border",
+        isError ? "border-track-500 bg-track-100" : "bg-white",
+        className,
+      ]
         .filter(Boolean)
         .join(" ")}
-      role={tone === "error" ? "alert" : undefined}
+      role={isError ? "alert" : undefined}
     >
       {eyebrow ? <SectionLabel weight={700}>{eyebrow}</SectionLabel> : null}
-      <div className={styles.title}>{title}</div>
-      <div className={styles.body}>{body}</div>
-      {action ? <div className={styles.action}>{action}</div> : null}
+      <div className={isError ? "text-[15px] font-semibold text-track-600" : "text-[15px] font-semibold text-slate-900"}>
+        {title}
+      </div>
+      <div className={isError ? "text-[13.5px] leading-[1.65] max-w-[62ch] text-slate-700" : "text-[13.5px] leading-[1.65] max-w-[62ch] text-slate-500"}>
+        {body}
+      </div>
+      {action ? <div className="mt-1">{action}</div> : null}
     </div>
   );
 }

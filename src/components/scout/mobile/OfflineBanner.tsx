@@ -1,5 +1,5 @@
 import { formatAgo } from "./format";
-import styles from "./OfflineBanner.module.css";
+
 
 export interface OfflineBannerProps {
   /** When the service worker cached what is on screen. */
@@ -23,9 +23,9 @@ export interface OfflineBannerProps {
  */
 export function OfflineBanner({ cachedAt, subject = "this page" }: OfflineBannerProps) {
   return (
-    <div className={styles.banner} role="status">
+    <div className="flex items-start gap-2.5 py-3 px-[13px] rounded-[12px] bg-[var(--surface-card)] border border-[color:var(--plot-amber)] text-ink text-[length:var(--text-12-5)] leading-normal" role="status">
       <svg
-        className={styles.icon}
+        className="flex-none mt-px text-[color:var(--plot-amber)]"
         width="17"
         height="17"
         viewBox="0 0 24 24"
@@ -41,9 +41,9 @@ export function OfflineBanner({ cachedAt, subject = "this page" }: OfflineBanner
         <path d="M8.5 16a5 5 0 0 1 7 0" />
         <path d="M12 20h.01" />
       </svg>
-      <span className={styles.text}>
-        <span className={styles.title}>Offline — showing a saved copy</span>
-        <span className={styles.detail}>
+      <span className="min-w-0">
+        <span className="block font-semibold">Offline — showing a saved copy</span>
+        <span className="block text-[color:var(--m-muted-on-white)] mt-0.5">
           {`${subject.charAt(0).toUpperCase()}${subject.slice(1)} was last updated ${formatAgo(cachedAt)}. `}
           It is read-only until you are back on the network, and the numbers may have moved since.
         </span>

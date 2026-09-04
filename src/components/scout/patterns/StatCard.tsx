@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import styles from "./StatCard.module.css";
 
 export interface StatCardProps {
   label: ReactNode;
@@ -21,20 +20,43 @@ export function StatCard({
   accent = false,
   className,
 }: StatCardProps) {
+  const valueSizeClass =
+    size === "sm" ? "text-xl mt-[3px]" : "text-2xl mt-[7px]";
+  const labelSizeClass =
+    size === "sm"
+      ? "text-[10.5px] tracking-[0.08em] font-normal"
+      : "text-[10px] tracking-[0.1em] font-bold";
+
   return (
     <div
       className={[
-        styles.card,
-        styles[size],
-        inverted && styles.inverted,
-        accent && styles.accent,
+        "border rounded-[12px] p-[13px] font-sans",
+        inverted ? "bg-black text-white border-black" : "bg-white",
         className,
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      <div className={styles.label}>{label}</div>
-      <div className={styles.value}>{value}</div>
+      <div
+        className={[
+          "uppercase",
+          labelSizeClass,
+          inverted ? "text-white/55" : "text-slate-500",
+        ].join(" ")}
+      >
+        {label}
+      </div>
+      <div
+        className={[
+          "font-display font-bold leading-tight",
+          valueSizeClass,
+          accent && "text-court-700",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {value}
+      </div>
     </div>
   );
 }

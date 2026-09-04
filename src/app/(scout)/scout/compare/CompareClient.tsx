@@ -8,7 +8,6 @@ import { SectionLabel, StateBlock } from "@/components/scout/patterns";
 import { formatRadius } from "@/lib/scout/display/format";
 import { POPULATION_LIMITATION_TEXT } from "@/lib/scout/census/disclosure";
 import type { ComparisonModel } from "@/lib/scout/compare/model";
-import styles from "./Compare.module.css";
 
 export interface CompareClientProps {
   comparison: ComparisonModel;
@@ -16,7 +15,6 @@ export interface CompareClientProps {
   selectedIds: string[];
 }
 
-/** How many columns the table can hold before it stops being readable. */
 const MAX_COLUMNS = 4;
 
 interface ComparisonReportRow {
@@ -26,21 +24,6 @@ interface ComparisonReportRow {
   link: { url: string; expiresOnLabel: string } | null;
 }
 
-/**
- * D4 — the comparison.
- *
- * The chip row writes the selection into the URL, so a comparison is a link
- * somebody can send. The table itself is rendered from `buildComparison`, which
- * decides the winning cell per row and generates the "Read" paragraph from the
- * same numbers — the mockup's fixed sentence would be wrong the first time a
- * scan changed underneath it.
- *
- * The warnings above the table are the part that matters most. A 5 km scan
- * finds more of everything than a 2 km one; a column that never searched for
- * pickleball shows a dash rather than a zero; and a desk-only score is rescaled
- * to 100 without the surveyor component, so it can out-rank a surveyed site.
- * All three are silent failures without a banner.
- */
 export function CompareClient({ comparison, options, selectedIds }: CompareClientProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -49,14 +32,6 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
   const [building, setBuilding] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
-  /**
-   * Produce the comparison as a document.
-   *
-   * Same background-render shape as a single-scan report: 202, then poll. The
-   * warnings above the table travel into the PDF unchanged and are printed
-   * *before* it — a caveat under a table is met after the reader has already
-   * drawn their conclusion.
-   */
   const buildReport = useCallback(async () => {
     setBuilding(true);
     setReportError(null);
@@ -106,17 +81,17 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
   const gridTemplate = `1.4fr repeat(${Math.max(columns, 1)}, 1fr)`;
 
   return (
-    <div className={`${styles.screen} ss-scroll ssIn`}>
-      <div className={styles.head}>
+    <div className="flex-1 min-h-0 overflow-y-auto px-10 pt-8 pb-12 max-[900px]:px-[18px] max-[900px]:pt-5 max-[900px]:pb-6 ssIn">
+      <div className="flex items-baseline justify-between mb-[22px] gap-5 flex-wrap">
         <div>
-          <h1 className={styles.title}>Compare areas</h1>
-          <div className={styles.lede}>
+          <h1 className="m-0 text-xl">Compare areas</h1>
+          <div className="text-[13px] text-slate-500 mt-2 font-sans tracking-normal normal-case">
             {columns === 0
               ? "Pick two or three saved scans."
               : `${columns} scan${columns === 1 ? "" : "s"} side by side. Best value in each row is highlighted.`}
           </div>
         </div>
-        <div className={styles.chips}>
+        <div className="flex gap-2 flex-wrap max-w-[640px] justify-end max-[900px]:justify-start">
           {options.map((option) => (
             <Tag
               key={option.id}
@@ -150,15 +125,16 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
       ) : (
         <>
           {comparison.warnings.length > 0 ? (
-            <div className={styles.warnings}>
+            <div className="flex flex-col gap-[10px] mb-[22px]">
               {comparison.warnings.map((warning) => (
                 <div
                   key={warning.code}
                   role={warning.severity === "warning" ? "alert" : "note"}
-                  className={[
-                    styles.warning,
-                    warning.severity === "warning" ? styles.warningWarning : styles.warningInfo,
-                  ].join(" ")}
+                  className={`rounded-lg px-[15px] py-3 text-[12.5px] leading-[1.65] ${
+                    warning.severity === "warning"
+                      ? "border border-amber-500 bg-white text-slate-700"
+                      : "border border-slate-200 bg-white text-slate-500"
+                  }`}
                 >
                   {warning.message}
                 </div>
@@ -166,37 +142,41 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
             </div>
           ) : null}
 
-          <div className={styles.table}>
-            <div className={styles.scroller}>
-              <div className={styles.grid} style={{ gridTemplateColumns: gridTemplate }}>
-                <div className={styles.headerCategory}>Category</div>
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <div className="grid min-w-[720px]" style={{ gridTemplateColumns: gridTemplate }}>
+                <div className="bg-slate-900 text-white/50 px-5 py-4 text-[10.5px] font-bold tracking-[0.12em] uppercase">
+                  Category
+                </div>
                 {comparison.subjects.map((subject) => (
-                  <div key={subject.scanId} className={styles.headerArea}>
+                  <div key={subject.scanId} className="bg-slate-900 text-white px-5 py-4 font-display text-xs tracking-wider uppercase">
                     {subject.areaLabel}
-                    <span className={styles.headerRadius}>{formatRadius(subject.radiusM)}</span>
+                    <span className="block font-sans text-[10.5px] tracking-normal normal-case text-white/40 mt-1">
+                      {formatRadius(subject.radiusM)}
+                    </span>
                   </div>
                 ))}
 
                 {comparison.rows.map((row, index) => (
                   <div key={row.id} style={{ display: "contents" }}>
                     <div
-                      className={[styles.rowLabel, index % 2 === 1 && styles.zebra]
-                        .filter(Boolean)
-                        .join(" ")}
+                      className={`px-5 py-[15px] text-[13.5px] font-semibold border-t border-slate-200 ${
+                        index % 2 === 1 ? "bg-[#fbfbfc]" : ""
+                      }`}
                     >
                       {row.label}
-                      {row.note ? <span className={styles.rowNote}>{row.note}</span> : null}
+                      {row.note ? (
+                        <span className="block text-[10.5px] font-normal text-slate-500 leading-[1.55] mt-1">
+                          {row.note}
+                        </span>
+                      ) : null}
                     </div>
                     {row.values.map((value, columnIndex) => (
                       <div
                         key={`${row.id}-${columnIndex}`}
-                        className={[
-                          styles.cell,
-                          index % 2 === 1 && styles.zebra,
-                          row.bestIndex === columnIndex && styles.cellBest,
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
+                        className={`px-5 py-[15px] text-[13.5px] text-slate-700 border-t border-slate-200 ${
+                          index % 2 === 1 ? "bg-[#fbfbfc]" : ""
+                        } ${row.bestIndex === columnIndex ? "font-bold !text-blue-700 !bg-blue-100" : ""}`}
                       >
                         {value.display}
                       </div>
@@ -207,24 +187,26 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
             </div>
           </div>
 
-          <div className={styles.foot}>
-            <div className={styles.read}>
+          <div className="flex gap-4 mt-[22px] items-start flex-wrap">
+            <div className="flex-1 min-w-[320px] bg-white border border-slate-200 rounded-2xl px-5 py-[18px]">
               <SectionLabel weight={700}>Read</SectionLabel>
-              <div className={styles.readBody}>
+              <div className="text-[13.5px] leading-[1.7] text-slate-700 mt-[10px] flex flex-col gap-[10px] [&>p]:m-0">
                 {comparison.narrative.map((paragraph) => (
                   <p key={paragraph}>{paragraph}</p>
                 ))}
               </div>
-              <p className={styles.method}>{POPULATION_LIMITATION_TEXT}</p>
+              <p className="text-[11px] leading-[1.65] text-slate-500 mt-[14px] border-t border-slate-200 pt-[11px]">
+                {POPULATION_LIMITATION_TEXT}
+              </p>
             </div>
             {comparison.subjects.length >= 2 ? (
-              <div className={styles.reportActions}>
+              <div className="flex flex-col gap-[10px] min-w-[220px] max-w-[300px]">
                 <Button onClick={() => void buildReport()} disabled={building}>
                   {building ? "Producing the comparison…" : "Build comparison report"}
                 </Button>
                 {report?.link ? (
                   <a
-                    className={styles.method}
+                    className="text-[11px] leading-[1.65] text-slate-500 break-words"
                     href={report.link.url}
                     target="_blank"
                     rel="noreferrer"
@@ -233,7 +215,11 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
                     {report.link.expiresOnLabel}
                   </a>
                 ) : null}
-                {reportError ? <p className={styles.method}>{reportError}</p> : null}
+                {reportError ? (
+                  <p className="text-[11px] leading-[1.65] text-slate-500 break-words">
+                    {reportError}
+                  </p>
+                ) : null}
               </div>
             ) : comparison.subjects[0] ? (
               <Link href={`/scout/report/${comparison.subjects[0].scanId}`}>

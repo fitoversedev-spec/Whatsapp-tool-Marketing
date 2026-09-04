@@ -1,13 +1,17 @@
 "use client";
 
 import { useId, useState, type ReactNode } from "react";
-import styles from "./Tooltip.module.css";
 
 export interface TooltipProps {
   label: string;
   side?: "top" | "bottom";
   children: ReactNode;
 }
+
+const sideClass: Record<"top" | "bottom", string> = {
+  top: "bottom-[calc(100%+8px)]",
+  bottom: "top-[calc(100%+8px)]",
+};
 
 /**
  * Shows on hover (as in the bundle) and additionally on focus, so the tooltip
@@ -19,7 +23,7 @@ export function Tooltip({ label, side = "top", children }: TooltipProps) {
 
   return (
     <span
-      className={styles.wrap}
+      className="relative inline-flex"
       onMouseEnter={() => setShow(true)}
       onMouseLeave={() => setShow(false)}
       onFocus={() => setShow(true)}
@@ -28,7 +32,11 @@ export function Tooltip({ label, side = "top", children }: TooltipProps) {
     >
       {children}
       {show ? (
-        <span id={id} role="tooltip" className={`${styles.bubble} ${styles[side]}`}>
+        <span
+          id={id}
+          role="tooltip"
+          className={`absolute left-1/2 -translate-x-1/2 bg-black text-white font-sans text-xs font-medium py-1.5 px-2.5 rounded-sm whitespace-nowrap z-[100] shadow-md ${sideClass[side]}`}
+        >
           {label}
         </span>
       ) : null}

@@ -1,5 +1,4 @@
 import type { ElementType, ReactNode } from "react";
-import styles from "./SectionLabel.module.css";
 
 export interface SectionLabelProps {
   children: ReactNode;
@@ -20,7 +19,12 @@ export function SectionLabel({
 }: SectionLabelProps) {
   return (
     <Tag
-      className={[styles.label, weight === 700 && styles.bold, onDark && styles.onDark, className]
+      className={[
+        "font-sans text-[11px] tracking-[0.13em] uppercase",
+        weight === 700 ? "font-bold" : "font-semibold",
+        onDark ? "text-white/55" : "text-slate-500",
+        className,
+      ]
         .filter(Boolean)
         .join(" ")}
     >

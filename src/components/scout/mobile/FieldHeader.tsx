@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { fieldNavItems, type FieldNavContext } from "./nav";
-import styles from "./FieldHeader.module.css";
 
 export interface FieldHeaderProps {
   /** Left-hand status text. The mockup prints the clock; we print the state. */
@@ -84,21 +83,21 @@ export function FieldHeader({
 
   return (
     <>
-      <header className={styles.header}>
-        <div className={styles.statusRow}>
-          <span>{statusLeft}</span>
-          <span>{statusRight}</span>
+      <header className="flex-none z-[12] bg-[var(--black)] text-[color:var(--on-dark)] pt-[calc(12px+var(--m-safe-top))] px-[var(--m-pad-x)] pb-[15px]">
+        <div className="flex justify-between items-center gap-2 text-[length:var(--text-11)] text-[color:var(--on-dark-muted-soft)] tracking-[0.04em] mb-3.5 min-w-0">
+          <span className="truncate">{statusLeft}</span>
+          <span className="truncate">{statusRight}</span>
         </div>
 
-        <div className={styles.bar}>
+        <div className="flex items-center gap-3 min-w-0">
           {variant === "brand" ? (
-            <div className={styles.brand}>
+            <div className="flex items-center gap-2.5 min-w-0">
               <BrandMark />
-              <span className={styles.wordmark}>Site Scout</span>
+              <span className="font-display uppercase tracking-[0.13em] text-[length:var(--text-13)] font-bold whitespace-nowrap">Site Scout</span>
             </div>
           ) : (
             <>
-              <Link href={backHref} className={styles.back} aria-label={backLabel}>
+              <Link href={backHref} className="relative flex-none w-8 h-8 border-0 rounded-full bg-[var(--on-dark-fill)] text-[color:var(--on-dark)] flex items-center justify-center cursor-pointer after:content-[''] after:absolute after:inset-[-6px] after:rounded-full" aria-label={backLabel}>
                 <svg
                   width="15"
                   height="15"
@@ -113,9 +112,9 @@ export function FieldHeader({
                   <path d="M15 18l-6-6 6-6" />
                 </svg>
               </Link>
-              <div className={styles.title}>
-                <div className={styles.titleText}>{title}</div>
-                {subtitle ? <div className={styles.subtitle}>{subtitle}</div> : null}
+              <div className="min-w-0">
+                <div className="font-display uppercase tracking-[0.11em] text-[length:var(--text-12-5)] font-bold whitespace-nowrap overflow-hidden text-ellipsis">{title}</div>
+                {subtitle ? <div className="text-[length:var(--text-11)] text-[color:var(--on-dark-muted)] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{subtitle}</div> : null}
               </div>
             </>
           )}
@@ -123,7 +122,7 @@ export function FieldHeader({
           <button
             type="button"
             ref={pillRef}
-            className={styles.menuPill}
+            className="flex items-center gap-2 ml-auto flex-none bg-[var(--on-dark-fill)] border-0 text-[color:var(--on-dark)] font-sans text-xs font-semibold py-3 px-[13px] rounded-full cursor-pointer min-h-[var(--m-touch)]"
             aria-expanded={menuOpen}
             aria-haspopup="menu"
             aria-controls={menuId}
@@ -152,7 +151,7 @@ export function FieldHeader({
               strokeWidth="2.6"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className={[styles.caret, menuOpen && styles.caretOpen].filter(Boolean).join(" ")}
+              className={["transition-transform duration-[var(--dur-fast)] ease-[var(--ease-standard)]", menuOpen && "rotate-180"].filter(Boolean).join(" ")}
               aria-hidden="true"
             >
               <path d="M6 9l6 6 6-6" />
@@ -161,7 +160,7 @@ export function FieldHeader({
         </div>
 
         {search ? (
-          <div className={styles.search}>
+          <div className="flex items-center gap-[9px] bg-[var(--on-dark-fill)] rounded-[12px] py-[11px] px-[13px] mt-3.5">
             <svg
               width="15"
               height="15"
@@ -177,7 +176,7 @@ export function FieldHeader({
               <path d="M20 20l-3.5-3.5" />
             </svg>
             <input
-              className={styles.searchInput}
+              className="flex-1 min-w-0 border-0 outline-none bg-transparent font-sans text-[length:var(--text-13-5)] text-[color:var(--on-dark)] min-h-[22px] placeholder:text-[color:var(--on-dark-muted-soft)]"
               type="search"
               aria-label={search.label}
               placeholder={search.placeholder}
@@ -192,12 +191,18 @@ export function FieldHeader({
         <>
           <button
             type="button"
-            className={styles.scrim}
+            className="fixed inset-0 z-30 border-0 p-0 bg-[rgba(10,10,10,0.35)] cursor-pointer"
             aria-label="Close menu"
             onClick={() => setMenuOpen(false)}
           />
-          <div className={styles.sheet} id={menuId} role="menu" aria-label="Go to">
-            <div className={styles.sheetHeading}>Go to</div>
+          <div
+            className="fixed top-[calc(96px+var(--m-safe-top))] right-[var(--m-pad-x)] z-[31] w-[min(236px,calc(100vw-36px))] bg-[var(--surface-card)] rounded-[16px] border border-[color:var(--border-default)] shadow-lg overflow-hidden motion-reduce:!animate-none"
+            style={{ animation: "ssIn 0.16s var(--ease-standard)" }}
+            id={menuId}
+            role="menu"
+            aria-label="Go to"
+          >
+            <div className="pt-[11px] px-[15px] pb-[9px] text-[length:var(--text-10)] font-bold tracking-[var(--tracking-section)] uppercase text-[color:var(--m-muted)] bg-slate-100">Go to</div>
             {items.map((item) =>
               item.href ? (
                 <Link
@@ -205,31 +210,29 @@ export function FieldHeader({
                   href={item.href}
                   role="menuitem"
                   className={[
-                    styles.sheetItem,
-                    item.key === activeKey && styles.sheetItemActive,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
+                    "flex items-center justify-between gap-2.5 w-full text-left border-0 border-t border-[color:var(--border-default)] py-[13px] px-[15px] min-h-[var(--m-touch)] font-sans text-[length:var(--text-13-5)] text-ink cursor-pointer no-underline [&:first-of-type]:border-t-0",
+                    item.key === activeKey ? "bg-blue-100 font-bold" : "bg-[var(--surface-card)] font-medium",
+                  ].join(" ")}
                 >
                   <span>{item.label}</span>
-                  <span className={styles.sheetHint}>{item.hint}</span>
+                  <span className="text-[length:var(--text-11)] text-[color:var(--m-muted)] flex-none">{item.hint}</span>
                 </Link>
               ) : (
                 <span
                   key={item.key}
                   role="menuitem"
                   aria-disabled="true"
-                  className={[styles.sheetItem, styles.sheetItemDisabled].join(" ")}
+                  className="flex items-center justify-between gap-2.5 w-full text-left bg-[var(--surface-card)] border-0 border-t border-[color:var(--border-default)] py-[13px] px-[15px] min-h-[var(--m-touch)] font-sans text-[length:var(--text-13-5)] font-medium text-[color:var(--m-muted)] cursor-not-allowed opacity-60 [&:first-of-type]:border-t-0"
                 >
                   <span>{item.label}</span>
-                  <span className={styles.sheetHint}>{item.hint}</span>
+                  <span className="text-[length:var(--text-11)] text-[color:var(--m-muted)] flex-none">{item.hint}</span>
                 </span>
               ),
             )}
             <form action="/api/scout/auth/signout" method="post">
-              <button type="submit" role="menuitem" className={styles.sheetItem}>
+              <button type="submit" role="menuitem" className="flex items-center justify-between gap-2.5 w-full text-left bg-[var(--surface-card)] border-0 border-t border-[color:var(--border-default)] py-[13px] px-[15px] min-h-[var(--m-touch)] font-sans text-[length:var(--text-13-5)] font-medium text-ink cursor-pointer no-underline [&:first-of-type]:border-t-0">
                 <span>Sign out</span>
-                <span className={styles.sheetHint} />
+                <span className="text-[length:var(--text-11)] text-[color:var(--m-muted)] flex-none" />
               </button>
             </form>
           </div>
@@ -239,25 +242,16 @@ export function FieldHeader({
   );
 }
 
-/**
- * The mockup loads `assets/logo-mark.png`, which is not in this repository
- * (client requirement B5). Until the real mark arrives this draws the brand
- * ribbon gradient at the same 26×26 footprint, exactly as `AppShell` does, so
- * the two shells stay visually consistent and swapping in the PNG is a
- * one-component change.
- */
+/** The host's Fitoverse logo, at the same 26x26 footprint the gradient placeholder used. */
 function BrandMark() {
   return (
-    <svg className={styles.mark} viewBox="0 0 26 26" role="img" aria-label="Fitoverse">
-      <defs>
-        <linearGradient id="ss-field-mark" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="var(--green)" />
-          <stop offset="45%" stopColor="var(--sky)" />
-          <stop offset="80%" stopColor="var(--navy)" />
-          <stop offset="100%" stopColor="var(--red)" />
-        </linearGradient>
-      </defs>
-      <rect x="0" y="0" width="26" height="26" rx="7" fill="url(#ss-field-mark)" />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className="w-[26px] h-[26px] flex-none"
+      src="/quotation-assets/image1.png"
+      alt="Fitoverse"
+      width={26}
+      height={26}
+    />
   );
 }

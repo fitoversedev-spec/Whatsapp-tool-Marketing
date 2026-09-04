@@ -5,7 +5,6 @@ import { Badge } from "@/components/scout/ui";
 import type { ComponentScore, ScoreFlag, ScoreResult } from "@/lib/scout/scoring";
 import { verdictLabel, verdictTone } from "./format";
 import { Sheet } from "./Sheet";
-import styles from "./ScoreBlock.module.css";
 
 export interface ScoreBlockProps {
   score: ScoreResult;
@@ -23,7 +22,7 @@ export interface ScoreBlockProps {
  * Phase 3's governing rule: *the score never appears without its breakdown.*
  * On a 1440px desktop that is satisfied by putting the five components beside
  * the number. On a 390px phone there is no beside, so the number itself is the
- * control that opens them — which means there is no arrangement of this screen
+ * control that opens them --- which means there is no arrangement of this screen
  * where a reader can see 66 and not be one tap from why.
  *
  * ## What travels with the number, always
@@ -46,11 +45,11 @@ export function ScoreBlock({ score, themesPending = false, onRefresh }: ScoreBlo
     <section aria-label="Site score">
       {/* Hard flags render regardless of the total, above it. */}
       {score.hardFlags.length > 0 ? (
-        <div className={styles.hardFlags}>
+        <div className="flex flex-col gap-2 mb-2.5">
           {score.hardFlags.map((flag) => (
-            <p key={flag.code} className={styles.hardFlag} role="alert">
+            <p key={flag.code} className="flex items-start gap-[9px] bg-red-100 border border-red-500 rounded-[12px] py-[11px] px-3 text-[length:var(--text-12-5)] leading-normal text-ink" role="alert">
               <svg
-                className={styles.hardFlagIcon}
+                className="flex-none mt-px text-red-600"
                 width="16"
                 height="16"
                 viewBox="0 0 24 24"
@@ -71,30 +70,30 @@ export function ScoreBlock({ score, themesPending = false, onRefresh }: ScoreBlo
 
       <button
         type="button"
-        className={styles.card}
+        className="w-full text-left block bg-[var(--black)] text-[color:var(--on-dark)] border border-[color:var(--black)] rounded-[18px] p-4 font-sans cursor-pointer"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
       >
-        <span className={styles.top}>
-          <span className={styles.label}>Site score</span>
+        <span className="flex items-start justify-between gap-3">
+          <span className="text-[length:var(--text-10-5)] font-semibold tracking-[var(--tracking-stat)] uppercase text-[color:var(--on-dark-muted)]">Site score</span>
           <Badge tone={verdictTone(score.verdict)}>{verdictLabel(score.verdict)}</Badge>
         </span>
 
-        <span className={styles.numeralRow}>
-          <span className={styles.numeral}>{score.totalRounded}</span>
-          <span className={styles.outOf}>/ 100</span>
+        <span className="flex items-baseline gap-2 mt-2">
+          <span className="font-display text-[40px] font-bold tracking-[0.02em] leading-none">{score.totalRounded}</span>
+          <span className="text-[length:var(--text-13)] text-[color:var(--on-dark-muted)]">/ 100</span>
         </span>
 
-        <span className={styles.meta}>
+        <span className="mt-2.5 text-[length:var(--text-11-5)] text-[color:var(--on-dark-muted-strong)] leading-normal">
           {`${score.confidence.level} confidence · model v${score.modelVersion}`}
           {score.countsAreExact ? "" : " · counts are floors"}
         </span>
 
-        {score.basisLabel ? <span className={styles.basis}>{score.basisLabel}</span> : null}
+        {score.basisLabel ? <span className="block mt-2 text-[length:var(--text-11)] text-[color:var(--sky)] leading-[1.45]">{score.basisLabel}</span> : null}
 
-        <p className={styles.statement}>{score.verdictStatement}</p>
+        <p className="mt-2.5 mb-0 text-[length:var(--text-12-5)] text-[color:var(--on-dark-muted-strong)] leading-normal">{score.verdictStatement}</p>
 
-        <span className={styles.expand}>
+        <span className="flex items-center justify-between gap-2 mt-3.5 pt-3 border-t border-[color:var(--on-dark-fill)] text-[length:var(--text-12-5)] font-semibold text-[color:var(--on-dark)] min-h-[24px]">
           See the five-component breakdown
           <svg
             width="15"
@@ -131,10 +130,10 @@ function ScoreBreakdown({
   return (
     <div>
       {themesPending ? (
-        <p className={styles.flag}>
+        <p className="text-[length:var(--text-11-5)] leading-normal py-[9px] px-2.5 rounded-md bg-slate-100 text-ink">
           Review analysis is still running, so the service-gap component may still gain points.{" "}
           {onRefresh ? (
-            <button type="button" onClick={onRefresh} className={styles.componentName}>
+            <button type="button" onClick={onRefresh} className="text-[length:var(--text-13-5)] font-semibold">
               Refresh the score
             </button>
           ) : null}
@@ -145,17 +144,17 @@ function ScoreBreakdown({
         <ComponentRow key={component.id} component={component} />
       ))}
 
-      <p className={styles.footnote}>
+      <p className="mt-4 mb-0 pt-3.5 border-t border-[color:var(--border-default)] text-[length:var(--text-11)] leading-[1.6] text-[color:var(--m-muted-on-white)]">
         {`Scored under model v${score.modelVersion}, checklist v${score.checklistVersion}. `}
         {`${score.pointsAwarded.toFixed(2)} of ${score.pointsAvailable} points available`}
         {score.pointsAvailable === 100 ? "." : ", rescaled to 100."}
         {score.basisLabel ? ` ${score.basisLabel}.` : ""}
       </p>
 
-      <div className={styles.footnote}>
+      <div className="mt-4 mb-0 pt-3.5 border-t border-[color:var(--border-default)] text-[length:var(--text-11)] leading-[1.6] text-[color:var(--m-muted-on-white)]">
         <strong>{`Confidence: ${score.confidence.level}.`}</strong>
         {score.confidence.reasons.length > 0 ? (
-          <ul className={styles.confidenceReasons}>
+          <ul className="mt-1.5 mb-0 pl-[18px] text-[length:var(--text-11)] leading-[1.6] text-[color:var(--m-muted-on-white)]">
             {score.confidence.reasons.map((reason) => (
               <li key={reason}>{reason}</li>
             ))}
@@ -170,10 +169,10 @@ function ComponentRow({ component }: { component: ComponentScore }) {
   const pct = component.available > 0 ? (component.points / component.available) * 100 : 0;
 
   return (
-    <div className={styles.component}>
-      <div className={styles.componentHead}>
-        <span className={styles.componentName}>{component.label}</span>
-        <span className={styles.componentPoints}>
+    <div className="border-t border-[color:var(--border-default)] py-3.5 px-0 first:border-t-0 first:pt-0">
+      <div className="flex items-baseline justify-between gap-2.5">
+        <span className="text-[length:var(--text-13-5)] font-semibold">{component.label}</span>
+        <span className="font-display text-[length:var(--text-13-5)] font-bold tracking-[0.02em] flex-none">
           {component.included
             ? `${component.points.toFixed(1)} / ${component.available}`
             : "Not scored"}
@@ -181,27 +180,27 @@ function ComponentRow({ component }: { component: ComponentScore }) {
       </div>
 
       {component.included ? (
-        <div className={styles.bar} role="presentation">
-          <span className={styles.barFill} style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+        <div className="h-1.5 rounded-full bg-slate-200 my-[9px] overflow-hidden" role="presentation">
+          <span className="block h-full rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
         </div>
       ) : null}
 
       {/* Printed verbatim: it is written to be read aloud. */}
-      <p className={styles.justification}>{component.justification}</p>
+      <p className="m-0 text-[length:var(--text-12-5)] leading-[1.6] text-ink">{component.justification}</p>
 
       {component.included ? null : (
-        <p className={styles.excluded}>
+        <p className="mt-2 mb-0 text-[length:var(--text-11-5)] leading-normal text-[color:var(--m-muted-on-white)]">
           Excluded from both the score and the points available, rather than scored as zero — an
           unobserved site is not a bad site.
         </p>
       )}
 
       {component.parts.length > 0 ? (
-        <ul className={styles.parts}>
+        <ul className="list-none mt-2.5 mb-0 p-0 flex flex-col gap-1.5">
           {component.parts.map((part) => (
-            <li key={part.id} className={styles.part}>
+            <li key={part.id} className="flex items-baseline justify-between gap-2.5 text-[length:var(--text-11-5)] text-[color:var(--m-muted-on-white)] leading-[1.45]">
               <span>{part.detail || part.label}</span>
-              <span className={styles.partPoints}>
+              <span className="flex-none font-semibold text-ink">
                 {part.available === null
                   ? part.points.toFixed(1)
                   : `${part.points.toFixed(1)}/${part.available}`}
@@ -212,7 +211,7 @@ function ComponentRow({ component }: { component: ComponentScore }) {
       ) : null}
 
       {component.flags.length > 0 ? (
-        <div className={styles.flags}>
+        <div className="flex flex-col gap-[7px] mt-2.5">
           {component.flags.map((flag) => (
             <p key={flag.code} className={flagClass(flag)}>
               {flag.message}
@@ -225,9 +224,10 @@ function ComponentRow({ component }: { component: ComponentScore }) {
 }
 
 function flagClass(flag: ScoreFlag): string {
-  if (flag.severity === "hard") return [styles.flag, styles.flagHard].join(" ");
-  if (flag.severity === "warning") return [styles.flag, styles.flagWarning].join(" ");
-  return styles.flag ?? "";
+  const base = "text-[length:var(--text-11-5)] leading-normal py-[9px] px-2.5 rounded-md text-ink";
+  if (flag.severity === "hard") return `${base} bg-red-100`;
+  if (flag.severity === "warning") return `${base} bg-blue-100`;
+  return `${base} bg-slate-100`;
 }
 
 /**
@@ -238,7 +238,7 @@ function flagClass(flag: ScoreFlag): string {
  */
 export function ScorePending({ message }: { message: string }) {
   return (
-    <section aria-label="Site score" className={styles.pending}>
+    <section aria-label="Site score" className="bg-[var(--surface-card)] border border-dashed border-[color:var(--border-strong)] rounded-[18px] py-[18px] px-4 text-[length:var(--text-13)] leading-[1.55] text-[color:var(--m-muted-on-white)] text-center">
       {message}
     </section>
   );

@@ -11,7 +11,7 @@ import {
   type BaseLayerSpec,
   type SiteMapMarker,
 } from "./siteMapConfig";
-import styles from "./SiteMap.module.css";
+
 
 export interface SiteMapProps {
   lat?: number;
@@ -398,12 +398,12 @@ export function SiteMap({
   return (
     <div
       ref={hostRef}
-      className={[styles.host, className].filter(Boolean).join(" ")}
+      className={["block relative overflow-hidden bg-[var(--map-placeholder)] w-full h-full", className].filter(Boolean).join(" ")}
       style={style}
       role="region"
       aria-label={ariaLabel}
     >
-      <div ref={canvasRef} className={styles.canvas} />
+      <div ref={canvasRef} className="absolute inset-0" />
     </div>
   );
 }

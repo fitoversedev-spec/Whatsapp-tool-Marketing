@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import styles from "./Skeleton.module.css";
 
 export interface SkeletonProps {
   /** Any CSS length. Defaults to filling its container. */
@@ -24,7 +23,12 @@ export function Skeleton({ width, height = "1em", radius, className }: SkeletonP
   return (
     <span
       aria-hidden="true"
-      className={[styles.skeleton, className].filter(Boolean).join(" ")}
+      className={[
+        "block bg-slate-200 rounded animate-pulse motion-reduce:animate-none",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={style}
     />
   );
@@ -40,7 +44,9 @@ export interface SkeletonBlockProps {
 /** A few skeleton lines plus the polite announcement that goes with them. */
 export function SkeletonBlock({ label, lines = 3, className }: SkeletonBlockProps) {
   return (
-    <div className={[styles.block, className].filter(Boolean).join(" ")}>
+    <div
+      className={["flex flex-col gap-[9px] w-full", className].filter(Boolean).join(" ")}
+    >
       <span role="status" className="srOnly">
         {label}
       </span>

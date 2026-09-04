@@ -15,7 +15,6 @@ import {
 } from "@/components/scout/mobile";
 import { SectionLabel } from "@/components/scout/patterns";
 import { Button, Tag } from "@/components/scout/ui";
-import styles from "./scan.module.css";
 
 /** `publicTaxonomy()`'s shape — labels and presets only, never search strings. */
 export interface PublicTaxonomy {
@@ -266,15 +265,15 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
         activeKey="scan"
       />
 
-      <div className={`mScroll ss-scroll ${styles.body} mIn`}>
+      <div className="mScroll ss-scroll pt-5 px-[var(--m-pad-x)] pb-6 flex flex-col gap-[22px] mIn">
         {/* ------------------------------------------- customer location */}
-        <div className={styles.section}>
+        <div className="flex flex-col gap-[9px]">
           <SectionLabel as="h1">Customer location</SectionLabel>
 
-          <div className={styles.locateRow}>
+          <div className="flex gap-2">
             <button
               type="button"
-              className={styles.locate}
+              className="flex-1 flex items-center justify-center gap-[9px] min-h-12 px-3.5 py-3 border border-black rounded-[var(--radius-12)] bg-black text-[var(--on-dark)] font-sans text-[length:var(--text-13-5)] font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-progress"
               onClick={geo.request}
               disabled={geo.status === "locating"}
             >
@@ -298,16 +297,16 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
           </div>
 
           {geo.message ? (
-            <p className={geo.status === "denied" ? styles.warn : styles.hint}>{geo.message}</p>
+            <p className={geo.status === "denied" ? "text-[length:var(--text-11-5)] leading-normal text-track-600" : "text-[length:var(--text-11-5)] leading-normal text-[var(--m-muted)]"}>{geo.message}</p>
           ) : (
-            <p className={styles.hint}>
+            <p className="text-[length:var(--text-11-5)] leading-normal text-[var(--m-muted)]">
               We only read your position when you tap this, and only to place the pin.
             </p>
           )}
 
-          <div className={styles.addressRow}>
+          <div className="flex items-center gap-2.5 bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-lg px-3.5 py-[13px] min-h-[var(--m-touch)]">
             <svg
-              className={styles.pinIcon}
+              className="flex-none text-court-500"
               width="16"
               height="16"
               viewBox="0 0 24 24"
@@ -322,7 +321,7 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
               <circle cx="12" cy="10" r="3" />
             </svg>
             <input
-              className={styles.addressInput}
+              className="flex-1 min-w-0 border-0 outline-0 font-sans text-sm text-[var(--ink)] bg-transparent"
               aria-label="Address or landmark"
               placeholder="Search an address or landmark"
               value={address}
@@ -337,7 +336,7 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
             />
             <button
               type="button"
-              className={styles.locateSecondary}
+              className="flex-none min-h-12 px-3.5 py-3 border border-[var(--border-strong)] rounded-[var(--radius-12)] bg-[var(--surface-card)] text-[var(--ink)] font-sans text-[length:var(--text-13-5)] font-semibold cursor-pointer"
               onClick={() => void lookUpAddress()}
               disabled={resolving || address.trim().length < 2}
             >
@@ -347,10 +346,10 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
         </div>
 
         {/* ------------------------------------------------------- map */}
-        <div className={styles.section}>
-          <div className={styles.mapFrame}>
+        <div className="flex flex-col gap-[9px]">
+          <div className="rounded-[var(--radius-16)] overflow-hidden border border-[var(--border-strong)] relative">
             <SiteMap
-              className={styles.map}
+              className="h-[220px] block"
               lat={centre.lat}
               lng={centre.lng}
               zoom={14}
@@ -361,7 +360,7 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
               ariaLabel="Drag the pin to the customer's plot"
             />
           </div>
-          <p className={styles.pinReadout}>
+          <p className="flex items-center gap-[7px] text-[length:var(--text-11-5)] text-[var(--m-muted)] [&_svg]:flex-none">
             <svg
               width="13"
               height="13"
@@ -375,8 +374,8 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
               <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />
             </svg>
             <span>
-              Drag the pin onto the exact plot ·{" "}
-              <output className={styles.coords} aria-live="polite">
+              Drag the pin onto the exact plot &middot;{" "}
+              <output className="tabular-nums" aria-live="polite">
                 {`${centre.lat.toFixed(4)}, ${centre.lng.toFixed(4)}`}
               </output>
             </span>
@@ -384,17 +383,19 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
         </div>
 
         {/* ---------------------------------------------------- radius */}
-        <div className={styles.sectionWide}>
+        <div className="flex flex-col gap-[11px]">
           <SectionLabel as="h2">Scan radius</SectionLabel>
-          <div className={styles.radiusGrid} role="group" aria-label="Scan radius">
+          <div className="grid grid-cols-4 gap-2" role="group" aria-label="Scan radius">
             {RADII_KM.map((km) => (
               <button
                 key={km}
                 type="button"
                 aria-pressed={radiusKm === km}
-                className={[styles.radiusButton, radiusKm === km && styles.radiusButtonOn]
-                  .filter(Boolean)
-                  .join(" ")}
+                className={`font-sans text-[length:var(--text-13-5)] font-semibold py-3.5 px-0 min-h-[var(--m-touch)] rounded-[var(--radius-12)] cursor-pointer transition-[background] duration-[var(--dur-fast)] ease-[var(--ease-standard)] border ${
+                  radiusKm === km
+                    ? "bg-black text-[var(--on-dark)] border-black"
+                    : "bg-[var(--surface-card)] text-[var(--ink)] border-[var(--border-strong)]"
+                }`}
                 onClick={() => setRadiusKm(km)}
               >
                 {`${km} km`}
@@ -404,10 +405,10 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
         </div>
 
         {/* ------------------------------------------ what to look for */}
-        <div className={styles.sectionWide}>
-          <div className={styles.sectionHead}>
+        <div className="flex flex-col gap-[11px]">
+          <div className="flex items-baseline justify-between gap-2.5">
             <SectionLabel as="h2">What to look for</SectionLabel>
-            <span className={styles.count}>{`${categoryIds.length} selected`}</span>
+            <span className="text-[length:var(--text-11-5)] text-[var(--m-muted)]">{`${categoryIds.length} selected`}</span>
           </div>
 
           {/*
@@ -416,17 +417,19 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
            * phone because a Full sweep is roughly five times the cost of a
            * Quick check, and the surveyor should learn that before running it.
            */}
-          <div className={styles.presets}>
-            <span className={styles.presetLabel}>Presets</span>
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-[length:var(--text-11-5)] text-[var(--m-muted)]">Presets</span>
             {taxonomy.presets.map((preset) => (
               <button
                 key={preset.id}
                 type="button"
                 title={preset.description}
                 aria-pressed={selectedPreset?.id === preset.id}
-                className={[styles.preset, selectedPreset?.id === preset.id && styles.presetOn]
-                  .filter(Boolean)
-                  .join(" ")}
+                className={`min-h-9 py-[7px] px-3 rounded-full font-sans text-xs font-semibold cursor-pointer border ${
+                  selectedPreset?.id === preset.id
+                    ? "border-solid border-[var(--accent)] text-court-700 bg-court-100"
+                    : "border-dashed border-[var(--border-strong)] bg-transparent text-[var(--m-muted)]"
+                }`}
                 onClick={() => setCategoryIds([...preset.categoryIds])}
               >
                 {preset.label}
@@ -434,13 +437,13 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
             ))}
           </div>
 
-          <div className={styles.tags}>
+          <div className="flex flex-wrap gap-2">
             {taxonomy.categories.map((category) => {
               const on = categoryIds.includes(category.id);
               return (
                 <Tag
                   key={category.id}
-                  className={styles.tag}
+                  className="min-h-[var(--m-touch)]"
                   selected={on}
                   onClick={() =>
                     setCategoryIds((ids) =>
@@ -483,7 +486,7 @@ function EstimateNote({
 }) {
   if (error) {
     return (
-      <span className={styles.error} role="alert">
+      <span className="text-[length:var(--text-12-5)] leading-normal text-track-600 text-left" role="alert">
         {error}
       </span>
     );

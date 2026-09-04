@@ -1,6 +1,5 @@
 import { DESK_ONLY_SHORT, verdictLabel, verdictTone } from "@/lib/scout/display/format";
 import { Badge } from "@/components/scout/ui";
-import styles from "./ScoreBadge.module.css";
 
 export interface ScoreBadgeProps {
   total: number | null;
@@ -33,25 +32,25 @@ export function ScoreBadge({
 }: ScoreBadgeProps) {
   if (total === null || verdict === null) {
     return (
-      <span className={[styles.wrap, styles[size], className].filter(Boolean).join(" ")}>
-        <span className={styles.unscored}>Not scored</span>
+      <span className={["inline-flex items-center gap-[7px] font-sans flex-wrap", className].filter(Boolean).join(" ")}>
+        <span className="text-[length:var(--text-11)] font-semibold tracking-[0.08em] uppercase text-slate-500">Not scored</span>
       </span>
     );
   }
 
   return (
-    <span className={[styles.wrap, styles[size], className].filter(Boolean).join(" ")}>
-      <span className={styles.number}>{Math.round(total)}</span>
+    <span className={["inline-flex items-center gap-[7px] font-sans flex-wrap", className].filter(Boolean).join(" ")}>
+      <span className={`font-display font-bold leading-none text-ink ${size === "md" ? "text-[length:var(--text-xl)]" : "text-[length:var(--text-15)]"}`}>{Math.round(total)}</span>
       <Badge tone={verdictTone(verdict)}>{verdictLabel(verdict)}</Badge>
       {basis === "desk_only" ? (
         <span
-          className={styles.deskOnly}
+          className="text-[length:var(--text-10)] font-bold tracking-[0.08em] uppercase text-slate-700 bg-white border border-[color:var(--plot-amber)] rounded-full py-0.5 px-2 cursor-help"
           title="No site survey recorded. The site-practicals component was excluded and the remaining 85 points rescaled to 100, so this score is not comparable with a surveyed site's."
         >
           {DESK_ONLY_SHORT}
         </span>
       ) : null}
-      {confidence ? <span className={styles.confidence}>{confidence} conf.</span> : null}
+      {confidence ? <span className="text-[length:var(--text-10-5)] text-slate-500 capitalize">{confidence} conf.</span> : null}
     </span>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useRef, type KeyboardEvent } from "react";
-import styles from "./Tabs.module.css";
 
 export interface TabsProps {
   tabs: string[];
@@ -31,7 +30,7 @@ export function Tabs({ tabs, active = 0, onChange, className, label = "Tabs" }: 
     <div
       role="tablist"
       aria-label={label}
-      className={[styles.tabs, className].filter(Boolean).join(" ")}
+      className={["flex gap-1 border-b font-sans", className].filter(Boolean).join(" ")}
       onKeyDown={onKeyDown}
     >
       {tabs.map((t, i) => (
@@ -45,7 +44,12 @@ export function Tabs({ tabs, active = 0, onChange, className, label = "Tabs" }: 
           role="tab"
           aria-selected={i === active}
           tabIndex={i === active ? 0 : -1}
-          className={[styles.tab, i === active && styles.active].filter(Boolean).join(" ")}
+          className={[
+            "py-2.5 px-[18px] text-sm font-medium text-slate-500 bg-transparent border-0 border-b-2 border-b-transparent -mb-px cursor-pointer transition-colors duration-150 ease-in-out",
+            i === active && "font-semibold text-court-500 border-b-court-500",
+          ]
+            .filter(Boolean)
+            .join(" ")}
           onClick={() => onChange?.(i)}
         >
           {t}

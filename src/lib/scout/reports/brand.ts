@@ -80,20 +80,13 @@ export function reportBrand(): ReportBrand {
 /**
  * Fonts.
  *
- * Client requirement **B4** is Azonix (display) and Gilroy (body). Neither has
- * been supplied, so the document uses the same substitutes the application
- * uses — Orbitron for display, Poppins for body — and falls back through the
- * generic families when neither is installed on the rendering machine. The PDF
- * therefore renders identically to what the studio preview shows, which is the
- * property that matters until the real files arrive.
- *
- * These are named here, in one place, so swapping them is a two-line change
- * plus an `@font-face` block pointing at the licensed files.
+ * Manrope — the host application's brand typeface, self-hosted in
+ * `public/fonts/`. Used for both display and body in the report to match the
+ * host's design system. The fallback stack is system-UI-first so the PDF
+ * remains readable when Manrope is not available to the rendering engine
+ * (headless Chromium loads it via the Google Fonts link in `css.ts`).
  */
 export const REPORT_FONT_STACKS = {
-  display: `Orbitron, "Trebuchet MS", "Segoe UI", Helvetica, Arial, sans-serif`,
-  body: `Poppins, "Segoe UI", Helvetica, Arial, sans-serif`,
+  display: `Manrope, "Segoe UI", system-ui, Helvetica, Arial, sans-serif`,
+  body: `Manrope, "Segoe UI", system-ui, Helvetica, Arial, sans-serif`,
 } as const;
-
-export const FONT_SUBSTITUTION_NOTE =
-  "Set in Orbitron and Poppins, standing in for the brand faces until the licensed files are supplied.";

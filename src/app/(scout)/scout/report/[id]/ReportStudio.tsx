@@ -21,9 +21,7 @@ import { deliveryNote, reportDelivery } from "@/lib/scout/reports/delivery";
 import type { ScanScreenData } from "@/lib/scout/scans/dto";
 import type { ScoreResult } from "@/lib/scout/scoring/types";
 import { markedCells, sweepStatusLabel, type SweepDocument } from "@/lib/scout/sweep/grid";
-import styles from "./Report.module.css";
 
-/** The `reports` row as the generate endpoint returns it. */
 export interface GeneratedReport {
   id: string;
   version: number;
@@ -39,7 +37,6 @@ export interface GeneratedReport {
 }
 
 export interface ShareResponse {
-  /** `null` under a delivery implementation that sends for itself. */
   whatsappUrl: string | null;
   mode: "handoff" | "sent";
   deliveryNote: string;
@@ -58,38 +55,10 @@ export interface ReportStudioProps {
 }
 
 const SAVE_DEBOUNCE_MS = 600;
-/**
- * What the button does, before a share has told us.
- *
- * Resolved from the installed delivery implementation rather than written into
- * the screen, so swapping `wa.me` for the host's WhatsApp Cloud API changes
- * this sentence without anybody remembering to.
- */
 const DELIVERY_NOTE = deliveryNote(reportDelivery().mode);
-/** How often the studio asks whether the background render has finished. */
 const GENERATE_POLL_MS = 2_000;
 const GENERATE_POLL_LIMIT = 60;
 
-/**
- * D5 — the report studio.
- *
- * ## The checklist is the scoreable input
- *
- * The mockup has a single free-text notes box. Free text cannot be scored, and
- * component 5 of the site score — 15 of the 100 points — is exactly the
- * surveyor's observations. So the checklist sits above the notes and the notes
- * stay for colour: "parking is dreadful" is a rating, "the watchman said the
- * owner is in Dubai until March" is not.
- *
- * The form is rendered generically from Phase 3's field definitions. Not one
- * field label appears in this file.
- *
- * ## Generate is a stub, deliberately
- *
- * PDF rendering and WhatsApp delivery belong to Phase 6. The buttons are here
- * because the screen's layout depends on them, and they say plainly that they
- * are not wired rather than producing a broken file.
- */
 export function ReportStudio({
   scan,
   sweep,
@@ -108,25 +77,12 @@ export function ReportStudio({
   const [scoring, setScoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /* ---------------------------------------------------- report generation */
-
   const [report, setReport] = useState<GeneratedReport | null>(initialReport);
   const [generating, setGenerating] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [share, setShare] = useState<ShareResponse | null>(null);
   const [sharing, setSharing] = useState(false);
 
-  /* -------------------------------------------------- draft autosave */
-
-  /**
-   * Autosave only what actually changed.
-   *
-   * A "first render" ref is not enough: React StrictMode double-invokes effects
-   * in development, so the second pass would slip past it and write the state
-   * the screen was loaded with. Comparing against the loaded value means
-   * opening the studio never writes a row, and reopening it never touches
-   * `updatedAt`.
-   */
   const loadedDraft = useRef(JSON.stringify({ blocks: initialBlocks, notes: initialNotes }));
   useEffect(() => {
     if (JSON.stringify({ blocks, notes }) === loadedDraft.current) return;
@@ -151,8 +107,6 @@ export function ReportStudio({
     };
   }, [blocks, notes, scan.scanId]);
 
-  /* ----------------------------------------------- survey save + rescore */
-
   const loadedAnswers = useRef(JSON.stringify(scan.surveyorInputs));
   useEffect(() => {
     if (JSON.stringify(answers) === loadedAnswers.current) return;
@@ -169,9 +123,6 @@ export function ReportStudio({
         if (!res.ok) throw new Error(String(res.status));
         const json = (await res.json()) as { rescoreRequired?: boolean; rejected?: string[] };
         setSurveyState("saved");
-        // The endpoint says so itself: observations do not reach the score
-        // until it is recomputed, and silently rescoring behind the surveyor
-        // would change a number they may already have quoted.
         if (json.rescoreRequired) setRescoreNeeded(true);
       } catch (e) {
         if ((e as Error).name !== "AbortError") setSurveyState("error");
@@ -202,16 +153,6 @@ export function ReportStudio({
     }
   }, [scan.scanId]);
 
-  /* --------------------------------------------------------- generation */
-
-  /**
-   * Generate, then poll.
-   *
-   * The POST returns a `generating` row and the render happens after the
-   * response. Polling rather than streaming because the render is seconds long
-   * and the answer is one of three words — a websocket for that would be a
-   * moving part with nothing to carry.
-   */
   const generate = useCallback(async () => {
     setGenerating(true);
     setError(null);
@@ -234,8 +175,6 @@ export function ReportStudio({
         if (!state.report) continue;
         setReport(state.report);
         if (state.report.status !== "generating") {
-          // The failure text is written on the row by the worker, so the
-          // screen shows what actually went wrong rather than "something did".
           if (state.report.status === "failed") setError(state.report.error);
           break;
         }
@@ -247,13 +186,6 @@ export function ReportStudio({
     }
   }, [scan.scanId]);
 
-  /**
-   * Log the hand-over, then open WhatsApp.
-   *
-   * The share is recorded *before* the window opens: the salesperson is about
-   * to leave the screen, and a log written on return is a log that is missing
-   * every time they do not come back.
-   */
   const shareOnWhatsApp = useCallback(async () => {
     if (!report) return;
     setSharing(true);
@@ -271,8 +203,6 @@ export function ReportStudio({
       }
       setShare(json);
       setReport((prev) => (prev ? { ...prev, sentTo: json.recipientName } : prev));
-      // A handoff needs the compose window opened. A delivery implementation
-      // that sends for itself returns no URL, and opening one would be a lie.
       if (json.whatsappUrl) window.open(json.whatsappUrl, "_blank", "noopener,noreferrer");
     } catch {
       setError("The share could not be recorded. Nothing has been sent.");
@@ -284,15 +214,11 @@ export function ReportStudio({
   const setAnswer = useCallback((fieldId: string, rating: number | null) => {
     setAnswers((prev) => {
       const next = { ...prev };
-      // Absent, never zero: a field nobody answered must not be scored as the
-      // worst possible observation.
       if (rating === null) delete next[fieldId];
       else next[fieldId] = rating;
       return next;
     });
   }, []);
-
-  /* --------------------------------------------------------- derived */
 
   const on = useCallback((id: string) => blocks[id] === true, [blocks]);
 
@@ -310,18 +236,17 @@ export function ReportStudio({
   const limitations = populationLimitations();
 
   return (
-    <div className={`${styles.split} ssIn`}>
-      <aside className={`${styles.panel} ss-scroll`}>
+    <div className="flex-1 flex min-h-0 max-[900px]:flex-col ssIn">
+      <aside className="w-[420px] flex-none bg-white border-r border-slate-200 overflow-y-auto px-6 pt-[26px] pb-8 flex flex-col gap-5 ss-scroll max-[900px]:w-full max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:border-slate-200">
         <div>
-          <h1 className={styles.title}>Report studio</h1>
-          <div className={styles.subtitle}>
+          <h1 className="m-0 text-base">Report studio</h1>
+          <div className="text-[12.5px] text-slate-500 mt-[9px] font-sans tracking-normal normal-case">
             {scan.areaLabel} · {formatRadius(scan.radiusM)} · {formatFullDate(scan.scoredAt)}
           </div>
         </div>
 
-        {/* ------------------------------------------- surveyor checklist */}
         <SurveyorChecklist answers={answers} onChange={setAnswer} />
-        <div className={styles.saveState} aria-live="polite">
+        <div className="text-[10.5px] text-slate-500" aria-live="polite">
           {surveyState === "saving"
             ? "Saving the survey…"
             : surveyState === "saved"
@@ -346,52 +271,50 @@ export function ReportStudio({
 
         {error ? <StateBlock tone="error" title="Something failed" body={error} /> : null}
 
-        {/* ------------------------------------------------- field notes */}
-        <div className={styles.section}>
+        <div className="flex flex-col gap-[9px]">
           <SectionLabel weight={700}>Field notes</SectionLabel>
           <textarea
-            className={styles.notes}
+            className="w-full box-border min-h-[190px] resize-y font-sans text-[13.5px] leading-[1.65] text-slate-900 border border-slate-300 rounded-lg p-[14px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             aria-label="Field notes"
             placeholder="What you saw that the data can't — parking, lighting, drainage, footfall at 7pm."
           />
-          <p className={styles.hint}>
+          <p className="m-0 text-[11px] leading-[1.65] text-slate-500">
             Colour for the report. The checklist above is what the score reads; this is what the
             customer reads.
           </p>
         </div>
 
-        {/* ---------------------------------------------------- includes */}
-        <div className={styles.section}>
+        <div className="flex flex-col gap-[9px]">
           <SectionLabel weight={700}>Include</SectionLabel>
           {TOGGLEABLE_REPORT_BLOCKS.map((block) => (
             <label
               key={block.id}
-              className={[styles.include, on(block.id) && styles.includeOn]
-                .filter(Boolean)
-                .join(" ")}
+              className={`flex items-start gap-[10px] text-[13px] px-[11px] py-[9px] border rounded-md cursor-pointer ${
+                on(block.id) ? "border-wa-green" : "border-slate-200"
+              }`}
             >
               <input
                 type="checkbox"
-                className={styles.includeCheck}
+                className="w-[15px] h-[15px] accent-wa-green mt-[2px] flex-none"
                 checked={on(block.id)}
                 onChange={(e) =>
                   setBlocks((prev) => ({ ...prev, [block.id]: e.target.checked }))
                 }
               />
-              <span className={styles.includeText}>
+              <span className="flex flex-col gap-[3px]">
                 <span>{block.label}</span>
-                <span className={styles.includeHelp}>{block.help}</span>
+                <span className="text-[10.5px] text-slate-500 leading-[1.55]">{block.help}</span>
               </span>
             </label>
           ))}
-          <p className={styles.hint}>
+          <p className="m-0 text-[11px] leading-[1.65] text-slate-500">
             The area header and the limitations paragraph are always printed. The limitations
             paragraph is what stops a reader inferring a catchment population from a saturation
             figure, so it is not a composition choice.
           </p>
-          <div className={styles.saveState} aria-live="polite">
+          <div className="text-[10.5px] text-slate-500" aria-live="polite">
             {saveState === "saving"
               ? "Saving…"
               : saveState === "saved"
@@ -410,20 +333,20 @@ export function ReportStudio({
               : "Generate report"}
         </Button>
 
-        <a className={styles.meta} href={`/api/scout/scans/${scan.scanId}/report/preview`} target="_blank" rel="noreferrer">
+        <a className="m-0 text-[11px] leading-[1.6] text-slate-500" href={`/api/scout/scans/${scan.scanId}/report/preview`} target="_blank" rel="noreferrer">
           Open the full preview in a new tab
         </a>
 
         {generating ? (
-          <p className={styles.meta} aria-live="polite">
+          <p className="m-0 text-[11px] leading-[1.6] text-slate-500" aria-live="polite">
             The PDF renders in the background, so you can keep working. It usually takes a few
             seconds; the first one after a deploy takes longer while the renderer starts.
           </p>
         ) : null}
 
         {report && (report.status === "generated" || report.status === "delivered") && report.link ? (
-          <div className={styles.generated}>
-            <p className={styles.meta}>
+          <div className="flex flex-col gap-[10px]">
+            <p className="m-0 text-[11px] leading-[1.6] text-slate-500">
               Version {report.version} ready
               {report.pdfBytes ? ` · ${(report.pdfBytes / 1024 / 1024).toFixed(2)} MB` : ""}
               {report.pageCount ? ` · ${report.pageCount} pages` : ""}
@@ -432,7 +355,7 @@ export function ReportStudio({
             </p>
 
             <input
-              className={styles.recipient}
+              className="w-full box-border font-sans text-[13.5px] text-slate-900 border border-slate-300 rounded-md px-3 py-[10px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
               aria-label="Who are you sending it to?"
@@ -441,7 +364,7 @@ export function ReportStudio({
 
             <button
               type="button"
-              className={styles.whatsapp}
+              className="w-full flex items-center justify-center gap-[10px] bg-[#25D366] text-slate-900 border-0 rounded-lg px-[18px] py-[14px] font-sans text-[14.5px] font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => void shareOnWhatsApp()}
               disabled={sharing}
             >
@@ -455,22 +378,22 @@ export function ReportStudio({
               Open the PDF
             </Button>
 
-            <div className={styles.linkBox}>
+            <div className="text-[11px] leading-[1.55] text-slate-700 bg-slate-50 rounded-md px-3 py-[10px] break-all [&_a]:text-court-600">
               <a href={report.link.url} target="_blank" rel="noreferrer">
                 {report.link.url}
               </a>
             </div>
 
-            <p className={styles.stubNote}>
+            <p className="m-0 text-[11px] leading-[1.65] text-slate-700 border border-dashed border-slate-300 rounded-md px-3 py-[10px]">
               {share?.deliveryNote ?? DELIVERY_NOTE} The link expires on{" "}
               {report.link.expiresOnLabel}; regenerating produces a new one and leaves this version
               readable until then.
             </p>
 
             {share ? (
-              <p className={styles.meta} aria-live="polite">
+              <p className="m-0 text-[11px] leading-[1.6] text-slate-500" aria-live="polite">
                 Logged{share.recipientName ? ` as sent to ${share.recipientName}` : ""}. This scan
-                now shows as “Report sent” on the dashboard.
+                now shows as "Report sent" on the dashboard.
               </p>
             ) : null}
           </div>
@@ -494,12 +417,11 @@ export function ReportStudio({
         ) : null}
       </aside>
 
-      {/* ------------------------------------------------- paper preview */}
-      <div className={`${styles.canvas} ss-scroll`}>
-        <article className={styles.paper} aria-label="Report preview">
-          <div className={styles.paperHead}>
-            <div className={styles.paperBrand}>
-              <svg className={styles.paperMark} viewBox="0 0 28 28" aria-hidden="true">
+      <div className="flex-1 min-w-0 overflow-y-auto px-10 pt-8 pb-12 bg-[#dedede] flex justify-center ss-scroll max-[1200px]:px-5">
+        <article className="w-[720px] bg-white shadow-[0_12px_34px_rgba(0,0,0,0.14)] px-[46px] py-[44px] flex flex-col gap-[26px] h-max max-[1200px]:w-full" aria-label="Report preview">
+          <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
+            <div className="flex items-center gap-[11px]">
+              <svg className="w-7 h-7 flex-none" viewBox="0 0 28 28" aria-hidden="true">
                 <defs>
                   <linearGradient id="ss-report-mark" x1="0" y1="0" x2="1" y2="1">
                     <stop offset="0%" stopColor="var(--green)" />
@@ -510,21 +432,21 @@ export function ReportStudio({
                 </defs>
                 <rect x="0" y="0" width="28" height="28" rx="7" fill="url(#ss-report-mark)" />
               </svg>
-              <span className={styles.paperWordmark}>Site Scout report</span>
+              <span className="font-display uppercase tracking-[0.12em] text-[13px] font-bold">Site Scout report</span>
             </div>
-            <span className={styles.paperDate}>{formatFullDate(new Date())}</span>
+            <span className="text-[11.5px] text-slate-500">{formatFullDate(new Date())}</span>
           </div>
 
           <div>
-            <div className={styles.paperAreaLabel}>Area</div>
-            <div className={styles.paperArea}>
+            <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Area</div>
+            <div className="text-2xl font-semibold mt-2">
               {scan.areaLabel} — {formatRadius(scan.radiusM)} radius
             </div>
           </div>
 
           {score ? (
             <div>
-              <div className={styles.paperAreaLabel}>Verdict</div>
+              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Verdict</div>
               <div style={{ marginTop: 8 }}>
                 <Badge tone={verdictTone(score.verdict)}>
                   {verdictLabel(score.verdict)} · {score.totalRounded}/100
@@ -534,26 +456,26 @@ export function ReportStudio({
           ) : null}
 
           {on("stat-cards") ? (
-            <div className={styles.paperStats}>
-              <div className={styles.paperStat}>
-                <div className={styles.paperStatValue}>
+            <div className="grid grid-cols-4 gap-[14px]">
+              <div className="border border-slate-200 rounded-lg p-[14px]">
+                <div className="font-display text-[22px] font-bold">
                   {atLeast(scan.competitionCount, scan.anySaturated)}
                 </div>
-                <div className={styles.paperStatLabel}>Facilities</div>
+                <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[6px]">Facilities</div>
               </div>
-              <div className={styles.paperStat}>
-                <div className={styles.paperStatValue}>{formatCount(scan.reviewTotal)}</div>
-                <div className={styles.paperStatLabel}>Reviews</div>
+              <div className="border border-slate-200 rounded-lg p-[14px]">
+                <div className="font-display text-[22px] font-bold">{formatCount(scan.reviewTotal)}</div>
+                <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[6px]">Reviews</div>
               </div>
-              <div className={styles.paperStat}>
-                <div className={styles.paperStatValue}>{formatRating(scan.avgRating)}</div>
-                <div className={styles.paperStatLabel}>Avg rating</div>
+              <div className="border border-slate-200 rounded-lg p-[14px]">
+                <div className="font-display text-[22px] font-bold">{formatRating(scan.avgRating)}</div>
+                <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[6px]">Avg rating</div>
               </div>
-              <div className={styles.paperStatDark}>
-                <div className={styles.paperStatValue}>
+              <div className="bg-slate-900 text-white rounded-lg p-[14px]">
+                <div className="font-display text-[22px] font-bold">
                   {atLeast(scan.demandCount, scan.anySaturated)}
                 </div>
-                <div className={styles.paperStatLabel}>Demand places</div>
+                <div className="text-[10px] tracking-[0.09em] uppercase text-white/40 mt-[6px]">Demand places</div>
               </div>
             </div>
           ) : null}
@@ -571,21 +493,21 @@ export function ReportStudio({
           ) : null}
 
           {on("count-table") && scan.categories.length > 0 ? (
-            <div className={styles.paperTable}>
-              <div className={styles.paperTableHead}>
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="grid grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr] px-[15px] py-[11px] bg-slate-100 text-[9.5px] font-bold tracking-[0.09em] uppercase text-slate-500">
                 <span>Category</span>
-                <span className={styles.right}>Count</span>
-                <span className={styles.right}>Reviews</span>
-                <span className={styles.right}>Nearest</span>
+                <span className="text-right">Count</span>
+                <span className="text-right">Reviews</span>
+                <span className="text-right">Nearest</span>
               </div>
               {scan.categories.map((c) => (
-                <div key={c.categoryId} className={styles.paperTableRow}>
+                <div key={c.categoryId} className="grid grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr] px-[15px] py-[11px] text-[12.5px] border-t border-slate-200 [&>span:first-child]:font-semibold">
                   <span>{c.label}</span>
-                  <span className={styles.right}>{atLeast(c.count, c.saturated)}</span>
-                  <span className={styles.rightMuted}>
+                  <span className="text-right">{atLeast(c.count, c.saturated)}</span>
+                  <span className="text-right text-slate-500">
                     {c.reviewTotal > 0 ? formatCount(c.reviewTotal) : "—"}
                   </span>
-                  <span className={styles.rightMuted}>
+                  <span className="text-right text-slate-500">
                     {c.nearestM === null ? "—" : formatDistance(c.nearestM)}
                   </span>
                 </div>
@@ -594,7 +516,7 @@ export function ReportStudio({
           ) : null}
 
           {on("map") ? (
-            <div className={styles.paperMap}>
+            <div className="h-[260px] rounded-lg overflow-hidden border border-slate-200 relative">
               <SiteMap
                 lat={scan.centre.lat}
                 lng={scan.centre.lng}
@@ -607,13 +529,13 @@ export function ReportStudio({
 
           {on("sweep") ? (
             <div>
-              <div className={styles.paperAreaLabel}>Spaces sweep</div>
+              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Spaces sweep</div>
               {sweepMarked.length === 0 ? (
-                <p className={styles.paperNotes}>
+                <p className="text-[13.5px] leading-[1.75] text-slate-700 mt-[10px] whitespace-pre-wrap min-h-[60px]">
                   No cells were marked in the sweep of this area.
                 </p>
               ) : (
-                <div className={styles.paperSweep}>
+                <div className="flex flex-col gap-[7px] text-[12.5px] leading-[1.65] text-slate-700 mt-[10px]">
                   {sweepMarked.map((cell) => (
                     <div key={cell.id}>
                       <strong>
@@ -622,7 +544,7 @@ export function ReportStudio({
                       {cell.note ? ` — ${cell.note}` : ""}
                     </div>
                   ))}
-                  <p className={styles.paperLimitations}>
+                  <p className="text-[11.5px] leading-[1.7] text-slate-500 mt-[10px]">
                     Marked from satellite imagery only. Imagery is typically one to three years old.
                   </p>
                 </div>
@@ -632,30 +554,30 @@ export function ReportStudio({
 
           {on("field-notes") ? (
             <div>
-              <div className={styles.paperAreaLabel}>Field notes</div>
-              <div className={styles.paperNotes}>
+              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Field notes</div>
+              <div className="text-[13.5px] leading-[1.75] text-slate-700 mt-[10px] whitespace-pre-wrap min-h-[60px]">
                 {notes || "Field notes appear here as you type them."}
               </div>
             </div>
           ) : null}
 
           <div>
-            <div className={styles.paperAreaLabel}>{limitations.heading}</div>
+            <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">{limitations.heading}</div>
             {limitations.paragraphs.map((p) => (
-              <p key={p} className={styles.paperLimitations}>
+              <p key={p} className="text-[11.5px] leading-[1.7] text-slate-500 mt-[10px]">
                 {p}
               </p>
             ))}
             {!limitations.paragraphs.includes(POPULATION_LIMITATION_TEXT) ? (
-              <p className={styles.paperLimitations}>{POPULATION_LIMITATION_TEXT}</p>
+              <p className="text-[11.5px] leading-[1.7] text-slate-500 mt-[10px]">{POPULATION_LIMITATION_TEXT}</p>
             ) : null}
           </div>
 
-          <div className={styles.paperFoot}>
+          <div className="border-t border-slate-200 pt-[14px] text-[11px] text-slate-500 leading-[1.6]">
             Prepared by {preparedBy} · Fitoverse · Data from public listings
             {score ? ` · scored under model v${score.modelVersion}` : ""}
             {scan.anySaturated
-              ? " · counts marked “at least” are floors: a search returned the maximum results a single query can"
+              ? ` · counts marked "at least" are floors: a search returned the maximum results a single query can`
               : ""}
             . This report contains no projection of revenue or return.
           </div>
@@ -665,5 +587,4 @@ export function ReportStudio({
   );
 }
 
-/** Exported so the handoff can name the blocks without re-listing them. */
 export const REPORT_BLOCK_COUNT = REPORT_BLOCKS.length;

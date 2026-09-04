@@ -1,6 +1,5 @@
 import { benchmarkSampleCaveat, SATURATION_METHOD_NOTE } from "@/lib/scout/census/disclosure";
 import type { ScoreResult } from "@/lib/scout/scoring";
-import styles from "./SaturationRow.module.css";
 
 export interface SaturationRowProps {
   score: ScoreResult;
@@ -36,19 +35,19 @@ export function SaturationRow({ score }: SaturationRowProps) {
   const isDefault = component.inputs.benchmarkIsModelDefault === true;
 
   return (
-    <section className={styles.row} aria-label="Competitive saturation">
-      <div className={styles.head}>
-        <span className={styles.label}>Competitive saturation</span>
-        <span className={styles.points}>
+    <section className="bg-[var(--surface-card)] border border-[color:var(--border-default)] rounded-lg p-3.5" aria-label="Competitive saturation">
+      <div className="flex items-baseline justify-between gap-2.5">
+        <span className="text-[length:var(--text-10-5)] font-semibold tracking-[var(--tracking-stat)] uppercase text-[color:var(--m-muted-on-white)]">Competitive saturation</span>
+        <span className="text-[length:var(--text-11-5)] text-[color:var(--m-muted-on-white)] flex-none">
           {`${component.points.toFixed(1)} / ${component.available}`}
         </span>
       </div>
 
-      <div className={styles.figures}>
-        <span className={styles.value}>
+      <div className="flex items-baseline gap-2.5 flex-wrap mt-[9px]">
+        <span className="font-display text-[length:var(--text-xl)] font-bold tracking-[0.02em]">
           {anchorsPerFacility === null ? "—" : `1 per ${anchorsPerFacility.toFixed(1)}`}
         </span>
-        <span className={styles.against}>
+        <span className="text-[length:var(--text-12-5)] text-[color:var(--m-muted-on-white)]">
           {benchmark === null
             ? "no comparison figure"
             : `vs ${isDefault ? "model default" : (city ?? "city")} 1 per ${benchmark.toFixed(1)}`}
@@ -56,9 +55,9 @@ export function SaturationRow({ score }: SaturationRowProps) {
       </div>
 
       {/* Component 2's own sentence, printed verbatim. */}
-      <p className={styles.note}>{component.justification}</p>
-      <p className={styles.note}>{SATURATION_METHOD_NOTE}</p>
-      {isDefault ? null : <p className={styles.caveat}>{benchmarkSampleCaveat(sampleCount)}</p>}
+      <p className="mt-2.5 mb-0 text-[length:var(--text-11)] leading-[1.55] text-[color:var(--m-muted-on-white)]">{component.justification}</p>
+      <p className="mt-2.5 mb-0 text-[length:var(--text-11)] leading-[1.55] text-[color:var(--m-muted-on-white)]">{SATURATION_METHOD_NOTE}</p>
+      {isDefault ? null : <p className="mt-1.5 mb-0 text-[length:var(--text-11)] leading-[1.55] text-blue-700">{benchmarkSampleCaveat(sampleCount)}</p>}
     </section>
   );
 }

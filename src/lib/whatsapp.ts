@@ -25,7 +25,7 @@ async function authHeaders() {
 }
 
 export type TemplateComponent =
-  | { type: "header"; parameters?: Array<{ type: string; text?: string; image?: { link: string } }> }
+  | { type: "header"; parameters?: Array<{ type: string; text?: string; image?: { link: string }; document?: { link: string; filename?: string } }> }
   | { type: "body"; parameters: Array<{ type: "text"; text: string }> }
   | { type: "button"; sub_type: string; index: number; parameters: Array<{ type: string; payload?: string; text?: string }> };
 

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { NAV_ITEMS, isActive } from "@/lib/scout/nav";
-import styles from "./AppShell.module.css";
 
 /**
  * What the shell needs to draw its chrome.
@@ -62,19 +61,27 @@ export function AppShell({
   }, [menuOpen]);
 
   return (
-    <div className={styles.shell}>
-      <header className={styles.topnav}>
-        <div className={styles.brand}>
+    <div className="min-h-dvh flex flex-col bg-slate-50 font-sans text-slate-900 min-[901px]:h-dvh min-[901px]:overflow-hidden">
+      {/* ---------- Desktop top nav ---------- */}
+      <header className="flex-none h-16 bg-black text-white flex items-center gap-9 px-7 max-[900px]:hidden">
+        <div className="flex items-center gap-[11px] flex-none">
           <BrandMark />
-          <span className={styles.wordmark}>Site Scout</span>
-          <span className={styles.internal}>Internal</span>
+          <span className="font-display uppercase tracking-[0.13em] text-[13px] font-bold">
+            Site Scout
+          </span>
+          <span className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[#73caf0] border border-[rgba(115,202,240,0.4)] py-[2px] px-[7px] rounded-[4px]">
+            Internal
+          </span>
         </div>
-        <nav className={styles.navlist} aria-label="Primary">
+        <nav className="flex items-center gap-1" aria-label="Primary">
           {items.map((n) => (
             <Link
               key={n.href}
               href={n.href}
-              className={[styles.navlink, isActive(pathname, n.href) && styles.navlinkActive]
+              className={[
+                "font-sans text-[13px] font-medium py-[9px] px-[15px] rounded-[9px] border-0 cursor-pointer transition-colors duration-150 ease-in-out bg-transparent text-white/70 no-underline hover:bg-white/10 hover:text-white",
+                isActive(pathname, n.href) && "font-semibold bg-white/15 text-white",
+              ]
                 .filter(Boolean)
                 .join(" ")}
               aria-current={isActive(pathname, n.href) ? "page" : undefined}
@@ -83,32 +90,41 @@ export function AppShell({
             </Link>
           ))}
         </nav>
-        <div className={styles.navRight}>
-          <span className={styles.deskNote}>{deskNote}</span>
+        <div className="ml-auto flex items-center gap-3.5">
+          <span className="text-xs text-white/55">{deskNote}</span>
           <form action="/api/scout/auth/signout" method="post">
-            <button type="submit" className={styles.signout}>
+            <button
+              type="submit"
+              className="bg-transparent border-0 text-white/55 text-xs font-sans cursor-pointer p-1 hover:text-white"
+            >
               Sign out
             </button>
           </form>
-          <span className={styles.avatar} title={`${user.name} · ${user.email}`}>
+          <span
+            className="w-8 h-8 rounded-full bg-[#1a2744] text-white flex items-center justify-center text-xs font-bold flex-none"
+            title={`${user.name} · ${user.email}`}
+          >
             {initials(user.name)}
           </span>
         </div>
       </header>
 
-      <header className={styles.mobileHeader}>
-        <div className={styles.statusRow}>
+      {/* ---------- Mobile header + Menu sheet ---------- */}
+      <header className="flex-none bg-black text-white pt-3 px-[18px] pb-3.5 hidden max-[900px]:block">
+        <div className="flex justify-between items-center text-[11px] text-white/40 tracking-[0.04em] mb-3.5">
           <span>{user.canEditScoringWeights ? "Admin" : "Sales"}</span>
           <span>{fieldNote}</span>
         </div>
-        <div className={styles.mobileBar}>
-          <div className={styles.brand}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-[11px] flex-none">
             <BrandMark />
-            <span className={styles.wordmark}>Site Scout</span>
+            <span className="font-display uppercase tracking-[0.13em] text-[13px] font-bold">
+              Site Scout
+            </span>
           </div>
           <button
             type="button"
-            className={styles.menuPill}
+            className="flex items-center gap-2 bg-white/10 border-0 text-white font-sans text-xs font-semibold py-2 px-[13px] rounded-full cursor-pointer"
             aria-expanded={menuOpen}
             aria-haspopup="menu"
             onClick={() => setMenuOpen((v) => !v)}
@@ -136,7 +152,7 @@ export function AppShell({
               strokeWidth="2.6"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className={[styles.caret, menuOpen && styles.caretOpen].filter(Boolean).join(" ")}
+              className={`transition-transform duration-150 ease-in-out ${menuOpen ? "rotate-180" : ""}`}
               aria-hidden="true"
             >
               <path d="M6 9l6 6 6-6" />
@@ -149,66 +165,63 @@ export function AppShell({
         <>
           <button
             type="button"
-            className={styles.scrim}
+            className="fixed inset-0 z-20 bg-black/35 border-0 p-0 cursor-default"
             aria-label="Close menu"
             onClick={() => setMenuOpen(false)}
           />
-          <div className={styles.sheet} role="menu" aria-label="Go to">
-            <div className={styles.sheetHeading}>Go to</div>
+          <div
+            className="fixed top-24 right-[18px] z-[21] w-[236px] bg-white rounded-[16px] border shadow-[0_18px_40px_rgba(0,0,0,0.22)] overflow-hidden animate-[ssIn_0.16s_ease] motion-reduce:animate-none"
+            role="menu"
+            aria-label="Go to"
+          >
+            <div className="pt-[11px] px-[15px] pb-[9px] text-[10px] font-bold tracking-[0.13em] uppercase text-slate-500 bg-slate-100">
+              Go to
+            </div>
             {items.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
                 role="menuitem"
                 className={[
-                  styles.sheetItem,
-                  isActive(pathname, n.href) && styles.sheetItemActive,
+                  "flex items-center justify-between gap-2.5 w-full text-left bg-white border-0 border-t py-[13px] px-[15px] font-sans text-[13.5px] font-medium text-slate-900 cursor-pointer no-underline first-of-type:border-t-0",
+                  isActive(pathname, n.href) && "bg-court-100 font-bold",
                 ]
                   .filter(Boolean)
                   .join(" ")}
               >
                 <span>{n.mobileLabel}</span>
-                <span className={styles.sheetHint}>{n.hint}</span>
+                <span className="text-[11px] text-slate-500">{n.hint}</span>
               </Link>
             ))}
             <form action="/api/scout/auth/signout" method="post">
-              <button type="submit" role="menuitem" className={styles.sheetItem}>
+              <button
+                type="submit"
+                role="menuitem"
+                className="flex items-center justify-between gap-2.5 w-full text-left bg-white border-0 border-t py-[13px] px-[15px] font-sans text-[13.5px] font-medium text-slate-900 cursor-pointer no-underline"
+              >
                 <span>Sign out</span>
-                <span className={styles.sheetHint}>{user.email}</span>
+                <span className="text-[11px] text-slate-500">{user.email}</span>
               </button>
             </form>
           </div>
         </>
       ) : null}
 
-      <main className={styles.main}>{children}</main>
+      <main className="flex-1 min-h-0 flex flex-col">{children}</main>
     </div>
   );
 }
 
-/**
- * The mockups load `assets/logo-mark.png`, which is not in this repo. Until the
- * real mark is supplied this draws the brand ribbon gradient in a rounded
- * square at the same 26x26 footprint, so layout is unaffected.
- */
+/** The host's Fitoverse logo, at the same 26x26 footprint the gradient placeholder used. */
 function BrandMark() {
   return (
-    <svg
-      className={styles.mark}
-      viewBox="0 0 26 26"
-      role="img"
-      aria-label="Fitoverse"
-      focusable="false"
-    >
-      <defs>
-        <linearGradient id="ss-mark" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="var(--green)" />
-          <stop offset="45%" stopColor="var(--sky)" />
-          <stop offset="80%" stopColor="var(--navy)" />
-          <stop offset="100%" stopColor="var(--red)" />
-        </linearGradient>
-      </defs>
-      <rect x="0" y="0" width="26" height="26" rx="7" fill="url(#ss-mark)" />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className="w-[26px] h-[26px] flex-none"
+      src="/quotation-assets/image1.png"
+      alt="Fitoverse"
+      width={26}
+      height={26}
+    />
   );
 }

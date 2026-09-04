@@ -6,7 +6,6 @@ import { useCallback, useState } from "react";
 import { useFormState } from "react-dom";
 import { SubmitButton } from "@/components/scout/forms/SubmitButton";
 import { approveUserAction, rejectUserAction, type AdminActionState } from "../actions";
-import styles from "./users.module.css";
 
 const INITIAL: AdminActionState = {};
 
@@ -41,17 +40,22 @@ export function PendingRow({ id, name, email, requestedAt }: PendingRowProps) {
 
   return (
     <>
-      <div className={styles.row}>
-        <span className={styles.name}>{name}</span>
-        <span className={styles.email}>{email}</span>
+      <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-5 py-[14px] text-[13.5px] text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-[6px]">
+        <span className="font-semibold text-slate-900">{name}</span>
+        <span className="break-all">{email}</span>
         <span>{requestedAt}</span>
-        <span className={styles.actions}>
-          <form action={approve} className={styles.actions}>
+        <span className="flex items-center gap-2 flex-wrap justify-end max-[900px]:justify-start">
+          <form action={approve} className="flex items-center gap-2 flex-wrap justify-end max-[900px]:justify-start">
             <input type="hidden" name="userId" value={id} />
-            <label className="srOnly" htmlFor={`role-${id}`}>
+            <label className="sr-only" htmlFor={`role-${id}`}>
               Role for {name}
             </label>
-            <select id={`role-${id}`} name="role" className={styles.roleSelect} defaultValue="sales">
+            <select
+              id={`role-${id}`}
+              name="role"
+              className="font-sans text-[13px] px-[10px] py-[6px] rounded border border-slate-300 bg-white text-slate-900"
+              defaultValue="sales"
+            >
               <option value="sales">Sales</option>
               <option value="admin">Admin</option>
             </select>
@@ -79,15 +83,15 @@ export function PendingRow({ id, name, email, requestedAt }: PendingRowProps) {
         </span>
       </div>
       {message ? (
-        <div className={styles.row}>
-          <span className={styles.banner} role="status">
+        <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-5 py-[14px] text-[13.5px] text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-[6px]">
+          <span className="rounded-xl px-[14px] py-[11px] text-[13px] bg-green-100 text-green-600" role="status">
             {message}
           </span>
         </div>
       ) : null}
       {error ? (
-        <div className={styles.row}>
-          <span className={`${styles.banner} ${styles.bannerError}`} role="alert">
+        <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-5 py-[14px] text-[13.5px] text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-[6px]">
+          <span className="rounded-xl px-[14px] py-[11px] text-[13px] bg-red-100 text-red-600" role="alert">
             {error}
           </span>
         </div>

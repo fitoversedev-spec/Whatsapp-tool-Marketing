@@ -7,7 +7,6 @@ import { ScoreBadge } from "@/components/scout/score";
 import { getScoutIdentity } from "@/lib/scout/identity";
 import { listDashboardScans } from "@/lib/scout/scans/queries";
 import { atLeast, formatDayMonth, formatRadius } from "@/lib/scout/display/format";
-import styles from "./Sites.module.css";
 
 export const metadata: Metadata = { title: "My sites — Site Scout" };
 export const dynamic = "force-dynamic";
@@ -49,24 +48,28 @@ export default async function Page() {
           }
         />
       ) : (
-        <div className={styles.list}>
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
           {scans.map((scan) => (
-            <Link key={scan.id} href={`/scout/scan/${scan.id}`} className={styles.row}>
-              <span className={styles.main}>
-                <span className={styles.name}>{scan.areaLabel}</span>
-                <span className={styles.meta}>
+            <Link
+              key={scan.id}
+              href={`/scout/scan/${scan.id}`}
+              className="flex items-center gap-[18px] py-[15px] px-5 border-t border-slate-200 no-underline text-slate-900 font-sans first:border-t-0 hover:bg-slate-100"
+            >
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-semibold">{scan.areaLabel}</span>
+                <span className="block text-[11.5px] text-slate-500 mt-[3px]">
                   {formatRadius(scan.radiusM)} · {formatDayMonth(scan.createdAt)} ·{" "}
                   {scan.ownerName}
                   {scan.customerName ? ` · ${scan.customerName}` : ""}
                 </span>
               </span>
-              <span className={styles.stat}>
-                <span className={styles.statValue}>
+              <span className="flex-none text-right min-w-[90px]">
+                <span className="block font-display text-lg font-bold">
                   {scan.facilityCount === null
                     ? "—"
                     : atLeast(scan.facilityCount, scan.saturated)}
                 </span>
-                <span className={styles.statLabel}>Facilities</span>
+                <span className="block text-[10px] tracking-[0.08em] uppercase text-slate-500 mt-[3px]">Facilities</span>
               </span>
               <ScoreBadge
                 total={scan.scoreTotal}

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import styles from "./SurveyChecklist.module.css";
 
 /**
  * The checklist payload served by `GET /api/scout/scans/{id}/survey`.
@@ -89,13 +88,13 @@ export function SurveyChecklist({
   }
 
   return (
-    <div className={styles.wrap}>
-      <div className={styles.summary}>
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-2.5 text-[length:var(--text-11-5)] text-[color:var(--m-muted)]">
         <span>{`${answered} of ${totalFields} observations recorded`}</span>
         <span>{`Checklist v${checklist.checklistVersion}`}</span>
       </div>
       <div
-        className={styles.progress}
+        className="h-1.5 rounded-full bg-slate-200 overflow-hidden"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={totalFields}
@@ -103,14 +102,17 @@ export function SurveyChecklist({
         aria-label="Checklist completion"
       >
         <span
-          className={styles.progressFill}
+          className="block h-full bg-green-500 rounded-full transition-[width] duration-[var(--dur-med)] ease-[var(--ease-standard)]"
           style={{ width: `${totalFields === 0 ? 0 : (answered / totalFields) * 100}%` }}
         />
       </div>
 
       {status ? (
         <p
-          className={[styles.status, statusIsError && styles.statusError].filter(Boolean).join(" ")}
+          className={[
+            "text-[length:var(--text-11-5)] leading-normal",
+            statusIsError ? "text-red-600" : "text-[color:var(--m-muted)]",
+          ].join(" ")}
           role="status"
         >
           {status}
@@ -122,18 +124,18 @@ export function SurveyChecklist({
         const groupAnswered = group.fields.filter((f) => f.id in answers).length;
 
         return (
-          <section className={styles.group} key={group.id}>
+          <section className="bg-[var(--surface-card)] border border-[color:var(--border-default)] rounded-lg overflow-hidden" key={group.id}>
             <button
               type="button"
-              className={styles.groupHead}
+              className="flex items-center justify-between gap-2.5 w-full text-left bg-[var(--surface-card)] border-0 p-3.5 min-h-[var(--m-touch)] cursor-pointer font-sans"
               aria-expanded={open}
               onClick={() => setOpenGroups((s) => ({ ...s, [group.id]: !open }))}
             >
-              <span className={styles.groupTitle}>
+              <span className="text-[length:var(--text-13-5)] font-semibold text-ink">
                 {group.label}
-                <span className={styles.groupDesc}>{group.description}</span>
+                <span className="block text-[length:var(--text-11-5)] font-normal text-[color:var(--m-muted-on-white)] mt-[3px] leading-[1.45]">{group.description}</span>
               </span>
-              <span className={styles.groupCount}>{`${groupAnswered}/${group.fields.length}`}</span>
+              <span className="flex-none text-[length:var(--text-11-5)] text-[color:var(--m-muted-on-white)]">{`${groupAnswered}/${group.fields.length}`}</span>
             </button>
 
             {open
@@ -168,20 +170,21 @@ function FieldRow({
   const name = `survey-${field.id}`;
 
   return (
-    <div className={styles.field}>
-      <fieldset className={styles.anchors}>
-        <legend className={styles.fieldLabel}>{field.label}</legend>
-        <p className={styles.fieldHelp}>{field.help}</p>
+    <div className="border-t border-[color:var(--border-default)] p-3.5">
+      <fieldset className="flex flex-col gap-1.5 border-0 m-0 p-0">
+        <legend className="text-[length:var(--text-13)] font-semibold text-ink">{field.label}</legend>
+        <p className="mt-1 mb-2.5 text-[length:var(--text-11-5)] leading-normal text-[color:var(--m-muted-on-white)]">{field.help}</p>
 
         {field.anchors.map((anchor, rating) => (
           <label
             key={anchor}
-            className={[styles.anchor, value === rating && styles.anchorSelected]
-              .filter(Boolean)
-              .join(" ")}
+            className={value === rating
+              ? "flex items-center gap-2.5 min-h-[var(--m-touch)] py-2 px-[11px] border border-[color:var(--accent)] bg-blue-100 rounded-md text-[length:var(--text-12-5)] leading-[1.4] text-ink cursor-pointer font-semibold"
+              : "flex items-center gap-2.5 min-h-[var(--m-touch)] py-2 px-[11px] border border-[color:var(--border-strong)] rounded-md text-[length:var(--text-12-5)] leading-[1.4] text-ink cursor-pointer bg-[var(--surface-card)]"
+            }
           >
             <input
-              className={styles.radio}
+              className="flex-none w-[18px] h-[18px] accent-[var(--accent)]"
               type="radio"
               name={name}
               value={rating}
@@ -189,14 +192,14 @@ function FieldRow({
               disabled={disabled}
               onChange={() => onSet(rating)}
             />
-            <span className={styles.rating}>{rating}</span>
+            <span className="flex-none font-display text-[length:var(--text-11)] font-bold text-[color:var(--m-muted-on-white)]">{rating}</span>
             <span>{anchor}</span>
           </label>
         ))}
       </fieldset>
 
       {value === undefined ? null : (
-        <button type="button" className={styles.clear} onClick={() => onSet(null)} disabled={disabled}>
+        <button type="button" className="self-start mt-2 bg-transparent border-0 py-2 px-0 min-h-[var(--m-touch)] font-sans text-[length:var(--text-11-5)] text-[color:var(--accent)] cursor-pointer underline" onClick={() => onSet(null)} disabled={disabled}>
           {`Clear "${field.label}" — leave it unobserved`}
         </button>
       )}

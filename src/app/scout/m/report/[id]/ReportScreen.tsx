@@ -23,7 +23,6 @@ import { POPULATION_LIMITATION_TEXT } from "@/lib/scout/census/disclosure";
 import { deliveryNote, reportDelivery } from "@/lib/scout/reports/delivery";
 import type { ScanResult } from "@/lib/scout/places/scanResult";
 import type { ScoreResult } from "@/lib/scout/scoring";
-import styles from "./report.module.css";
 
 interface ScoreResponse {
   readonly score: ScoreResult;
@@ -297,18 +296,18 @@ export function ReportScreen({ scanId }: { scanId: string }) {
         navContext={{ scanId }}
       />
 
-      <div className={`mScroll ss-scroll ${styles.body} mIn`}>
+      <div className="mScroll ss-scroll pt-5 pb-6 px-[var(--m-pad-x)] flex flex-col gap-[18px] mIn">
         {error ? (
-          <p className={styles.notice} role="alert">
+          <p className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-[13px] px-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--m-muted-on-white)]" role="alert">
             {error}
           </p>
         ) : null}
 
         {/* ------------------------------------------- summary card */}
         {result ? (
-          <section className={styles.summary}>
+          <section className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-16)] p-4 flex flex-col gap-2.5">
             <SectionLabel as="h1">In this report</SectionLabel>
-            <p className={styles.summaryText}>
+            <p className="m-0 text-[length:var(--text-13)] text-[color:var(--m-muted-on-white)] leading-[1.7]">
               {`${formatCount(result.competitionCount, exact)} sports facilities · `}
               {`${formatCount(result.demandCount, exact)} demand places · `}
               {`${formatNumber(result.reviewTotal)} reviews`}
@@ -324,17 +323,17 @@ export function ReportScreen({ scanId }: { scanId: string }) {
         {/* --------------------------------------------- live score */}
         {score ? (
           <section
-            className={[styles.scoreStrip, scoring && styles.scoreBusy].filter(Boolean).join(" ")}
+            className={`flex items-center gap-3.5 bg-[var(--black)] text-[color:var(--on-dark)] rounded-[var(--radius-16)] py-3.5 px-4${scoring ? " opacity-60" : ""}`}
             aria-label="Site score"
             aria-busy={scoring}
           >
-            <span className={styles.scoreNumeral}>{score.totalRounded}</span>
-            <span className={styles.scoreMeta}>
+            <span className="font-display text-[28px] font-bold tracking-[0.02em] leading-none flex-none">{score.totalRounded}</span>
+            <span className="min-w-0 text-[length:var(--text-11-5)] leading-normal text-[color:var(--on-dark-muted-strong)]">
               {`${score.verdict} · ${score.confidence.level} confidence · model v${score.modelVersion}`}
               {score.basis === "desk_only" ? (
-                <span className={styles.scoreBasis}>{score.basisLabel}</span>
+                <span className="block text-[color:var(--sky)] mt-[3px]">{score.basisLabel}</span>
               ) : (
-                <span className={styles.scoreBasisFull}>
+                <span className="block text-turf-100 mt-[3px]">
                   Full assessment — the site survey is included.
                 </span>
               )}
@@ -343,15 +342,15 @@ export function ReportScreen({ scanId }: { scanId: string }) {
         ) : null}
 
         {score?.hardFlags.map((flag) => (
-          <p key={flag.code} className={`${styles.notice} ${styles.hardFlag}`} role="alert">
+          <p key={flag.code} className="bg-[var(--surface-card)] border border-track-500 rounded-[var(--radius-12)] py-[13px] px-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--ink)]" role="alert">
             {flag.message}
           </p>
         ))}
 
         {/* --------------------------------------- surveyor checklist */}
-        <div className={styles.section}>
+        <div className="flex flex-col gap-[9px]">
           <SectionLabel as="h2">Site survey</SectionLabel>
-          <p className={styles.status}>
+          <p className="text-[length:var(--text-11-5)] text-[color:var(--m-muted)] leading-normal">
             {answeredCount === 0
               ? "Nothing recorded yet, so the score is a desk assessment. Four answers is enough to turn it into a full one."
               : answeredCount < 4
@@ -368,15 +367,15 @@ export function ReportScreen({ scanId }: { scanId: string }) {
               disabled={!online}
             />
           ) : (
-            <p className={styles.notice}>Loading the checklist…</p>
+            <p className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-[13px] px-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--m-muted-on-white)]">Loading the checklist…</p>
           )}
         </div>
 
         {/* ------------------------------------------- field notes */}
-        <div className={styles.section}>
+        <div className="flex flex-col gap-[9px]">
           <SectionLabel as="h2">Field notes</SectionLabel>
           <textarea
-            className={styles.notes}
+            className="w-full min-h-[130px] resize-y font-sans text-[length:var(--text-13-5)] leading-[1.6] text-[color:var(--ink)] bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-lg p-3.5 outline-none focus-visible:border-[var(--accent)]"
             aria-label="Field notes"
             placeholder="What you saw that the data can't — parking, lighting, drainage, footfall at 7pm."
             value={notes}
@@ -388,11 +387,11 @@ export function ReportScreen({ scanId }: { scanId: string }) {
          * Required on any document carrying a saturation figure, and the report
          * carries one. Placed where the person about to send it will read it.
          */}
-        <p className={styles.notice}>{POPULATION_LIMITATION_TEXT}</p>
+        <p className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-[13px] px-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--m-muted-on-white)]">{POPULATION_LIMITATION_TEXT}</p>
 
         {ready && report?.link ? (
-          <section className={styles.generated}>
-            <span className={styles.tick}>
+          <section className="bg-[var(--surface-card)] border border-turf-500 rounded-[var(--radius-16)] p-4 flex items-center gap-3 [animation:ssIn_0.22s_var(--ease-standard)] motion-reduce:[animation:none]">
+            <span className="w-[34px] h-[34px] rounded-full bg-turf-100 flex items-center justify-center flex-none text-turf-500">
               <svg
                 width="17"
                 height="17"
@@ -407,11 +406,11 @@ export function ReportScreen({ scanId }: { scanId: string }) {
                 <path d="M20 6L9 17l-5-5" />
               </svg>
             </span>
-            <span className={styles.generatedText}>
-              <span className={styles.generatedTitle}>
+            <span className="min-w-0">
+              <span className="block text-[length:var(--text-13-5)] font-semibold">
                 Report ready — version {report.version}
               </span>
-              <span className={styles.generatedSub}>
+              <span className="block text-[length:var(--text-11-5)] text-[color:var(--m-muted-on-white)] mt-0.5 leading-normal">
                 {report.pdfBytes ? `${(report.pdfBytes / 1024 / 1024).toFixed(2)} MB · ` : ""}
                 {report.pageCount ? `${report.pageCount} pages · ` : ""}
                 the link works until {report.link.expiresOnLabel}. Add who you are sending it to so
@@ -423,10 +422,10 @@ export function ReportScreen({ scanId }: { scanId: string }) {
         ) : null}
 
         {ready ? (
-          <div className={styles.section}>
+          <div className="flex flex-col gap-[9px]">
             <SectionLabel as="h2">Sending it to</SectionLabel>
             <input
-              className={styles.recipient}
+              className="w-full min-h-[48px] font-sans text-[length:var(--text-13-5)] text-[color:var(--ink)] bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-lg py-3 px-3.5 outline-none focus-visible:border-[var(--accent)]"
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
               aria-label="Who are you sending it to?"
@@ -436,7 +435,7 @@ export function ReportScreen({ scanId }: { scanId: string }) {
         ) : null}
 
         {report?.status === "failed" ? (
-          <p className={styles.notice}>
+          <p className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-[13px] px-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--m-muted-on-white)]">
             {report.error ??
               "The PDF could not be produced. Nothing has been sent to anyone — try again."}
           </p>
@@ -458,7 +457,7 @@ export function ReportScreen({ scanId }: { scanId: string }) {
           <>
             <button
               type="button"
-              className={styles.whatsapp}
+              className="w-full flex items-center justify-center gap-2.5 bg-[var(--whatsapp)] text-[color:var(--black)] border-0 rounded-lg py-[17px] px-5 min-h-[var(--m-touch)] font-sans text-[length:var(--text-15-5)] font-bold cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
               onClick={() => void shareOnWhatsApp()}
               disabled={sharing || !online}
             >

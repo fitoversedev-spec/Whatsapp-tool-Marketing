@@ -5,7 +5,7 @@ import { env } from "@/lib/scout/env";
 import { publicTaxonomy } from "@/lib/scout/places/taxonomy";
 import { ScanScreen } from "./ScanScreen";
 
-export const metadata: Metadata = { title: "Area profile — Site Scout" };
+export const metadata: Metadata = { title: "Scan Area — Site Scout" };
 export const dynamic = "force-dynamic";
 
 /**

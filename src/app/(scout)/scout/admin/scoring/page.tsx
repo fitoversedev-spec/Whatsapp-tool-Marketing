@@ -17,7 +17,7 @@ export default async function AdminScoringPage() {
 
   return (
     <ScreenScaffold
-      eyebrow="Admin"
+      eyebrow="Settings"
       title="Scoring Weights"
       lede="Adjust how the 100-point site viability score is distributed across the five assessment components. Saving creates a new model version."
     >

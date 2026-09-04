@@ -12,17 +12,17 @@ type Props = {
 
 const SCOUT_NAV = [
   { href: "/scout/dashboard", label: "Dashboard", icon: "\u{1F4CA}", exact: true },
-  { href: "/scout/scan", label: "Area Profile", icon: "\u{1F50D}" },
-  { href: "/scout/sweep", label: "Spaces Sweep", icon: "\u{1F9F9}" },
+  { href: "/scout/scan", label: "Scan Area", icon: "\u{1F50D}" },
+  { href: "/scout/sweep", label: "Find Spaces", icon: "\u{1F9F9}" },
   { href: "/scout/compare", label: "Compare", icon: "\u{2696}️" },
-  { href: "/scout/sites", label: "My Sites", icon: "\u{1F4CD}" },
-  { href: "/scout/admin", label: "Admin", icon: "\u{1F6E0}️", adminOnly: true },
+  { href: "/scout/sites", label: "Saved Scans", icon: "\u{1F4CD}" },
+  { href: "/scout/admin", label: "Settings", icon: "\u{1F6E0}️", adminOnly: true },
 ];
 
 const SCOUT_ALL_PAGES = [
   ...SCOUT_NAV,
   { href: "/scout/report", label: "Report" },
-  { href: "/scout/admin/scoring", label: "Scoring Weights" },
+  { href: "/scout/admin/scoring", label: "Scoring" },
   { href: "/scout/admin/users", label: "Users" },
 ];
 

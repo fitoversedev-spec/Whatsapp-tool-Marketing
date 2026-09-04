@@ -24,7 +24,7 @@ import type {
 import type { ScoreResult } from "@/lib/scout/scoring/types";
 
 
-const RADII_KM = [1, 2, 3, 5] as const;
+const RADII_KM = [1, 2, 5, 10] as const;
 const RESULTS_PER_GROUP = 4;
 /** Poll cadence while a job is running. One indexed row per call. */
 const PROGRESS_POLL_MS = 1500;
@@ -82,7 +82,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
   const [centre, setCentre] = useState(initial?.centre ?? { lat: 12.9784, lng: 77.6408 });
   const [radiusKm, setRadiusKm] = useState((initial?.radiusM ?? 2000) / 1000);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    initial ? [...initial.categoryIds] : (taxonomy.presets[1]?.categoryIds ?? []).slice(),
+    initial ? [...initial.categoryIds] : taxonomy.categories.map((c) => c.id),
   );
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
@@ -315,12 +315,6 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
   const competition = taxonomy.categories.filter((c) => c.side === "competition");
   const demand = taxonomy.categories.filter((c) => c.side === "demand");
 
-  const activePreset = taxonomy.presets.find(
-    (p) =>
-      p.categoryIds.length === selectedCategories.length &&
-      p.categoryIds.every((id) => selectedCategories.includes(id)),
-  );
-
   const scrollTargetRef = useRef<HTMLDivElement | null>(null);
 
   /** Map marker → list row. The list is inside a scrolling panel. */
@@ -429,26 +423,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
         {!isSaved ? (
           <>
             <div className="flex flex-col gap-[10px]">
-              <SectionLabel weight={700}>Preset</SectionLabel>
-              <div className="flex gap-2 flex-wrap">
-                {taxonomy.presets.map((preset) => (
-                  <Tag
-                    key={preset.id}
-                    selected={activePreset?.id === preset.id}
-                    onClick={() => setSelectedCategories([...preset.categoryIds])}
-                  >
-                    {preset.label}
-                  </Tag>
-                ))}
-              </div>
-              <p className="m-0 text-xs leading-[1.6] text-slate-500">
-                {activePreset?.description ??
-                  "A custom selection. Pick a preset to reset it, or tick categories below."}
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-[10px]">
-              <SectionLabel weight={700}>Competition</SectionLabel>
+              <SectionLabel weight={700}>Sports</SectionLabel>
               <div className="flex flex-wrap gap-2">
                 {competition.map((c) => (
                   <Tag
@@ -464,7 +439,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
             </div>
 
             <div className="flex flex-col gap-[10px]">
-              <SectionLabel weight={700}>Demand pool</SectionLabel>
+              <SectionLabel weight={700}>Nearby Places</SectionLabel>
               <div className="flex flex-wrap gap-2">
                 {demand.map((c) => (
                   <Tag

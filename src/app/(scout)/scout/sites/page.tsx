@@ -8,7 +8,7 @@ import { getScoutIdentity } from "@/lib/scout/identity";
 import { listDashboardScans } from "@/lib/scout/scans/queries";
 import { atLeast, formatDayMonth, formatRadius } from "@/lib/scout/display/format";
 
-export const metadata: Metadata = { title: "My sites — Site Scout" };
+export const metadata: Metadata = { title: "Saved Scans — Site Scout" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -27,8 +27,8 @@ export default async function Page() {
 
   return (
     <ScreenScaffold
-      eyebrow="My sites"
-      title="My sites"
+      eyebrow="Saved Scans"
+      title="Saved Scans"
       lede="Every area you have scanned, newest first."
       actions={
         <Link href="/scout/scan">
@@ -39,7 +39,7 @@ export default async function Page() {
       {scans.length === 0 ? (
         <StateBlock
           eyebrow="Nothing saved yet"
-          title="No sites yet"
+          title="No scans yet"
           body="Run a scan to see the competing facilities and demand anchors around a plot. Nothing is billed until you press Run scan, and the cost is on screen before you do."
           action={
             <Link href="/scout/scan">

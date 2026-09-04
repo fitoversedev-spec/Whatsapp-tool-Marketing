@@ -40,7 +40,7 @@ export function PendingRow({ id, name, email, requestedAt }: PendingRowProps) {
 
   return (
     <>
-      <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-5 py-[14px] text-[13.5px] text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-[6px]">
+      <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-1.5">
         <span className="font-semibold text-slate-900">{name}</span>
         <span className="break-all">{email}</span>
         <span>{requestedAt}</span>
@@ -53,7 +53,7 @@ export function PendingRow({ id, name, email, requestedAt }: PendingRowProps) {
             <select
               id={`role-${id}`}
               name="role"
-              className="font-sans text-[13px] px-[10px] py-[6px] rounded border border-slate-300 bg-white text-slate-900"
+              className="font-sans text-sm px-2.5 py-1.5 rounded border border-slate-300 bg-white text-slate-900"
               defaultValue="sales"
             >
               <option value="sales">Sales</option>
@@ -83,15 +83,15 @@ export function PendingRow({ id, name, email, requestedAt }: PendingRowProps) {
         </span>
       </div>
       {message ? (
-        <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-5 py-[14px] text-[13.5px] text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-[6px]">
-          <span className="rounded-xl px-[14px] py-[11px] text-[13px] bg-green-100 text-green-600" role="status">
+        <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-1.5">
+          <span className="rounded-lg px-3 py-2.5 text-sm bg-green-100 text-green-600" role="status">
             {message}
           </span>
         </div>
       ) : null}
       {error ? (
-        <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-5 py-[14px] text-[13.5px] text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-[6px]">
-          <span className="rounded-xl px-[14px] py-[11px] text-[13px] bg-red-100 text-red-600" role="alert">
+        <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-1.5">
+          <span className="rounded-lg px-3 py-2.5 text-sm bg-red-100 text-red-600" role="alert">
             {error}
           </span>
         </div>

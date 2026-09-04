@@ -25,7 +25,7 @@ type Deal = {
   nextActionNote: string | null; nextActionDueAt: string | null;
 };
 type ActivityRow = { id: string; subject: string; notes: string | null; occurredAt: string; typeName: string; ownerName: string };
-type QuotationRow = { id: string; number: string; customerName?: string; sport: string; grandTotal: number; status: string; contactPhone: string | null; sentAt: string | null; createdAt: string };
+type QuotationRow = { id: string; number: string; sport: string; grandTotal: number; status: string; contactPhone: string | null; sentAt: string | null; createdAt: string };
 type CourtImageRow = { id: string; number: string; status: string; imageUrl: string | null; contactPhone: string | null; sentAt: string | null; createdAt: string };
 type ProductInterestRow = { id: string; name: string; sportName: string | null };
 type ProductOption = { id: string; name: string; type: string };
@@ -1077,7 +1077,7 @@ export default function ContactDetailClient({
                         {/* Label by customer name (not the quote number/sport) —
                             sport, value and date sit alongside as detail. */}
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-900">{q.customerName ?? contact.name}</span>
+                          <span className="text-sm font-medium text-slate-900">{contact.name}</span>
                           <span className={`badge ${STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-700"}`}>
                             {q.status}
                           </span>

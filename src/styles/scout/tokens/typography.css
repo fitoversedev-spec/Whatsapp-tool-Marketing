@@ -1,7 +1,7 @@
 :root{
-/* Manrope — the host's brand typeface */
---font-display:'Manrope',system-ui,sans-serif;
---font-body:'Manrope',system-ui,sans-serif;
+/* Poppins — the host's brand typeface, loaded in globals.css */
+--font-display:'Poppins',system-ui,-apple-system,sans-serif;
+--font-body:'Poppins',system-ui,-apple-system,sans-serif;
 --text-xs:12px;
 --text-sm:14px;
 --text-base:16px;
@@ -18,10 +18,9 @@
 --leading-tight:1.15;
 --leading-snug:1.35;
 --leading-normal:1.6;
---tracking-display:.06em; /* Azonix-style wide caps */
+--tracking-display:-0.01em;
 --tracking-caps:.14em;
 }
 body{font-family:var(--font-body);color:var(--text-body);font-size:var(--text-base);line-height:var(--leading-normal)}
-h1,h2,h3,.display{font-family:var(--font-display);letter-spacing:var(--tracking-display);text-transform:uppercase;line-height:var(--leading-tight)}
 a{color:var(--accent);text-decoration:none}
 a:hover{color:var(--accent-hover)}

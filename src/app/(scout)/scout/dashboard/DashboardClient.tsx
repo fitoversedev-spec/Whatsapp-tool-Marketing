@@ -76,7 +76,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
   const compareChips = scans.slice(0, 3);
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto pt-8 px-10 pb-12 max-[900px]:pt-5 max-[900px]:px-[18px] max-[900px]:pb-6 ss-scroll ssIn">
+    <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
       <div className="flex gap-8 items-start max-[1100px]:flex-col">
         <div className="flex-1 min-w-0 flex flex-col gap-5">
           <div className="flex items-baseline justify-between gap-5 flex-wrap">
@@ -91,7 +91,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
               <label className="flex items-center gap-[7px] text-[11.5px] text-slate-500">
                 <span className="srOnly">Sort scans by</span>
                 <select
-                  className="font-sans text-[13px] py-[9px] px-[11px] rounded-md border border-[var(--border-strong)] bg-[var(--surface-card)] text-slate-900 cursor-pointer"
+                  className="font-sans text-[13px] py-[9px] px-[11px] rounded-md border border-slate-300 bg-white text-slate-900 cursor-pointer"
                   value={sort}
                   onChange={(e) => setSort(e.target.value as SortKey)}
                 >
@@ -102,7 +102,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                   ))}
                 </select>
               </label>
-              <div className="flex items-center gap-[9px] bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-md py-[9px] px-[13px] w-[280px] focus-within:border-court-500 focus-within:shadow-[var(--focus-ring)] max-[900px]:w-full">
+              <div className="flex items-center gap-[9px] bg-white border border-slate-300 rounded-md py-[9px] px-[13px] w-[280px] focus-within:border-court-500 focus-within:shadow-sm max-[900px]:w-full">
                 <svg
                   width="14"
                   height="14"
@@ -112,7 +112,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                   strokeWidth="2.2"
                   strokeLinecap="round"
                   aria-hidden="true"
-                  color="var(--gray-500)"
+                  className="text-slate-400"
                 >
                   <circle cx="11" cy="11" r="7" />
                   <path d="M20 20l-3.5-3.5" />
@@ -129,7 +129,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
           </div>
 
           {mixedBasis ? (
-            <p className="border border-[var(--plot-amber)] rounded-[12px] bg-[var(--surface-card)] py-3 px-3.5 text-[12.5px] leading-[1.65] text-slate-700" role="note">
+            <p className="border border-amber-400 rounded-[12px] bg-white py-3 px-3.5 text-[12.5px] leading-[1.65] text-slate-700" role="note">
               This ranking mixes desk-only scores with surveyed ones. A desk-only score excludes the
               site-practicals component and is rescaled to 100 without it, so an unvisited site can
               out-rank a surveyed one here. Survey the sites marked <strong>Desk only</strong> before
@@ -165,7 +165,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
           ) : (
             <div className="grid grid-cols-3 gap-4 max-[1280px]:grid-cols-2 max-[900px]:grid-cols-1">
               {filtered.map((scan) => (
-                <Link key={scan.id} href={`/scout/scan/${scan.id}`} className="text-left bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[16px] p-[18px] cursor-pointer font-sans flex flex-col gap-3 no-underline text-slate-900 transition-colors hover:border-[var(--border-strong)]">
+                <Link key={scan.id} href={`/scout/scan/${scan.id}`} className="card text-left p-4 cursor-pointer font-sans flex flex-col gap-3 no-underline text-slate-900 transition-colors hover:border-slate-300">
                   <span className="flex items-center justify-between gap-2.5">
                     <span className="text-[15px] font-semibold text-slate-900">{scan.areaLabel}</span>
                     <span className="text-[11px] text-slate-500 whitespace-nowrap">{formatRadius(scan.radiusM)}</span>
@@ -173,7 +173,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
 
                   <span className="flex gap-[18px]">
                     <span className="block">
-                      <span className="block [font-family:var(--font-display)] text-[22px] font-bold">
+                      <span className="block font-heading text-[22px] font-bold">
                         {scan.facilityCount === null
                           ? "—"
                           : atLeast(scan.facilityCount, scan.saturated)}
@@ -181,18 +181,18 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                       <span className="block text-[10.5px] tracking-[0.08em] uppercase text-slate-500 mt-[3px]">Facilities</span>
                     </span>
                     <span className="block">
-                      <span className="block [font-family:var(--font-display)] text-[22px] font-bold text-court-700">
+                      <span className="block font-heading text-[22px] font-bold text-court-700">
                         {scan.demandCount === null ? "—" : atLeast(scan.demandCount, scan.saturated)}
                       </span>
                       <span className="block text-[10.5px] tracking-[0.08em] uppercase text-slate-500 mt-[3px]">Demand</span>
                     </span>
                     <span className="block">
-                      <span className="block [font-family:var(--font-display)] text-[22px] font-bold">{formatRating(scan.avgRating)}</span>
+                      <span className="block font-heading text-[22px] font-bold">{formatRating(scan.avgRating)}</span>
                       <span className="block text-[10.5px] tracking-[0.08em] uppercase text-slate-500 mt-[3px]">Avg rating</span>
                     </span>
                   </span>
 
-                  <span className="border-t border-[var(--border-default)] pt-[11px]">
+                  <span className="border-t border-slate-200 pt-[11px]">
                     <ScoreBadge
                       total={scan.scoreTotal}
                       verdict={scan.scoreVerdict}
@@ -202,7 +202,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                     />
                   </span>
 
-                  <span className="flex items-center justify-between gap-2.5 border-t border-[var(--border-default)] pt-[11px] text-[11.5px] text-slate-500 mt-auto">
+                  <span className="flex items-center justify-between gap-2.5 border-t border-slate-200 pt-[11px] text-[11.5px] text-slate-500 mt-auto">
                     <span className="truncate">
                       {formatDayMonth(scan.createdAt)} · {scan.ownerName}
                       {scan.customerName ? ` · ${scan.customerName}` : ""}
@@ -216,20 +216,20 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
         </div>
 
         <div className="w-[360px] flex-none flex flex-col gap-5 max-[1100px]:w-full">
-          <div className="bg-black text-white rounded-[18px] p-[22px] flex flex-col gap-3.5">
-            <div className="[font-family:var(--font-display)] uppercase tracking-[0.1em] text-xs text-[color:var(--sky)]">Compare areas</div>
+          <div className="bg-black text-white rounded-xl p-5 flex flex-col gap-3.5">
+            <div className="font-heading uppercase tracking-[0.1em] text-xs text-court-400">Compare areas</div>
             <div className="text-[14px] leading-[1.6] text-white/75">
               Put two or three saved scans side by side before the pricing call.
             </div>
             <div className="flex gap-2 flex-wrap">
               {compareChips.length > 0 ? (
                 compareChips.map((s) => (
-                  <span key={s.id} className="text-[11.5px] bg-[var(--on-dark-fill)] py-[5px] px-[11px] rounded-full text-white">
+                  <span key={s.id} className="text-[11.5px] bg-white/15 py-[5px] px-[11px] rounded-full text-white">
                     {s.areaLabel}
                   </span>
                 ))
               ) : (
-                <span className="text-[11.5px] bg-[var(--on-dark-fill)] py-[5px] px-[11px] rounded-full text-white">No scans yet</span>
+                <span className="text-[11.5px] bg-white/15 py-[5px] px-[11px] rounded-full text-white">No scans yet</span>
               )}
             </div>
             <Link
@@ -243,12 +243,12 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
             </Link>
           </div>
 
-          <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[18px] overflow-hidden">
+          <div className="card overflow-hidden">
             <div className="pt-4 px-[18px] pb-3">
               <SectionLabel weight={700}>Recent reports</SectionLabel>
             </div>
             {reports.length === 0 ? (
-              <p className="pt-3.5 px-[18px] pb-[18px] text-[12.5px] leading-[1.65] text-slate-500 border-t border-[var(--border-default)]">
+              <p className="pt-3.5 px-[18px] pb-[18px] text-[12.5px] leading-[1.65] text-slate-500 border-t border-slate-200">
                 No reports yet. Open a scan and choose <strong>Create report</strong> to compose one.
               </p>
             ) : (
@@ -256,7 +256,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                 <Link
                   key={report.id}
                   href={`/scout/report/${report.scanId}`}
-                  className="flex items-center gap-3 w-full text-left bg-[var(--surface-card)] border-0 border-t border-[var(--border-default)] py-3.5 px-[18px] cursor-pointer font-sans no-underline text-slate-900 hover:bg-slate-100"
+                  className="flex items-center gap-3 w-full text-left bg-white border-0 border-t border-slate-200 py-3.5 px-[18px] cursor-pointer font-sans no-underline text-slate-900 hover:bg-slate-100"
                 >
                   <span className="w-[30px] h-[30px] rounded bg-slate-100 flex items-center justify-center flex-none text-slate-500">
                     <svg

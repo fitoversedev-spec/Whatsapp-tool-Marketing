@@ -34,7 +34,7 @@ export function StateBlock({
   return (
     <div
       className={[
-        "rounded-[16px] p-[22px] flex flex-col gap-2.5 items-start font-sans border",
+        "rounded-xl p-[22px] flex flex-col gap-2.5 items-start font-sans border",
         isError ? "border-track-500 bg-track-100" : "bg-white",
         className,
       ]

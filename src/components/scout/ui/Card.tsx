@@ -21,7 +21,7 @@ export function Card({ title, eyebrow, footer, dark = false, children, className
         .join(" ")}
     >
       {eyebrow ? (
-        <div className="font-display uppercase tracking-[0.13em] text-[11px] text-court-500">
+        <div className="font-heading uppercase tracking-[0.13em] text-[11px] text-court-500">
           {eyebrow}
         </div>
       ) : null}

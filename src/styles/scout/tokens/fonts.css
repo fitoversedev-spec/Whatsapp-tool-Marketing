@@ -1,3 +1,2 @@
-/* Manrope — the host's brand typeface, self-hosted as TTF in /public/fonts/ */
-@font-face { font-family: "Manrope"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/Manrope-Regular.ttf") format("truetype"); }
-@font-face { font-family: "Manrope"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/Manrope-Bold.ttf") format("truetype"); }
+/* Scout font tokens — inherits from the host's Poppins (globals.css).
+   No additional @font-face needed; the host already loads Poppins 300–700. */

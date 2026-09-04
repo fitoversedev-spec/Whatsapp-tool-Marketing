@@ -495,17 +495,17 @@ export function SweepScreen({
 
         <div className="grid grid-cols-3 gap-2.5">
           <div className="border border-[var(--border-default)] rounded-[12px] p-3">
-            <div className="[font-family:var(--font-display)] text-[22px] font-bold text-[var(--plot-amber)]">{counts.plot}</div>
+            <div className="font-heading text-[22px] font-bold text-[var(--plot-amber)]">{counts.plot}</div>
             <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[5px]">Empty plots</div>
           </div>
           <div className="border border-[var(--border-default)] rounded-[12px] p-3">
-            <div className="[font-family:var(--font-display)] text-[22px] font-bold text-turf-500">
+            <div className="font-heading text-[22px] font-bold text-turf-500">
               {counts.terrace}
             </div>
             <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[5px]">Terraces</div>
           </div>
           <div className="border border-[var(--border-default)] rounded-[12px] p-3">
-            <div className="[font-family:var(--font-display)] text-[22px] font-bold text-track-500">
+            <div className="font-heading text-[22px] font-bold text-track-500">
               {counts.rejected}
             </div>
             <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[5px]">Rejected</div>
@@ -575,7 +575,7 @@ export function SweepScreen({
                 >
                   <button
                     type="button"
-                    className={`flex-none [font-family:var(--font-display)] text-[11px] font-bold tracking-[0.06em] py-1.5 px-[9px] rounded border-0 cursor-pointer ${
+                    className={`flex-none font-heading text-[11px] font-bold tracking-[0.06em] py-1.5 px-[9px] rounded border-0 cursor-pointer ${
                       cell.status === "plot"
                         ? "bg-[var(--plot-amber)] text-slate-900"
                         : cell.status === "terrace"

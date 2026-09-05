@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const ADMIN_LINKS = [
   { href: "/scout/admin/users", label: "Users" },
   { href: "/scout/admin/scoring", label: "Scoring" },
+  { href: "/scout/admin/usage", label: "Usage" },
 ];
 
 export function AdminNav() {

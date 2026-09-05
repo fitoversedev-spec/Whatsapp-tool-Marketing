@@ -12,7 +12,7 @@
 /** A count, qualified as a floor where the search may have been truncated. */
 export function atLeast(count: number, saturated: boolean): string {
   const n = formatCount(count);
-  return saturated ? `at least ${n}` : n;
+  return saturated ? `${n}+` : n;
 }
 
 export function formatCount(n: number): string {

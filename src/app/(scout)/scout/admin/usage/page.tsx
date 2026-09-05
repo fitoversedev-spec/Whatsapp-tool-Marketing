@@ -15,8 +15,13 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
 });
 
-const currency = (usd: number) =>
-  usd < 0.01 && usd > 0 ? "<$0.01" : `$${usd.toFixed(2)}`;
+const USD_TO_INR = 84;
+const currency = (usd: number) => {
+  const usdStr = usd < 0.01 && usd > 0 ? "<$0.01" : `$${usd.toFixed(2)}`;
+  const inr = usd * USD_TO_INR;
+  const inrStr = inr < 1 && inr > 0 ? "<₹1" : `₹${Math.round(inr)}`;
+  return `${usdStr} (${inrStr})`;
+};
 
 interface RepSummary {
   userId: string;

@@ -74,6 +74,7 @@ export interface BaseLayerSpec {
   url: string;
   attribution: string;
   maxZoom: number;
+  maxNativeZoom?: number;
   /** Requires a browser Maps key; blocked in Phase 0. */
   requiresKey: boolean;
 }
@@ -127,6 +128,7 @@ export const ESRI_SATELLITE: BaseLayerSpec = {
   url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
   attribution: "Tiles &copy; Esri",
   maxZoom: 19,
+  maxNativeZoom: 17,
   requiresKey: false,
 };
 

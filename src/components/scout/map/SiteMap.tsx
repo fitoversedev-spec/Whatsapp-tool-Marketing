@@ -349,6 +349,7 @@ export function SiteMap({
       tileRef.current = L.tileLayer(layerSpec.url, {
         attribution: layerSpec.attribution,
         maxZoom: layerSpec.maxZoom,
+        ...(layerSpec.maxNativeZoom != null && { maxNativeZoom: layerSpec.maxNativeZoom }),
       }).addTo(map);
       map.attributionControl.setPrefix("");
 
@@ -505,6 +506,7 @@ export function SiteMap({
     const next = L.tileLayer(spec.url, {
       attribution: spec.attribution,
       maxZoom: spec.maxZoom,
+      ...(spec.maxNativeZoom != null && { maxNativeZoom: spec.maxNativeZoom }),
     }).addTo(map);
     tileRef.current = next;
     if (previous) map.removeLayer(previous);

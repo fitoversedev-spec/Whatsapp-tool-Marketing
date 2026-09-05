@@ -196,7 +196,7 @@ export function ReportStudio({
   const limitations = populationLimitations();
 
   return (
-    <div className="flex-1 flex min-h-0 max-[900px]:flex-col ssIn">
+    <div className="flex-1 flex min-h-0 overflow-hidden max-[900px]:flex-col ssIn">
       <aside className="w-[420px] flex-none bg-white border-r border-slate-200 overflow-y-auto px-6 pt-[26px] pb-8 flex flex-col gap-5 ss-scroll max-[900px]:w-full max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:border-slate-200">
         <div>
           <h1 className="m-0 text-base">Report studio</h1>

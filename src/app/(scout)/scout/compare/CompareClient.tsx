@@ -5,13 +5,23 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import { Button, Tag } from "@/components/scout/ui";
 import { SectionLabel, StateBlock } from "@/components/scout/patterns";
-import { formatRadius } from "@/lib/scout/display/format";
+import { formatDayMonth, formatRadius } from "@/lib/scout/display/format";
 import { POPULATION_LIMITATION_TEXT } from "@/lib/scout/census/disclosure";
 import type { ComparisonModel } from "@/lib/scout/compare/model";
 
+export interface ScanOption {
+  id: string;
+  areaLabel: string;
+  radiusM: number;
+  scoreTotal: number | null;
+  scoreVerdict: string | null;
+  customerName: string | null;
+  createdAt: string;
+}
+
 export interface CompareClientProps {
   comparison: ComparisonModel;
-  options: Array<{ id: string; areaLabel: string; radiusM: number }>;
+  options: ScanOption[];
   selectedIds: string[];
 }
 
@@ -82,26 +92,66 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 ssIn">
-      <div className="flex items-baseline justify-between mb-[22px] gap-5 flex-wrap">
-        <div>
+      <div className="mb-[22px]">
+        <div className="mb-4">
           <h1 className="m-0 text-xl">Compare areas</h1>
           <div className="text-sm text-slate-500 mt-2 font-sans tracking-normal normal-case">
             {columns === 0
-              ? "Pick two or three saved scans."
-              : `${columns} scan${columns === 1 ? "" : "s"} side by side. Best value in each row is highlighted.`}
+              ? "Pick two or three saved scans to compare side by side."
+              : `${columns} scan${columns === 1 ? "" : "s"} selected. Best value in each row is highlighted.`}
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap max-w-[640px] justify-end max-[900px]:justify-start">
-          {options.map((option) => (
-            <Tag
-              key={option.id}
-              selected={selectedIds.includes(option.id)}
-              onClick={() => toggle(option.id)}
-              disabled={pending}
-            >
-              {option.areaLabel}
-            </Tag>
-          ))}
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {options.map((option) => {
+            const selected = selectedIds.includes(option.id);
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => toggle(option.id)}
+                disabled={pending}
+                className={`text-left rounded-xl border-2 p-3 transition cursor-pointer ${
+                  selected
+                    ? "border-court-500 bg-court-50 ring-1 ring-court-500/30"
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                }`}
+              >
+                <span className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-sm font-semibold text-slate-900 truncate">
+                    {option.areaLabel}
+                  </span>
+                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-none transition ${
+                    selected ? "border-court-500 bg-court-500" : "border-slate-300"
+                  }`}>
+                    {selected && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </span>
+                </span>
+                <span className="text-xs text-slate-500 block">
+                  {formatRadius(option.radiusM)}
+                  {option.customerName ? ` · ${option.customerName}` : ""}
+                </span>
+                <span className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+                  <span className="text-xs text-slate-400">
+                    {formatDayMonth(option.createdAt)}
+                  </span>
+                  {option.scoreTotal !== null && (
+                    <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                      option.scoreVerdict === "proceed" ? "bg-green-100 text-green-700"
+                        : option.scoreVerdict === "avoid" ? "bg-red-100 text-red-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}>
+                      {Math.round(option.scoreTotal)}
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

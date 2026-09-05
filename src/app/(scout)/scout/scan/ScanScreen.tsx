@@ -72,6 +72,7 @@ export interface ScanScreenProps {
   /** `null` on `/scout/scan` — a new, unrun scan. */
   initial: ScanScreenData | null;
   googleKeyMissing: boolean;
+  prefill?: { lat: number; lng: number; address: string } | null;
 }
 
 /**
@@ -99,14 +100,14 @@ export interface ScanScreenProps {
  * database. Seeing the flag, this screen POSTs `/run` and the scan carries on
  * from exactly where it stopped rather than restarting.
  */
-export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenProps) {
+export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: ScanScreenProps) {
   const router = useRouter();
   const isSaved = initial !== null;
 
   /* ---------------------------------------------------------- scan setup */
 
-  const [address, setAddress] = useState(initial?.address ?? initial?.areaLabel ?? "");
-  const [centre, setCentre] = useState(initial?.centre ?? { lat: 12.9784, lng: 77.6408 });
+  const [address, setAddress] = useState(initial?.address ?? initial?.areaLabel ?? prefill?.address ?? "");
+  const [centre, setCentre] = useState(initial?.centre ?? (prefill ? { lat: prefill.lat, lng: prefill.lng } : { lat: 12.9784, lng: 77.6408 }));
   const [radiusKm, setRadiusKm] = useState((initial?.radiusM ?? 2000) / 1000);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
     initial

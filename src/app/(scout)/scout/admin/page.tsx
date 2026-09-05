@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
-export default function AdminIndex() {
+export const dynamic = "force-dynamic";
+
+export default async function AdminIndex() {
   redirect("/scout/admin/users");
 }

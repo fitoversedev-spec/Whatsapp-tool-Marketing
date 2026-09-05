@@ -41,7 +41,7 @@ export default async function ScanDetailPage({ params }: { params: { id: string 
   return (
     <>
       <div className="px-4 sm:px-6 lg:px-8 pt-3">
-        <BackButton backHref="/scout/dashboard" />
+        <BackButton backHref="/scout/sites" />
       </div>
       <ScanScreen
         taxonomy={publicTaxonomy()}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import BackButton from "@/components/BackButton";
 import { Badge } from "@/components/scout/ui";
 import { ScreenScaffold, SectionLabel } from "@/components/scout/patterns";
 import { prisma } from "@/lib/scout/db";
@@ -111,78 +112,83 @@ export default async function AdminUsagePage() {
         );
 
   return (
-    <ScreenScaffold
-      eyebrow="Admin"
-      title="Usage"
-      lede="Scan counts and estimated Google API costs per team member (last 30 days)."
-    >
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <SummaryCard label="Total scans" value={String(totals.scans)} />
-        <SummaryCard label="API calls" value={totals.apiCalls.toLocaleString()} />
-        <SummaryCard label="Est. cost" value={currency(totals.costUsd)} />
-        <SummaryCard
-          label="Cache hit rate"
-          value={`${cacheHitRate}%`}
-          sub={`Daily cap: ${placesConfig.dailyCallCap}`}
-        />
+    <>
+      <div className="px-4 sm:px-6 lg:px-8 pt-3">
+        <BackButton backHref="/scout/dashboard" />
       </div>
-
-      {/* Per-rep table */}
-      <SectionLabel weight={700} as="h2">
-        Per team member ({reps.length})
-      </SectionLabel>
-
-      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-        <div className="grid grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr_0.8fr] bg-slate-100 text-slate-600 px-4 py-3 text-xs font-semibold uppercase tracking-wider max-[900px]:hidden">
-          <span>Name</span>
-          <span className="text-right">Scans</span>
-          <span className="text-right">API calls</span>
-          <span className="text-right">Est. cost</span>
-          <span className="text-right">Last scan</span>
+      <ScreenScaffold
+        eyebrow="Admin"
+        title="Usage"
+        lede="Scan counts and estimated Google API costs per team member (last 30 days)."
+      >
+        {/* Summary cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <SummaryCard label="Total scans" value={String(totals.scans)} />
+          <SummaryCard label="API calls" value={totals.apiCalls.toLocaleString()} />
+          <SummaryCard label="Est. cost" value={currency(totals.costUsd)} />
+          <SummaryCard
+            label="Cache hit rate"
+            value={`${cacheHitRate}%`}
+            sub={`Daily cap: ${placesConfig.dailyCallCap}`}
+          />
         </div>
-        {reps.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-slate-500 text-center">
-            No usage data yet.
-          </p>
-        ) : (
-          reps.map((rep) => (
-            <div
-              key={rep.userId}
-              className="grid grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr_0.8fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-3 even:bg-slate-50 max-[900px]:grid-cols-1 max-[900px]:gap-1.5"
-            >
-              <div className="min-w-0">
-                <span className="font-semibold text-slate-900 block truncate">
-                  {rep.name || "—"}
+
+        {/* Per-rep table */}
+        <SectionLabel weight={700} as="h2">
+          Per team member ({reps.length})
+        </SectionLabel>
+
+        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+          <div className="grid grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr_0.8fr] bg-slate-100 text-slate-600 px-4 py-3 text-xs font-semibold uppercase tracking-wider max-[900px]:hidden">
+            <span>Name</span>
+            <span className="text-right">Scans</span>
+            <span className="text-right">API calls</span>
+            <span className="text-right">Est. cost</span>
+            <span className="text-right">Last scan</span>
+          </div>
+          {reps.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-slate-500 text-center">
+              No usage data yet.
+            </p>
+          ) : (
+            reps.map((rep) => (
+              <div
+                key={rep.userId}
+                className="grid grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr_0.8fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-3 even:bg-slate-50 max-[900px]:grid-cols-1 max-[900px]:gap-1.5"
+              >
+                <div className="min-w-0">
+                  <span className="font-semibold text-slate-900 block truncate">
+                    {rep.name || "—"}
+                  </span>
+                  <span className="text-xs text-slate-500 block truncate">
+                    {rep.email}
+                  </span>
+                </div>
+                <span className="text-right tabular-nums">
+                  {rep.scans}
                 </span>
-                <span className="text-xs text-slate-500 block truncate">
-                  {rep.email}
+                <span className="text-right tabular-nums">
+                  {rep.apiCalls.toLocaleString()}
+                  {rep.cacheHits > 0 && (
+                    <span className="text-xs text-slate-400 ml-1">
+                      +{rep.cacheHits} cached
+                    </span>
+                  )}
+                </span>
+                <span className="text-right tabular-nums">
+                  <Badge tone={rep.costUsd > 1 ? "red" : "neutral"}>
+                    {currency(rep.costUsd)}
+                  </Badge>
+                </span>
+                <span className="text-right text-xs text-slate-500">
+                  {rep.lastScanAt ? dateFormat.format(rep.lastScanAt) : "—"}
                 </span>
               </div>
-              <span className="text-right tabular-nums">
-                {rep.scans}
-              </span>
-              <span className="text-right tabular-nums">
-                {rep.apiCalls.toLocaleString()}
-                {rep.cacheHits > 0 && (
-                  <span className="text-xs text-slate-400 ml-1">
-                    +{rep.cacheHits} cached
-                  </span>
-                )}
-              </span>
-              <span className="text-right tabular-nums">
-                <Badge tone={rep.costUsd > 1 ? "red" : "neutral"}>
-                  {currency(rep.costUsd)}
-                </Badge>
-              </span>
-              <span className="text-right text-xs text-slate-500">
-                {rep.lastScanAt ? dateFormat.format(rep.lastScanAt) : "—"}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
-    </ScreenScaffold>
+            ))
+          )}
+        </div>
+      </ScreenScaffold>
+    </>
   );
 }
 

@@ -46,7 +46,7 @@ function ownershipFilter(identity: ScoutIdentity): Prisma.ScanWhereInput {
 
 export async function listDashboardScans(identity: ScoutIdentity): Promise<DashboardScan[]> {
   const rows = await prisma.scan.findMany({
-    where: ownershipFilter(identity),
+    where: { ...ownershipFilter(identity), archivedAt: null },
     select: {
       id: true,
       areaLabel: true,
@@ -254,14 +254,31 @@ export function readCategoryIds(searchTerms: Record<string, unknown> | null): st
 
 /** Areas the comparison chip row offers — scored or scanned scans only. */
 export async function listComparableScans(identity: ScoutIdentity): Promise<
-  Array<{ id: string; areaLabel: string; radiusM: number; scoreTotal: number | null }>
+  Array<{
+    id: string;
+    areaLabel: string;
+    radiusM: number;
+    scoreTotal: number | null;
+    scoreVerdict: string | null;
+    customerName: string | null;
+    createdAt: string;
+  }>
 > {
   const rows = await prisma.scan.findMany({
     where: {
       status: { in: ["scanned", "report_sent"] },
+      archivedAt: null,
       ...ownershipFilter(identity),
     },
-    select: { id: true, areaLabel: true, radiusM: true, scoreTotal: true },
+    select: {
+      id: true,
+      areaLabel: true,
+      radiusM: true,
+      scoreTotal: true,
+      scoreVerdict: true,
+      customerName: true,
+      createdAt: true,
+    },
     orderBy: { createdAt: "desc" },
     take: 24,
   });
@@ -271,6 +288,9 @@ export async function listComparableScans(identity: ScoutIdentity): Promise<
     areaLabel: r.areaLabel,
     radiusM: r.radiusM,
     scoreTotal: r.scoreTotal === null ? null : Number(r.scoreTotal),
+    scoreVerdict: r.scoreVerdict,
+    customerName: r.customerName,
+    createdAt: r.createdAt.toISOString(),
   }));
 }
 

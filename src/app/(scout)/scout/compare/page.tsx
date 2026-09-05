@@ -50,7 +50,15 @@ export default async function ComparePage({
       </div>
       <CompareClient
         comparison={comparison}
-        options={options.map((o) => ({ id: o.id, areaLabel: o.areaLabel, radiusM: o.radiusM }))}
+        options={options.map((o) => ({
+          id: o.id,
+          areaLabel: o.areaLabel,
+          radiusM: o.radiusM,
+          scoreTotal: o.scoreTotal,
+          scoreVerdict: o.scoreVerdict,
+          customerName: o.customerName,
+          createdAt: o.createdAt,
+        }))}
         selectedIds={subjects.map((s) => s.scanId)}
       />
     </>

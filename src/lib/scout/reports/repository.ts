@@ -3,8 +3,10 @@ import "server-only";
 import type { Report } from "@prisma/client";
 
 import { Prisma, prisma } from "@/lib/scout/db";
+import { env } from "@/lib/scout/env";
 
 import { defaultBlockState, sanitiseBlockState, type ReportBlockState } from "./blocks";
+import { signReportLink } from "./signing";
 
 export interface ReportDraft {
   readonly id: string;
@@ -346,6 +348,22 @@ export async function updateReportTitle(reportId: string, title: string): Promis
   `);
 }
 
+/**
+ * Soft-delete a report.
+ *
+ * `archived_at` only removes the row from {@link listAllReports}. The PDF
+ * already produced, its blob key, its shares and its signed link are all
+ * untouched — a link already handed to a customer keeps working after the
+ * row is archived off the list. There is no matching "unarchive" yet; the
+ * column exists so a later admin screen can add one without a migration.
+ */
+export async function archiveReport(reportId: string): Promise<void> {
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE reports SET archived_at = now(), updated_at = now()
+    WHERE id = ${reportId}::uuid
+  `);
+}
+
 /* ---------------------------------------------------------------- shares */
 
 /** What the share message needs to know about the scan behind a report. */
@@ -471,6 +489,26 @@ export interface ReportListRow {
   readonly channel: string | null;
   readonly areaLabel: string;
   readonly ownerName: string;
+  /**
+   * The signed, expiring link to the PDF (see `signing.ts`) — `null` until a
+   * generation has produced one. Ready to drop straight into a share message;
+   * nothing downstream needs `expiresAt` or the signing secret.
+   */
+  readonly reportUrl: string | null;
+}
+
+/**
+ * Build the same signed link {@link reportLink} in `generate.ts` builds.
+ *
+ * Duplicated rather than imported: `/scout/reports` is rendered on every
+ * visit, and pulling in `generate.ts` for one URL would drag its whole
+ * PDF-rendering and AI-summary dependency graph into that page's module tree.
+ * The three lines below are the entire overlap.
+ */
+function publicReportUrl(reportId: string, expiresAt: Date | null): string | null {
+  if (!expiresAt) return null;
+  const signed = signReportLink(reportId, env.reportLinkSecret, expiresAt);
+  return `${env.appUrl.replace(/\/$/, "")}${signed.path}`;
 }
 
 export async function listAllReports(userId?: string): Promise<ReportListRow[]> {
@@ -478,6 +516,7 @@ export async function listAllReports(userId?: string): Promise<ReportListRow[]> 
     where: {
       ...(userId ? { createdBy: userId } : {}),
       status: { not: "draft" },
+      archivedAt: null,
     },
     orderBy: { createdAt: "desc" },
     take: 200,
@@ -489,6 +528,7 @@ export async function listAllReports(userId?: string): Promise<ReportListRow[]> 
       status: true,
       pdfBytes: true,
       generatedAt: true,
+      expiresAt: true,
       createdAt: true,
       sentTo: true,
       channel: true,
@@ -509,5 +549,6 @@ export async function listAllReports(userId?: string): Promise<ReportListRow[]> 
     channel: r.channel,
     areaLabel: r.scan.areaLabel,
     ownerName: r.author.name,
+    reportUrl: publicReportUrl(r.id, r.expiresAt),
   }));
 }

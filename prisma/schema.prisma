@@ -2249,6 +2249,7 @@ model Scan {
   scannedAt        DateTime?  @map("scanned_at") @db.Timestamptz(6)
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  archivedAt       DateTime?  @map("archived_at") @db.Timestamptz(6)
 
   owner        User          @relation(fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "scans_owner_id_users_id_fk")
   site         Site?         @relation(fields: [siteId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "scans_site_id_sites_id_fk")
@@ -2543,6 +2544,7 @@ model Report {
   channel           ReportChannel?
   sentTo            String?       @map("sent_to") @db.VarChar(200)
   sentAt            DateTime?     @map("sent_at") @db.Timestamptz(6)
+  archivedAt        DateTime?     @map("archived_at") @db.Timestamptz(6)
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
 

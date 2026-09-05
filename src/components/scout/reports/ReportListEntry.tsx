@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { formatFullDate } from "@/lib/scout/display/format";
@@ -31,6 +32,27 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** "Resend" once a report has gone out, "Send" once it is ready but has not, else nothing. */
+function sendLabel(status: string): "Send" | "Resend" | null {
+  if (status === "delivered") return "Resend";
+  if (status === "generated") return "Send";
+  return null;
+}
+
+/**
+ * Digits from a recorded recipient, kept only when they plausibly are a
+ * phone number rather than a name.
+ *
+ * `sentTo` is a free-text recipient *name* ("Sent to Deepa") — see
+ * `share.ts` — not a validated phone field, so a name yields no digits here
+ * and the wa.me link opens WhatsApp's own contact picker instead of
+ * guessing wrong in front of a customer.
+ */
+function phoneDigits(sentTo: string | null): string {
+  const digits = (sentTo ?? "").replace(/[^0-9]/g, "");
+  return digits.length >= 7 ? digits : "";
+}
+
 export interface ReportListEntryProps {
   report: ReportListRow;
 }
@@ -50,7 +72,48 @@ export interface ReportListEntryProps {
  * the row away mid-edit.
  */
 export function ReportListEntry({ report }: ReportListEntryProps) {
+  const router = useRouter();
   const [title, setTitle] = useState(report.title);
+  const [archiving, setArchiving] = useState(false);
+
+  /**
+   * Opens WhatsApp Web with the report's signed link already in the message.
+   *
+   * No share is recorded here — that is the studio's "Share on WhatsApp"
+   * flow (`ReportStudio.tsx`), which asks for a recipient name and logs the
+   * hand-over. This is the quick, list-page shortcut the task asked for: a
+   * pre-filled `wa.me` link and nothing else.
+   */
+  function handleSend(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!report.reportUrl) return;
+    const message = `Here is your Site Scout report for ${report.areaLabel}: ${report.reportUrl}`;
+    const phone = phoneDigits(report.sentTo);
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  }
+
+  async function handleArchive(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (archiving) return;
+    if (!window.confirm("Delete this report from the list? Any link already sent keeps working.")) {
+      return;
+    }
+    setArchiving(true);
+    try {
+      const res = await fetch(`/api/scout/reports/${report.id}/archive`, { method: "POST" });
+      if (res.ok) {
+        router.refresh();
+      } else {
+        setArchiving(false);
+      }
+    } catch {
+      setArchiving(false);
+    }
+  }
+
+  const send = sendLabel(report.status);
 
   return (
     <Link
@@ -90,6 +153,34 @@ export function ReportListEntry({ report }: ReportListEntryProps) {
       </span>
 
       <span className="flex-none">{statusBadge(report.status)}</span>
+
+      <span className="flex-none flex items-center gap-1.5">
+        {send && report.reportUrl ? (
+          <button
+            type="button"
+            onClick={handleSend}
+            className="inline-flex items-center rounded-md bg-wa-green/10 px-2.5 py-1 text-xs font-semibold text-wa-green hover:bg-wa-green/20 transition-colors"
+          >
+            {send}
+          </button>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={handleArchive}
+          disabled={archiving}
+          aria-label="Delete report"
+          title="Delete report"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <line x1="10" y1="11" x2="10" y2="17" />
+            <line x1="14" y1="11" x2="14" y2="17" />
+          </svg>
+        </button>
+      </span>
     </Link>
   );
 }

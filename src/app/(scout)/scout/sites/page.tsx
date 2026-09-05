@@ -8,6 +8,7 @@ import { ScoreBadge } from "@/components/scout/score";
 import { getScoutIdentity } from "@/lib/scout/identity";
 import { listDashboardScans } from "@/lib/scout/scans/queries";
 import { atLeast, formatDayMonth, formatRadius } from "@/lib/scout/display/format";
+import { ArchiveScanButton } from "./ArchiveScanButton";
 
 export const metadata: Metadata = { title: "Saved Scans — Site Scout" };
 export const dynamic = "force-dynamic";
@@ -58,7 +59,7 @@ export default async function Page() {
               <Link
                 key={scan.id}
                 href={`/scout/scan/${scan.id}`}
-                className="flex items-center gap-[18px] py-[15px] px-5 border-t border-slate-200 no-underline text-slate-900 font-sans first:border-t-0 hover:bg-slate-100"
+                className="group flex items-center gap-[18px] py-[15px] px-5 border-t border-slate-200 no-underline text-slate-900 font-sans first:border-t-0 hover:bg-slate-100"
               >
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-semibold">{scan.areaLabel}</span>
@@ -82,6 +83,7 @@ export default async function Page() {
                   basis={scan.scoreBasis}
                   size="sm"
                 />
+                <ArchiveScanButton scanId={scan.id} />
               </Link>
             ))}
           </div>

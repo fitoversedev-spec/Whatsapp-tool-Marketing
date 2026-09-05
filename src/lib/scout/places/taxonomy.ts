@@ -116,8 +116,38 @@ const COMPETITION: readonly CategoryDef[] = [
     ],
   },
   {
-    id: "racquet-sports",
-    label: "Racquet sports",
+    id: "badminton",
+    label: "Badminton",
+    side: "competition",
+    fields: "ENTERPRISE_ATMOSPHERE",
+    terms: [
+      {
+        id: "badminton",
+        label: "Badminton",
+        mode: "text",
+        queries: ["badminton court", "shuttle court", "badminton academy"],
+        sportFormat: "badminton",
+      },
+    ],
+  },
+  {
+    id: "tennis",
+    label: "Tennis",
+    side: "competition",
+    fields: "ENTERPRISE_ATMOSPHERE",
+    terms: [
+      {
+        id: "tennis",
+        label: "Tennis",
+        mode: "text",
+        queries: ["tennis court", "tennis academy"],
+        sportFormat: "tennis",
+      },
+    ],
+  },
+  {
+    id: "pickleball",
+    label: "Pickleball",
     side: "competition",
     fields: "ENTERPRISE_ATMOSPHERE",
     terms: [
@@ -128,20 +158,14 @@ const COMPETITION: readonly CategoryDef[] = [
         queries: ["pickleball court", "pickleball arena"],
         sportFormat: "pickleball",
       },
-      {
-        id: "tennis",
-        label: "Tennis",
-        mode: "text",
-        queries: ["tennis court", "tennis academy"],
-        sportFormat: "tennis",
-      },
-      {
-        id: "badminton",
-        label: "Badminton",
-        mode: "text",
-        queries: ["badminton court", "shuttle court", "badminton academy"],
-        sportFormat: "badminton",
-      },
+    ],
+  },
+  {
+    id: "squash",
+    label: "Squash",
+    side: "competition",
+    fields: "ENTERPRISE_ATMOSPHERE",
+    terms: [
       {
         id: "squash",
         label: "Squash",
@@ -149,6 +173,14 @@ const COMPETITION: readonly CategoryDef[] = [
         queries: ["squash court", "squash arena"],
         sportFormat: "squash",
       },
+    ],
+  },
+  {
+    id: "table-tennis",
+    label: "Table tennis",
+    side: "competition",
+    fields: "ENTERPRISE_ATMOSPHERE",
+    terms: [
       {
         id: "table-tennis",
         label: "Table tennis",
@@ -159,8 +191,8 @@ const COMPETITION: readonly CategoryDef[] = [
     ],
   },
   {
-    id: "court-sports",
-    label: "Court sports",
+    id: "basketball",
+    label: "Basketball",
     side: "competition",
     fields: "ENTERPRISE_ATMOSPHERE",
     terms: [
@@ -171,6 +203,14 @@ const COMPETITION: readonly CategoryDef[] = [
         queries: ["basketball court", "basketball arena"],
         sportFormat: "basketball",
       },
+    ],
+  },
+  {
+    id: "volleyball",
+    label: "Volleyball",
+    side: "competition",
+    fields: "ENTERPRISE_ATMOSPHERE",
+    terms: [
       {
         id: "volleyball",
         label: "Volleyball",
@@ -204,8 +244,8 @@ const COMPETITION: readonly CategoryDef[] = [
     ],
   },
   {
-    id: "track-wheels",
-    label: "Track & wheels",
+    id: "running-track",
+    label: "Running track",
     side: "competition",
     fields: "ENTERPRISE_ATMOSPHERE",
     terms: [
@@ -215,51 +255,6 @@ const COMPETITION: readonly CategoryDef[] = [
         mode: "nearby",
         googleTypes: ["athletic_field"],
         sportFormat: "running-track",
-      },
-      {
-        id: "skating-rink",
-        label: "Skating rink",
-        // `ice_skating_rink` is the only skating type Google has, and Indian
-        // rinks are overwhelmingly roller. Text mode catches both.
-        mode: "text",
-        queries: ["skating rink", "roller skating rink"],
-        sportFormat: "skating-rink",
-      },
-    ],
-  },
-  {
-    id: "water",
-    label: "Water",
-    side: "competition",
-    fields: "ENTERPRISE_ATMOSPHERE",
-    terms: [
-      {
-        id: "swimming-pool",
-        label: "Swimming pool",
-        mode: "nearby",
-        googleTypes: ["swimming_pool"],
-        sportFormat: "swimming-pool",
-      },
-    ],
-  },
-  {
-    id: "adjacent-fitness",
-    label: "Adjacent fitness",
-    side: "competition",
-    fields: "ENTERPRISE_ATMOSPHERE",
-    terms: [
-      { id: "gym", label: "Gym", mode: "nearby", googleTypes: ["gym", "fitness_center"] },
-      {
-        id: "sports-academy",
-        label: "Sports academy",
-        mode: "nearby",
-        googleTypes: ["sports_coaching", "sports_activity_location"],
-      },
-      {
-        id: "sports-club",
-        label: "Sports club",
-        mode: "nearby",
-        googleTypes: ["sports_club", "sports_complex"],
       },
     ],
   },
@@ -334,42 +329,6 @@ const DEMAND: readonly CategoryDef[] = [
       { id: "hostel", label: "Hostels", mode: "nearby", googleTypes: ["hostel"] },
     ],
   },
-  {
-    id: "lifestyle",
-    label: "Lifestyle",
-    side: "demand",
-    // `priceLevel` is the free affluence proxy (plan §3) and is an Enterprise
-    // field, so this one category costs a tier more than the other anchors.
-    fields: "ENTERPRISE",
-    anchorWeight: 0.2,
-    terms: [
-      { id: "cafe", label: "Cafés", mode: "nearby", googleTypes: ["cafe"] },
-      { id: "restaurant", label: "Restaurants", mode: "nearby", googleTypes: ["restaurant"] },
-      { id: "mall", label: "Malls", mode: "nearby", googleTypes: ["shopping_mall"] },
-      { id: "hotel", label: "Hotels", mode: "nearby", googleTypes: ["hotel"] },
-    ],
-  },
-  {
-    id: "transit",
-    label: "Transit",
-    side: "demand",
-    fields: "PRO",
-    anchorWeight: 0.4,
-    terms: [
-      {
-        id: "metro-station",
-        label: "Metro stations",
-        mode: "nearby",
-        googleTypes: ["subway_station", "light_rail_station"],
-      },
-      {
-        id: "bus-terminal",
-        label: "Bus terminals",
-        mode: "nearby",
-        googleTypes: ["bus_station"],
-      },
-    ],
-  },
 ] as const;
 
 export const CATEGORIES: readonly CategoryDef[] = [...COMPETITION, ...DEMAND];
@@ -385,7 +344,7 @@ export const PRESETS: readonly PresetDef[] = [
     id: "standard-scan",
     label: "Standard scan",
     description: "The three formats Fitoverse sells most, against the three demand pools that fill them.",
-    categoryIds: ["turf-sports", "racquet-sports", "cricket", "education", "workplaces", "residential"],
+    categoryIds: ["turf-sports", "badminton", "tennis", "cricket", "education", "workplaces", "residential"],
   },
   {
     id: "full-sweep",

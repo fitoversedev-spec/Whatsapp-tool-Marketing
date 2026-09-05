@@ -76,11 +76,11 @@ export function ReportStudio({
   const [error, setError] = useState<string | null>(null);
 
   const [suggestionsText, setSuggestionsText] = useState("");
-  const [whatsappCaption, setWhatsappCaption] = useState("");
+  const whatsappCaption = "";
 
   const [report, setReport] = useState<GeneratedReport | null>(initialReport);
   const [generating, setGenerating] = useState(false);
-  const [recipient, setRecipient] = useState("");
+  const [reportName, setReportName] = useState(initialReport?.title ?? "");
   const [share, setShare] = useState<ShareResponse | null>(null);
   const [sharing, setSharing] = useState(false);
 
@@ -113,6 +113,13 @@ export function ReportStudio({
     setError(null);
     setShare(null);
     try {
+      if (reportName.trim()) {
+        await fetch(`/api/scout/scans/${scan.scanId}/report`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ includedBlocks: blocks, fieldNotes: notes, suggestionsText, title: reportName.trim() }),
+        });
+      }
       const res = await fetch(`/api/scout/scans/${scan.scanId}/report/generate`, { method: "POST" });
       const json = (await res.json()) as { report?: GeneratedReport; error?: string };
       if (!res.ok || !json.report) {
@@ -139,7 +146,7 @@ export function ReportStudio({
     } finally {
       setGenerating(false);
     }
-  }, [scan.scanId]);
+  }, [scan.scanId, reportName, blocks, notes, suggestionsText]);
 
   const shareOnWhatsApp = useCallback(async () => {
     if (!report) return;
@@ -149,7 +156,7 @@ export function ReportStudio({
       const res = await fetch(`/api/scout/reports/${report.id}/share`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel: "whatsapp", recipientName: recipient, caption: whatsappCaption || undefined }),
+        body: JSON.stringify({ channel: "whatsapp", caption: whatsappCaption || undefined }),
       });
       const json = (await res.json()) as ShareResponse & { error?: string };
       if (!res.ok || !json.link) {
@@ -164,7 +171,7 @@ export function ReportStudio({
     } finally {
       setSharing(false);
     }
-  }, [report, recipient]);
+  }, [report, whatsappCaption]);
 
   const on = useCallback((id: string) => blocks[id] === true, [blocks]);
 
@@ -223,11 +230,11 @@ export function ReportStudio({
             {scan.competitionCount > 0 || scan.demandCount > 0 ? (
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded bg-white border border-slate-200 px-3 py-2">
-                  <div className="text-slate-500 text-[10.5px]">Facilities found</div>
+                  <div className="text-slate-500 text-[12px]">Facilities found</div>
                   <div className="font-semibold text-slate-900">{atLeast(scan.competitionCount ?? 0, scan.anySaturated)}</div>
                 </div>
                 <div className="rounded bg-white border border-slate-200 px-3 py-2">
-                  <div className="text-slate-500 text-[10.5px]">Demand anchors</div>
+                  <div className="text-slate-500 text-[12px]">Demand anchors</div>
                   <div className="font-semibold text-slate-900">{atLeast(scan.demandCount ?? 0, scan.anySaturated)}</div>
                 </div>
               </div>
@@ -246,10 +253,10 @@ export function ReportStudio({
             aria-label="Custom notes for the report"
             placeholder="Add any custom points you want included in the report — e.g. nearby upcoming developments, land cost observations, footfall patterns at 7pm, lighting and parking notes."
           />
-          <p className="m-0 text-[11px] leading-[1.65] text-slate-500">
+          <p className="m-0 text-[13px] leading-[1.65] text-slate-500">
             These notes will be included in the AI-generated report alongside the scan data analysis.
           </p>
-          <div className="text-[10.5px] text-slate-500" aria-live="polite">
+          <div className="text-[12px] text-slate-500" aria-live="polite">
             {saveState === "saving"
               ? "Saving…"
               : saveState === "saved"
@@ -269,9 +276,20 @@ export function ReportStudio({
             aria-label="Your custom suggestions for the customer"
             placeholder="Write your suggestions for the customer — e.g. recommended sports, facility layout ideas, pricing strategy, unique selling points for this location."
           />
-          <p className="m-0 text-[11px] leading-[1.65] text-slate-500">
+          <p className="m-0 text-[13px] leading-[1.65] text-slate-500">
             This section appears in the report as "Our Suggestions" — your custom recommendations to the customer.
           </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <SectionLabel weight={700}>Report name</SectionLabel>
+          <input
+            className="w-full box-border font-sans text-sm text-slate-900 border border-slate-300 rounded-lg px-3.5 py-2.5 outline-none focus:border-court-500 focus:ring-2 focus:ring-court-500/20"
+            value={reportName}
+            onChange={(e) => setReportName(e.target.value)}
+            aria-label="Report name"
+            placeholder={`${scan.areaLabel} — Site Scout report`}
+          />
         </div>
 
         <Button block onClick={() => void generate()} disabled={generating}>
@@ -282,12 +300,12 @@ export function ReportStudio({
               : "Generate report"}
         </Button>
 
-        <a className="m-0 text-[11px] leading-[1.6] text-slate-500" href={`/api/scout/scans/${scan.scanId}/report/preview`} target="_blank" rel="noreferrer">
+        <a className="m-0 text-[13px] leading-[1.6] text-slate-500" href={`/api/scout/scans/${scan.scanId}/report/preview`} target="_blank" rel="noreferrer">
           Open the full preview in a new tab
         </a>
 
         {generating ? (
-          <p className="m-0 text-[11px] leading-[1.6] text-slate-500" aria-live="polite">
+          <p className="m-0 text-[13px] leading-[1.6] text-slate-500" aria-live="polite">
             The PDF renders in the background, so you can keep working. It usually takes a few
             seconds; the first one after a deploy takes longer while the renderer starts.
           </p>
@@ -295,29 +313,13 @@ export function ReportStudio({
 
         {report && (report.status === "generated" || report.status === "delivered") && report.link ? (
           <div className="flex flex-col gap-[10px]">
-            <p className="m-0 text-[11px] leading-[1.6] text-slate-500">
+            <p className="m-0 text-[13px] leading-[1.6] text-slate-500">
               Version {report.version} ready
               {report.pdfBytes ? ` · ${(report.pdfBytes / 1024 / 1024).toFixed(2)} MB` : ""}
               {report.pageCount ? ` · ${report.pageCount} pages` : ""}
               {report.scoreModelVersion ? ` · score model v${report.scoreModelVersion}` : ""}. The
               link works until {report.link.expiresOnLabel}.
             </p>
-
-            <input
-              className="w-full box-border font-sans text-[13.5px] text-slate-900 border border-slate-300 rounded-md px-3 py-[10px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-              aria-label="Who are you sending it to?"
-              placeholder="Who are you sending it to? (e.g. Deepa)"
-            />
-
-            <textarea
-              className="w-full box-border min-h-[80px] resize-y font-sans text-[13px] leading-[1.6] text-slate-900 border border-slate-300 rounded-md px-3 py-[10px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
-              value={whatsappCaption}
-              onChange={(e) => setWhatsappCaption(e.target.value)}
-              aria-label="Custom message to send with the report"
-              placeholder="Add a custom message to accompany the report link (optional)"
-            />
 
             <button
               type="button"
@@ -335,20 +337,20 @@ export function ReportStudio({
               Open the PDF
             </Button>
 
-            <div className="text-[11px] leading-[1.55] text-slate-700 bg-slate-50 rounded-md px-3 py-[10px] break-all [&_a]:text-court-600">
+            <div className="text-[13px] leading-[1.55] text-slate-700 bg-slate-50 rounded-md px-3 py-[10px] break-all [&_a]:text-court-600">
               <a href={report.link.url} target="_blank" rel="noreferrer">
                 {report.link.url}
               </a>
             </div>
 
-            <p className="m-0 text-[11px] leading-[1.65] text-slate-700 border border-dashed border-slate-300 rounded-md px-3 py-[10px]">
+            <p className="m-0 text-[13px] leading-[1.65] text-slate-700 border border-dashed border-slate-300 rounded-md px-3 py-[10px]">
               {share?.deliveryNote ?? DELIVERY_NOTE} The link expires on{" "}
               {report.link.expiresOnLabel}; regenerating produces a new one and leaves this version
               readable until then.
             </p>
 
             {share ? (
-              <p className="m-0 text-[11px] leading-[1.6] text-slate-500" aria-live="polite">
+              <p className="m-0 text-[13px] leading-[1.6] text-slate-500" aria-live="polite">
                 Logged{share.recipientName ? ` as sent to ${share.recipientName}` : ""}. This scan
                 now shows as "Report sent" on the dashboard.
               </p>
@@ -395,7 +397,7 @@ export function ReportStudio({
           </div>
 
           <div>
-            <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Area</div>
+            <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Area</div>
             <div className="text-2xl font-semibold mt-2">
               {scan.areaLabel} — {formatRadius(scan.radiusM)} radius
             </div>
@@ -403,7 +405,7 @@ export function ReportStudio({
 
           {score ? (
             <div>
-              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Verdict</div>
+              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Verdict</div>
               <div style={{ marginTop: 8 }}>
                 <Badge tone={verdictTone(score.verdict)}>
                   {verdictLabel(score.verdict)} · {score.totalRounded}/100
@@ -474,7 +476,7 @@ export function ReportStudio({
 
           {on("sports-areas") && scan.places.filter((p) => p.side === "competition").length > 0 ? (
             <div>
-              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Available sports facilities</div>
+              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Available sports facilities</div>
               <div className="border border-slate-200 rounded-lg overflow-hidden mt-[10px]">
                 <div className="grid grid-cols-[1.4fr_0.6fr_0.6fr] px-[15px] py-[11px] bg-slate-100 text-[9.5px] font-bold tracking-[0.09em] uppercase text-slate-500">
                   <span>Facility</span>
@@ -498,7 +500,7 @@ export function ReportStudio({
 
           {on("ai-summary") ? (
             <div>
-              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">AI analysis</div>
+              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">AI analysis</div>
               <div className="mt-[10px] border-l-[3px] border-[#2e3192] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700">
                 AI analysis will be generated based on scan data — recommending the best sports for this location, revenue potential, and competitive positioning.
               </div>
@@ -507,7 +509,7 @@ export function ReportStudio({
 
           {on("suggestions") && suggestionsText ? (
             <div>
-              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Our suggestions</div>
+              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Our suggestions</div>
               <div className="mt-[10px] border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 whitespace-pre-wrap">
                 {suggestionsText}
               </div>
@@ -530,7 +532,7 @@ export function ReportStudio({
 
           {on("sweep") ? (
             <div>
-              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Spaces sweep</div>
+              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Spaces sweep</div>
               {sweepMarked.length === 0 ? (
                 <p className="text-[13.5px] leading-[1.75] text-slate-700 mt-[10px] whitespace-pre-wrap min-h-[60px]">
                   No cells were marked in the sweep of this area.
@@ -555,7 +557,7 @@ export function ReportStudio({
 
           {on("field-notes") ? (
             <div>
-              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Field notes</div>
+              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Field notes</div>
               <div className="text-[13.5px] leading-[1.75] text-slate-700 mt-[10px] whitespace-pre-wrap min-h-[60px]">
                 {notes || "Field notes appear here as you type them."}
               </div>
@@ -563,7 +565,7 @@ export function ReportStudio({
           ) : null}
 
           <div>
-            <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">{limitations.heading}</div>
+            <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">{limitations.heading}</div>
             {limitations.paragraphs.map((p) => (
               <p key={p} className="text-[11.5px] leading-[1.7] text-slate-500 mt-[10px]">
                 {p}

@@ -68,8 +68,8 @@ export function reportCss(): string {
 html,body{ margin:0; padding:0; background:var(--white); }
 body{
   font-family:var(--font-body);
-  font-size:13pt;
-  line-height:1.55;
+  font-size:13.5pt;
+  line-height:1.6;
   color:var(--ink);
   -webkit-print-color-adjust:exact;
   print-color-adjust:exact;
@@ -82,13 +82,13 @@ body{
 .section > *:first-child{ margin-top:0; }
 
 h1,h2,h3,h4{ break-after:avoid; page-break-after:avoid; margin:0; }
-h1{ font-family:var(--font-display); font-size:20pt; line-height:1.2; letter-spacing:-.01em; font-weight:700; }
+h1{ font-family:var(--font-display); font-size:22pt; line-height:1.25; letter-spacing:-.01em; font-weight:700; }
 h2{
-  font-size:14pt; font-weight:700; letter-spacing:-.005em;
-  margin:0 0 8pt; padding-bottom:5pt; border-bottom:1.6pt solid var(--black);
+  font-size:15pt; font-weight:700; letter-spacing:-.005em;
+  margin:0 0 10pt; padding-bottom:6pt; border-bottom:1.6pt solid var(--black);
 }
-h3{ font-size:12pt; font-weight:600; margin:14pt 0 5pt; }
-p{ margin:0 0 8pt; }
+h3{ font-size:12.5pt; font-weight:600; margin:16pt 0 6pt; }
+p{ margin:0 0 10pt; }
 ul{ margin:0 0 8pt; padding-left:16pt; }
 li{ margin-bottom:4pt; break-inside:avoid; }
 
@@ -104,10 +104,10 @@ li{ margin-bottom:4pt; break-inside:avoid; }
 
 /* ---------------------------------------------------------------- cover */
 
-.coverHead{ display:flex; align-items:center; gap:8pt; border-bottom:2pt solid var(--black); padding-bottom:10pt; }
-.mark{ width:20pt; height:20pt; border-radius:5pt; background:linear-gradient(120deg,#159341 0%,#73caf0 45%,#2e3192 80%,#c81124 100%); flex:none; }
-.wordmark{ font-family:var(--font-display); font-size:10.5pt; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
-.coverMeta{ margin-top:14pt; }
+.coverHead{ display:flex; align-items:center; gap:10pt; border-bottom:2pt solid var(--black); padding-bottom:12pt; }
+.coverLogo{ height:28pt; width:auto; flex:none; }
+.wordmark{ font-family:var(--font-display); font-size:11pt; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+.coverMeta{ margin-top:16pt; }
 .coverMeta dl{ margin:0; display:grid; grid-template-columns:auto 1fr; gap:3pt 10pt; font-size:10.5pt; }
 .coverMeta dt{ color:var(--gray-500); }
 .coverMeta dd{ margin:0; font-weight:500; }
@@ -179,6 +179,15 @@ td.r,th.r{ text-align:right; }
 .theme{ break-inside:avoid-page; margin-bottom:10pt; }
 .themeHead{ display:flex; justify-content:space-between; align-items:baseline; gap:8pt; }
 .themeHead .n{ font-weight:700; font-size:11.5pt; }
+
+/* ---------------------------------------------------- aiSummary + suggestions */
+
+.aiSummaryBlock, .suggestionsBlock{
+  white-space:pre-wrap; background:var(--gray-100); border-left:3pt solid var(--navy);
+  padding:10pt 12pt; font-size:11.5pt; line-height:1.6; break-inside:auto;
+  border-radius:0 6pt 6pt 0;
+}
+.suggestionsBlock{ border-left-color:var(--green); }
 
 /* ------------------------------------------------------------------ map */
 

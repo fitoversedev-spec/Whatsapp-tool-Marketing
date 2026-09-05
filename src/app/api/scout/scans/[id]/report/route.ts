@@ -56,6 +56,7 @@ export async function PUT(request: Request, context: { params: { id: string } })
   const payload = (body ?? {}) as {
     includedBlocks?: unknown;
     fieldNotes?: unknown;
+    suggestionsText?: unknown;
     title?: unknown;
   };
 
@@ -64,6 +65,7 @@ export async function PUT(request: Request, context: { params: { id: string } })
     userId: auth.identity.userId,
     includedBlocks: payload.includedBlocks,
     fieldNotes: typeof payload.fieldNotes === "string" ? payload.fieldNotes : "",
+    suggestionsText: typeof payload.suggestionsText === "string" ? payload.suggestionsText : undefined,
     title: typeof payload.title === "string" ? payload.title : undefined,
   });
 

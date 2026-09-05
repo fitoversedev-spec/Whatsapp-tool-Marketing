@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import BackButton from "@/components/BackButton";
 import { getScoutProfile } from "@/lib/scout/identity";
 import { defaultBlockState } from "@/lib/scout/reports/blocks";
 import { latestGeneratedReport, reportLink } from "@/lib/scout/reports/generate";
@@ -58,13 +59,18 @@ export default async function ReportPage({ params }: { params: { id: string } })
         : null;
 
   return (
-    <ReportStudio
-      scan={scan}
-      sweep={sweep}
-      initialBlocks={draft?.includedBlocks ?? defaultBlockState()}
-      initialNotes={draft?.fieldNotes ?? scan.fieldNotes ?? ""}
-      preparedBy={author.displayName}
-      initialReport={initialReport}
-    />
+    <>
+      <div className="px-4 sm:px-6 lg:px-8 pt-3">
+        <BackButton backHref={`/scout/scan/${id}`} />
+      </div>
+      <ReportStudio
+        scan={scan}
+        sweep={sweep}
+        initialBlocks={draft?.includedBlocks ?? defaultBlockState()}
+        initialNotes={draft?.fieldNotes ?? scan.fieldNotes ?? ""}
+        preparedBy={author.displayName}
+        initialReport={initialReport}
+      />
+    </>
   );
 }

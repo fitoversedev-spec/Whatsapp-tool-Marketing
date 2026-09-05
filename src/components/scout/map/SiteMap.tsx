@@ -5,11 +5,13 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import type * as LeafletNS from "leaflet";
 import {
   CIRCLE_STYLE,
+  CUSTOM_MARKER_COLORS,
   DEFAULTS,
   MARKER_COLORS,
   resolveBaseLayer,
   type BaseLayerId,
   type BaseLayerSpec,
+  type CustomSiteMapMarker,
   type SiteMapMarker,
 } from "./siteMapConfig";
 
@@ -60,6 +62,18 @@ export interface SiteMapProps {
   popups?: boolean;
   /** Accessible name for the map region. */
   ariaLabel?: string;
+  /**
+   * User-authored annotations — customer locations, competitor areas, free-form
+   * notes. Rendered as diamonds with a permanent label, distinct from the
+   * dot-shaped Google-sourced {@link SiteMapMarker}s.
+   */
+  customMarkers?: CustomSiteMapMarker[];
+  /**
+   * Fires on a right-click (Leaflet's `contextmenu` event) anywhere on the
+   * map, so a caller can drop a custom marker without first entering a
+   * placement mode.
+   */
+  onMapRightClick?: (latlng: { lat: number; lng: number }) => void;
 }
 
 type Leaflet = typeof LeafletNS;
@@ -114,6 +128,42 @@ function pinIcon(L: Leaflet): LeafletNS.DivIcon {
   });
 }
 
+/** Diamond icon for a user-placed {@link CustomSiteMapMarker} — distinct from the round `dotIcon`. */
+function customMarkerIcon(L: Leaflet, category: string): LeafletNS.DivIcon {
+  const c = CUSTOM_MARKER_COLORS[category] ?? CUSTOM_MARKER_COLORS.custom;
+  return L.divIcon({
+    className: "",
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+    html:
+      '<span style="display:block;width:11px;height:11px;transform:rotate(45deg);background:' +
+      c +
+      ';box-shadow:0 0 0 2.5px #fff,0 1px 3px rgba(0,0,0,.35)"></span>',
+  });
+}
+
+/**
+ * Permanent label for a custom marker, with an inline "remove" control.
+ *
+ * Leaflet tooltips are `pointer-events:none` by default (they carry no
+ * `interactive` styling of their own), so the label text stays click-through —
+ * only `.ss-marker-del` opts back in with its own `pointer-events:auto`. The
+ * click still bubbles to the map container, where `ScanScreen` (via `onReady`)
+ * inspects `event.originalEvent.target` for that class and handles the delete;
+ * `SiteMap` renders the control but never learns what it does.
+ */
+function customMarkerTooltipHtml(m: CustomSiteMapMarker): string {
+  const label = String(m.label ?? "").replace(/</g, "&lt;");
+  return (
+    '<span style="display:inline-flex;align-items:center;gap:5px;font-family:system-ui,sans-serif;' +
+    'font-size:11.5px;font-weight:600;color:#1e293b;white-space:nowrap">' +
+    label +
+    `<span class="ss-marker-del" data-marker-id="${m.id}" role="button" aria-label="Remove marker" ` +
+    'style="pointer-events:auto;cursor:pointer;color:#94a3b8;font-weight:700;line-height:1;padding:0 1px">' +
+    "&times;</span></span>"
+  );
+}
+
 /**
  * React port of `design/site-map.js`, preserving its public contract.
  *
@@ -145,12 +195,15 @@ export function SiteMap({
   className,
   style,
   ariaLabel = "Map of the scan area",
+  customMarkers,
+  onMapRightClick,
 }: SiteMapProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletNS.Map | null>(null);
   const circleRef = useRef<LeafletNS.Circle | null>(null);
   const layerRef = useRef<LeafletNS.LayerGroup | null>(null);
+  const customLayerRef = useRef<LeafletNS.LayerGroup | null>(null);
   const pinRef = useRef<LeafletNS.Marker | null>(null);
   const tileRef = useRef<LeafletNS.TileLayer | null>(null);
   const overlayRef = useRef<LeafletNS.TileLayer | null>(null);
@@ -160,9 +213,11 @@ export function SiteMap({
   const onPinMoveRef = useRef(onPinMove);
   const onMarkerTapRef = useRef(onMarkerTap);
   const onReadyRef = useRef(onReady);
+  const onMapRightClickRef = useRef(onMapRightClick);
   onPinMoveRef.current = onPinMove;
   onMarkerTapRef.current = onMarkerTap;
   onReadyRef.current = onReady;
+  onMapRightClickRef.current = onMapRightClick;
 
   // Latest geometry, read by the deferred build without re-triggering it.
   const geometryRef = useRef({
@@ -202,6 +257,9 @@ export function SiteMap({
   const markersRef = useRef<SiteMapMarker[]>(markers ?? []);
   markersRef.current = markers ?? [];
 
+  const customMarkersRef = useRef<CustomSiteMapMarker[]>(customMarkers ?? []);
+  customMarkersRef.current = customMarkers ?? [];
+
   /* ---------- build (deferred until visible, as in the original) ---------- */
   useEffect(() => {
     const host = hostRef.current;
@@ -233,8 +291,30 @@ export function SiteMap({
           .addTo(layer)
           .on("click", () => onMarkerTapRef.current?.(m));
         if (popupsRef.current && m.name) {
-          marker.bindPopup(markerPopupHtml(m), { maxWidth: 260, className: "ss-popup" });
+          marker.bindTooltip(markerPopupHtml(m), {
+            direction: "top",
+            offset: [0, -10],
+            opacity: 1,
+            className: "ss-popup",
+          });
         }
+      }
+    }
+
+    function paintCustomMarkers(L: Leaflet) {
+      const layer = customLayerRef.current;
+      if (!layer) return;
+      layer.clearLayers();
+      for (const m of customMarkersRef.current) {
+        L.marker([m.lat, m.lng], { icon: customMarkerIcon(L, m.category) })
+          .addTo(layer)
+          .bindTooltip(customMarkerTooltipHtml(m), {
+            permanent: true,
+            direction: "top",
+            offset: [0, -9],
+            opacity: 1,
+            className: "ss-custom-marker-tooltip",
+          });
       }
     }
 
@@ -282,6 +362,15 @@ export function SiteMap({
 
       layerRef.current = L.layerGroup().addTo(map);
       paintMarkers(L);
+
+      customLayerRef.current = L.layerGroup().addTo(map);
+      paintCustomMarkers(L);
+
+      // Always bound, regardless of `pin`/`interactive` — a right-click drops
+      // a custom marker even on a saved (non-draggable-pin) scan.
+      map.on("contextmenu", (e: LeafletNS.LeafletMouseEvent) => {
+        onMapRightClickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng });
+      });
 
       // The sweep screen draws no centre pin: its subject is the grid, and a
       // marker in the middle of it would sit on top of a clickable cell.
@@ -368,6 +457,7 @@ export function SiteMap({
       mapRef.current = null;
       circleRef.current = null;
       layerRef.current = null;
+      customLayerRef.current = null;
       pinRef.current = null;
       tileRef.current = null;
       overlayRef.current = null;
@@ -438,10 +528,33 @@ export function SiteMap({
         .addTo(layer)
         .on("click", () => onMarkerTapRef.current?.(m));
       if (popupsRef.current && m.name) {
-        marker.bindPopup(markerPopupHtml(m), { maxWidth: 260, className: "ss-popup" });
+        marker.bindTooltip(markerPopupHtml(m), {
+          direction: "top",
+          offset: [0, -10],
+          opacity: 1,
+          className: "ss-popup",
+        });
       }
     }
   }, [markers]);
+
+  useEffect(() => {
+    const L = leafletRef.current;
+    const layer = customLayerRef.current;
+    if (!L || !layer) return;
+    layer.clearLayers();
+    for (const m of customMarkersRef.current) {
+      L.marker([m.lat, m.lng], { icon: customMarkerIcon(L, m.category) })
+        .addTo(layer)
+        .bindTooltip(customMarkerTooltipHtml(m), {
+          permanent: true,
+          direction: "top",
+          offset: [0, -9],
+          opacity: 1,
+          className: "ss-custom-marker-tooltip",
+        });
+    }
+  }, [customMarkers]);
 
   useEffect(() => {
     const dragging = pinRef.current?.dragging;

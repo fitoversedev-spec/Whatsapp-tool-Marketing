@@ -42,8 +42,9 @@ export default function BackButton({
       router.push(backHref);
       return;
     }
+    const isScout = pathname.startsWith("/scout/");
     const isCrm = pathname.startsWith("/crm/") || pathname.startsWith("/deals") || pathname.startsWith("/pipeline");
-    router.push(isCrm ? "/crm" : "/inbox");
+    router.push(isScout ? "/scout/dashboard" : isCrm ? "/crm" : "/inbox");
   }
 
   return (

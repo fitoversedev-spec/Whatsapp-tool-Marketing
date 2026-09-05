@@ -35,7 +35,7 @@ export async function POST(request: Request, context: { params: { reportId: stri
   } catch {
     body = {};
   }
-  const payload = (body ?? {}) as { channel?: unknown; recipientName?: unknown };
+  const payload = (body ?? {}) as { channel?: unknown; recipientName?: unknown; caption?: unknown };
   const channel = typeof payload.channel === "string" ? payload.channel : "whatsapp";
   if (!CHANNELS.has(channel)) {
     return NextResponse.json({ error: "Unknown share channel." }, { status: 400 });
@@ -48,6 +48,7 @@ export async function POST(request: Request, context: { params: { reportId: stri
       reportId,
       channel: channel as "whatsapp" | "pdf" | "email",
       recipientName: payload.recipientName,
+      caption: typeof payload.caption === "string" ? payload.caption : undefined,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown share error.";

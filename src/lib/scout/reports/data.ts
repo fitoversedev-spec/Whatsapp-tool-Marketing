@@ -145,6 +145,7 @@ export async function assembleReportInput(
     themes,
     blocks: sanitiseBlockState(blocks),
     brand: reportBrand(),
+    suggestionsText: draft?.suggestionsText || null,
   };
 }
 

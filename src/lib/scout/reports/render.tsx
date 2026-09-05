@@ -19,6 +19,7 @@
  */
 
 import { REPORT_FONT_LINK, reportCss } from "./css";
+import { FITOVERSE_LOGO_DATA_URI } from "./logo-data";
 import { renderStaticMarkup } from "./staticMarkup";
 import { REPORT_SECTION_TITLES, type ReportDocument, type ReportSectionId } from "./types";
 
@@ -57,7 +58,8 @@ function Cover({ doc }: { doc: ReportDocument }) {
   return (
     <section className="section">
       <div className="coverHead">
-        <span className="mark" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={FITOVERSE_LOGO_DATA_URI} alt="Fitoverse" className="coverLogo" />
         <span className="wordmark">Site Scout report</span>
       </div>
 
@@ -449,6 +451,69 @@ function Demand({ doc, n }: { doc: ReportDocument; n: number }) {
   );
 }
 
+/* ---------------------------------------------------------- sportsAreas */
+
+function SportsAreas({ doc, n }: { doc: ReportDocument; n: number }) {
+  const s = doc.sportsAreas;
+  if (!s) return null;
+  return (
+    <section className="section">
+      <SectionHeading n={n} id="sportsAreas" />
+      <p>
+        <strong>{s.headline}</strong>
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Facility</th>
+            <th>Category</th>
+            <th className="r">Distance</th>
+            <th className="r">Rating</th>
+            <th className="r">Reviews</th>
+          </tr>
+        </thead>
+        <tbody>
+          {s.rows.map((row) => (
+            <tr key={`${row.name}:${row.distance}`}>
+              <td className="venueName">{row.name}</td>
+              <td className="tiny">{row.category}</td>
+              <td className="r">{row.distance}</td>
+              <td className="r">{row.rating} ★</td>
+              <td className="r">{row.reviews}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------- aiSummary */
+
+function AiSummary({ doc, n }: { doc: ReportDocument; n: number }) {
+  const a = doc.aiSummary;
+  if (!a) return null;
+  return (
+    <section className="section">
+      <SectionHeading n={n} id="aiSummary" />
+      <div className="aiSummaryBlock">{a.summary}</div>
+    </section>
+  );
+}
+
+/* ----------------------------------------------------------- suggestions */
+
+function Suggestions({ doc, n }: { doc: ReportDocument; n: number }) {
+  const s = doc.suggestions;
+  if (!s) return null;
+  return (
+    <section className="section">
+      <SectionHeading n={n} id="suggestions" />
+      <div className="suggestionsBlock">{s.text}</div>
+    </section>
+  );
+}
+
 /* -------------------------------------------------------------------- map */
 
 function MapPage({ doc, n }: { doc: ReportDocument; n: number }) {
@@ -618,6 +683,12 @@ export function ReportBody({ doc }: { doc: ReportDocument }) {
             return <Competition key={id} doc={doc} n={n} />;
           case "demand":
             return <Demand key={id} doc={doc} n={n} />;
+          case "sportsAreas":
+            return <SportsAreas key={id} doc={doc} n={n} />;
+          case "aiSummary":
+            return <AiSummary key={id} doc={doc} n={n} />;
+          case "suggestions":
+            return <Suggestions key={id} doc={doc} n={n} />;
           case "map":
             return <MapPage key={id} doc={doc} n={n} />;
           case "sweep":

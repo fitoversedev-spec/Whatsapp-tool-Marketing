@@ -171,23 +171,23 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                     <span className="text-xs text-slate-500 whitespace-nowrap">{formatRadius(scan.radiusM)}</span>
                   </span>
 
-                  <span className="flex gap-4">
-                    <span className="block">
-                      <span className="block font-mono text-xl font-semibold">
+                  <span className="flex gap-3 min-w-0">
+                    <span className="block min-w-0 flex-1">
+                      <span className="block font-mono text-base font-semibold truncate">
                         {scan.facilityCount === null
                           ? "—"
                           : atLeast(scan.facilityCount, scan.saturated)}
                       </span>
                       <span className="block text-xs text-slate-600 mt-[3px]">Facilities</span>
                     </span>
-                    <span className="block">
-                      <span className="block font-mono text-xl font-semibold text-court-700">
+                    <span className="block min-w-0 flex-1">
+                      <span className="block font-mono text-base font-semibold text-court-700 truncate">
                         {scan.demandCount === null ? "—" : atLeast(scan.demandCount, scan.saturated)}
                       </span>
                       <span className="block text-xs text-slate-600 mt-[3px]">Demand</span>
                     </span>
-                    <span className="block">
-                      <span className="block font-mono text-xl font-semibold">{formatRating(scan.avgRating)}</span>
+                    <span className="block min-w-0 flex-1">
+                      <span className="block font-mono text-base font-semibold">{formatRating(scan.avgRating)}</span>
                       <span className="block text-xs text-slate-600 mt-[3px]">Avg rating</span>
                     </span>
                   </span>

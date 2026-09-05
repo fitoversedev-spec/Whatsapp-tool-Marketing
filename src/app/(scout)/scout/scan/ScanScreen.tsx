@@ -3,9 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Tag } from "@/components/scout/ui";
+import type * as LeafletNS from "leaflet";
+import { Badge, Button, Input, Select, Tag } from "@/components/scout/ui";
 import { SectionLabel, SkeletonBlock, StatCard, StateBlock } from "@/components/scout/patterns";
-import { ESRI_SATELLITE, MapLayerToggle, MARKER_COLORS, SiteMap, type BaseLayerSpec, type MapMode, type SatelliteLayerResponse, type SiteMapMarker } from "@/components/scout/map";
+import {
+  CUSTOM_MARKER_COLORS,
+  ESRI_SATELLITE,
+  MapLayerToggle,
+  MARKER_COLORS,
+  SiteMap,
+  type BaseLayerSpec,
+  type CustomSiteMapMarker,
+  type MapMode,
+  type SatelliteLayerResponse,
+  type SiteMapMarker,
+} from "@/components/scout/map";
 import { SaturationPanel, ScorePanel } from "@/components/scout/score";
 import {
   atLeast,
@@ -28,6 +40,21 @@ const PRESET_RADII = [1, 2, 5, 10, 15, 20] as const;
 const RESULTS_PER_GROUP = 4;
 /** Poll cadence while a job is running. One indexed row per call. */
 const PROGRESS_POLL_MS = 1500;
+
+/** Dropdown options for a custom marker's category — keys match `CUSTOM_MARKER_COLORS`. */
+const MARKER_CATEGORY_OPTIONS = [
+  { value: "customer", label: "Customer location" },
+  { value: "competitor", label: "Competitor area" },
+  { value: "custom", label: "Custom note" },
+];
+
+interface MarkerDraft {
+  lat: number;
+  lng: number;
+  label: string;
+  category: string;
+  note: string;
+}
 
 interface EstimateResponse {
   tiles: number;
@@ -316,6 +343,142 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
       setScoring(false);
     }
   }, [scanId]);
+
+  /* ------------------------------------------------------- custom markers */
+
+  const [customMarkers, setCustomMarkers] = useState<CustomSiteMapMarker[]>([]);
+  // Same reasoning as `placementModeRef`: `deleteCustomMarker` may run from a
+  // handler `SiteMap` bound once, long before this specific closure existed,
+  // so it reads the live list through a ref rather than the `customMarkers`
+  // it captured at its own creation time.
+  const customMarkersRef = useRef(customMarkers);
+  customMarkersRef.current = customMarkers;
+  const [placementMode, setPlacementMode] = useState(false);
+  // Read inside the map's `click` handler, which SiteMap binds once (via
+  // `onReady`) and never rebinds — a plain `placementMode` closure would go
+  // stale the moment the toolbar button is toggled after that.
+  const placementModeRef = useRef(placementMode);
+  placementModeRef.current = placementMode;
+
+  const [markerDraft, setMarkerDraft] = useState<MarkerDraft | null>(null);
+  const [markerSaving, setMarkerSaving] = useState(false);
+  const [markerError, setMarkerError] = useState<string | null>(null);
+
+  // Load once the scan exists — a draft (unsaved) scan has nowhere for a
+  // marker to attach to.
+  useEffect(() => {
+    if (!scanId) return;
+    let cancelled = false;
+    fetch(`/api/scout/scans/${scanId}/markers`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { markers?: CustomSiteMapMarker[] } | null) => {
+        if (!cancelled && json?.markers) setCustomMarkers(json.markers);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [scanId]);
+
+  const openMarkerDraft = useCallback((latlng: { lat: number; lng: number }) => {
+    setMarkerDraft({ lat: latlng.lat, lng: latlng.lng, label: "", category: "custom", note: "" });
+    setMarkerError(null);
+    setPlacementMode(false);
+  }, []);
+
+  /**
+   * Optimistic: the marker disappears immediately rather than waiting on the
+   * round trip, and is restored if the delete turns out to have failed.
+   */
+  const deleteCustomMarker = useCallback(
+    async (markerId: string) => {
+      if (!scanId) return;
+      const removed = customMarkersRef.current.find((m) => m.id === markerId) ?? null;
+      setCustomMarkers((prev) => prev.filter((m) => m.id !== markerId));
+      try {
+        const res = await fetch(`/api/scout/scans/${scanId}/markers/${markerId}`, { method: "DELETE" });
+        if (!res.ok && removed) {
+          setCustomMarkers((prev) => (prev.some((m) => m.id === markerId) ? prev : [...prev, removed]));
+        }
+      } catch {
+        if (removed) {
+          setCustomMarkers((prev) => (prev.some((m) => m.id === markerId) ? prev : [...prev, removed]));
+        }
+      }
+    },
+    [scanId],
+  );
+
+  /**
+   * Grabs the live Leaflet map so this screen can listen for clicks itself.
+   * `SiteMap` only exposes `onMapRightClick` (always-on) as a prop —
+   * "left-click places a marker, but only in placement mode" and "click the
+   * tooltip's ✕ to delete" are both this screen's concern, wired directly
+   * onto the map instance rather than growing SiteMap's contract further.
+   */
+  const handleMapReady = useCallback(
+    (map: LeafletNS.Map) => {
+      map.on("click", (e: LeafletNS.LeafletMouseEvent) => {
+        const target = e.originalEvent?.target as HTMLElement | null;
+        const delBtn = target?.closest?.(".ss-marker-del") as HTMLElement | null;
+        if (delBtn) {
+          const markerId = delBtn.getAttribute("data-marker-id");
+          if (markerId) void deleteCustomMarker(markerId);
+          return;
+        }
+        if (!placementModeRef.current) return;
+        openMarkerDraft(e.latlng);
+      });
+    },
+    [deleteCustomMarker, openMarkerDraft],
+  );
+
+  const handleMapRightClick = useCallback(
+    (latlng: { lat: number; lng: number }) => {
+      if (!scanId) return;
+      openMarkerDraft(latlng);
+    },
+    [scanId, openMarkerDraft],
+  );
+
+  const saveMarkerDraft = useCallback(async () => {
+    if (!scanId || !markerDraft) return;
+    const label = markerDraft.label.trim();
+    if (!label) {
+      setMarkerError("Give the marker a label.");
+      return;
+    }
+    setMarkerSaving(true);
+    setMarkerError(null);
+    try {
+      const res = await fetch(`/api/scout/scans/${scanId}/markers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label,
+          category: markerDraft.category,
+          lat: markerDraft.lat,
+          lng: markerDraft.lng,
+          note: markerDraft.note.trim() || null,
+        }),
+      });
+      let json: { marker?: CustomSiteMapMarker; error?: string };
+      try { json = await res.json(); } catch { json = {}; }
+      if (!res.ok || !json.marker) {
+        setMarkerError(json.error ?? `Server returned ${res.status}. Check Vercel logs for details.`);
+        return;
+      }
+      const saved = json.marker;
+      setCustomMarkers((prev) => [...prev, saved]);
+      setMarkerDraft(null);
+    } catch (err) {
+      setMarkerError(
+        `The marker could not be saved: ${err instanceof Error ? err.message : "network error"}`,
+      );
+    } finally {
+      setMarkerSaving(false);
+    }
+  }, [scanId, markerDraft]);
 
   /* -------------------------------------------------------------- derived */
 
@@ -789,7 +952,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                 <Link href={`/scout/report/${scanId}`}>
                   <Button block>Create report</Button>
                 </Link>
-                <Link href="/scout/scans">
+                <Link href="/scout/sites">
                   <Button block variant="secondary">
                     <svg className="w-4 h-4 mr-1.5 inline-block" viewBox="0 0 20 20" fill="currentColor"><path d="M15.621 4.379a3 3 0 00-4.242 0l-7 7a3 3 0 004.241 4.243h.001l.497-.5a.75.75 0 011.064 1.057l-.498.501-.002.002a4.5 4.5 0 01-6.364-6.364l7-7a4.5 4.5 0 016.368 6.36l-3.455 3.553A2.625 2.625 0 119.52 9.52l3.45-3.451a.75.75 0 111.061 1.06l-3.45 3.451a1.125 1.125 0 001.587 1.595l3.454-3.553a3 3 0 000-4.242z" /></svg>
                     Saved scans
@@ -823,6 +986,9 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
           onPinMove={isSaved ? undefined : handlePinMove}
           onMarkerTap={selectFromMap}
           popups
+          customMarkers={customMarkers}
+          onMapRightClick={scanId ? handleMapRightClick : undefined}
+          onReady={scanId ? handleMapReady : undefined}
           ariaLabel="Catchment map. Facilities and demand anchors are plotted around the scan centre."
         />
 
@@ -831,6 +997,24 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
             mode={mapMode}
             onChange={setMapMode}
           />
+          {scanId ? (
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1.5 rounded-lg border py-2 px-3 text-xs font-semibold shadow-md transition-colors ${
+                placementMode
+                  ? "bg-slate-800 text-white border-slate-800"
+                  : "bg-white/95 text-slate-700 border-slate-200 hover:bg-white"
+              }`}
+              onClick={() => setPlacementMode((v) => !v)}
+              aria-pressed={placementMode}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              {placementMode ? "Click the map to place" : "Add marker"}
+            </button>
+          ) : null}
           <div className="bg-white/95 border border-slate-200 rounded-lg py-[13px] px-[15px] flex flex-col gap-2 shadow-[0_6px_18px_rgba(0,0,0,0.1)]">
           <SectionLabel weight={700}>Legend</SectionLabel>
           <span className="flex items-center gap-2 text-xs">
@@ -857,6 +1041,34 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
             />
             Customer plot
           </span>
+          {scanId ? (
+            <>
+              <span className="flex items-center gap-2 text-xs">
+                <span
+                  className="w-[9px] h-[9px] rotate-45"
+                  style={{ background: CUSTOM_MARKER_COLORS.customer }}
+                  aria-hidden="true"
+                />
+                Customer location
+              </span>
+              <span className="flex items-center gap-2 text-xs">
+                <span
+                  className="w-[9px] h-[9px] rotate-45"
+                  style={{ background: CUSTOM_MARKER_COLORS.competitor }}
+                  aria-hidden="true"
+                />
+                Competitor area
+              </span>
+              <span className="flex items-center gap-2 text-xs">
+                <span
+                  className="w-[9px] h-[9px] rotate-45"
+                  style={{ background: CUSTOM_MARKER_COLORS.custom }}
+                  aria-hidden="true"
+                />
+                Custom note
+              </span>
+            </>
+          ) : null}
           </div>
         </div>
 
@@ -891,6 +1103,84 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing }: ScanScreenPr
                 Open in Google Maps
               </a>
             ) : null}
+          </div>
+        ) : null}
+
+        {markerDraft ? (
+          <div className="absolute inset-0 z-[600] flex items-center justify-center bg-black/20 p-4">
+            <div className="w-full max-w-[320px] bg-white border border-slate-200 rounded-lg p-4 shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col gap-3 animate-[ssIn_var(--dur-med)_var(--ease-standard)]">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-900">New map marker</span>
+                <button
+                  type="button"
+                  className="bg-transparent border-0 text-slate-500 text-sm cursor-pointer leading-none p-1"
+                  aria-label="Cancel"
+                  onClick={() => {
+                    setMarkerDraft(null);
+                    setMarkerError(null);
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <Input
+                label="Label"
+                value={markerDraft.label}
+                onChange={(e) =>
+                  setMarkerDraft((d) => (d ? { ...d, label: e.target.value } : d))
+                }
+                placeholder="e.g. Ramesh's plot"
+                maxLength={200}
+                autoFocus
+              />
+
+              <Select
+                label="Category"
+                value={markerDraft.category}
+                onChange={(e) =>
+                  setMarkerDraft((d) => (d ? { ...d, category: e.target.value } : d))
+                }
+                options={MARKER_CATEGORY_OPTIONS}
+              />
+
+              <div className="flex flex-col gap-1.5 font-sans text-[13px] text-slate-900">
+                <label className="font-semibold" htmlFor="ss-marker-note">
+                  Note (optional)
+                </label>
+                <textarea
+                  id="ss-marker-note"
+                  className="w-full font-sans text-xs leading-[1.6] text-slate-900 border border-slate-300 rounded-md py-2 px-3 outline-none resize-none focus:border-court-500 focus:ring-2 focus:ring-court-500/20"
+                  rows={2}
+                  maxLength={500}
+                  value={markerDraft.note}
+                  onChange={(e) =>
+                    setMarkerDraft((d) => (d ? { ...d, note: e.target.value } : d))
+                  }
+                  placeholder="Anything worth remembering about this spot"
+                />
+              </div>
+
+              {markerError ? (
+                <p className="m-0 text-xs leading-[1.6] text-red-600">{markerError}</p>
+              ) : null}
+
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setMarkerDraft(null);
+                    setMarkerError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={() => void saveMarkerDraft()} disabled={markerSaving}>
+                  {markerSaving ? "Saving…" : "Save marker"}
+                </Button>
+              </div>
+            </div>
           </div>
         ) : null}
       </div>

@@ -53,6 +53,7 @@ import { reportBrand, type ReportBrand } from "./brand";
 import { buildObservations, OBSERVATIONS_NOTE } from "./observations";
 import { sectionsFor } from "./sections";
 import type {
+  AiSummarySection,
   CatchmentAnchorRow,
   CompetitionSection,
   CompetitorCategory,
@@ -63,6 +64,9 @@ import type {
   ObservationsSection,
   ReportDocument,
   ReportStat,
+  SportsAreaRow,
+  SportsAreasSection,
+  SuggestionsSection,
   SweepSection,
   VerdictComponent,
   VerdictSection,
@@ -143,6 +147,9 @@ export interface ReportInput {
 
   readonly blocks: ReportBlockState;
   readonly brand?: ReportBrand;
+
+  readonly aiSummaryText?: string | null;
+  readonly suggestionsText?: string | null;
 }
 
 /* ------------------------------------------------------------- formatting */
@@ -428,6 +435,26 @@ function buildSurveyorSection(input: ReportInput, notesOn: boolean): Observation
   };
 }
 
+/* --------------------------------------------------------- sportsAreas */
+
+function buildSportsAreas(input: ReportInput): SportsAreasSection | null {
+  const rows: SportsAreaRow[] = input.places
+    .filter((p) => p.side === "competition")
+    .sort((a, b) => a.distanceM - b.distanceM)
+    .map((p) => ({
+      name: p.name,
+      category: input.categories.find((c) => p.categories.includes(c.categoryId))?.label ?? "Sports facility",
+      distance: formatDistance(p.distanceM),
+      rating: formatRating(p.rating),
+      reviews: p.reviewCount === null ? "—" : formatCount(p.reviewCount),
+    }));
+  if (rows.length === 0) return null;
+  return {
+    headline: `${rows.length} sports and fitness ${rows.length === 1 ? "facility" : "facilities"} found within ${formatRadius(input.radiusM)}`,
+    rows,
+  };
+}
+
 /* ------------------------------------------------------------- document */
 
 export function buildReportDocument(input: ReportInput): ReportDocument {
@@ -442,12 +469,20 @@ export function buildReportDocument(input: ReportInput): ReportDocument {
 
   const sweep = on("sweep") ? buildSweep(input.sweep) : null;
   const surveyor = buildSurveyorSection(input, on("field-notes"));
+  const sportsAreas = on("sports-areas") ? buildSportsAreas(input) : null;
+  const aiSummary: AiSummarySection | null =
+    on("ai-summary") && input.aiSummaryText ? { summary: input.aiSummaryText } : null;
+  const suggestions: SuggestionsSection | null =
+    on("suggestions") && input.suggestionsText ? { text: input.suggestionsText } : null;
 
   const sections = sectionsFor(blocks, {
     scored: score !== null,
     mapAvailable: input.map !== null,
     sweepHasMarks: sweep !== null,
     hasSurveyorContent: surveyor !== null,
+    hasSportsAreas: sportsAreas !== null,
+    hasAiSummary: aiSummary !== null,
+    hasSuggestions: suggestions !== null,
   });
 
   /* ------------------------------------------------------------- cover */
@@ -594,6 +629,9 @@ export function buildReportDocument(input: ReportInput): ReportDocument {
     },
     competition,
     demand: buildDemand(input, on("count-table")),
+    sportsAreas,
+    aiSummary,
+    suggestions,
     map: on("map") ? input.map : null,
     sweep,
     observations: surveyor,

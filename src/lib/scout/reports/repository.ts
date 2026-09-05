@@ -12,6 +12,7 @@ export interface ReportDraft {
   readonly title: string | null;
   readonly includedBlocks: ReportBlockState;
   readonly fieldNotes: string;
+  readonly suggestionsText: string;
   readonly status: string;
   readonly channel: "whatsapp" | "pdf" | "email" | null;
   readonly updatedAt: string;
@@ -32,12 +33,15 @@ export async function getReportDraft(scanId: string): Promise<ReportDraft | null
   });
 
   if (!row) return null;
+  const rawBlocks = row.includedBlocks as Record<string, unknown> | null;
+  const suggestionsText = typeof rawBlocks?._suggestionsText === "string" ? rawBlocks._suggestionsText : "";
   return {
     id: row.id,
     scanId: row.scanId,
     title: row.title,
     includedBlocks: sanitiseBlockState(row.includedBlocks),
     fieldNotes: row.fieldNotes ?? "",
+    suggestionsText,
     status: row.status,
     channel: row.channel,
     updatedAt: row.updatedAt.toISOString(),
@@ -49,6 +53,7 @@ export interface SaveReportDraftInput {
   readonly userId: string;
   readonly includedBlocks: unknown;
   readonly fieldNotes: string;
+  readonly suggestionsText?: string;
   readonly title?: string | null;
   readonly scoreModelVersion?: string | null;
 }
@@ -64,6 +69,9 @@ export interface SaveReportDraftInput {
  */
 export async function saveReportDraft(input: SaveReportDraftInput): Promise<ReportDraft> {
   const blocks = sanitiseBlockState(input.includedBlocks);
+  const blocksWithMeta = input.suggestionsText
+    ? { ...blocks, _suggestionsText: input.suggestionsText.slice(0, 4000) }
+    : blocks;
   const notes = input.fieldNotes.slice(0, 4000);
 
   const existing = await prisma.report.findFirst({
@@ -88,7 +96,7 @@ export async function saveReportDraft(input: SaveReportDraftInput): Promise<Repo
 
     await prisma.$executeRaw(Prisma.sql`
       UPDATE reports SET
-        included_blocks = ${JSON.stringify(blocks)}::jsonb,
+        included_blocks = ${JSON.stringify(blocksWithMeta)}::jsonb,
         field_notes = ${notes}${title}${modelVersion},
         updated_at = now()
       WHERE id = ${existing.id}::uuid
@@ -99,7 +107,7 @@ export async function saveReportDraft(input: SaveReportDraftInput): Promise<Repo
         scanId: input.scanId,
         createdBy: input.userId,
         title: input.title ?? null,
-        includedBlocks: blocks as Prisma.InputJsonValue,
+        includedBlocks: blocksWithMeta as Prisma.InputJsonValue,
         fieldNotes: notes,
         scoreModelVersion: input.scoreModelVersion ?? null,
         status: "draft",
@@ -114,13 +122,13 @@ export async function saveReportDraft(input: SaveReportDraftInput): Promise<Repo
   const saved = await getReportDraft(input.scanId);
   if (saved) return saved;
 
-  // Unreachable in practice; a typed fallback beats a non-null assertion.
   return {
     id: "",
     scanId: input.scanId,
     title: input.title ?? null,
     includedBlocks: defaultBlockState(),
     fieldNotes: notes,
+    suggestionsText: input.suggestionsText ?? "",
     status: "draft",
     channel: null,
     updatedAt: new Date().toISOString(),
@@ -324,6 +332,20 @@ export async function markReportFailed(reportId: string, message: string): Promi
   `);
 }
 
+/**
+ * Rename a report.
+ *
+ * Only `reports.title` moves — the PDF already produced (and its blob key)
+ * is untouched, so a rename never invalidates a link already handed to a
+ * customer. It is a label on the row, not a new document.
+ */
+export async function updateReportTitle(reportId: string, title: string): Promise<void> {
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE reports SET title = ${title.slice(0, 240)}, updated_at = now()
+    WHERE id = ${reportId}::uuid
+  `);
+}
+
 /* ---------------------------------------------------------------- shares */
 
 /** What the share message needs to know about the scan behind a report. */
@@ -432,4 +454,60 @@ export async function getPublicReportRow(reportId: string): Promise<PublicReport
     expiresAt: row.expiresAt,
     areaLabel: row.scan.areaLabel,
   };
+}
+
+/* ---------------------------------------------------------- reports list */
+
+export interface ReportListRow {
+  readonly id: string;
+  readonly scanId: string;
+  readonly title: string | null;
+  readonly version: number;
+  readonly status: string;
+  readonly pdfBytes: number | null;
+  readonly generatedAt: string | null;
+  readonly createdAt: string;
+  readonly sentTo: string | null;
+  readonly channel: string | null;
+  readonly areaLabel: string;
+  readonly ownerName: string;
+}
+
+export async function listAllReports(userId?: string): Promise<ReportListRow[]> {
+  const rows = await prisma.report.findMany({
+    where: {
+      ...(userId ? { createdBy: userId } : {}),
+      status: { not: "draft" },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: {
+      id: true,
+      scanId: true,
+      title: true,
+      version: true,
+      status: true,
+      pdfBytes: true,
+      generatedAt: true,
+      createdAt: true,
+      sentTo: true,
+      channel: true,
+      scan: { select: { areaLabel: true } },
+      author: { select: { name: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    scanId: r.scanId,
+    title: r.title,
+    version: r.version,
+    status: r.status,
+    pdfBytes: r.pdfBytes,
+    generatedAt: r.generatedAt ? r.generatedAt.toISOString() : null,
+    createdAt: r.createdAt.toISOString(),
+    sentTo: r.sentTo,
+    channel: r.channel,
+    areaLabel: r.scan.areaLabel,
+    ownerName: r.author.name,
+  }));
 }

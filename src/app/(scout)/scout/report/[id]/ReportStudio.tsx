@@ -5,6 +5,7 @@ import { Badge, Button } from "@/components/scout/ui";
 import { SectionLabel, StateBlock } from "@/components/scout/patterns";
 import { SiteMap, type SiteMapMarker } from "@/components/scout/map";
 import { SaturationPanel, ScorePanel } from "@/components/scout/score";
+import { EditableReportTitle } from "@/components/scout/reports";
 import {
   atLeast,
   formatCount,
@@ -26,6 +27,7 @@ export interface GeneratedReport {
   id: string;
   version: number;
   status: string;
+  title: string | null;
   error: string | null;
   pdfBytes: number | null;
   pageCount: number | null;
@@ -73,6 +75,9 @@ export function ReportStudio({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
+  const [suggestionsText, setSuggestionsText] = useState("");
+  const [whatsappCaption, setWhatsappCaption] = useState("");
+
   const [report, setReport] = useState<GeneratedReport | null>(initialReport);
   const [generating, setGenerating] = useState(false);
   const [recipient, setRecipient] = useState("");
@@ -81,7 +86,7 @@ export function ReportStudio({
 
   const loadedDraft = useRef(JSON.stringify({ blocks: initialBlocks, notes: initialNotes }));
   useEffect(() => {
-    if (JSON.stringify({ blocks, notes }) === loadedDraft.current) return;
+    if (JSON.stringify({ blocks, notes, suggestionsText }) === loadedDraft.current) return;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setSaveState("saving");
@@ -90,7 +95,7 @@ export function ReportStudio({
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           signal: controller.signal,
-          body: JSON.stringify({ includedBlocks: blocks, fieldNotes: notes }),
+          body: JSON.stringify({ includedBlocks: blocks, fieldNotes: notes, suggestionsText }),
         });
         setSaveState(res.ok ? "saved" : "error");
       } catch (e) {
@@ -101,7 +106,7 @@ export function ReportStudio({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [blocks, notes, scan.scanId]);
+  }, [blocks, notes, suggestionsText, scan.scanId]);
 
   const generate = useCallback(async () => {
     setGenerating(true);
@@ -144,7 +149,7 @@ export function ReportStudio({
       const res = await fetch(`/api/scout/reports/${report.id}/share`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel: "whatsapp", recipientName: recipient }),
+        body: JSON.stringify({ channel: "whatsapp", recipientName: recipient, caption: whatsappCaption || undefined }),
       });
       const json = (await res.json()) as ShareResponse & { error?: string };
       if (!res.ok || !json.link) {
@@ -191,6 +196,18 @@ export function ReportStudio({
           <div className="text-[12.5px] text-slate-500 mt-[9px] font-sans tracking-normal normal-case">
             {scan.areaLabel} · {formatRadius(scan.radiusM)} · {formatFullDate(scan.scoredAt)}
           </div>
+          {report && (report.status === "generated" || report.status === "delivered") ? (
+            <div className="mt-3">
+              <EditableReportTitle
+                reportId={report.id}
+                title={report.title ?? ""}
+                placeholder={`${scan.areaLabel} — Site Scout report`}
+                onSaved={(title) => setReport((prev) => (prev ? { ...prev, title } : prev))}
+                className="group flex items-center gap-1.5 min-w-0 max-w-full text-left bg-transparent border-0 p-0 cursor-text font-sans text-[13px] font-semibold text-slate-800 hover:text-slate-900"
+                inputClassName="w-full box-border font-sans text-[13px] font-semibold text-slate-900 border border-slate-300 rounded-md px-2.5 py-1.5 outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* AI Analysis — based on scan data */}
@@ -243,6 +260,20 @@ export function ReportStudio({
           </div>
         </div>
 
+        <div className="flex flex-col gap-[9px]">
+          <SectionLabel weight={700}>Our suggestions</SectionLabel>
+          <textarea
+            className="w-full box-border min-h-[120px] resize-y font-sans text-[13.5px] leading-[1.65] text-slate-900 border border-slate-300 rounded-lg p-[14px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
+            value={suggestionsText}
+            onChange={(e) => setSuggestionsText(e.target.value)}
+            aria-label="Your custom suggestions for the customer"
+            placeholder="Write your suggestions for the customer — e.g. recommended sports, facility layout ideas, pricing strategy, unique selling points for this location."
+          />
+          <p className="m-0 text-[11px] leading-[1.65] text-slate-500">
+            This section appears in the report as "Our Suggestions" — your custom recommendations to the customer.
+          </p>
+        </div>
+
         <Button block onClick={() => void generate()} disabled={generating}>
           {generating
             ? "Producing the report…"
@@ -278,6 +309,14 @@ export function ReportStudio({
               onChange={(e) => setRecipient(e.target.value)}
               aria-label="Who are you sending it to?"
               placeholder="Who are you sending it to? (e.g. Deepa)"
+            />
+
+            <textarea
+              className="w-full box-border min-h-[80px] resize-y font-sans text-[13px] leading-[1.6] text-slate-900 border border-slate-300 rounded-md px-3 py-[10px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
+              value={whatsappCaption}
+              onChange={(e) => setWhatsappCaption(e.target.value)}
+              aria-label="Custom message to send with the report"
+              placeholder="Add a custom message to accompany the report link (optional)"
             />
 
             <button
@@ -430,6 +469,48 @@ export function ReportStudio({
                   </span>
                 </div>
               ))}
+            </div>
+          ) : null}
+
+          {on("sports-areas") && scan.places.filter((p) => p.side === "competition").length > 0 ? (
+            <div>
+              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Available sports facilities</div>
+              <div className="border border-slate-200 rounded-lg overflow-hidden mt-[10px]">
+                <div className="grid grid-cols-[1.4fr_0.6fr_0.6fr] px-[15px] py-[11px] bg-slate-100 text-[9.5px] font-bold tracking-[0.09em] uppercase text-slate-500">
+                  <span>Facility</span>
+                  <span className="text-right">Distance</span>
+                  <span className="text-right">Rating</span>
+                </div>
+                {scan.places
+                  .filter((p) => p.side === "competition")
+                  .sort((a, b) => a.distanceM - b.distanceM)
+                  .slice(0, 15)
+                  .map((p) => (
+                    <div key={p.placeId} className="grid grid-cols-[1.4fr_0.6fr_0.6fr] px-[15px] py-[11px] text-[12.5px] border-t border-slate-200">
+                      <span className="font-semibold truncate">{p.name}</span>
+                      <span className="text-right text-slate-500">{formatDistance(p.distanceM)}</span>
+                      <span className="text-right text-slate-500">{formatRating(p.rating)} ★</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ) : null}
+
+          {on("ai-summary") ? (
+            <div>
+              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">AI analysis</div>
+              <div className="mt-[10px] border-l-[3px] border-[#2e3192] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700">
+                AI analysis will be generated based on scan data — recommending the best sports for this location, revenue potential, and competitive positioning.
+              </div>
+            </div>
+          ) : null}
+
+          {on("suggestions") && suggestionsText ? (
+            <div>
+              <div className="text-[10.5px] font-bold tracking-[0.12em] uppercase text-slate-500">Our suggestions</div>
+              <div className="mt-[10px] border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 whitespace-pre-wrap">
+                {suggestionsText}
+              </div>
             </div>
           ) : null}
 

@@ -24,6 +24,9 @@ export type ReportSectionId =
   | "catchment"
   | "competition"
   | "demand"
+  | "sportsAreas"
+  | "aiSummary"
+  | "suggestions"
   | "map"
   | "sweep"
   | "observations"
@@ -36,6 +39,9 @@ export const REPORT_SECTION_TITLES: Readonly<Record<ReportSectionId, string>> = 
   catchment: "The catchment",
   competition: "Competition",
   demand: "Demand anchors",
+  sportsAreas: "Available sports facilities",
+  aiSummary: "AI analysis",
+  suggestions: "Our suggestions",
   map: "The catchment, mapped",
   sweep: "Marked open spaces",
   observations: "Surveyor observations",
@@ -210,6 +216,33 @@ export interface CountTableRow {
   readonly nearest: string;
 }
 
+/* ---------------------------------------------------------- sportsAreas */
+
+export interface SportsAreaRow {
+  readonly name: string;
+  readonly category: string;
+  readonly distance: string;
+  readonly rating: string;
+  readonly reviews: string;
+}
+
+export interface SportsAreasSection {
+  readonly headline: string;
+  readonly rows: readonly SportsAreaRow[];
+}
+
+/* -------------------------------------------------------------- aiSummary */
+
+export interface AiSummarySection {
+  readonly summary: string;
+}
+
+/* ----------------------------------------------------------- suggestions */
+
+export interface SuggestionsSection {
+  readonly text: string;
+}
+
 /* ------------------------------------------------------------------- map */
 
 export interface MapSection {
@@ -276,6 +309,9 @@ export interface ReportDocument {
   readonly catchment: CatchmentSection;
   readonly competition: CompetitionSection;
   readonly demand: DemandSection;
+  readonly sportsAreas: SportsAreasSection | null;
+  readonly aiSummary: AiSummarySection | null;
+  readonly suggestions: SuggestionsSection | null;
   readonly map: MapSection | null;
   readonly sweep: SweepSection | null;
   readonly observations: ObservationsSection | null;

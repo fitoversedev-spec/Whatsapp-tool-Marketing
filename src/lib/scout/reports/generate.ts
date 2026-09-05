@@ -7,6 +7,7 @@ import { formatFullDate } from "@/lib/scout/display/format";
 import { CATEGORIES } from "@/lib/scout/places/taxonomy";
 import { getCompareSubjects } from "@/lib/scout/scans/queries";
 
+import { canGenerateAiSummary, generateAiSummary } from "./ai-summary";
 import { reportBrand } from "./brand";
 import { buildComparisonDocument, renderComparisonHtml } from "./comparison";
 import { assembleReportInput } from "./data";
@@ -157,7 +158,33 @@ export async function runReportGeneration(
     });
     if (!input) throw new Error("The scan behind this report could not be read.");
 
-    const document = buildReportDocument(input);
+    let aiSummaryText: string | null = null;
+    if (input.blocks["ai-summary"] && canGenerateAiSummary()) {
+      try {
+        aiSummaryText = await generateAiSummary(author.userId, {
+          areaLabel: input.areaLabel,
+          radiusM: input.radiusM,
+          competitionCount: input.competitionCount,
+          demandCount: input.demandCount,
+          avgRating: input.avgRating,
+          reviewTotal: input.reviewTotal,
+          categories: input.categories,
+          places: input.places.map((p) => ({
+            name: p.name,
+            side: p.side,
+            rating: p.rating,
+            reviewCount: p.reviewCount,
+            distanceM: p.distanceM,
+          })),
+          scoreTotal: input.score?.totalRounded ?? null,
+          scoreVerdict: input.score?.verdict ?? null,
+        });
+      } catch (err) {
+        console.error(JSON.stringify({ tag: "report.ai-summary.failed", reportId, error: err instanceof Error ? err.message : "unknown" }));
+      }
+    }
+
+    const document = buildReportDocument({ ...input, aiSummaryText });
     const html = await renderReportHtml(document);
     const brand = reportBrand();
 
@@ -249,6 +276,7 @@ export async function recordShare(input: {
   readonly reportId: string;
   readonly channel: "whatsapp" | "pdf" | "email";
   readonly recipientName?: unknown;
+  readonly caption?: string;
 }): Promise<ShareResult | null> {
   const row = await getReportRow(input.reportId);
   if (!row || !row.expiresAt) return null;
@@ -275,6 +303,7 @@ export async function recordShare(input: {
     preparedBy: input.user.displayName,
     recipientName,
     expiresOnLabel: link.expiresOnLabel,
+    caption: input.caption,
   });
 
   await recordShareRows({

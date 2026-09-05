@@ -100,6 +100,7 @@ model User {
   scoutReportShares ReportShare[]     @relation("ScoutReportSharer")
   scoutPlaceTags    PlaceTag[]        @relation("ScoutPlaceTagAuthor")
   scoutApiUsage     ApiUsage[]        @relation("ScoutApiUsageUser")
+  scanMarkers       ScanMarker[]      @relation("ScanMarkerAuthor")
 
   @@map("users")
 }
@@ -2258,6 +2259,7 @@ model Scan {
   reviewThemes ReviewTheme[]
   apiUsage     ApiUsage[]
   job          ScanJob?
+  markers      ScanMarker[]
 
   @@index([ownerId], map: "scans_owner_idx")
   @@index([siteId], map: "scans_site_idx")
@@ -2586,4 +2588,26 @@ model ReportShare {
   @@index([reportId], map: "report_shares_report_idx")
   @@index([scanId], map: "report_shares_scan_idx")
   @@map("report_shares")
+}
+
+// Custom map annotations a surveyor drops on the scan map — customer
+// locations, competitor areas, or any free-form note. Distinct from `Place`
+// (Google-sourced venues): a ScanMarker has no Google identity, is scoped to
+// exactly one scan, and is entirely user-authored.
+model ScanMarker {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scanId    String   @map("scan_id") @db.Uuid
+  createdBy String   @map("created_by")
+  label     String   @db.VarChar(200)
+  category  String   @default("custom") @db.VarChar(40)
+  lat       Float
+  lng       Float
+  note      String?  @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  scan   Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  author User @relation("ScanMarkerAuthor", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([scanId], map: "scan_markers_scan_idx")
+  @@map("scan_markers")
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import BackButton from "@/components/BackButton";
 import { getScoutIdentity } from "@/lib/scout/identity";
 import { buildComparison } from "@/lib/scout/compare/model";
 import { CATEGORIES } from "@/lib/scout/places/taxonomy";
@@ -43,10 +44,15 @@ export default async function ComparePage({
   );
 
   return (
-    <CompareClient
-      comparison={comparison}
-      options={options.map((o) => ({ id: o.id, areaLabel: o.areaLabel, radiusM: o.radiusM }))}
-      selectedIds={subjects.map((s) => s.scanId)}
-    />
+    <>
+      <div className="px-4 sm:px-6 lg:px-8 pt-3">
+        <BackButton backHref="/scout/dashboard" />
+      </div>
+      <CompareClient
+        comparison={comparison}
+        options={options.map((o) => ({ id: o.id, areaLabel: o.areaLabel, radiusM: o.radiusM }))}
+        selectedIds={subjects.map((s) => s.scanId)}
+      />
+    </>
   );
 }

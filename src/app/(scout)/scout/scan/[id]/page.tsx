@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import BackButton from "@/components/BackButton";
 import { getScoutIdentity } from "@/lib/scout/identity";
 import { env } from "@/lib/scout/env";
 import { publicTaxonomy } from "@/lib/scout/places/taxonomy";
@@ -38,10 +39,15 @@ export default async function ScanDetailPage({ params }: { params: { id: string 
   if (!data) notFound();
 
   return (
-    <ScanScreen
-      taxonomy={publicTaxonomy()}
-      initial={data}
-      googleKeyMissing={!env.hasGoogleServerKey}
-    />
+    <>
+      <div className="px-4 sm:px-6 lg:px-8 pt-3">
+        <BackButton backHref="/scout/dashboard" />
+      </div>
+      <ScanScreen
+        taxonomy={publicTaxonomy()}
+        initial={data}
+        googleKeyMissing={!env.hasGoogleServerKey}
+      />
+    </>
   );
 }

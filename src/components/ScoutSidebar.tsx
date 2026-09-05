@@ -16,6 +16,7 @@ const SCOUT_NAV = [
   { href: "/scout/sweep", label: "Find Spaces", icon: "\u{1F9F9}" },
   { href: "/scout/compare", label: "Compare", icon: "\u{2696}️" },
   { href: "/scout/sites", label: "Saved Scans", icon: "\u{1F4CD}" },
+  { href: "/scout/reports", label: "Reports", icon: "\u{1F4C4}" },
   { href: "/scout/admin", label: "Settings", icon: "\u{1F6E0}️", adminOnly: true },
 ];
 

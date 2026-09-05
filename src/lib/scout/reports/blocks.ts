@@ -55,6 +55,24 @@ export const REPORT_BLOCKS: readonly ReportBlockDef[] = [
     defaultOn: true,
   },
   {
+    id: "sports-areas",
+    label: "Available sports facilities",
+    help: "Lists sports and fitness venues found in the scan area.",
+    defaultOn: true,
+  },
+  {
+    id: "ai-summary",
+    label: "AI analysis",
+    help: "An AI-generated summary recommending sports for revenue potential based on scan data.",
+    defaultOn: true,
+  },
+  {
+    id: "suggestions",
+    label: "Our suggestions",
+    help: "A custom text section for your own recommendations to the customer.",
+    defaultOn: true,
+  },
+  {
     id: "map",
     label: "Map with markers",
     help: "The catchment with competing facilities and demand anchors plotted.",

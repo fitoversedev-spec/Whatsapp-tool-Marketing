@@ -46,6 +46,9 @@ export interface SectionAvailability {
   readonly mapAvailable: boolean;
   readonly sweepHasMarks: boolean;
   readonly hasSurveyorContent: boolean;
+  readonly hasSportsAreas: boolean;
+  readonly hasAiSummary: boolean;
+  readonly hasSuggestions: boolean;
 }
 
 const ORDER: readonly ReportSectionId[] = [
@@ -54,6 +57,9 @@ const ORDER: readonly ReportSectionId[] = [
   "catchment",
   "competition",
   "demand",
+  "sportsAreas",
+  "aiSummary",
+  "suggestions",
   "map",
   "sweep",
   "observations",
@@ -81,6 +87,12 @@ export function sectionsFor(
         return available.scored && on("score");
       case "map":
         return on("map") && available.mapAvailable;
+      case "sportsAreas":
+        return on("sports-areas") && available.hasSportsAreas;
+      case "aiSummary":
+        return on("ai-summary") && available.hasAiSummary;
+      case "suggestions":
+        return on("suggestions") && available.hasSuggestions;
       case "sweep":
         return on("sweep") && available.sweepHasMarks;
       case "observations":

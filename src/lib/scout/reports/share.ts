@@ -29,6 +29,7 @@ export interface ShareMessageInput {
   readonly recipientName?: string | null;
   /** ISO-8601 date the link stops working, already formatted for a reader. */
   readonly expiresOnLabel: string | null;
+  readonly caption?: string | null;
 }
 
 /** The pre-filled WhatsApp body. Plain text — WhatsApp renders no markup. */
@@ -54,6 +55,11 @@ export function shareMessage(input: ShareMessageInput): string {
   lines.push("");
   lines.push(input.url);
   if (input.expiresOnLabel) lines.push(`(This link works until ${input.expiresOnLabel}.)`);
+  if (input.caption?.trim()) {
+    lines.push("");
+    lines.push(input.caption.trim());
+  }
+
   lines.push("");
   lines.push(
     `${input.preparedBy} · Fitoverse. It is a desk survey for screening — happy to walk through it.`,

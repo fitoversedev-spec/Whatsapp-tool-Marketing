@@ -23,6 +23,30 @@ export interface SiteMapMarker {
   [key: string]: unknown;
 }
 
+/**
+ * Colours for user-authored `ScanMarker` annotations — customer locations,
+ * competitor areas, and free-form notes dropped directly on the map.
+ *
+ * Kept separate from {@link MARKER_COLORS}: those mark something *Google*
+ * returned (a facility, a demand anchor); these mark something a *person*
+ * typed. `SiteMap` renders them with a distinct diamond shape so the two
+ * families are never mistaken for one another.
+ */
+export const CUSTOM_MARKER_COLORS: Record<string, string> = {
+  customer: "#8b5cf6",
+  competitor: "#f97316",
+  custom: "#6b7280",
+};
+
+/** A user-placed marker — the map-rendering shape of a `ScanMarker` row. */
+export interface CustomSiteMapMarker {
+  id: string;
+  lat: number;
+  lng: number;
+  label: string;
+  category: string;
+}
+
 /** Catchment circle styling from the original custom element. */
 export const CIRCLE_STYLE = {
   color: MARKER_COLORS.demand,

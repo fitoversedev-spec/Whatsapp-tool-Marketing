@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import BackButton from "@/components/BackButton";
 import { Button } from "@/components/scout/ui";
 import { ScreenScaffold, StateBlock } from "@/components/scout/patterns";
 import { canAccessAllScans, getScoutIdentity } from "@/lib/scout/identity";
@@ -37,13 +38,18 @@ export default async function SweepPage({
     if (scan && (scan.ownerId === identity.userId || canAccessAllScans(identity))) {
       const sweep = await getSweep(scanId);
       return (
-        <SweepScreen
-          scanId={scanId}
-          areaLabel={scan.areaLabel}
-          centre={scan.centre}
-          radiusM={scan.radiusM}
-          initialSweep={sweep}
-        />
+        <>
+          <div className="px-4 sm:px-6 lg:px-8 pt-3">
+            <BackButton backHref="/scout/dashboard" />
+          </div>
+          <SweepScreen
+            scanId={scanId}
+            areaLabel={scan.areaLabel}
+            centre={scan.centre}
+            radiusM={scan.radiusM}
+            initialSweep={sweep}
+          />
+        </>
       );
     }
   }
@@ -51,33 +57,38 @@ export default async function SweepPage({
   const scans = await listComparableScans(identity);
 
   return (
-    <ScreenScaffold
-      eyebrow="Spaces sweep"
-      title="Pick the area to sweep"
-      lede="A sweep is saved against a scan, so it stays with the area everyone else can see."
-    >
-      {scans.length === 0 ? (
-        <StateBlock
-          eyebrow="Nothing to sweep yet"
-          title="Run a scan first"
-          body="A sweep records the vacant plots and terraces you spot inside a scanned area. Run a scan so there is somewhere to save it."
-          action={
-            <Link href="/scout/scan">
-              <Button>New scan</Button>
-            </Link>
-          }
-        />
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-          {scans.map((scan) => (
-            <Link key={scan.id} href={`/scout/sweep?scanId=${scan.id}`}>
-              <Button variant="secondary" block>
-                {scan.areaLabel} · {formatRadius(scan.radiusM)}
-              </Button>
-            </Link>
-          ))}
-        </div>
-      )}
-    </ScreenScaffold>
+    <>
+      <div className="px-4 sm:px-6 lg:px-8 pt-3">
+        <BackButton backHref="/scout/dashboard" />
+      </div>
+      <ScreenScaffold
+        eyebrow="Spaces sweep"
+        title="Pick the area to sweep"
+        lede="A sweep is saved against a scan, so it stays with the area everyone else can see."
+      >
+        {scans.length === 0 ? (
+          <StateBlock
+            eyebrow="Nothing to sweep yet"
+            title="Run a scan first"
+            body="A sweep records the vacant plots and terraces you spot inside a scanned area. Run a scan so there is somewhere to save it."
+            action={
+              <Link href="/scout/scan">
+                <Button>New scan</Button>
+              </Link>
+            }
+          />
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {scans.map((scan) => (
+              <Link key={scan.id} href={`/scout/sweep?scanId=${scan.id}`}>
+                <Button variant="secondary" block>
+                  {scan.areaLabel} · {formatRadius(scan.radiusM)}
+                </Button>
+              </Link>
+            ))}
+          </div>
+        )}
+      </ScreenScaffold>
+    </>
   );
 }

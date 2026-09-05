@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import NavigationTracker from "@/components/NavigationTracker";
 import ScoutSidebar from "@/components/ScoutSidebar";
 import type { Role } from "@/lib/rbac";
 
@@ -19,6 +20,7 @@ export default async function ScoutLayout({ children }: { children: ReactNode })
         }}
       />
       <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden pb-14 lg:pb-0">{children}</main>
+      <NavigationTracker />
     </div>
   );
 }

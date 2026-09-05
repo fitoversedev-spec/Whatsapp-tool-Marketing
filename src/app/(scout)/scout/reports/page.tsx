@@ -3,9 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import { ScreenScaffold, StateBlock } from "@/components/scout/patterns";
-import { ReportListEntry } from "@/components/scout/reports";
 import { getScoutIdentity, canAccessAllScans } from "@/lib/scout/identity";
 import { listAllReports } from "@/lib/scout/reports/repository";
+
+import { ReportListClient } from "./ReportListClient";
 
 export const metadata: Metadata = { title: "Reports — Site Scout" };
 export const dynamic = "force-dynamic";
@@ -42,11 +43,7 @@ export default async function Page() {
             }
           />
         ) : (
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            {reports.map((r) => (
-              <ReportListEntry key={r.id} report={r} />
-            ))}
-          </div>
+          <ReportListClient reports={reports} />
         )}
       </ScreenScaffold>
     </>

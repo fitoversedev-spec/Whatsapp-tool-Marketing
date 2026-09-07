@@ -573,7 +573,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
       const plotPos: [number, number] = [centre.lat, centre.lng];
       const selPos: [number, number] = [selectedPlace.lat, selectedPlace.lng];
 
-      function drawLine(a: [number, number], b: [number, number], distM: number, color: string) {
+      const addLine = (a: [number, number], b: [number, number], distM: number, color: string) => {
         L.polyline([a, b], { color, weight: 3, dashArray: "8 5", opacity: 0.9 }).addTo(lg);
         const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
         const label = distM < 1000 ? `${Math.round(distM)} m` : `${(distM / 1000).toFixed(1)} km`;
@@ -585,12 +585,10 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
           }),
           interactive: false,
         }).addTo(lg);
-      }
+      };
 
-      // Line from customer plot to selected place
-      drawLine(plotPos, selPos, selectedPlace.distanceM, "#0369a1");
+      addLine(plotPos, selPos, selectedPlace.distanceM, "#0369a1");
 
-      // Lines from selected place to up to 3 nearest other facilities
       const places = data?.places ?? [];
       const others = places
         .filter((p) => p.placeId !== selectedPlace.placeId)
@@ -603,7 +601,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
         .slice(0, 3);
 
       for (const p of others) {
-        drawLine(selPos, [p.lat, p.lng], Math.round(p.distFromSelected), "#7c3aed");
+        addLine(selPos, [p.lat, p.lng], Math.round(p.distFromSelected), "#7c3aed");
       }
     });
   }, [selectedPlace, centre.lat, centre.lng, data?.places]);

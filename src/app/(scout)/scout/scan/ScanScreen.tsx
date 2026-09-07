@@ -568,11 +568,13 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     if (!selectedPlace) return;
     import("leaflet").then((mod) => {
       const L = mod as unknown as typeof LeafletNS;
+      const lg = distanceLineRef.current;
+      if (!lg) return;
       const plotPos: [number, number] = [centre.lat, centre.lng];
       const selPos: [number, number] = [selectedPlace.lat, selectedPlace.lng];
 
       function drawLine(a: [number, number], b: [number, number], distM: number, color: string) {
-        L.polyline([a, b], { color, weight: 3, dashArray: "8 5", opacity: 0.9 }).addTo(layer);
+        L.polyline([a, b], { color, weight: 3, dashArray: "8 5", opacity: 0.9 }).addTo(lg);
         const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
         const label = distM < 1000 ? `${Math.round(distM)} m` : `${(distM / 1000).toFixed(1)} km`;
         L.marker(mid, {
@@ -582,7 +584,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
             html: `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:system-ui,sans-serif;font-size:13px;font-weight:700;color:${color};background:#fff;padding:2px 8px;border-radius:6px;border:2px solid ${color};box-shadow:0 2px 6px rgba(0,0,0,.25)">${label}</span>`,
           }),
           interactive: false,
-        }).addTo(layer);
+        }).addTo(lg);
       }
 
       // Line from customer plot to selected place

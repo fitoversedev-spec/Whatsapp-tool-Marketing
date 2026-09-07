@@ -151,6 +151,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   const [data, setData] = useState<ScanScreenData | null>(initial);
   const [progress, setProgress] = useState<ScanProgressDto | null>(initial?.progress ?? null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [pinnedPlaceIds, setPinnedPlaceIds] = useState<string[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
@@ -565,46 +566,55 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     const layer = distanceLineRef.current;
     if (!layer) return;
     layer.clearLayers();
-    if (!selectedPlace) return;
+    if (pinnedPlaceIds.length === 0) return;
     import("leaflet").then((mod) => {
       const L = mod as unknown as typeof LeafletNS;
       const lg = distanceLineRef.current;
       if (!lg) return;
-      const plotPos: [number, number] = [centre.lat, centre.lng];
-      const selPos: [number, number] = [selectedPlace.lat, selectedPlace.lng];
+
+      const pinned = pinnedPlaceIds
+        .map((id) => (data?.places ?? []).find((p) => p.placeId === id))
+        .filter((p): p is NonNullable<typeof p> => p != null);
+      if (pinned.length === 0) return;
 
       const addLine = (a: [number, number], b: [number, number], distM: number, color: string) => {
-        L.polyline([a, b], { color, weight: 3, dashArray: "8 5", opacity: 0.9 }).addTo(lg);
+        L.polyline([a, b], { color, weight: 4, dashArray: "8 5", opacity: 0.9 }).addTo(lg);
         const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
         const label = distM < 1000 ? `${Math.round(distM)} m` : `${(distM / 1000).toFixed(1)} km`;
         L.marker(mid, {
           icon: L.divIcon({
             className: "",
             iconSize: [0, 0],
-            html: `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:system-ui,sans-serif;font-size:13px;font-weight:700;color:${color};background:#fff;padding:2px 8px;border-radius:6px;border:2px solid ${color};box-shadow:0 2px 6px rgba(0,0,0,.25)">${label}</span>`,
+            html: `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:system-ui,sans-serif;font-size:14px;font-weight:700;color:${color};background:#fff;padding:3px 10px;border-radius:8px;border:2px solid ${color};box-shadow:0 2px 8px rgba(0,0,0,.35)">${label}</span>`,
           }),
           interactive: false,
         }).addTo(lg);
       };
 
-      addLine(plotPos, selPos, selectedPlace.distanceM, "#0369a1");
+      const haversine = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+        const R = 6371e3;
+        const toRad = (d: number) => (d * Math.PI) / 180;
+        const dLat = toRad(lat2 - lat1);
+        const dLng = toRad(lng2 - lng1);
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      };
 
-      const places = data?.places ?? [];
-      const others = places
-        .filter((p) => p.placeId !== selectedPlace.placeId)
-        .map((p) => {
-          const dLat = (p.lat - selectedPlace.lat) * 111320;
-          const dLng = (p.lng - selectedPlace.lng) * 111320 * Math.cos((selectedPlace.lat * Math.PI) / 180);
-          return { ...p, distFromSelected: Math.sqrt(dLat * dLat + dLng * dLng) };
-        })
-        .sort((a, b) => a.distFromSelected - b.distFromSelected)
-        .slice(0, 3);
+      const plotPos: [number, number] = [centre.lat, centre.lng];
+      for (const p of pinned) {
+        addLine(plotPos, [p.lat, p.lng], p.distanceM, "#0369a1");
+      }
 
-      for (const p of others) {
-        addLine(selPos, [p.lat, p.lng], Math.round(p.distFromSelected), "#7c3aed");
+      for (let i = 0; i < pinned.length; i++) {
+        for (let j = i + 1; j < pinned.length; j++) {
+          const dist = haversine(pinned[i].lat, pinned[i].lng, pinned[j].lat, pinned[j].lng);
+          addLine([pinned[i].lat, pinned[i].lng], [pinned[j].lat, pinned[j].lng], dist, "#7c3aed");
+        }
       }
     });
-  }, [selectedPlace, centre.lat, centre.lng, data?.places]);
+  }, [pinnedPlaceIds, centre.lat, centre.lng, data?.places]);
 
   const selectedTermCount = useMemo(
     () =>
@@ -619,11 +629,14 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
 
   const scrollTargetRef = useRef<HTMLDivElement | null>(null);
 
-  /** Map marker → list row. The list is inside a scrolling panel. */
+  /** Map marker → list row + toggle pin for distance comparison. */
   const selectFromMap = useCallback((marker: SiteMapMarker) => {
     const id = typeof marker.placeId === "string" ? marker.placeId : null;
     setSelectedPlaceId(id);
     if (!id) return;
+    setPinnedPlaceIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
     requestAnimationFrame(() => {
       document
         .querySelector(`[data-place-row="${CSS.escape(id)}"]`)
@@ -971,7 +984,18 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
             {/* ------------------------------------------------ result groups */}
             {groups.length > 0 ? (
               <div className="flex flex-col gap-2">
-                <SectionLabel weight={700}>Results</SectionLabel>
+                <div className="flex items-center justify-between">
+                  <SectionLabel weight={700}>Results</SectionLabel>
+                  {pinnedPlaceIds.length > 0 && (
+                    <button
+                      type="button"
+                      className="bg-transparent border-0 font-sans text-xs text-purple-600 cursor-pointer hover:text-purple-800"
+                      onClick={() => setPinnedPlaceIds([])}
+                    >
+                      Clear {pinnedPlaceIds.length} pin{pinnedPlaceIds.length > 1 ? "s" : ""}
+                    </button>
+                  )}
+                </div>
                 {groups.map((group) => {
                   const expanded = expandedGroups[group.id] === true;
                   const shown = expanded ? group.places : group.places.slice(0, RESULTS_PER_GROUP);
@@ -992,44 +1016,80 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                           {atLeast(group.places.length, group.saturated)} shown
                         </span>
                       </div>
-                      {shown.map((place) => (
-                        <button
-                          key={place.placeId}
-                          type="button"
-                          data-place-row={place.placeId}
-                          className={`flex items-center gap-[10px] border rounded-lg py-2 px-3 w-full text-left bg-white font-sans cursor-pointer ${
-                            selectedPlaceId === place.placeId
-                              ? "border-court-500 bg-court-100"
-                              : "border-slate-200 hover:border-slate-300"
-                          }`}
-                          aria-pressed={selectedPlaceId === place.placeId}
-                          onClick={() =>
-                            setSelectedPlaceId((current) =>
-                              current === place.placeId ? null : place.placeId,
-                            )
-                          }
-                        >
-                          <span className="flex-1 min-w-0">
-                            <span className="block text-sm font-semibold text-slate-900">{place.name}</span>
-                            <span className="block text-xs text-slate-500 mt-0.5">
-                              {[
-                                place.primaryTypeDisplayName,
-                                place.rating === null
-                                  ? null
-                                  : `${place.rating.toFixed(1)} ★ ${formatCount(place.reviewCount ?? 0)}`,
-                                place.businessStatus && place.businessStatus !== "OPERATIONAL"
-                                  ? place.businessStatus.toLowerCase().replaceAll("_", " ")
-                                  : null,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ") || "No detail from Google"}
+                      {shown.map((place) => {
+                        const isPinned = pinnedPlaceIds.includes(place.placeId);
+                        return (
+                          <div
+                            key={place.placeId}
+                            data-place-row={place.placeId}
+                            className={`flex items-center gap-[10px] border rounded-lg py-2 px-3 w-full text-left bg-white font-sans cursor-pointer ${
+                              selectedPlaceId === place.placeId
+                                ? "border-court-500 bg-court-50"
+                                : isPinned
+                                  ? "border-purple-400 bg-purple-50"
+                                  : "border-slate-200 hover:border-slate-300"
+                            }`}
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={selectedPlaceId === place.placeId}
+                            onClick={() =>
+                              setSelectedPlaceId((current) =>
+                                current === place.placeId ? null : place.placeId,
+                              )
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setSelectedPlaceId((current) =>
+                                  current === place.placeId ? null : place.placeId,
+                                );
+                              }
+                            }}
+                          >
+                            <span className="flex-1 min-w-0">
+                              <span className="block text-sm font-semibold text-slate-900">{place.name}</span>
+                              <span className="block text-xs text-slate-500 mt-0.5">
+                                {[
+                                  place.primaryTypeDisplayName,
+                                  place.rating === null
+                                    ? null
+                                    : `${place.rating.toFixed(1)} ★ ${formatCount(place.reviewCount ?? 0)}`,
+                                  place.businessStatus && place.businessStatus !== "OPERATIONAL"
+                                    ? place.businessStatus.toLowerCase().replaceAll("_", " ")
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ") || "No detail from Google"}
+                              </span>
                             </span>
-                          </span>
-                          <span className="text-xs text-slate-500 flex-none">
-                            {formatDistance(place.distanceM)}
-                          </span>
-                        </button>
-                      ))}
+                            <span className="text-xs text-slate-500 flex-none">
+                              {formatDistance(place.distanceM)}
+                            </span>
+                            <button
+                              type="button"
+                              className={`flex-none w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                                isPinned
+                                  ? "bg-purple-600 text-white"
+                                  : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPinnedPlaceIds((prev) =>
+                                  prev.includes(place.placeId)
+                                    ? prev.filter((id) => id !== place.placeId)
+                                    : [...prev, place.placeId],
+                                );
+                              }}
+                              title={isPinned ? "Remove from distance comparison" : "Compare distance"}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                                <circle cx="12" cy="10" r="3" />
+                              </svg>
+                            </button>
+                          </div>
+                        );
+                      })}
                       {group.places.length > RESULTS_PER_GROUP ? (
                         <button
                           type="button"

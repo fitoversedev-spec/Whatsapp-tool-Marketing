@@ -211,7 +211,7 @@
 - Saturation panel
 - Verdict badge (Proceed / Investigate / Avoid)
 - Map with colour-coded markers (green = facilities, blue = demand, red = plot)
-- Distance line from plot to selected facility on map
+- Manual distance comparison: pin places to see distance lines between all pinned pairs and from plot
 - Customer markers (user-placed annotations)
 - Archive / delete scan
 

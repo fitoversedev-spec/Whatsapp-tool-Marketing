@@ -136,14 +136,15 @@ async function resolveGoogleMapsUrl(url: string): Promise<{ lat: number; lng: nu
   const finalUrl = res.url;
 
   const tryExtract = (s: string): { lat: number; lng: number } | null => {
-    const at = s.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-    if (at) return { lat: Number(at[1]), lng: Number(at[2]) };
-    const q = s.match(/[?&](?:q|ll|query|center)=(-?\d+\.?\d*)[,+%20]+(-?\d+\.?\d*)/);
-    if (q) return { lat: Number(q[1]), lng: Number(q[2]) };
-    const pl = s.match(/\/place\/(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-    if (pl) return { lat: Number(pl[1]), lng: Number(pl[2]) };
+    // !3d/!4d = exact place coords, checked first (@ is only viewport center)
     const d = s.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
     if (d) return { lat: Number(d[1]), lng: Number(d[2]) };
+    const pl = s.match(/\/place\/(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (pl) return { lat: Number(pl[1]), lng: Number(pl[2]) };
+    const q = s.match(/[?&](?:q|ll|query|center)=(-?\d+\.?\d*)[,+%20]+(-?\d+\.?\d*)/);
+    if (q) return { lat: Number(q[1]), lng: Number(q[2]) };
+    const at = s.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (at) return { lat: Number(at[1]), lng: Number(at[2]) };
     return null;
   };
 

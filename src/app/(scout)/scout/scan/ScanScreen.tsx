@@ -47,18 +47,18 @@ const GOOGLE_MAPS_URL_RE = /google\.[\w.]+\/maps|maps\.google|maps\.app\.goo\.gl
 function parseGoogleMapsUrl(input: string): { lat: number; lng: number } | null {
   const trimmed = input.trim();
   if (!GOOGLE_MAPS_URL_RE.test(trimmed)) return null;
-  // @lat,lng or @lat,lng,zoom
-  const atMatch = trimmed.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (atMatch) return { lat: Number(atMatch[1]), lng: Number(atMatch[2]) };
-  // ?q=lat,lng or ?ll=lat,lng
-  const qMatch = trimmed.match(/[?&](?:q|ll|query)=(-?\d+\.\d+)[,%20]+(-?\d+\.\d+)/);
-  if (qMatch) return { lat: Number(qMatch[1]), lng: Number(qMatch[2]) };
+  // !3d (lat) and !4d (lng) — exact place coords, checked first
+  const dMatch = trimmed.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
+  if (dMatch) return { lat: Number(dMatch[1]), lng: Number(dMatch[2]) };
   // /place/lat,lng
   const placeMatch = trimmed.match(/\/place\/(-?\d+\.\d+),(-?\d+\.\d+)/);
   if (placeMatch) return { lat: Number(placeMatch[1]), lng: Number(placeMatch[2]) };
-  // !3d (lat) and !4d (lng) in data params
-  const dMatch = trimmed.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
-  if (dMatch) return { lat: Number(dMatch[1]), lng: Number(dMatch[2]) };
+  // ?q=lat,lng or ?ll=lat,lng
+  const qMatch = trimmed.match(/[?&](?:q|ll|query)=(-?\d+\.\d+)[,%20]+(-?\d+\.\d+)/);
+  if (qMatch) return { lat: Number(qMatch[1]), lng: Number(qMatch[2]) };
+  // @lat,lng — viewport center, used as fallback only
+  const atMatch = trimmed.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (atMatch) return { lat: Number(atMatch[1]), lng: Number(atMatch[2]) };
   return null;
 }
 

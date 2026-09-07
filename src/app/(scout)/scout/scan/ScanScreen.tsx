@@ -37,7 +37,26 @@ import type { ScoreResult } from "@/lib/scout/scoring/types";
 
 
 const PRESET_RADII = [1, 2, 5, 10, 15, 20] as const;
+const SLIDER_MIN = 1;
+const SLIDER_MAX = 20;
 const RESULTS_PER_GROUP = 4;
+
+/** Extract lat/lng from a Google Maps URL. Returns null if not a Maps link. */
+function parseGoogleMapsUrl(input: string): { lat: number; lng: number } | null {
+  const trimmed = input.trim();
+  if (!/google\.\w+\/maps|maps\.google|maps\.app\.goo\.gl|goo\.gl\/maps/i.test(trimmed)) return null;
+  // @lat,lng or @lat,lng,zoom
+  const atMatch = trimmed.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (atMatch) return { lat: Number(atMatch[1]), lng: Number(atMatch[2]) };
+  // ?q=lat,lng or ?ll=lat,lng
+  const qMatch = trimmed.match(/[?&](?:q|ll|query)=(-?\d+\.\d+)[,%20]+(-?\d+\.\d+)/);
+  if (qMatch) return { lat: Number(qMatch[1]), lng: Number(qMatch[2]) };
+  // /place/lat,lng
+  const placeMatch = trimmed.match(/\/place\/(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (placeMatch) return { lat: Number(placeMatch[1]), lng: Number(placeMatch[2]) };
+  return null;
+}
+
 /** Poll cadence while a job is running. One indexed row per call. */
 const PROGRESS_POLL_MS = 1500;
 
@@ -243,6 +262,15 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     setGeocodeError(null);
     setSuggestions([]);
     try {
+      const mapsCoords = parseGoogleMapsUrl(q);
+      if (mapsCoords) {
+        setCentre(mapsCoords);
+        const revRes = await fetch(`/api/scout/geocode?lat=${mapsCoords.lat}&lng=${mapsCoords.lng}`);
+        const revJson = await revRes.json();
+        const addr = revJson?.results?.[0]?.formattedAddress;
+        setAddress(addr ?? `${mapsCoords.lat.toFixed(6)}, ${mapsCoords.lng.toFixed(6)}`);
+        return;
+      }
       const res = await fetch(`/api/scout/geocode?q=${encodeURIComponent(q)}`);
       const json = (await res.json()) as {
         results?: Array<{
@@ -347,6 +375,9 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
 
   /* ------------------------------------------------------- custom markers */
 
+  const mapInstanceRef = useRef<LeafletNS.Map | null>(null);
+  const distanceLineRef = useRef<LeafletNS.LayerGroup | null>(null);
+
   const [customMarkers, setCustomMarkers] = useState<CustomSiteMapMarker[]>([]);
   // Same reasoning as `placementModeRef`: `deleteCustomMarker` may run from a
   // handler `SiteMap` bound once, long before this specific closure existed,
@@ -419,6 +450,11 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
    */
   const handleMapReady = useCallback(
     (map: LeafletNS.Map) => {
+      mapInstanceRef.current = map;
+      import("leaflet").then((mod) => {
+        const L = mod as unknown as typeof LeafletNS;
+        distanceLineRef.current = L.layerGroup().addTo(map);
+      });
       map.on("click", (e: LeafletNS.LeafletMouseEvent) => {
         const target = e.originalEvent?.target as HTMLElement | null;
         const delBtn = target?.closest?.(".ss-marker-del") as HTMLElement | null;
@@ -506,6 +542,36 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     [data?.places, selectedPlaceId],
   );
 
+  useEffect(() => {
+    const layer = distanceLineRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    if (!selectedPlace) return;
+    import("leaflet").then((mod) => {
+      const L = mod as unknown as typeof LeafletNS;
+      const from: [number, number] = [centre.lat, centre.lng];
+      const to: [number, number] = [selectedPlace.lat, selectedPlace.lng];
+      L.polyline([from, to], {
+        color: "#0369a1",
+        weight: 2,
+        dashArray: "6 4",
+        opacity: 0.8,
+      }).addTo(layer);
+      const midLat = (from[0] + to[0]) / 2;
+      const midLng = (from[1] + to[1]) / 2;
+      const dist = selectedPlace.distanceM;
+      const label = dist < 1000 ? `${Math.round(dist)} m` : `${(dist / 1000).toFixed(1)} km`;
+      L.marker([midLat, midLng], {
+        icon: L.divIcon({
+          className: "",
+          iconSize: [0, 0],
+          html: `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:system-ui,sans-serif;font-size:11px;font-weight:600;color:#0369a1;background:#fff;padding:1px 6px;border-radius:4px;border:1px solid #bae6fd;box-shadow:0 1px 3px rgba(0,0,0,.15)">${label}</span>`,
+        }),
+        interactive: false,
+      }).addTo(layer);
+    });
+  }, [selectedPlace, centre.lat, centre.lng]);
+
   const selectedTermCount = useMemo(
     () =>
       taxonomy.categories
@@ -562,8 +628,8 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                   void lookupAddress();
                 }
               }}
-              placeholder="Address or landmark"
-              aria-label="Address or landmark"
+              placeholder="Address, landmark, or Google Maps link"
+              aria-label="Address, landmark, or Google Maps link"
               disabled={isSaved}
             />
             {!isSaved ? (
@@ -619,11 +685,12 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
               className="w-full accent-slate-800 cursor-pointer"
               aria-label="Scan radius"
             />
-            <div className="flex justify-between text-xs text-slate-500 mt-1 px-0.5">
+            <div className="relative h-5 text-xs text-slate-500 mt-1">
               {PRESET_RADII.map((r) => (
                 <span
                   key={r}
-                  className={`cursor-pointer transition-colors ${radiusKm === r ? "text-slate-900 font-semibold" : "hover:text-slate-700"}`}
+                  className={`absolute -translate-x-1/2 cursor-pointer transition-colors ${radiusKm === r ? "text-slate-900 font-semibold" : "hover:text-slate-700"}`}
+                  style={{ left: `${((r - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100}%` }}
                   onClick={() => !isSaved && setRadiusKm(r)}
                 >
                   {r}
@@ -989,7 +1056,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
           popups
           customMarkers={customMarkers}
           onMapRightClick={scanId ? handleMapRightClick : undefined}
-          onReady={scanId ? handleMapReady : undefined}
+          onReady={handleMapReady}
           ariaLabel="Catchment map. Facilities and demand anchors are plotted around the scan centre."
         />
 
@@ -1016,27 +1083,27 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
               {placementMode ? "Click the map to place" : "Add marker"}
             </button>
           ) : null}
-          <div className="bg-white/95 border border-slate-200 rounded-lg py-[13px] px-[15px] flex flex-col gap-2 shadow-[0_6px_18px_rgba(0,0,0,0.1)]">
+          <div className="bg-white border border-slate-200 rounded-lg py-[13px] px-[15px] flex flex-col gap-2 shadow-[0_6px_18px_rgba(0,0,0,0.1)]">
           <SectionLabel weight={700}>Legend</SectionLabel>
-          <span className="flex items-center gap-2 text-xs">
+          <span className="flex items-center gap-2 text-xs text-slate-700">
             <span
-              className="w-[9px] h-[9px] rounded-full"
+              className="w-[9px] h-[9px] rounded-full flex-none"
               style={{ background: MARKER_COLORS.facility }}
               aria-hidden="true"
             />
             Sports facility
           </span>
-          <span className="flex items-center gap-2 text-xs">
+          <span className="flex items-center gap-2 text-xs text-slate-700">
             <span
-              className="w-[9px] h-[9px] rounded-full"
+              className="w-[9px] h-[9px] rounded-full flex-none"
               style={{ background: MARKER_COLORS.demand }}
               aria-hidden="true"
             />
             Demand anchor
           </span>
-          <span className="flex items-center gap-2 text-xs">
+          <span className="flex items-center gap-2 text-xs text-slate-700">
             <span
-              className="w-[9px] h-[9px] rounded-full"
+              className="w-[9px] h-[9px] rounded-full flex-none"
               style={{ background: MARKER_COLORS.plot }}
               aria-hidden="true"
             />
@@ -1044,25 +1111,25 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
           </span>
           {scanId ? (
             <>
-              <span className="flex items-center gap-2 text-xs">
+              <span className="flex items-center gap-2 text-xs text-slate-700">
                 <span
-                  className="w-[9px] h-[9px] rotate-45"
+                  className="w-[9px] h-[9px] rotate-45 flex-none"
                   style={{ background: CUSTOM_MARKER_COLORS.customer }}
                   aria-hidden="true"
                 />
                 Customer location
               </span>
-              <span className="flex items-center gap-2 text-xs">
+              <span className="flex items-center gap-2 text-xs text-slate-700">
                 <span
-                  className="w-[9px] h-[9px] rotate-45"
+                  className="w-[9px] h-[9px] rotate-45 flex-none"
                   style={{ background: CUSTOM_MARKER_COLORS.competitor }}
                   aria-hidden="true"
                 />
                 Competitor area
               </span>
-              <span className="flex items-center gap-2 text-xs">
+              <span className="flex items-center gap-2 text-xs text-slate-700">
                 <span
-                  className="w-[9px] h-[9px] rotate-45"
+                  className="w-[9px] h-[9px] rotate-45 flex-none"
                   style={{ background: CUSTOM_MARKER_COLORS.custom }}
                   aria-hidden="true"
                 />

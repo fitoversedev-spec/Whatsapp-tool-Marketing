@@ -95,7 +95,7 @@ export interface PresetDef {
 const COMPETITION: readonly CategoryDef[] = [
   {
     id: "turf-sports",
-    label: "Turf sports",
+    label: "Football turfs",
     side: "competition",
     fields: "ENTERPRISE_ATMOSPHERE",
     terms: [
@@ -264,10 +264,9 @@ const COMPETITION: readonly CategoryDef[] = [
 
 const DEMAND: readonly CategoryDef[] = [
   {
-    id: "education",
-    label: "Education",
+    id: "schools",
+    label: "Schools",
     side: "demand",
-    // Schools need a name, a location and a type. Nothing pricier.
     fields: "PRO",
     anchorWeight: 0.7,
     terms: [
@@ -277,11 +276,35 @@ const DEMAND: readonly CategoryDef[] = [
         mode: "nearby",
         googleTypes: ["school", "primary_school", "secondary_school"],
       },
+    ],
+  },
+  {
+    id: "colleges",
+    label: "Colleges",
+    side: "demand",
+    fields: "PRO",
+    anchorWeight: 0.7,
+    terms: [
       {
         id: "college",
         label: "Colleges & Universities",
         mode: "nearby",
         googleTypes: ["university"],
+      },
+    ],
+  },
+  {
+    id: "kindergarten",
+    label: "Kindergarten",
+    side: "demand",
+    fields: "PRO",
+    anchorWeight: 0.5,
+    terms: [
+      {
+        id: "kindergarten",
+        label: "Kindergarten & Preschools",
+        mode: "text",
+        queries: ["kindergarten", "preschool", "play school"],
       },
     ],
   },
@@ -292,7 +315,6 @@ const DEMAND: readonly CategoryDef[] = [
     fields: "PRO",
     anchorWeight: 1.0,
     terms: [
-      { id: "tech-park", label: "Tech parks", mode: "text", queries: ["tech park", "IT park"] },
       {
         id: "office-complex",
         label: "Office complexes",
@@ -308,8 +330,19 @@ const DEMAND: readonly CategoryDef[] = [
     ],
   },
   {
-    id: "residential",
-    label: "Residential",
+    id: "it-companies",
+    label: "IT Companies",
+    side: "demand",
+    fields: "PRO",
+    anchorWeight: 1.0,
+    terms: [
+      { id: "tech-park", label: "Tech parks", mode: "text", queries: ["tech park", "IT park"] },
+      { id: "it-company", label: "IT companies", mode: "text", queries: ["IT company", "software company", "tech company"] },
+    ],
+  },
+  {
+    id: "apartments",
+    label: "Apartments",
     side: "demand",
     fields: "PRO",
     anchorWeight: 0.8,
@@ -320,13 +353,6 @@ const DEMAND: readonly CategoryDef[] = [
         mode: "nearby",
         googleTypes: ["apartment_complex", "apartment_building", "condominium_complex"],
       },
-      {
-        id: "gated-community",
-        label: "Gated communities",
-        mode: "text",
-        queries: ["gated community"],
-      },
-      { id: "hostel", label: "Hostels", mode: "nearby", googleTypes: ["hostel"] },
     ],
   },
 ] as const;
@@ -337,14 +363,14 @@ export const PRESETS: readonly PresetDef[] = [
   {
     id: "quick-check",
     label: "Quick check",
-    description: "Turf sports and education. The cheapest useful read on a plot.",
-    categoryIds: ["turf-sports", "education"],
+    description: "Football turfs and schools. The cheapest useful read on a plot.",
+    categoryIds: ["turf-sports", "schools"],
   },
   {
     id: "standard-scan",
     label: "Standard scan",
     description: "The three formats Fitoverse sells most, against the three demand pools that fill them.",
-    categoryIds: ["turf-sports", "badminton", "tennis", "cricket", "education", "workplaces", "residential"],
+    categoryIds: ["turf-sports", "badminton", "tennis", "cricket", "schools", "colleges", "workplaces", "apartments"],
   },
   {
     id: "full-sweep",

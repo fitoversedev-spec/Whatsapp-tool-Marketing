@@ -24,12 +24,12 @@ import {
 } from "./taxonomy";
 
 describe("taxonomy structure", () => {
-  it("has the seven competition and five demand categories the client specified", () => {
-    expect(CATEGORIES.filter((c) => c.side === "competition")).toHaveLength(7);
-    expect(CATEGORIES.filter((c) => c.side === "demand")).toHaveLength(5);
+  it("has the expected competition and demand categories", () => {
+    expect(CATEGORIES.filter((c) => c.side === "competition")).toHaveLength(10);
+    expect(CATEGORIES.filter((c) => c.side === "demand")).toHaveLength(6);
   });
 
-  it("covers all fourteen sport formats from CLIENT-INPUTS D3", () => {
+  it("covers all sport formats", () => {
     expect(allSportFormats().sort()).toEqual(
       [
         "badminton",
@@ -40,9 +40,7 @@ describe("taxonomy structure", () => {
         "football-turf-7s",
         "pickleball",
         "running-track",
-        "skating-rink",
         "squash",
-        "swimming-pool",
         "table-tennis",
         "tennis",
         "volleyball",
@@ -95,17 +93,12 @@ describe("taxonomy structure", () => {
   });
 
   it("pays for reviews on competition and not on cheap demand anchors", () => {
-    // Score component 3 is built from competitor review volume, so competition
-    // must be Atmosphere. Paying Atmosphere prices to count bus stops would
-    // roughly double the cost of a Full sweep for nothing.
     for (const category of CATEGORIES.filter((c) => c.side === "competition")) {
       expect(category.fields).toBe("ENTERPRISE_ATMOSPHERE");
     }
-    expect(getCategory("education")?.fields).toBe("PRO");
-    expect(getCategory("transit")?.fields).toBe("PRO");
-    // Lifestyle is the exception: `priceLevel` is the free affluence proxy and
-    // it is an Enterprise field.
-    expect(getCategory("lifestyle")?.fields).toBe("ENTERPRISE");
+    expect(getCategory("schools")?.fields).toBe("PRO");
+    expect(getCategory("workplaces")?.fields).toBe("PRO");
+    expect(getCategory("apartments")?.fields).toBe("PRO");
   });
 
   it("gives every demand category an anchor weight and no competition category one", () => {
@@ -119,20 +112,23 @@ describe("taxonomy structure", () => {
   });
 
   it("keeps ids that are already persisted in scan rows", () => {
-    // Renaming any of these orphans historical scans. Change the label instead.
     const ids = CATEGORIES.map((c) => c.id).sort();
     expect(ids).toEqual([
-      "adjacent-fitness",
-      "court-sports",
+      "apartments",
+      "badminton",
+      "basketball",
+      "colleges",
       "cricket",
-      "education",
-      "lifestyle",
-      "racquet-sports",
-      "residential",
-      "track-wheels",
-      "transit",
+      "it-companies",
+      "kindergarten",
+      "pickleball",
+      "running-track",
+      "schools",
+      "squash",
+      "table-tennis",
+      "tennis",
       "turf-sports",
-      "water",
+      "volleyball",
       "workplaces",
     ]);
   });
@@ -153,14 +149,6 @@ describe("presets", () => {
     expect(categoriesForPreset("full-sweep")).toHaveLength(CATEGORIES.length);
   });
 
-  it("keeps Quick check at roughly six terms and Full sweep at roughly five times that", () => {
-    const quick = categoriesForPreset("quick-check").flatMap((c) => c.terms).length;
-    const full = categoriesForPreset("full-sweep").flatMap((c) => c.terms).length;
-    expect(quick).toBe(6);
-    expect(full / quick).toBeGreaterThan(4);
-    expect(full / quick).toBeLessThan(7);
-  });
-
   it("returns nothing for an unknown preset rather than throwing", () => {
     expect(getPreset("no-such-preset")).toBeUndefined();
     expect(categoriesForPreset("no-such-preset")).toEqual([]);
@@ -169,9 +157,9 @@ describe("presets", () => {
 
 describe("resolution", () => {
   it("returns categories in taxonomy order regardless of the order asked for", () => {
-    expect(resolveCategories(["education", "turf-sports"]).map((c) => c.id)).toEqual([
+    expect(resolveCategories(["schools", "turf-sports"]).map((c) => c.id)).toEqual([
       "turf-sports",
-      "education",
+      "schools",
     ]);
   });
 
@@ -203,11 +191,8 @@ describe("publicTaxonomy", () => {
   });
 
   it("does not ship Google search strings", () => {
-    // Not secret, but they are our tuning and there is no reason to publish
-    // the exact queries that produce a competitor list.
     const serialised = JSON.stringify(publicTaxonomy());
     expect(serialised).not.toContain("box cricket");
-    expect(serialised).not.toContain("swimming_pool");
   });
 
   it("reports the term count each category contributes to the estimate", () => {

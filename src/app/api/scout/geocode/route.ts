@@ -41,9 +41,34 @@ export async function GET(request: NextRequest) {
 
   const params = request.nextUrl.searchParams;
   const query = params.get("q")?.trim();
+  const mapsUrl = params.get("url")?.trim();
   const lat = Number(params.get("lat"));
   const lng = Number(params.get("lng"));
   const hasPin = Number.isFinite(lat) && Number.isFinite(lng);
+
+  if (mapsUrl) {
+    try {
+      const resolved = await resolveGoogleMapsUrl(mapsUrl);
+      if (!resolved) {
+        return NextResponse.json(
+          { results: [], error: "Could not extract a location from that link. Try pasting the address instead." },
+          { status: 200, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      const client = createGoogleClient();
+      const revResponse = await client.reverseGeocode(resolved);
+      const addr = revResponse.results?.[0]?.formatted_address ?? null;
+      return NextResponse.json(
+        { results: [{ formattedAddress: addr ?? `${resolved.lat.toFixed(6)}, ${resolved.lng.toFixed(6)}`, location: resolved, placeId: revResponse.results?.[0]?.place_id ?? null }] },
+        { status: 200, headers: { "Cache-Control": "no-store" } },
+      );
+    } catch {
+      return NextResponse.json(
+        { results: [], error: "Could not resolve that link. Try pasting the address instead." },
+        { status: 200, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+  }
 
   if (!query && !hasPin) {
     return NextResponse.json(
@@ -97,4 +122,30 @@ export async function GET(request: NextRequest) {
       { status: 502 },
     );
   }
+}
+
+/** Follow redirects on a Google Maps short link and extract lat/lng from the final URL. */
+async function resolveGoogleMapsUrl(url: string): Promise<{ lat: number; lng: number } | null> {
+  const res = await fetch(url, { method: "GET", redirect: "follow", headers: { "User-Agent": "Mozilla/5.0" } });
+  const finalUrl = res.url;
+
+  // @lat,lng
+  const atMatch = finalUrl.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (atMatch) return { lat: Number(atMatch[1]), lng: Number(atMatch[2]) };
+  // ?q=lat,lng
+  const qMatch = finalUrl.match(/[?&](?:q|ll|query|center)=(-?\d+\.?\d*)[,+%20]+(-?\d+\.?\d*)/);
+  if (qMatch) return { lat: Number(qMatch[1]), lng: Number(qMatch[2]) };
+  // /place/lat,lng
+  const placeMatch = finalUrl.match(/\/place\/(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (placeMatch) return { lat: Number(placeMatch[1]), lng: Number(placeMatch[2]) };
+  // !3d (lat) and !4d (lng) in data params
+  const dMatch = finalUrl.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
+  if (dMatch) return { lat: Number(dMatch[1]), lng: Number(dMatch[2]) };
+
+  // Try parsing the HTML body for coords if URL didn't contain them
+  const body = await res.text();
+  const bodyMatch = body.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (bodyMatch) return { lat: Number(bodyMatch[1]), lng: Number(bodyMatch[2]) };
+
+  return null;
 }

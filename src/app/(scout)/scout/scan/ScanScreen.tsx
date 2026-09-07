@@ -41,10 +41,12 @@ const SLIDER_MIN = 1;
 const SLIDER_MAX = 20;
 const RESULTS_PER_GROUP = 4;
 
+const GOOGLE_MAPS_URL_RE = /google\.\w+\/maps|maps\.google|maps\.app\.goo\.gl|goo\.gl\/maps|share\.google/i;
+
 /** Extract lat/lng from a Google Maps URL. Returns null if not a Maps link. */
 function parseGoogleMapsUrl(input: string): { lat: number; lng: number } | null {
   const trimmed = input.trim();
-  if (!/google\.\w+\/maps|maps\.google|maps\.app\.goo\.gl|goo\.gl\/maps/i.test(trimmed)) return null;
+  if (!GOOGLE_MAPS_URL_RE.test(trimmed)) return null;
   // @lat,lng or @lat,lng,zoom
   const atMatch = trimmed.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
   if (atMatch) return { lat: Number(atMatch[1]), lng: Number(atMatch[2]) };
@@ -55,6 +57,11 @@ function parseGoogleMapsUrl(input: string): { lat: number; lng: number } | null 
   const placeMatch = trimmed.match(/\/place\/(-?\d+\.\d+),(-?\d+\.\d+)/);
   if (placeMatch) return { lat: Number(placeMatch[1]), lng: Number(placeMatch[2]) };
   return null;
+}
+
+/** Returns true if the input looks like a Google Maps link (even a short one without coords). */
+function isGoogleMapsUrl(input: string): boolean {
+  return GOOGLE_MAPS_URL_RE.test(input.trim());
 }
 
 /** Poll cadence while a job is running. One indexed row per call. */
@@ -269,6 +276,18 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
         const revJson = await revRes.json();
         const addr = revJson?.results?.[0]?.formattedAddress;
         setAddress(addr ?? `${mapsCoords.lat.toFixed(6)}, ${mapsCoords.lng.toFixed(6)}`);
+        return;
+      }
+      if (isGoogleMapsUrl(q)) {
+        const res = await fetch(`/api/scout/geocode?url=${encodeURIComponent(q)}`);
+        const json = await res.json();
+        const first = json?.results?.[0];
+        if (first?.location?.lat != null && first?.location?.lng != null) {
+          setCentre({ lat: first.location.lat, lng: first.location.lng });
+          setAddress(first.formattedAddress ?? `${first.location.lat.toFixed(6)}, ${first.location.lng.toFixed(6)}`);
+        } else {
+          setGeocodeError(json?.error ?? "Could not extract a location from that link.");
+        }
         return;
       }
       const res = await fetch(`/api/scout/geocode?q=${encodeURIComponent(q)}`);
@@ -549,28 +568,43 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     if (!selectedPlace) return;
     import("leaflet").then((mod) => {
       const L = mod as unknown as typeof LeafletNS;
-      const from: [number, number] = [centre.lat, centre.lng];
-      const to: [number, number] = [selectedPlace.lat, selectedPlace.lng];
-      L.polyline([from, to], {
-        color: "#0369a1",
-        weight: 2,
-        dashArray: "6 4",
-        opacity: 0.8,
-      }).addTo(layer);
-      const midLat = (from[0] + to[0]) / 2;
-      const midLng = (from[1] + to[1]) / 2;
-      const dist = selectedPlace.distanceM;
-      const label = dist < 1000 ? `${Math.round(dist)} m` : `${(dist / 1000).toFixed(1)} km`;
-      L.marker([midLat, midLng], {
-        icon: L.divIcon({
-          className: "",
-          iconSize: [0, 0],
-          html: `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:system-ui,sans-serif;font-size:11px;font-weight:600;color:#0369a1;background:#fff;padding:1px 6px;border-radius:4px;border:1px solid #bae6fd;box-shadow:0 1px 3px rgba(0,0,0,.15)">${label}</span>`,
-        }),
-        interactive: false,
-      }).addTo(layer);
+      const plotPos: [number, number] = [centre.lat, centre.lng];
+      const selPos: [number, number] = [selectedPlace.lat, selectedPlace.lng];
+
+      function drawLine(a: [number, number], b: [number, number], distM: number, color: string) {
+        L.polyline([a, b], { color, weight: 3, dashArray: "8 5", opacity: 0.9 }).addTo(layer);
+        const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const label = distM < 1000 ? `${Math.round(distM)} m` : `${(distM / 1000).toFixed(1)} km`;
+        L.marker(mid, {
+          icon: L.divIcon({
+            className: "",
+            iconSize: [0, 0],
+            html: `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);white-space:nowrap;font-family:system-ui,sans-serif;font-size:13px;font-weight:700;color:${color};background:#fff;padding:2px 8px;border-radius:6px;border:2px solid ${color};box-shadow:0 2px 6px rgba(0,0,0,.25)">${label}</span>`,
+          }),
+          interactive: false,
+        }).addTo(layer);
+      }
+
+      // Line from customer plot to selected place
+      drawLine(plotPos, selPos, selectedPlace.distanceM, "#0369a1");
+
+      // Lines from selected place to up to 3 nearest other facilities
+      const places = data?.places ?? [];
+      const others = places
+        .filter((p) => p.placeId !== selectedPlace.placeId)
+        .map((p) => {
+          const dLat = (p.lat - selectedPlace.lat) * 111320;
+          const dLng = (p.lng - selectedPlace.lng) * 111320 * Math.cos((selectedPlace.lat * Math.PI) / 180);
+          return { ...p, distFromSelected: Math.sqrt(dLat * dLat + dLng * dLng) };
+        })
+        .sort((a, b) => a.distFromSelected - b.distFromSelected)
+        .slice(0, 3);
+
+      for (const p of others) {
+        drawLine(selPos, [p.lat, p.lng], Math.round(p.distFromSelected), "#7c3aed");
+      }
     });
-  }, [selectedPlace, centre.lat, centre.lng]);
+  }, [selectedPlace, centre.lat, centre.lng, data?.places]);
 
   const selectedTermCount = useMemo(
     () =>

@@ -155,6 +155,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   const [progress, setProgress] = useState<ScanProgressDto | null>(initial?.progress ?? null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [pinnedPlaceIds, setPinnedPlaceIds] = useState<string[]>([]);
+  const [plotPinned, setPlotPinned] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
@@ -569,7 +570,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     const layer = distanceLineRef.current;
     if (!layer) return;
     layer.clearLayers();
-    if (pinnedPlaceIds.length === 0) return;
+    if (pinnedPlaceIds.length === 0 && !plotPinned) return;
     import("leaflet").then((mod) => {
       const L = mod as unknown as typeof LeafletNS;
       const lg = distanceLineRef.current;
@@ -606,8 +607,10 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
       };
 
       const plotPos: [number, number] = [centre.lat, centre.lng];
-      for (const p of pinned) {
-        addLine(plotPos, [p.lat, p.lng], p.distanceM, "#0369a1");
+      if (plotPinned) {
+        for (const p of pinned) {
+          addLine(plotPos, [p.lat, p.lng], p.distanceM, "#0369a1");
+        }
       }
 
       for (let i = 0; i < pinned.length; i++) {
@@ -617,7 +620,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
         }
       }
     });
-  }, [pinnedPlaceIds, centre.lat, centre.lng, data?.places]);
+  }, [pinnedPlaceIds, plotPinned, centre.lat, centre.lng, data?.places]);
 
   const selectedTermCount = useMemo(
     () =>
@@ -989,15 +992,48 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <SectionLabel weight={700}>Results</SectionLabel>
-                  {pinnedPlaceIds.length > 0 && (
+                  {(pinnedPlaceIds.length > 0 || plotPinned) && (
                     <button
                       type="button"
                       className="bg-transparent border-0 font-sans text-xs text-purple-600 cursor-pointer hover:text-purple-800"
-                      onClick={() => setPinnedPlaceIds([])}
+                      onClick={() => { setPinnedPlaceIds([]); setPlotPinned(false); }}
                     >
-                      Clear {pinnedPlaceIds.length} pin{pinnedPlaceIds.length > 1 ? "s" : ""}
+                      Clear all pins
                     </button>
                   )}
+                </div>
+                <div
+                  className={`flex items-center gap-[10px] border rounded-lg py-2 px-3 w-full font-sans ${
+                    plotPinned
+                      ? "border-red-400 bg-red-50"
+                      : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full flex-none"
+                    style={{ background: MARKER_COLORS.plot }}
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-slate-900">Customer plot</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">
+                      {address || `${centre.lat.toFixed(5)}, ${centre.lng.toFixed(5)}`}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className={`flex-none w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                      plotPinned
+                        ? "bg-red-600 text-white"
+                        : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                    }`}
+                    onClick={() => setPlotPinned((v) => !v)}
+                    title={plotPinned ? "Remove plot from distance comparison" : "Include plot in distance comparison"}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                      <circle cx="12" cy="10" r="3" />
+                    </svg>
+                  </button>
                 </div>
                 {groups.map((group) => {
                   const expanded = expandedGroups[group.id] === true;

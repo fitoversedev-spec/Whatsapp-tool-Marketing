@@ -124,28 +124,49 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** Follow redirects on a Google Maps short link and extract lat/lng from the final URL. */
+/** Follow redirects on a Google Maps short link and extract lat/lng from the final URL or body. */
 async function resolveGoogleMapsUrl(url: string): Promise<{ lat: number; lng: number } | null> {
-  const res = await fetch(url, { method: "GET", redirect: "follow", headers: { "User-Agent": "Mozilla/5.0" } });
+  const UA =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+  const res = await fetch(url, {
+    method: "GET",
+    redirect: "follow",
+    headers: { "User-Agent": UA, Accept: "text/html" },
+  });
   const finalUrl = res.url;
 
-  // @lat,lng
-  const atMatch = finalUrl.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-  if (atMatch) return { lat: Number(atMatch[1]), lng: Number(atMatch[2]) };
-  // ?q=lat,lng
-  const qMatch = finalUrl.match(/[?&](?:q|ll|query|center)=(-?\d+\.?\d*)[,+%20]+(-?\d+\.?\d*)/);
-  if (qMatch) return { lat: Number(qMatch[1]), lng: Number(qMatch[2]) };
-  // /place/lat,lng
-  const placeMatch = finalUrl.match(/\/place\/(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-  if (placeMatch) return { lat: Number(placeMatch[1]), lng: Number(placeMatch[2]) };
-  // !3d (lat) and !4d (lng) in data params
-  const dMatch = finalUrl.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
-  if (dMatch) return { lat: Number(dMatch[1]), lng: Number(dMatch[2]) };
+  const tryExtract = (s: string): { lat: number; lng: number } | null => {
+    const at = s.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (at) return { lat: Number(at[1]), lng: Number(at[2]) };
+    const q = s.match(/[?&](?:q|ll|query|center)=(-?\d+\.?\d*)[,+%20]+(-?\d+\.?\d*)/);
+    if (q) return { lat: Number(q[1]), lng: Number(q[2]) };
+    const pl = s.match(/\/place\/(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (pl) return { lat: Number(pl[1]), lng: Number(pl[2]) };
+    const d = s.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
+    if (d) return { lat: Number(d[1]), lng: Number(d[2]) };
+    return null;
+  };
 
-  // Try parsing the HTML body for coords if URL didn't contain them
+  const fromUrl = tryExtract(finalUrl);
+  if (fromUrl) return fromUrl;
+
   const body = await res.text();
-  const bodyMatch = body.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-  if (bodyMatch) return { lat: Number(bodyMatch[1]), lng: Number(bodyMatch[2]) };
+  const fromBody = tryExtract(body);
+  if (fromBody) return fromBody;
+
+  // meta refresh redirect: <meta http-equiv="refresh" content="0;url=...">
+  const metaMatch = body.match(/content=["'][^"']*url=([^"']+)/i);
+  if (metaMatch) {
+    const fromMeta = tryExtract(metaMatch[1]);
+    if (fromMeta) return fromMeta;
+  }
+
+  // window.location or location.href = "..." in scripts
+  const jsMatch = body.match(/(?:window\.)?location(?:\.href)?\s*=\s*["']([^"']+)/i);
+  if (jsMatch) {
+    const fromJs = tryExtract(jsMatch[1]);
+    if (fromJs) return fromJs;
+  }
 
   return null;
 }

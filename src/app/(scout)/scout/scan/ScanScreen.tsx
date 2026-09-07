@@ -41,7 +41,7 @@ const SLIDER_MIN = 1;
 const SLIDER_MAX = 20;
 const RESULTS_PER_GROUP = 4;
 
-const GOOGLE_MAPS_URL_RE = /google\.\w+\/maps|maps\.google|maps\.app\.goo\.gl|goo\.gl\/maps|share\.google/i;
+const GOOGLE_MAPS_URL_RE = /google\.[\w.]+\/maps|maps\.google|maps\.app\.goo\.gl|goo\.gl\/maps|share\.google/i;
 
 /** Extract lat/lng from a Google Maps URL. Returns null if not a Maps link. */
 function parseGoogleMapsUrl(input: string): { lat: number; lng: number } | null {
@@ -56,6 +56,9 @@ function parseGoogleMapsUrl(input: string): { lat: number; lng: number } | null 
   // /place/lat,lng
   const placeMatch = trimmed.match(/\/place\/(-?\d+\.\d+),(-?\d+\.\d+)/);
   if (placeMatch) return { lat: Number(placeMatch[1]), lng: Number(placeMatch[2]) };
+  // !3d (lat) and !4d (lng) in data params
+  const dMatch = trimmed.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
+  if (dMatch) return { lat: Number(dMatch[1]), lng: Number(dMatch[2]) };
   return null;
 }
 

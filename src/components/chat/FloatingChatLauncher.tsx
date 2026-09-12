@@ -84,7 +84,7 @@ export default function FloatingChatLauncher({
           onClick={openPanel}
           aria-label="Open team chat"
           title="Team chat"
-          className="fixed bottom-4 right-4 z-40 w-14 h-14 rounded-full bg-wa-green hover:bg-wa-green/90 text-white shadow-lg flex items-center justify-center text-2xl transition"
+          className="fixed bottom-20 md:bottom-4 right-4 z-40 w-14 h-14 rounded-full bg-wa-green hover:bg-wa-green/90 text-white shadow-lg flex items-center justify-center text-2xl transition"
         >
           💬
           {badge > 0 && (

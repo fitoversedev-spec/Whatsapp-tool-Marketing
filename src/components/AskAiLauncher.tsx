@@ -45,7 +45,7 @@ export default function AskAiLauncher() {
           onClick={openPanel}
           aria-label="Ask AI"
           title="Ask AI about your sales data"
-          className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-wa-green hover:bg-wa-green/90 text-white shadow-lg flex items-center justify-center text-2xl transition"
+          className="fixed bottom-36 md:bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-wa-green hover:bg-wa-green/90 text-white shadow-lg flex items-center justify-center text-2xl transition"
         >
           ✨
         </button>

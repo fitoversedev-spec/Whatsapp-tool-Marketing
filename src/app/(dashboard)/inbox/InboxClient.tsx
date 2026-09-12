@@ -349,7 +349,7 @@ export default function InboxClient({
   }
 
   return (
-    <div className="flex flex-1 md:h-screen h-[calc(100vh-3.5rem)] md:items-stretch">
+    <div className="flex flex-1 md:h-screen h-[calc(100vh-3.5rem-3.5rem)] md:items-stretch">
       {/* Conversation list */}
       <div
         className={`

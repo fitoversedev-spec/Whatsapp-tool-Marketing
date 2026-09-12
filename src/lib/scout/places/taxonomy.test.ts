@@ -312,6 +312,49 @@ describe("shouldFilterCompetition across all categories", () => {
     expect(shouldFilterCompetition("athletic_field", null, "City Ground", "badminton")).toBe(true);
     expect(shouldFilterCompetition("athletic_field", null, "City Ground", "running-track")).toBe(false);
   });
+
+  it("filters infrastructure companies by name", () => {
+    expect(shouldFilterCompetition(null, null, "Michezo Sports Infrastructure Pvt Ltd", "turf-sports")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Anivi Sports Infrastructure Company", "turf-sports")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "XYZ Infrastructure Private Limited", "badminton")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "ABC Construction Pvt Ltd", "cricket")).toBe(true);
+  });
+
+  it("filters manufacturers and suppliers by name", () => {
+    expect(shouldFilterCompetition(null, null, "XYZ Turf Manufacturer", "turf-sports")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Cricket Net Manufacturing Co", "cricket")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Sports Equipment Supplier", "badminton")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "ABC Flooring Distributor", "tennis")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Sports Material Stockist", "volleyball")).toBe(true);
+  });
+
+  it("filters equipment shops and sports goods stores by name", () => {
+    expect(shouldFilterCompetition(null, null, "XYZ Sports Goods", "badminton")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "ABC Sports Equipment Store", "tennis")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Cricket Equipment Shop", "cricket")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Equipment Dealer XYZ", "squash")).toBe(true);
+  });
+
+  it("filters real estate and renovation businesses by name", () => {
+    expect(shouldFilterCompetition(null, null, "Cricket Heights Real Estate", "cricket")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Turf Landscaping Services", "turf-sports")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Sports Furnishing Co", "badminton")).toBe(true);
+  });
+
+  it("keeps legitimate venues that happen to have common words", () => {
+    expect(shouldFilterCompetition(null, null, "City Turf Arena", "turf-sports")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "Shuttle Sports Academy", "badminton")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "Metro Tennis Club", "tennis")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "XYZ Sports Complex", "basketball")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "Box Cricket Zone", "cricket")).toBe(false);
+  });
+
+  it("filters grocery_store and market types for all categories", () => {
+    for (const catId of CATEGORIES.filter((c) => c.side === "competition").map((c) => c.id)) {
+      expect(shouldFilterCompetition("grocery_store", null, "Fresh Mart", catId)).toBe(true);
+      expect(shouldFilterCompetition("market", null, "City Market", catId)).toBe(true);
+    }
+  });
 });
 
 describe("publicTaxonomy", () => {

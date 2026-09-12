@@ -490,9 +490,12 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   "wedding_venue",
   // Organizations
   "non_governmental_organization",
+  // Child care — not a sports facility
+  "child_care_agency",
   // Miscellaneous
   "parking",
   "storage",
+  "self_storage",
   "courier_service",
   "tourist_attraction",
   "campground",
@@ -502,6 +505,14 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   "marina",
   "warehouse",
   "farm",
+  "market",
+  "grocery_store",
+  "liquor_store",
+  "discount_store",
+  "cell_phone_store",
+  "telecommunications_service_provider",
+  "notary_public",
+  "tailor",
 ]);
 
 /**
@@ -601,6 +612,59 @@ const COMPETITION_DENY_DISPLAY_NAMES: ReadonlySet<string> = new Set([
   "place of worship",
 ]);
 
+/**
+ * Substrings in a place **name** that identify a business entity rather than
+ * a sports facility. Catches infrastructure companies, equipment dealers,
+ * manufacturers etc. that slip through when Google assigns a generic type
+ * like `establishment` or `point_of_interest`.
+ */
+const BUSINESS_NAME_SIGNALS: readonly string[] = [
+  "manufacturer",
+  "manufacturing",
+  "supplier",
+  "distributor",
+  "distribution",
+  "fabricat",
+  "wholesaler",
+  "wholesale",
+  "exporter",
+  "importer",
+  "stockist",
+  "dealer",
+  "dealership",
+  "installation service",
+  "installation company",
+  "real estate",
+  "realty",
+  "renovation",
+  "furnishing",
+  "interior decorator",
+  "interior design",
+  "sports goods",
+  "sports equipment",
+  "equipment store",
+  "equipment shop",
+  "landscaping",
+  "godown",
+  "trading company",
+  "trading co",
+  "sports material",
+  "construction company",
+  "construction pvt",
+  "construction private",
+  "infrastructure pvt",
+  "infrastructure private",
+  "infrastructure limited",
+  "infrastructure ltd",
+  "infrastructure co",
+  "infrastructure company",
+];
+
+function isBusinessEntity(placeName: string): boolean {
+  const lower = placeName.toLowerCase();
+  return BUSINESS_NAME_SIGNALS.some((kw) => lower.includes(kw));
+}
+
 export function shouldFilterCompetition(
   primaryType: string | null,
   displayName: string | null,
@@ -611,6 +675,7 @@ export function shouldFilterCompetition(
   if (displayName && COMPETITION_DENY_DISPLAY_NAMES.has(displayName.toLowerCase())) return true;
   if (primaryType && TYPE_TO_CATEGORY.has(primaryType) && TYPE_TO_CATEGORY.get(primaryType) !== categoryId) return true;
   if (isSportMismatch(placeName, categoryId)) return true;
+  if (isBusinessEntity(placeName)) return true;
   return false;
 }
 

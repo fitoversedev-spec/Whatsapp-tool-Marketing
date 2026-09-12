@@ -786,7 +786,7 @@ export default function ContactDetailClient({
         </div>
       ) : (
         <div className="flex gap-6">
-          <nav className="hidden lg:block w-40 shrink-0 sticky top-4 self-start space-y-0.5">
+          <nav className="hidden md:block w-40 shrink-0 sticky top-4 self-start space-y-0.5">
             {SECTIONS.map((s) =>
               s.id === "open-activities" ? (
                 // "+" here opens the same Task/Meeting/Call menu as the card,
@@ -1184,7 +1184,7 @@ export default function ContactDetailClient({
                 <h3 className="text-base font-semibold text-slate-900">Open activities <span className="text-slate-400 font-normal font-mono">{openCount}</span></h3>
                 {/* Mobile-only: the desktop entry point is the "+" on the
                     left section nav (which is hidden on mobile). */}
-                <div className="relative lg:hidden">
+                <div className="relative md:hidden">
                   <button
                     onClick={() => setAddMenuOpen((v) => !v)}
                     className="btn btn-secondary !px-2.5 !py-1 !text-xs"

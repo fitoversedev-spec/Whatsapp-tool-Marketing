@@ -231,10 +231,11 @@ export default async function ProductPage({
 
         {/* Specs table */}
         {specEntries.length > 0 && (
-          <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
             <h2 className="border-b border-slate-200 bg-slate-50 px-5 py-3 text-sm font-bold uppercase tracking-wide text-slate-500">
               Specifications
             </h2>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <tbody>
                 {specEntries.map(([key, val], i) => (
@@ -252,6 +253,7 @@ export default async function ProductPage({
                 ))}
               </tbody>
             </table>
+            </div>
           </section>
         )}
 

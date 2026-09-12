@@ -94,7 +94,7 @@ export default function ChatPanel({
   const actionable = requests.filter((r) => r.canRespond || r.canApprove);
 
   return (
-    <div className="fixed z-50 flex flex-col bg-white shadow-2xl border border-slate-200 right-4 bottom-4 w-[380px] h-[560px] rounded-2xl max-sm:inset-0 max-sm:w-full max-sm:h-full max-sm:rounded-none">
+    <div className="fixed z-50 flex flex-col bg-white shadow-2xl border border-slate-200 inset-0 w-full h-full md:inset-auto md:right-4 md:bottom-4 md:w-[380px] md:h-[560px] md:rounded-2xl">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 shrink-0">
         {view === "thread" ? (

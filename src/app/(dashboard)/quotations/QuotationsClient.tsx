@@ -356,7 +356,127 @@ export default function QuotationsClient({
           </div>
         ) : (
           <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filtered.map((q) => (
+                <div key={q.id} className={`p-4 ${selected.has(q.id) ? "bg-track-50/60" : ""}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex items-start gap-2">
+                      {isAdmin && (
+                        <input
+                          type="checkbox"
+                          checked={selected.has(q.id)}
+                          onChange={() => toggleOne(q.id)}
+                          className="rounded mt-1 shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-medium text-slate-900 truncate">{q.customerName}</div>
+                        <div className="text-xs text-slate-500 font-mono">
+                          {q.number} · <span className="capitalize">{q.sport}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span
+                      className={`shrink-0 badge ${
+                        STATUS_COLORS[q.status] ?? "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {q.status}
+                    </span>
+                  </div>
+
+                  {q.contactPhone ? (
+                    <div className="text-xs text-slate-500 font-mono mt-1.5">+{q.contactPhone}</div>
+                  ) : q.status === "draft" ? (
+                    <div className="flex items-center gap-1 mt-2">
+                      <input
+                        value={phoneEdits[q.id] ?? ""}
+                        onChange={(e) => setPhoneEdits((curr) => ({ ...curr, [q.id]: e.target.value }))}
+                        placeholder="+919876543210"
+                        className="input flex-1 !px-1.5 !py-0.5 text-sm !border-amber-300 font-mono"
+                      />
+                      <button
+                        onClick={() => savePhone(q)}
+                        disabled={savingPhone === q.id || !(phoneEdits[q.id] ?? "").trim()}
+                        className="text-sm text-court-700 hover:underline disabled:opacity-40 disabled:no-underline"
+                      >
+                        {savingPhone === q.id ? "…" : "Save"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-amber-700 mt-1.5">no phone</div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                    <div>
+                      Total
+                      <span className="block font-mono text-slate-700">
+                        ₹ {Number(q.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <div>
+                      Date
+                      <span className="block font-mono text-slate-700">
+                        {new Date(q.quoteDate).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                    {isAdmin && (
+                      <div className="col-span-2">
+                        By <span className="text-slate-700">{q.createdByName}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 flex-wrap mt-3 pt-3 border-t border-slate-100">
+                    <a
+                      href={`/api/quotations/${q.id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-wa-dark hover:underline"
+                    >
+                      View PDF
+                    </a>
+                    {q.status === "draft" && q.contactPhone && (
+                      <button onClick={() => send(q)} className="text-xs text-blue-700 hover:underline">
+                        Send
+                      </button>
+                    )}
+                    {q.status === "sent" && (
+                      <button
+                        onClick={() => markStatus(q, "accepted")}
+                        className="text-xs text-emerald-700 hover:underline"
+                      >
+                        Mark accepted
+                      </button>
+                    )}
+                    {(q.status === "sent" || q.status === "accepted") && (
+                      <button
+                        onClick={() => convertToInvoice(q)}
+                        className="text-xs text-wa-dark hover:underline font-medium"
+                      >
+                        Convert to invoice
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => remove(q)}
+                        className="text-xs text-red-600 hover:underline ml-auto"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="data-table">
                 <thead>
                   <tr>

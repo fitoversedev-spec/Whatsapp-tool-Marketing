@@ -40,12 +40,12 @@ export function PendingRow({ id, name, email, requestedAt }: PendingRowProps) {
 
   return (
     <>
-      <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-1.5">
+      <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-1.5 md:gap-3">
         <span className="font-semibold text-slate-900">{name}</span>
         <span className="break-all">{email}</span>
         <span>{requestedAt}</span>
-        <span className="flex items-center gap-2 flex-wrap justify-end max-[900px]:justify-start">
-          <form action={approve} className="flex items-center gap-2 flex-wrap justify-end max-[900px]:justify-start">
+        <span className="flex items-center gap-2 flex-wrap justify-start md:justify-end">
+          <form action={approve} className="flex items-center gap-2 flex-wrap justify-start md:justify-end">
             <input type="hidden" name="userId" value={id} />
             <label className="sr-only" htmlFor={`role-${id}`}>
               Role for {name}
@@ -83,14 +83,14 @@ export function PendingRow({ id, name, email, requestedAt }: PendingRowProps) {
         </span>
       </div>
       {message ? (
-        <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-1.5">
+        <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-1.5 md:gap-3">
           <span className="rounded-lg px-3 py-2.5 text-sm bg-green-100 text-green-600" role="status">
             {message}
           </span>
         </div>
       ) : null}
       {error ? (
-        <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-3 max-[900px]:grid-cols-1 max-[900px]:gap-1.5">
+        <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-1.5 md:gap-3">
           <span className="rounded-lg px-3 py-2.5 text-sm bg-red-100 text-red-600" role="alert">
             {error}
           </span>

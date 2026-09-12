@@ -16,7 +16,7 @@ export default function AiPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed z-50 flex flex-col bg-white shadow-2xl border border-slate-200 right-[404px] bottom-4 w-[440px] h-[600px] rounded-2xl max-lg:right-4 max-sm:inset-0 max-sm:w-full max-sm:h-full max-sm:rounded-none">
+    <div className="fixed z-50 flex flex-col bg-white shadow-2xl border border-slate-200 inset-0 w-full h-full md:inset-auto md:right-4 md:bottom-4 md:w-[440px] md:h-[600px] md:rounded-2xl md:max-w-[calc(100vw-5rem)] lg:right-[404px]">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 shrink-0">
         <span aria-hidden className="text-lg leading-none">✨</span>

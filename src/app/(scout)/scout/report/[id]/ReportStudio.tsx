@@ -196,8 +196,8 @@ export function ReportStudio({
   const limitations = populationLimitations();
 
   return (
-    <div className="flex-1 flex min-h-0 overflow-hidden max-[900px]:flex-col ssIn">
-      <aside className="w-[420px] flex-none bg-white border-r border-slate-200 overflow-y-auto px-6 pt-[26px] pb-8 flex flex-col gap-5 ss-scroll max-[900px]:w-full max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:border-slate-200">
+    <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden ssIn">
+      <aside className="w-full md:w-[420px] flex-none bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto px-6 pt-[26px] pb-8 flex flex-col gap-5 ss-scroll">
         <div>
           <h1 className="m-0 text-base">Report studio</h1>
           <div className="text-[12.5px] text-slate-500 mt-[9px] font-sans tracking-normal normal-case">
@@ -376,8 +376,8 @@ export function ReportStudio({
         ) : null}
       </aside>
 
-      <div className="flex-1 min-w-0 overflow-y-auto px-10 pt-8 pb-12 bg-[#dedede] flex justify-center ss-scroll max-[1200px]:px-5">
-        <article className="w-[720px] bg-white shadow-[0_12px_34px_rgba(0,0,0,0.14)] px-[46px] py-[44px] flex flex-col gap-[26px] h-max max-[1200px]:w-full" aria-label="Report preview">
+      <div className="flex-1 min-w-0 overflow-y-auto px-5 lg:px-10 pt-8 pb-12 bg-[#dedede] flex justify-center ss-scroll">
+        <article className="w-full lg:w-[720px] bg-white shadow-[0_12px_34px_rgba(0,0,0,0.14)] px-[46px] py-[44px] flex flex-col gap-[26px] h-max" aria-label="Report preview">
           <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
             <div className="flex items-center gap-[11px]">
               <svg className="w-7 h-7 flex-none" viewBox="0 0 28 28" aria-hidden="true">

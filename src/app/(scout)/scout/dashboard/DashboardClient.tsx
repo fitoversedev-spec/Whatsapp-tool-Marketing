@@ -77,7 +77,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
-      <div className="flex gap-8 items-start max-[1100px]:flex-col">
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
         <div className="flex-1 min-w-0 flex flex-col gap-5">
           <div className="flex items-baseline justify-between gap-5 flex-wrap">
             <div>
@@ -102,7 +102,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                   ))}
                 </select>
               </label>
-              <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md py-2 px-3 w-[280px] focus-within:border-court-500 focus-within:shadow-sm max-[900px]:w-full">
+              <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md py-2 px-3 w-full md:w-[280px] focus-within:border-court-500 focus-within:shadow-sm">
                 <svg
                   width="14"
                   height="14"
@@ -163,7 +163,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
               }
             />
           ) : (
-            <div className="grid grid-cols-3 gap-4 max-[1280px]:grid-cols-2 max-[900px]:grid-cols-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filtered.map((scan) => (
                 <Link key={scan.id} href={`/scout/scan/${scan.id}`} className="card text-left p-4 cursor-pointer font-sans flex flex-col gap-3 no-underline text-slate-900 transition-colors hover:border-slate-300">
                   <span className="flex items-center justify-between gap-2.5">
@@ -215,7 +215,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
           )}
         </div>
 
-        <div className="w-[360px] flex-none flex flex-col gap-5 max-[1100px]:w-full">
+        <div className="w-full lg:w-[360px] lg:flex-none flex flex-col gap-5">
           <div className="bg-black text-white rounded-xl p-5 flex flex-col gap-3.5">
             <div className="font-heading uppercase tracking-[0.1em] text-xs text-court-400">Compare areas</div>
             <div className="text-sm leading-[1.6] text-white/75">

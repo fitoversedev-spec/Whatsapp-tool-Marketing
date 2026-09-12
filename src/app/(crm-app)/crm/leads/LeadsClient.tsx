@@ -140,58 +140,101 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
         />
       </div>
 
-      <div className="card overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Company</th>
-              <th>Phone</th>
-              <th>Status</th>
-              <th className="!text-right"><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((l) => (
-              <tr key={l.id}>
-                <td>
-                  <Link href={`/crm/contacts/${l.id}`} className="font-medium text-court-700 hover:underline">
+      <div className="card">
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {visible.map((l) => (
+            <div key={l.id} className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <Link href={`/crm/contacts/${l.id}`} className="block truncate font-medium text-court-700 hover:underline">
                     {l.name}
                   </Link>
-                </td>
-                <td>
-                  <Link href={`/crm/companies/${l.accountId}`} className="text-slate-600 hover:underline">{l.accountName}</Link>
-                </td>
-                <td className="text-slate-600 font-mono">{l.phone ?? "—"}</td>
-                <td>
-                  {l.converted ? (
-                    <span className="badge bg-green-100 text-green-700">Converted</span>
-                  ) : (
-                    <span className="badge bg-amber-100 text-amber-700">Open</span>
-                  )}
-                </td>
-                <td className="!text-right">
-                  {!l.converted && (
-                    <button
-                      onClick={() => convertToDeal(l)}
-                      disabled={convertingId === l.id}
-                      className="btn btn-primary !px-3 !py-1 !text-xs"
-                    >
-                      {convertingId === l.id ? "Converting..." : "Convert to Deal"}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {visible.length === 0 && (
+                  <div className="text-xs text-slate-500 truncate mt-0.5">
+                    <Link href={`/crm/companies/${l.accountId}`} className="hover:underline">{l.accountName}</Link>
+                    <span className="font-mono"> · {l.phone ?? "—"}</span>
+                  </div>
+                </div>
+                {l.converted ? (
+                  <span className="shrink-0 badge bg-green-100 text-green-700">Converted</span>
+                ) : (
+                  <span className="shrink-0 badge bg-amber-100 text-amber-700">Open</span>
+                )}
+              </div>
+              {!l.converted && (
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <button
+                    onClick={() => convertToDeal(l)}
+                    disabled={convertingId === l.id}
+                    className="btn btn-primary !py-1.5 !text-xs w-full"
+                  >
+                    {convertingId === l.id ? "Converting..." : "Convert to Deal"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          {visible.length === 0 && (
+            <div className="py-8 text-center text-sm text-slate-400">
+              No leads yet — promote a contact from the Contacts list.
+            </div>
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="data-table">
+            <thead>
               <tr>
-                <td colSpan={5} className="py-8 text-center text-slate-400">
-                  No leads yet — promote a contact from the Contacts list.
-                </td>
+                <th>Name</th>
+                <th>Company</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th className="!text-right"><span className="sr-only">Actions</span></th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {visible.map((l) => (
+                <tr key={l.id}>
+                  <td>
+                    <Link href={`/crm/contacts/${l.id}`} className="font-medium text-court-700 hover:underline">
+                      {l.name}
+                    </Link>
+                  </td>
+                  <td>
+                    <Link href={`/crm/companies/${l.accountId}`} className="text-slate-600 hover:underline">{l.accountName}</Link>
+                  </td>
+                  <td className="text-slate-600 font-mono">{l.phone ?? "—"}</td>
+                  <td>
+                    {l.converted ? (
+                      <span className="badge bg-green-100 text-green-700">Converted</span>
+                    ) : (
+                      <span className="badge bg-amber-100 text-amber-700">Open</span>
+                    )}
+                  </td>
+                  <td className="!text-right">
+                    {!l.converted && (
+                      <button
+                        onClick={() => convertToDeal(l)}
+                        disabled={convertingId === l.id}
+                        className="btn btn-primary !px-3 !py-1 !text-xs"
+                      >
+                        {convertingId === l.id ? "Converting..." : "Convert to Deal"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-400">
+                    No leads yet — promote a contact from the Contacts list.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {showAdd && (

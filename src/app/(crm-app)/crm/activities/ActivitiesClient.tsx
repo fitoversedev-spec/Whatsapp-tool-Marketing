@@ -169,71 +169,134 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
             )}
           </div>
 
-          <div className="card overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Activity</th>
-              <th>Customer</th>
-              <th>Phone</th>
-              <th className="whitespace-nowrap">When</th>
-              <th>Owner</th>
-              <th>Deal</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((a) => {
-              const tag = KIND_TAG[a.kind];
-              return (
-                <tr key={a.id} className="align-top">
-                  <td>
-                    <div className="flex items-center gap-1.5">
-                      <TypeIcon typeName={a.typeName} />
-                      <span className="text-slate-700 whitespace-nowrap">{a.typeName ?? "—"}</span>
+          <div className="card">
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {visible.map((a) => {
+                const tag = KIND_TAG[a.kind];
+                return (
+                  <div key={a.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex items-start gap-2">
+                        <div className="pt-0.5 shrink-0">
+                          <TypeIcon typeName={a.typeName} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-slate-900 truncate">{a.title}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            {a.contactName ? (
+                              a.contactId ? (
+                                <Link href={`/crm/contacts/${a.contactId}`} className="text-court-700 hover:underline font-medium">{a.contactName}</Link>
+                              ) : (
+                                <span>{a.contactName}</span>
+                              )
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                            <span className="font-mono"> · {fmtDate(a.timestamp)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <span className={`shrink-0 badge ${tag.cls}`}>{tag.label}</span>
                     </div>
-                  </td>
-                  <td>
-                    <div className="font-medium text-slate-900">{a.title}</div>
-                    {a.detail && <div className="text-xs text-slate-500 mt-0.5 max-w-xs truncate" title={a.detail}>{a.detail}</div>}
-                  </td>
-                  <td className="whitespace-nowrap">
-                    {a.contactName ? (
-                      a.contactId ? (
-                        <Link href={`/crm/contacts/${a.contactId}`} className="text-court-700 hover:underline font-medium">{a.contactName}</Link>
-                      ) : (
-                        <span className="text-slate-700">{a.contactName}</span>
-                      )
-                    ) : (
-                      <span className="text-slate-300">—</span>
+                    {a.detail && (
+                      <div className="text-xs text-slate-500 mt-2 truncate" title={a.detail}>{a.detail}</div>
                     )}
-                  </td>
-                  <td className="text-slate-600 whitespace-nowrap font-mono">{a.contactPhone ?? "—"}</td>
-                  <td className="text-slate-500 whitespace-nowrap font-mono">{fmtDate(a.timestamp)}</td>
-                  <td className="text-slate-600 whitespace-nowrap">{a.ownerName}</td>
-                  <td className="whitespace-nowrap">
-                    {a.dealId ? (
-                      <Link href={`/deals/${a.dealId}`} className="text-court-700 hover:underline font-mono">{a.dealCode}</Link>
-                    ) : a.accountId ? (
-                      <Link href={`/crm/companies/${a.accountId}`} className="text-court-700 hover:underline">{a.accountName}</Link>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )}
-                  </td>
-                  <td>
-                    <span className={`badge ${tag.cls}`}>{tag.label}</span>
-                  </td>
-                </tr>
-              );
-            })}
-            {visible.length === 0 && (
-              <tr>
-                <td colSpan={8} className="py-8 text-center text-slate-400">No activities found.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                      <div>
+                        <span className="text-slate-400">Phone: </span>
+                        <span className="font-mono text-slate-700">{a.contactPhone ?? "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Owner: </span>
+                        <span className="text-slate-700">{a.ownerName}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-slate-400">Deal: </span>
+                        {a.dealId ? (
+                          <Link href={`/deals/${a.dealId}`} className="text-court-700 hover:underline font-mono">{a.dealCode}</Link>
+                        ) : a.accountId ? (
+                          <Link href={`/crm/companies/${a.accountId}`} className="text-court-700 hover:underline">{a.accountName}</Link>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {visible.length === 0 && (
+                <div className="py-8 text-center text-sm text-slate-400">No activities found.</div>
+              )}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Activity</th>
+                    <th>Customer</th>
+                    <th>Phone</th>
+                    <th className="whitespace-nowrap">When</th>
+                    <th>Owner</th>
+                    <th>Deal</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((a) => {
+                    const tag = KIND_TAG[a.kind];
+                    return (
+                      <tr key={a.id} className="align-top">
+                        <td>
+                          <div className="flex items-center gap-1.5">
+                            <TypeIcon typeName={a.typeName} />
+                            <span className="text-slate-700 whitespace-nowrap">{a.typeName ?? "—"}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="font-medium text-slate-900">{a.title}</div>
+                          {a.detail && <div className="text-xs text-slate-500 mt-0.5 max-w-xs truncate" title={a.detail}>{a.detail}</div>}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          {a.contactName ? (
+                            a.contactId ? (
+                              <Link href={`/crm/contacts/${a.contactId}`} className="text-court-700 hover:underline font-medium">{a.contactName}</Link>
+                            ) : (
+                              <span className="text-slate-700">{a.contactName}</span>
+                            )
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="text-slate-600 whitespace-nowrap font-mono">{a.contactPhone ?? "—"}</td>
+                        <td className="text-slate-500 whitespace-nowrap font-mono">{fmtDate(a.timestamp)}</td>
+                        <td className="text-slate-600 whitespace-nowrap">{a.ownerName}</td>
+                        <td className="whitespace-nowrap">
+                          {a.dealId ? (
+                            <Link href={`/deals/${a.dealId}`} className="text-court-700 hover:underline font-mono">{a.dealCode}</Link>
+                          ) : a.accountId ? (
+                            <Link href={`/crm/companies/${a.accountId}`} className="text-court-700 hover:underline">{a.accountName}</Link>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`badge ${tag.cls}`}>{tag.label}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {visible.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-400">No activities found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

@@ -168,42 +168,68 @@ export default function CompaniesClient({
         )}
       </div>
 
-      <div className="card overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>City</th>
-              <th>{classificationLabel}</th>
-              <th>Owner</th>
-              <th className="!text-right">Contacts</th>
-              <th className="!text-right">Deals</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((c) => (
-              <tr key={c.id}>
-                <td>
-                  <Link href={`/crm/companies/${c.id}`} className="font-medium text-court-700 hover:underline">
+      <div className="card overflow-hidden">
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {visible.map((c) => (
+            <div key={c.id} className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <Link href={`/crm/companies/${c.id}`} className="font-medium text-court-700 hover:underline truncate block">
                     {c.name}
                   </Link>
-                </td>
-                <td className="text-slate-600">{c.city ?? "—"}</td>
-                <td className="text-slate-600">{classificationValue(c)}</td>
-                <td className="text-slate-600">{c.ownerName ?? "—"}</td>
-                <td className="!text-right text-slate-600 font-mono">{c.contactCount}</td>
-                <td className="!text-right text-slate-600 font-mono">{c.dealCount}</td>
-              </tr>
-            ))}
-            {visible.length === 0 && (
+                  <div className="text-xs text-slate-500 truncate mt-0.5">{classificationValue(c)}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                <div>Contacts <span className="text-slate-800 font-mono">{c.contactCount}</span></div>
+                <div>Deals <span className="text-slate-800 font-mono">{c.dealCount}</span></div>
+              </div>
+            </div>
+          ))}
+          {visible.length === 0 && (
+            <div className="py-8 text-center text-slate-400 text-sm">No records in this segment.</div>
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="data-table">
+            <thead>
               <tr>
-                <td colSpan={6} className="py-8 text-center text-slate-400">
-                  No records in this segment.
-                </td>
+                <th>Name</th>
+                <th>City</th>
+                <th>{classificationLabel}</th>
+                <th>Owner</th>
+                <th className="!text-right">Contacts</th>
+                <th className="!text-right">Deals</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {visible.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <Link href={`/crm/companies/${c.id}`} className="font-medium text-court-700 hover:underline">
+                      {c.name}
+                    </Link>
+                  </td>
+                  <td className="text-slate-600">{c.city ?? "—"}</td>
+                  <td className="text-slate-600">{classificationValue(c)}</td>
+                  <td className="text-slate-600">{c.ownerName ?? "—"}</td>
+                  <td className="!text-right text-slate-600 font-mono">{c.contactCount}</td>
+                  <td className="!text-right text-slate-600 font-mono">{c.dealCount}</td>
+                </tr>
+              ))}
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-400">
+                    No records in this segment.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {showNew && (

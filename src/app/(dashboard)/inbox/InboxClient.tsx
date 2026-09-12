@@ -349,12 +349,12 @@ export default function InboxClient({
   }
 
   return (
-    <div className="flex flex-1 lg:h-screen h-[calc(100vh-3.5rem)] lg:items-stretch">
+    <div className="flex flex-1 md:h-screen h-[calc(100vh-3.5rem)] md:items-stretch">
       {/* Conversation list */}
       <div
         className={`
-          w-full lg:w-80 lg:min-w-0 lg:shrink border-r border-slate-200 bg-white flex-col
-          ${selected ? "hidden lg:flex" : "flex"}
+          w-full md:w-72 lg:w-80 md:min-w-0 md:shrink border-r border-slate-200 bg-white flex-col
+          ${selected ? "hidden md:flex" : "flex"}
         `}
       >
         <div className="px-4 py-4 border-b border-slate-200 shrink-0 space-y-3">
@@ -451,7 +451,7 @@ export default function InboxClient({
       <div
         className={`
           flex-1 min-w-0 flex-col bg-slate-50
-          ${selected ? "flex" : "hidden lg:flex"}
+          ${selected ? "flex" : "hidden md:flex"}
         `}
       >
         {current ? (
@@ -460,7 +460,7 @@ export default function InboxClient({
               <button
                 onClick={() => setSelected(null)}
                 aria-label="Back to conversations"
-                className="lg:hidden -ml-1 p-1.5 rounded-lg hover:bg-slate-100 active:bg-slate-200"
+                className="md:hidden -ml-1 p-1.5 rounded-lg hover:bg-slate-100 active:bg-slate-200"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="15 18 9 12 15 6" />

@@ -73,7 +73,7 @@ export function SaturationPanel({
         <span id="saturation-heading">Competitive saturation</span>
       </SectionLabel>
 
-      <div className="grid grid-cols-1 min-[1100px]:grid-cols-[1.3fr_1fr] gap-2.5">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-2.5">
         <div className="bg-[var(--black)] text-[color:var(--on-dark)] rounded-lg p-4">
           <div className="font-heading text-[30px] font-bold leading-[1.1] flex items-baseline gap-[7px]">
             {figures.anchorsPerFacility === null ? (

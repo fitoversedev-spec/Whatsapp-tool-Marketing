@@ -275,7 +275,7 @@ export function FindSpacesScreen() {
       </div>
 
       {/* Side panel */}
-      <div className="w-[380px] flex-none border-l border-slate-200 bg-white flex flex-col overflow-y-auto max-[900px]:hidden">
+      <div className="hidden md:flex md:flex-col w-[380px] flex-none border-l border-slate-200 bg-white overflow-y-auto">
         {point ? (
           <div className="flex flex-col gap-4 p-5">
             <div className="flex items-start justify-between gap-2">

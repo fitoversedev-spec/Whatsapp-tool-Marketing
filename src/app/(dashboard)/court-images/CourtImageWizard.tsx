@@ -2252,9 +2252,18 @@ export default function CourtImageWizard({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-stretch justify-center">
+      {/* Phone gate — canvas needs tablet-sized screen minimum */}
+      <div className="md:hidden flex items-center justify-center w-full h-full p-8">
+        <div className="bg-white rounded-2xl p-8 max-w-sm text-center shadow-2xl">
+          <div className="text-4xl mb-4">🖥️</div>
+          <h2 className="text-lg font-semibold text-slate-900 mb-2">Open on a larger screen</h2>
+          <p className="text-sm text-slate-500 mb-5">The Court Designer needs a tablet or laptop for the best design experience.</p>
+          <button type="button" onClick={onClose} className="btn btn-primary w-full">Got it</button>
+        </div>
+      </div>
       {/* V1: the Court Designer fills the entire browser (no max-width cap,
           no rounded corners) so the canvas has maximum room. */}
-      <div className="bg-white shadow-2xl w-full h-full max-w-none flex flex-col overflow-hidden">
+      <div className="hidden md:flex bg-white shadow-2xl w-full h-full max-w-none flex-col overflow-hidden">
         {/* Header — title + step indicator + close */}
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-4">

@@ -369,8 +369,8 @@ export function SweepScreen({
   const rectById = useMemo(() => new Map(rects.map((r) => [r.id, r])), [rects]);
 
   return (
-    <div className="flex-1 flex min-h-0 max-[900px]:flex-col ssIn">
-      <div className="flex-1 min-w-0 relative bg-black max-[900px]:min-h-[380px]">
+    <div className="flex-1 flex flex-col md:flex-row min-h-0 ssIn">
+      <div className="flex-1 min-w-0 relative bg-black min-h-[380px] md:min-h-0">
         <SiteMap
           className="absolute inset-0 block"
           lat={centre.lat}
@@ -482,7 +482,7 @@ export function SweepScreen({
         </div>
       </div>
 
-      <aside className="w-[400px] flex-none bg-white border-l border-slate-200 overflow-y-auto pt-6 px-5 pb-8 flex flex-col gap-5 max-[900px]:w-full max-[900px]:border-l-0 max-[900px]:border-t max-[900px]:border-slate-200 ss-scroll">
+      <aside className="w-full md:w-[400px] flex-none bg-white border-t md:border-t-0 md:border-l border-slate-200 overflow-y-auto pt-6 px-5 pb-8 flex flex-col gap-5 ss-scroll">
         <div>
           <h1 className="m-0 text-base">Spaces sweep</h1>
           <div className="text-sm text-slate-500 mt-[9px] leading-[1.6] font-sans tracking-normal normal-case">

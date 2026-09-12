@@ -176,7 +176,50 @@ export default function AdCampaignsClient({
                 </button>
                 <ExportButtons filename="ad-campaigns" headers={campaignHeaders} rows={campaignRows} />
               </div>
-              <div className="overflow-x-auto">
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {campaigns.map((c) => (
+                  <Link
+                    key={c.metaId}
+                    href={`/ad-campaigns/${c.metaId}`}
+                    className="block p-4 active:bg-slate-50"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-medium text-slate-900 truncate">{c.name}</div>
+                        {c.objective && (
+                          <div className="text-xs text-slate-400 truncate">{c.objective}</div>
+                        )}
+                      </div>
+                      <span className="shrink-0">
+                        <StatusBadge status={c.status} />
+                      </span>
+                    </div>
+                    {c.sport && <span className="chip text-xs mt-1.5 inline-block">{c.sport}</span>}
+                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                      <div>
+                        Spend
+                        <span className="block font-mono text-slate-700">{fmtInr(c.spend)}</span>
+                      </div>
+                      <div>
+                        Cost / lead
+                        <span className="block font-mono text-slate-700">{fmtCpl(c.cpl)}</span>
+                      </div>
+                      <div>
+                        Insight leads
+                        <span className="block font-mono text-slate-700">{fmtInt(c.insightLeads)}</span>
+                      </div>
+                      <div>
+                        Captured leads
+                        <span className="block font-mono text-slate-700">{fmtInt(c.capturedLeads)}</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="data-table">
                   <thead>
                     <tr>

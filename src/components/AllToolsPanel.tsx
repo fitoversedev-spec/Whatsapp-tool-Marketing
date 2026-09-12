@@ -244,7 +244,7 @@ export default function AllToolsPanel({
     <>
       {/* Mobile backdrop — covers the rest of the sidebar drawer area */}
       <div
-        className="lg:hidden fixed inset-0 bg-black/50 z-[55]"
+        className="md:hidden fixed inset-0 bg-black/50 z-[55]"
         aria-hidden="true"
         onClick={onClose}
       />
@@ -261,7 +261,7 @@ export default function AllToolsPanel({
           font-sans
           fixed z-[60] bg-white shadow-2xl border border-slate-300
           inset-x-4 top-20 bottom-4 max-h-[80vh] overflow-y-auto rounded-2xl
-          lg:inset-auto lg:top-4 lg:bottom-4 lg:left-[var(--all-tools-left)] lg:w-[760px] lg:max-w-[calc(100vw-var(--all-tools-left)-1rem)] lg:max-h-[calc(100vh-2rem)]
+          md:inset-auto md:top-4 md:bottom-4 md:left-[var(--all-tools-left)] md:w-[760px] md:max-w-[calc(100vw-var(--all-tools-left)-1rem)] md:max-h-[calc(100vh-2rem)]
         `}
       >
         {/* Header */}
@@ -299,7 +299,7 @@ export default function AllToolsPanel({
                 >
                   {group.title}
                 </h3>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {visible.map((item) => {
                     const active = pathname.startsWith(item.href);
                     return (

@@ -43,7 +43,7 @@ export default async function AdminUsersPage() {
         </SectionLabel>
 
         <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-          <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] bg-slate-100 text-slate-600 px-4 py-3 text-xs font-semibold uppercase tracking-wider max-[900px]:hidden">
+          <div className="hidden md:grid md:grid-cols-[1.6fr_1.4fr_1fr_1.4fr] bg-slate-100 text-slate-600 px-4 py-3 text-xs font-semibold uppercase tracking-wider">
             <span>Name</span>
             <span>Email</span>
             <span>Requested</span>
@@ -69,7 +69,7 @@ export default async function AdminUsersPage() {
         </SectionLabel>
 
         <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-          <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] bg-slate-100 text-slate-600 px-4 py-3 text-xs font-semibold uppercase tracking-wider max-[900px]:hidden">
+          <div className="hidden md:grid md:grid-cols-[1.6fr_1.4fr_1fr_1.4fr] bg-slate-100 text-slate-600 px-4 py-3 text-xs font-semibold uppercase tracking-wider">
             <span>Name</span>
             <span>Email</span>
             <span>Role</span>
@@ -79,7 +79,7 @@ export default async function AdminUsersPage() {
             <p className="px-4 py-6 text-sm text-slate-500 text-center">No accounts yet.</p>
           ) : (
             existing.map((u) => (
-              <div className="grid grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-3 even:bg-slate-50 max-[900px]:grid-cols-1 max-[900px]:gap-1.5" key={u.id}>
+              <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1.4fr_1fr_1.4fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-1.5 md:gap-3 even:bg-slate-50" key={u.id}>
                 <span className="font-semibold text-slate-900">{u.name}</span>
                 <span className="break-all">{u.email}</span>
                 <span>

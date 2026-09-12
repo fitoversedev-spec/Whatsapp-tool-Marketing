@@ -390,7 +390,56 @@ export default function LeadsTable({
         {filtered.length === 0 ? (
           <p className="text-sm text-slate-400">No leads match the current filters.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile cards */}
+          <div className="md:hidden border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100">
+            {filtered.map((l) => (
+              <div
+                key={l.id}
+                onClick={() => handleRowClick(l)}
+                className={`p-4 cursor-pointer transition-colors ${
+                  selectedLeadId === l.id
+                    ? "bg-court-50 border-l-2 border-l-court-500"
+                    : "hover:bg-slate-50"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-slate-900 truncate">{l.fullName ?? "—"}</span>
+                      <Link
+                        href={`/ad-campaigns/leads/${l.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        title="Open full detail page"
+                        className="text-slate-400 hover:text-court-600 shrink-0"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </Link>
+                    </div>
+                    <div className="text-xs text-slate-500 truncate mt-0.5">
+                      {l.phone ?? "—"} · {l.formName ?? "—"}
+                    </div>
+                  </div>
+                  <span className={`shrink-0 badge ${LEAD_STAGE_CHIP[l.stage as keyof typeof LEAD_STAGE_CHIP] ?? "bg-slate-100 text-slate-700"}`}>
+                    {stageLabel(l.stage)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                  <div className="truncate">
+                    {new Date(l.capturedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                  </div>
+                  {showCampaignColumn && <div className="truncate">{l.campaignName ?? "—"}</div>}
+                  <div className="truncate">{l.city ?? "—"}</div>
+                  <div className="truncate">{l.sport ?? "—"}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
@@ -490,6 +539,7 @@ export default function LeadsTable({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

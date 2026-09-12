@@ -61,9 +61,9 @@ export function AppShell({
   }, [menuOpen]);
 
   return (
-    <div className="min-h-dvh flex flex-col bg-slate-50 font-sans text-slate-900 min-[901px]:h-dvh min-[901px]:overflow-hidden">
+    <div className="min-h-dvh flex flex-col bg-slate-50 font-sans text-slate-900 md:h-dvh md:overflow-hidden">
       {/* ---------- Desktop top nav ---------- */}
-      <header className="flex-none h-16 bg-black text-white flex items-center gap-9 px-7 max-[900px]:hidden">
+      <header className="hidden md:flex flex-none h-16 bg-black text-white items-center gap-9 px-7">
         <div className="flex items-center gap-[11px] flex-none">
           <BrandMark />
           <span className="font-display uppercase tracking-[0.13em] text-[13px] font-bold">
@@ -110,7 +110,7 @@ export function AppShell({
       </header>
 
       {/* ---------- Mobile header + Menu sheet ---------- */}
-      <header className="flex-none bg-black text-white pt-3 px-[18px] pb-3.5 hidden max-[900px]:block">
+      <header className="flex-none bg-black text-white pt-3 px-[18px] pb-3.5 md:hidden">
         <div className="flex justify-between items-center text-[11px] text-white/40 tracking-[0.04em] mb-3.5">
           <span>{user.canEditScoringWeights ? "Admin" : "Sales"}</span>
           <span>{fieldNote}</span>
@@ -170,7 +170,7 @@ export function AppShell({
             onClick={() => setMenuOpen(false)}
           />
           <div
-            className="fixed top-24 right-[18px] z-[21] w-[236px] bg-white rounded-[16px] border shadow-[0_18px_40px_rgba(0,0,0,0.22)] overflow-hidden animate-[ssIn_0.16s_ease] motion-reduce:animate-none"
+            className="fixed top-24 right-[18px] z-[21] w-[236px] max-w-[calc(100vw-2rem)] bg-white rounded-[16px] border shadow-[0_18px_40px_rgba(0,0,0,0.22)] overflow-hidden animate-[ssIn_0.16s_ease] motion-reduce:animate-none"
             role="menu"
             aria-label="Go to"
           >

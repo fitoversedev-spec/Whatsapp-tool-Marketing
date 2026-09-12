@@ -91,45 +91,95 @@ export default function InvoicesClient({ basePath = "" }: { basePath?: string } 
         </div>
       </div>
 
-      <div className="card overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th className="text-left">Invoice</th>
-              <th className="text-left">Customer</th>
-              <th className="!text-right">Total</th>
-              <th className="!text-right">Paid</th>
-              <th className="text-left">Status</th>
-              <th className="text-left">Due</th>
-              <th className="text-left">Rep</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows === null ? (
-              <tr><td colSpan={7} className="py-8 text-center text-slate-400">Loading…</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={7} className="py-10 text-center text-slate-400">No invoices yet. Convert a confirmed quote from the Quotations page.</td></tr>
-            ) : (
-              rows.map((inv) => (
-                <tr key={inv.id}>
-                  <td>
-                    <Link href={`${basePath}/invoices/${inv.id}`} className="font-medium text-court-700 hover:underline">{inv.number}</Link>
-                  </td>
-                  <td className="text-slate-700">{inv.customerName}</td>
-                  <td className="!text-right font-mono">{inr(inv.grandTotal)}</td>
-                  <td className="!text-right font-mono text-slate-500">{inr(inv.amountPaid)}</td>
-                  <td>
-                    <span className={`badge ${STATUS_STYLE[inv.status] ?? "bg-slate-100 text-slate-600"}`}>
-                      {STATUS_LABEL[inv.status] ?? inv.status}
-                    </span>
-                  </td>
-                  <td className="text-slate-500 font-mono">{dateShort(inv.dueDate)}</td>
-                  <td className="text-slate-500">{inv.createdByName}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div className="card overflow-hidden">
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {rows === null ? (
+            <div className="py-8 text-center text-sm text-slate-400">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="py-10 px-4 text-center text-sm text-slate-400">
+              No invoices yet. Convert a confirmed quote from the Quotations page.
+            </div>
+          ) : (
+            rows.map((inv) => (
+              <Link
+                key={inv.id}
+                href={`${basePath}/invoices/${inv.id}`}
+                className="block p-4 active:bg-slate-50"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium text-slate-900 truncate">{inv.customerName}</div>
+                    <div className="text-xs text-slate-500 font-mono">{inv.number}</div>
+                  </div>
+                  <span className={`shrink-0 badge ${STATUS_STYLE[inv.status] ?? "bg-slate-100 text-slate-600"}`}>
+                    {STATUS_LABEL[inv.status] ?? inv.status}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                  <div>
+                    Total
+                    <span className="block font-mono text-slate-700">{inr(inv.grandTotal)}</span>
+                  </div>
+                  <div>
+                    Paid
+                    <span className="block font-mono text-slate-700">{inr(inv.amountPaid)}</span>
+                  </div>
+                  <div>
+                    Due
+                    <span className="block font-mono text-slate-700">{dateShort(inv.dueDate)}</span>
+                  </div>
+                  <div>
+                    Rep
+                    <span className="block text-slate-700">{inv.createdByName}</span>
+                  </div>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th className="text-left">Invoice</th>
+                <th className="text-left">Customer</th>
+                <th className="!text-right">Total</th>
+                <th className="!text-right">Paid</th>
+                <th className="text-left">Status</th>
+                <th className="text-left">Due</th>
+                <th className="text-left">Rep</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows === null ? (
+                <tr><td colSpan={7} className="py-8 text-center text-slate-400">Loading…</td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={7} className="py-10 text-center text-slate-400">No invoices yet. Convert a confirmed quote from the Quotations page.</td></tr>
+              ) : (
+                rows.map((inv) => (
+                  <tr key={inv.id}>
+                    <td>
+                      <Link href={`${basePath}/invoices/${inv.id}`} className="font-medium text-court-700 hover:underline">{inv.number}</Link>
+                    </td>
+                    <td className="text-slate-700">{inv.customerName}</td>
+                    <td className="!text-right font-mono">{inr(inv.grandTotal)}</td>
+                    <td className="!text-right font-mono text-slate-500">{inr(inv.amountPaid)}</td>
+                    <td>
+                      <span className={`badge ${STATUS_STYLE[inv.status] ?? "bg-slate-100 text-slate-600"}`}>
+                        {STATUS_LABEL[inv.status] ?? inv.status}
+                      </span>
+                    </td>
+                    <td className="text-slate-500 font-mono">{dateShort(inv.dueDate)}</td>
+                    <td className="text-slate-500">{inv.createdByName}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

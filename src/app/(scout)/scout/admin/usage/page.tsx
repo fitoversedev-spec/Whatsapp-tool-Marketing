@@ -144,7 +144,7 @@ export default async function AdminUsagePage() {
         </SectionLabel>
 
         <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-          <div className="grid grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr_0.8fr] bg-slate-100 text-slate-600 px-4 py-3 text-xs font-semibold uppercase tracking-wider max-[900px]:hidden">
+          <div className="hidden md:grid md:grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr_0.8fr] bg-slate-100 text-slate-600 px-4 py-3 text-xs font-semibold uppercase tracking-wider">
             <span>Name</span>
             <span className="text-right">Scans</span>
             <span className="text-right">API calls</span>
@@ -159,7 +159,7 @@ export default async function AdminUsagePage() {
             reps.map((rep) => (
               <div
                 key={rep.userId}
-                className="grid grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr_0.8fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-3 even:bg-slate-50 max-[900px]:grid-cols-1 max-[900px]:gap-1.5"
+                className="grid grid-cols-1 md:grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr_0.8fr] items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-700 gap-1.5 md:gap-3 even:bg-slate-50"
               >
                 <div className="min-w-0">
                   <span className="font-semibold text-slate-900 block truncate">

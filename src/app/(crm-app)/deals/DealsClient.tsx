@@ -231,92 +231,154 @@ export default function DealsClient({
         )}
       </div>
 
-      <div className="card overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              {isAdmin && (
-                <th className="w-8">
-                  <SelectAllCheckbox ids={visible.map((d) => d.id)} selected={selected} onChange={setSelected} />
-                </th>
-              )}
-              <th className="text-left">Deal</th>
-              <th className="text-left">Account</th>
-              <th className="text-left">Channel</th>
-              <th className="text-left">Stage</th>
-              <th className="text-left">Owner</th>
-              <th className="!text-right">Value</th>
-              {isAdmin && <th className="w-8"><span className="sr-only">Actions</span></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {visible.length === 0 && (
-              <tr>
-                <td colSpan={isAdmin ? 8 : 6} className="py-10 text-center text-slate-400">
-                  No deals yet — click "New Deal" to create one.
-                </td>
-              </tr>
-            )}
-            {visible.map((d) => (
-              <tr key={d.id}>
-                {isAdmin && (
-                  <td>
+      <div className="card">
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {visible.length === 0 && (
+            <div className="py-10 text-center text-sm text-slate-400">
+              No deals yet — click &quot;New Deal&quot; to create one.
+            </div>
+          )}
+          {visible.map((d) => (
+            <div key={d.id} className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex items-start gap-2">
+                  {isAdmin && (
                     <input
                       type="checkbox"
                       checked={selected.has(d.id)}
                       onChange={() => toggleSelected(d.id)}
                       aria-label={`Select ${d.code}`}
-                      className="rounded"
+                      className="rounded mt-1 shrink-0"
                     />
-                  </td>
-                )}
-                <td>
-                  <Link href={`/deals/${d.id}`} className="text-base font-medium text-slate-900 hover:text-court-700 hover:underline">
-                    {d.title}
-                  </Link>
-                  <div className="text-xs text-slate-500 font-mono">{d.code}</div>
-                </td>
-                <td>
-                  <div className="text-slate-700">{d.accountName}</div>
-                  {d.accountCity && <div className="text-xs text-slate-500">{d.accountCity}</div>}
-                </td>
-                <td>
+                  )}
+                  <div className="min-w-0">
+                    <Link href={`/deals/${d.id}`} className="block truncate font-medium text-slate-900 hover:text-court-700 hover:underline">
+                      {d.title}
+                    </Link>
+                    <div className="text-xs text-slate-500 font-mono">{d.code}</div>
+                    <div className="text-xs text-slate-500 truncate">
+                      {d.accountName}
+                      {d.accountCity ? ` — ${d.accountCity}` : ""}
+                    </div>
+                  </div>
+                </div>
+                <span className="shrink-0">
+                  <StageBadge name={d.stageName} colorHex={d.stageColorHex} />
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                <div>
+                  <span className="text-slate-400">Value: </span>
+                  <span className="font-mono text-slate-700">
+                    {fmtInr(d.wonValue ?? d.quotedValue ?? d.estimatedValue)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Owner: </span>
+                  <span className="text-slate-700">{d.ownerName ?? "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Channel: </span>
                   <ChannelBadge channel={d.dealChannel} />
-                </td>
-                <td>
-                  <select
-                    value={d.stageId}
-                    onChange={(e) => onStagePick(d, e.target.value)}
-                    className="input w-auto text-xs !px-1.5 !py-1"
-                  >
-                    {stages.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                  <div className="mt-1"><StageBadge name={d.stageName} colorHex={d.stageColorHex} /></div>
-                </td>
-                <td className="text-slate-600">{d.ownerName ?? "—"}</td>
-                <td className="!text-right font-medium text-slate-900 font-mono">
-                  {fmtInr(d.wonValue ?? d.quotedValue ?? d.estimatedValue)}
-                </td>
+                </div>
+                <div>
+                  <span className="text-slate-400">Created: </span>
+                  <span className="text-slate-700">{new Date(d.createdAt).toLocaleDateString("en-IN")}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
                 {isAdmin && (
-                  <td className="!text-right">
-                    <button
-                      type="button"
-                      onClick={() => deleteDeals([d.id])}
-                      disabled={deleting}
-                      aria-label={`Delete ${d.code}`}
-                      title="Delete deal"
-                      className="text-red-400 hover:text-red-600 disabled:opacity-50"
-                    >
-                      <TrashIcon />
-                    </button>
-                  </td>
+                  <th className="w-8">
+                    <SelectAllCheckbox ids={visible.map((d) => d.id)} selected={selected} onChange={setSelected} />
+                  </th>
                 )}
+                <th className="text-left">Deal</th>
+                <th className="text-left">Account</th>
+                <th className="text-left">Channel</th>
+                <th className="text-left">Stage</th>
+                <th className="text-left">Owner</th>
+                <th className="!text-right">Value</th>
+                {isAdmin && <th className="w-8"><span className="sr-only">Actions</span></th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan={isAdmin ? 8 : 6} className="py-10 text-center text-slate-400">
+                    No deals yet — click "New Deal" to create one.
+                  </td>
+                </tr>
+              )}
+              {visible.map((d) => (
+                <tr key={d.id}>
+                  {isAdmin && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(d.id)}
+                        onChange={() => toggleSelected(d.id)}
+                        aria-label={`Select ${d.code}`}
+                        className="rounded"
+                      />
+                    </td>
+                  )}
+                  <td>
+                    <Link href={`/deals/${d.id}`} className="text-base font-medium text-slate-900 hover:text-court-700 hover:underline">
+                      {d.title}
+                    </Link>
+                    <div className="text-xs text-slate-500 font-mono">{d.code}</div>
+                  </td>
+                  <td>
+                    <div className="text-slate-700">{d.accountName}</div>
+                    {d.accountCity && <div className="text-xs text-slate-500">{d.accountCity}</div>}
+                  </td>
+                  <td>
+                    <ChannelBadge channel={d.dealChannel} />
+                  </td>
+                  <td>
+                    <select
+                      value={d.stageId}
+                      onChange={(e) => onStagePick(d, e.target.value)}
+                      className="input w-auto text-xs !px-1.5 !py-1"
+                    >
+                      {stages.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                    <div className="mt-1"><StageBadge name={d.stageName} colorHex={d.stageColorHex} /></div>
+                  </td>
+                  <td className="text-slate-600">{d.ownerName ?? "—"}</td>
+                  <td className="!text-right font-medium text-slate-900 font-mono">
+                    {fmtInr(d.wonValue ?? d.quotedValue ?? d.estimatedValue)}
+                  </td>
+                  {isAdmin && (
+                    <td className="!text-right">
+                      <button
+                        type="button"
+                        onClick={() => deleteDeals([d.id])}
+                        disabled={deleting}
+                        aria-label={`Delete ${d.code}`}
+                        title="Delete deal"
+                        className="text-red-400 hover:text-red-600 disabled:opacity-50"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {showNew && (

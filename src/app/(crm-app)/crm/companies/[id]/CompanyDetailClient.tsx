@@ -134,7 +134,7 @@ export default function CompanyDetailClient({
       ) : (
         <div className="flex gap-6">
           {/* Left rail — jumps to sections below */}
-          <nav className="hidden lg:block w-40 shrink-0 sticky top-4 self-start space-y-0.5">
+          <nav className="hidden md:block w-40 shrink-0 sticky top-4 self-start space-y-0.5">
             {SECTIONS.map((s) => (
               <a
                 key={s.id}

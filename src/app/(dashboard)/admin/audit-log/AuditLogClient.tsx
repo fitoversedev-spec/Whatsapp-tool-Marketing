@@ -82,7 +82,40 @@ export default function AuditLogClient() {
           ) : rows.length === 0 ? (
             <div className="p-10 text-center text-sm text-slate-400">No audit events yet.</div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {rows.map((r) => {
+                const expanded = expandedId === r.id;
+                return (
+                  <div
+                    key={r.id}
+                    className="p-4 cursor-pointer active:bg-slate-50"
+                    onClick={() => setExpandedId(expanded ? null : r.id)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${ACTION_COLORS[r.action] ?? "bg-slate-100 text-slate-600"}`}>
+                          {r.action}
+                        </span>
+                        <div className="text-xs text-slate-500 truncate mt-1.5">
+                          {r.actorName ?? "system"} · {r.entity} <span className="text-slate-400">{r.entityId.slice(0, 8)}</span>
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-[10px] text-slate-400 whitespace-nowrap">
+                        {new Date(r.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
+                      </span>
+                    </div>
+                    {expanded && r.diff && (
+                      <pre className="text-xs text-slate-600 whitespace-pre-wrap break-all mt-3 pt-3 border-t border-slate-100">{JSON.stringify(JSON.parse(r.diff), null, 2)}</pre>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-slate-500 border-b border-slate-200 text-xs uppercase tracking-wide">
@@ -127,6 +160,7 @@ export default function AuditLogClient() {
               </tbody>
             </table>
             </div>
+            </>
           )}
         </div>
 

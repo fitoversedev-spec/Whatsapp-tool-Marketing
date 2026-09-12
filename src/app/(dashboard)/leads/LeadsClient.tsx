@@ -248,7 +248,95 @@ export default function LeadsClient({
           </div>
         ) : (
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filtered.map((l) => (
+                <div key={l.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-900 truncate">
+                        {l.contactName ?? "(no name)"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {PATH_LABEL[l.path] ?? l.path} · +{l.contactPhone}
+                      </div>
+                    </div>
+                    <select
+                      value={l.status}
+                      onChange={(e) => patchLead(l.id, { status: e.target.value })}
+                      className={`shrink-0 text-xs font-medium px-2 py-1 rounded-md border-0 ${
+                        STATUS_COLORS[l.status] ?? "bg-slate-100"
+                      }`}
+                    >
+                      <option value="new">New</option>
+                      <option value="in_progress">In progress</option>
+                      <option value="contacted">Contacted</option>
+                      <option value="converted">Converted</option>
+                      <option value="lost">Lost</option>
+                    </select>
+                  </div>
+
+                  {(l.location || l.sizeFt || l.sport || l.maintenanceType || l.productCategory || l.preferredDateTime || l.notes) && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {l.location && <span className="chip text-xs">📍 {l.location}</span>}
+                      {l.sizeFt && <span className="chip text-xs">📏 {l.sizeFt} ft</span>}
+                      {l.sport && <span className="chip text-xs">⚽ {l.sport}</span>}
+                      {l.maintenanceType && <span className="chip text-xs">🔧 {l.maintenanceType}</span>}
+                      {l.productCategory && <span className="chip text-xs">📦 {l.productCategory}</span>}
+                      {l.preferredDateTime && (
+                        <span className="chip text-xs">
+                          📞 {new Date(l.preferredDateTime).toLocaleString("en-IN")}
+                        </span>
+                      )}
+                      {l.notes && <span className="chip text-xs text-amber-700">⚠ {l.notes}</span>}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                    <div>
+                      Assigned
+                      <select
+                        value={l.assignedToUserId ?? ""}
+                        onChange={(e) =>
+                          patchLead(l.id, {
+                            assignedToUserId: e.target.value || null,
+                          } as any)
+                        }
+                        className="block w-full mt-0.5 text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-700"
+                      >
+                        <option value="">Unassigned</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      Created
+                      <span className="block font-mono text-slate-700 mt-0.5">
+                        {new Date(l.createdAt).toLocaleString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <a
+                    href={`/inbox?conversation=${l.conversationId}`}
+                    className="inline-block mt-3 text-xs font-medium text-wa-green hover:underline"
+                  >
+                    Open chat →
+                  </a>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-200 text-[11px] uppercase text-slate-500 font-medium tracking-wide">
                   <tr>

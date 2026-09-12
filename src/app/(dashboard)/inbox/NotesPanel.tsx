@@ -117,16 +117,16 @@ export default function NotesPanel({
     <>
       {/* Mobile backdrop */}
       <div
-        className="lg:hidden fixed inset-0 bg-black/40 z-40"
+        className="md:hidden fixed inset-0 bg-black/40 z-40"
         onClick={onClose}
         aria-hidden="true"
       />
       <aside
         className={`
-          fixed lg:relative inset-y-0 right-0 z-50 lg:z-auto
-          w-full sm:w-96 lg:w-80 xl:w-96 lg:shrink-0 h-full
+          fixed md:relative inset-y-0 right-0 z-50 md:z-auto
+          w-full sm:w-96 md:w-80 xl:w-96 md:shrink-0 h-full
           bg-white border-l border-slate-200 flex flex-col
-          shadow-2xl lg:shadow-none
+          shadow-2xl md:shadow-none
         `}
       >
         <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">

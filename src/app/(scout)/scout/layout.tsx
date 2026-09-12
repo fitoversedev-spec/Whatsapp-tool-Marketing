@@ -11,7 +11,7 @@ export default async function ScoutLayout({ children }: { children: ReactNode })
   const user = await requireUser();
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-slate-50">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-slate-50">
       <ScoutSidebar
         user={{
           name: user.name,
@@ -19,7 +19,7 @@ export default async function ScoutLayout({ children }: { children: ReactNode })
           role: user.role as Role,
         }}
       />
-      <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto pb-14 lg:pb-0">{children}</main>
+      <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto pb-14 md:pb-0">{children}</main>
       <NavigationTracker />
     </div>
   );

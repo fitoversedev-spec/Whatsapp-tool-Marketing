@@ -148,7 +148,7 @@ export default function CrmSidebar({
   return (
     <>
       {/* Mobile top bar */}
-      <header className="font-sans lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3">
+      <header className="font-sans md:hidden sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3">
         <button
           aria-label="Open menu"
           onClick={() => setOpen(true)}
@@ -177,7 +177,7 @@ export default function CrmSidebar({
       {/* Mobile backdrop */}
       {open && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/40 z-40 backdrop-blur-sm"
+          className="md:hidden fixed inset-0 bg-black/40 z-40 backdrop-blur-sm"
           onClick={() => setOpen(false)}
           aria-hidden="true"
         />
@@ -187,18 +187,18 @@ export default function CrmSidebar({
       <aside
         className={`
           font-sans
-          fixed lg:sticky inset-y-0 left-0 top-0 z-50 lg:z-auto
-          w-64 h-screen lg:h-screen shrink-0
+          fixed md:sticky inset-y-0 left-0 top-0 z-50 md:z-auto
+          w-64 h-screen md:h-screen shrink-0
           app-sidebar border-r flex flex-col
           transform transition-[width,transform] duration-200 ease-out
-          ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-          ${collapsed ? "lg:w-[68px]" : "lg:w-60"}
+          ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+          md:w-[68px] ${collapsed ? "lg:w-[68px]" : "lg:w-60"}
         `}
       >
         <div
           className={`
             border-b border-slate-200 flex items-center
-            ${collapsed ? "lg:p-3 lg:justify-center p-5 justify-between" : "p-5 justify-between"}
+            p-5 justify-between md:p-3 md:justify-center ${collapsed ? "" : "lg:p-5 lg:justify-between"}
           `}
         >
           <div className="flex items-center gap-3 min-w-0 overflow-hidden">
@@ -206,21 +206,20 @@ export default function CrmSidebar({
             <img
               src="/quotation-assets/image1.png"
               alt="Fitoverse"
-              className={collapsed ? "lg:hidden h-8 w-auto" : "h-8 w-auto"}
+              className={`h-8 w-auto md:hidden ${collapsed ? "" : "lg:block"}`}
             />
-            {collapsed && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src="/quotation-assets/image1.png"
-                alt="Fitoverse"
-                className="hidden lg:block h-8 w-auto max-w-[40px] object-contain object-left"
-              />
-            )}
+            {/* Rail: clip lockup to just the infinity mark — tablet always, laptop when user-collapsed */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/quotation-assets/image1.png"
+              alt="Fitoverse"
+              className={`hidden md:block ${collapsed ? "" : "lg:hidden"} h-8 w-auto max-w-[40px] object-contain object-left`}
+            />
           </div>
           <button
             aria-label="Close menu"
             onClick={() => setOpen(false)}
-            className="lg:hidden p-1.5 -mr-1 rounded-lg hover:bg-slate-100"
+            className="md:hidden p-1.5 -mr-1 rounded-lg hover:bg-slate-100"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -245,17 +244,15 @@ export default function CrmSidebar({
 
         {/* Static CRM badge */}
         <div className="px-3 pt-3">
-          <div className={collapsed ? "lg:hidden" : ""}>
+          <div className={`md:hidden ${collapsed ? "" : "lg:block"}`}>
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wide whitespace-nowrap bg-turf-500/10 text-turf-700">
               <span className="w-1.5 h-1.5 rounded-full bg-turf-500" />
               Fitoverse CRM
             </span>
           </div>
-          {collapsed && (
-            <div className="hidden lg:flex lg:justify-center">
-              <span className="w-2.5 h-2.5 rounded-full bg-turf-500" title="Fitoverse CRM" aria-label="Fitoverse CRM" />
-            </div>
-          )}
+          <div className={`hidden md:flex md:justify-center ${collapsed ? "" : "lg:hidden"}`}>
+            <span className="w-2.5 h-2.5 rounded-full bg-turf-500" title="Fitoverse CRM" aria-label="Fitoverse CRM" />
+          </div>
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -270,8 +267,8 @@ export default function CrmSidebar({
                 key={item.href}
                 href={item.href}
                 title={collapsed ? item.label : undefined}
-                className={`relative flex items-center gap-3 rounded-lg text-sm font-medium transition ${
-                  collapsed ? "lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5" : "px-3 py-2.5"
+                className={`relative flex items-center gap-3 rounded-lg text-sm font-medium transition px-3 py-2.5 md:justify-center md:px-2 md:py-2.5 ${
+                  collapsed ? "" : "lg:justify-start lg:px-3 lg:py-2.5"
                 } ${
                   active
                     ? "bg-[var(--acs)] text-[var(--ac)]"
@@ -286,24 +283,17 @@ export default function CrmSidebar({
                 )}
                 <span className="text-base shrink-0 relative">
                   {item.icon}
-                  {collapsed && badge > 0 && (
+                  {badge > 0 && (
                     <span
-                      className={`hidden lg:block absolute -top-1 -right-1 ${badgeColor} w-2.5 h-2.5 rounded-full ring-2 ring-white`}
+                      className={`hidden md:block ${collapsed ? "" : "lg:hidden"} absolute -top-1 -right-1 ${badgeColor} w-2.5 h-2.5 rounded-full ring-2 ring-white`}
                       aria-label={`${badge} pending`}
                     />
                   )}
                 </span>
-                <span className={`flex-1 font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>{item.label}</span>
-                {!collapsed && badge > 0 && (
+                <span className={`flex-1 font-heading uppercase tracking-wide md:hidden ${collapsed ? "" : "lg:block"}`}>{item.label}</span>
+                {badge > 0 && (
                   <span
-                    className={`inline-block ${badgeColor} text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none`}
-                  >
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                )}
-                {collapsed && badge > 0 && (
-                  <span
-                    className={`lg:hidden inline-block ${badgeColor} text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none ml-auto`}
+                    className={`inline-block md:hidden ${collapsed ? "" : "lg:inline-block"} ${badgeColor} text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none`}
                   >
                     {badge > 99 ? "99+" : badge}
                   </span>
@@ -319,8 +309,8 @@ export default function CrmSidebar({
             data-all-tools-trigger
             title={collapsed ? "All Tools" : undefined}
             onClick={() => setAllToolsOpen((v) => !v)}
-            className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition ${
-              collapsed ? "lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5" : "px-3 py-2.5"
+            className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition px-3 py-2.5 md:justify-center md:px-2 md:py-2.5 ${
+              collapsed ? "" : "lg:justify-start lg:px-3 lg:py-2.5"
             } ${
               allToolsOpen
                 ? "bg-wa-green/10 text-wa-dark"
@@ -329,31 +319,29 @@ export default function CrmSidebar({
           >
             <span className="text-base shrink-0 relative">
               {"\u{1F532}"}
-              {collapsed && pendingCount > 0 && user.role === "admin" && (
-                <span className="hidden lg:block absolute -top-1 -right-1 bg-amber-500 w-2.5 h-2.5 rounded-full ring-2 ring-white" />
+              {pendingCount > 0 && user.role === "admin" && (
+                <span className={`hidden md:block ${collapsed ? "" : "lg:hidden"} absolute -top-1 -right-1 bg-amber-500 w-2.5 h-2.5 rounded-full ring-2 ring-white`} />
               )}
             </span>
-            <span className={`flex-1 text-left font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>All Tools</span>
-            {!collapsed && pendingCount > 0 && user.role === "admin" && (
-              <span className="inline-block bg-amber-500 text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
+            <span className={`flex-1 text-left font-heading uppercase tracking-wide md:hidden ${collapsed ? "" : "lg:block"}`}>All Tools</span>
+            {pendingCount > 0 && user.role === "admin" && (
+              <span className={`inline-block md:hidden ${collapsed ? "" : "lg:inline-block"} bg-amber-500 text-white text-[10px] font-bold font-mono rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none`}>
                 {pendingCount}
               </span>
             )}
-            {!collapsed && (
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={`transition-transform ${allToolsOpen ? "rotate-90" : ""}`}
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            )}
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${allToolsOpen ? "rotate-90" : ""} md:hidden ${collapsed ? "" : "lg:block"}`}
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
           </button>
 
           <div className="my-2 border-t border-slate-200" />
@@ -363,80 +351,70 @@ export default function CrmSidebar({
             type="button"
             onClick={openMarketing}
             title={collapsed ? "WhatsApp Marketing" : undefined}
-            className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition ${
-              collapsed ? "lg:justify-center lg:px-2 lg:py-2.5 px-3 py-2.5" : "px-3 py-2.5"
+            className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition px-3 py-2.5 md:justify-center md:px-2 md:py-2.5 ${
+              collapsed ? "" : "lg:justify-start lg:px-3 lg:py-2.5"
             } text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100`}
           >
             <span className="text-base shrink-0">{"\u{1F4AC}"}</span>
-            <span className={`flex-1 text-left font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>
+            <span className={`flex-1 text-left font-heading uppercase tracking-wide md:hidden ${collapsed ? "" : "lg:block"}`}>
               WhatsApp Marketing
             </span>
-            {!collapsed && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            )}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`md:hidden ${collapsed ? "" : "lg:block"}`}>
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
           </button>
         </nav>
 
-        <div className={`border-t border-slate-200 ${collapsed ? "lg:p-2 p-3" : "p-3"}`}>
+        <div className={`border-t border-slate-200 p-3 md:p-2 ${collapsed ? "" : "lg:p-3"}`}>
           <Link
             href="/crm/profile"
             title={collapsed ? `${user.name} (${user.role})` : undefined}
-            className={`block rounded-lg transition ${
-              collapsed ? "lg:px-1 lg:py-2 px-3 py-2" : "px-3 py-2"
+            className={`block rounded-lg transition px-3 py-2 md:px-1 md:py-2 ${
+              collapsed ? "" : "lg:px-3 lg:py-2"
             } ${
               pathname.startsWith("/crm/profile") ? "bg-slate-100" : "hover:bg-slate-50"
             }`}
           >
-            {collapsed ? (
-              <>
-                <div className="hidden lg:flex items-center justify-center">
-                  <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-xs ${
-                      user.role === "admin"
-                        ? "bg-purple-100 text-purple-700"
-                        : "bg-blue-100 text-blue-700"
-                    }`}
-                  >
-                    {initials(user.name)}
-                  </div>
-                </div>
-                <div className="lg:hidden">
-                  <div className="text-sm font-medium text-slate-900 truncate">{user.name}</div>
-                  <div className="text-xs text-slate-500 truncate">{user.email}</div>
-                  <div className="text-xs mt-0.5">
-                    <span className={`badge ${user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
-                      {user.role}
-                    </span>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="text-sm font-medium text-slate-900 truncate">{user.name}</div>
-                <div className="text-xs text-slate-500 truncate">{user.email}</div>
-                <div className="text-xs mt-0.5">
-                  <span className={`badge ${user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
-                    {user.role}
-                  </span>
-                </div>
-              </>
-            )}
+            {/* Initials avatar — tablet rail + laptop collapsed */}
+            <div className={`hidden md:flex ${collapsed ? "" : "lg:hidden"} items-center justify-center`}>
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-xs ${
+                  user.role === "admin"
+                    ? "bg-purple-100 text-purple-700"
+                    : "bg-blue-100 text-blue-700"
+                }`}
+              >
+                {initials(user.name)}
+              </div>
+            </div>
+            {/* Full profile — phone drawer + laptop expanded */}
+            <div className={`md:hidden ${collapsed ? "" : "lg:block"}`}>
+              <div className="text-sm font-medium text-slate-900 truncate">{user.name}</div>
+              <div className="text-xs text-slate-500 truncate">{user.email}</div>
+              <div className="text-xs mt-0.5">
+                <span
+                  className={`badge ${
+                    user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                  }`}
+                >
+                  {user.role}
+                </span>
+              </div>
+            </div>
           </Link>
           <button
             onClick={logout}
             title={collapsed ? "Sign out" : undefined}
-            className={`w-full text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 rounded-lg transition ${
-              collapsed ? "lg:flex lg:items-center lg:justify-center lg:px-2 lg:py-2 px-3 py-2.5 text-left" : "px-3 py-2.5 text-left"
+            className={`w-full text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 rounded-lg transition px-3 py-2.5 text-left md:flex md:items-center md:justify-center md:px-2 md:py-2 ${
+              collapsed ? "" : "lg:justify-start lg:px-3 lg:py-2.5"
             }`}
           >
-            <span className={collapsed ? "lg:inline hidden text-base" : "hidden"}>{"⏻"}</span>
-            <span className={`font-heading uppercase tracking-wide ${collapsed ? "lg:hidden" : ""}`}>Sign out</span>
+            <span className={`hidden md:inline ${collapsed ? "" : "lg:hidden"} text-base`}>⏻</span>
+            <span className={`font-heading uppercase tracking-wide md:hidden ${collapsed ? "" : "lg:inline"}`}>Sign out</span>
           </button>
-          <div className={`px-1 pt-2 ${collapsed ? "lg:hidden" : ""}`}>
+          <div className={`px-1 pt-2 md:hidden ${collapsed ? "" : "lg:block"}`}>
             <ThemeToggle />
           </div>
         </div>

@@ -382,7 +382,7 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   "moving_company",
   // Wholesale & distribution
   "wholesaler",
-  // Retail
+  // Retail — equipment shops are not playing facilities
   "hardware_store",
   "clothing_store",
   "shoe_store",
@@ -390,12 +390,16 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   "electronics_store",
   "furniture_store",
   "home_goods_store",
+  "home_improvement_store",
   "department_store",
   "shopping_mall",
   "supermarket",
   "convenience_store",
   "pet_store",
   "book_store",
+  "sporting_goods_store",
+  "store",
+  "auto_parts_store",
   // Professional services
   "accounting",
   "lawyer",
@@ -403,12 +407,15 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   "real_estate_agency",
   "travel_agency",
   "employment_agency",
+  "consultant",
   // Medical
   "hospital",
   "doctor",
   "dentist",
   "pharmacy",
   "veterinary_care",
+  "medical_lab",
+  "physiotherapist",
   // Financial
   "bank",
   "atm",
@@ -434,8 +441,15 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   "fire_station",
   "police",
   "post_office",
+  "local_government_office",
   // Lodging
   "lodging",
+  "hotel",
+  "resort_hotel",
+  "motel",
+  "extended_stay_hotel",
+  "bed_and_breakfast",
+  "hostel",
   // Transit
   "airport",
   "bus_station",
@@ -451,10 +465,13 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   "bakery",
   "meal_delivery",
   "meal_takeaway",
+  "coffee_shop",
+  "ice_cream_shop",
   // Entertainment
   "movie_theater",
   "night_club",
   "amusement_park",
+  "bowling_alley",
   // Educational — valid demand anchors, never competition
   "university",
   "school",
@@ -468,6 +485,9 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   "community_center",
   "convention_center",
   "performing_arts_theater",
+  // Events & venues — event spaces, not regular sports facilities
+  "event_venue",
+  "wedding_venue",
   // Organizations
   "non_governmental_organization",
   // Miscellaneous
@@ -476,8 +496,12 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   "courier_service",
   "tourist_attraction",
   "campground",
+  "rv_park",
   "zoo",
   "aquarium",
+  "marina",
+  "warehouse",
+  "farm",
 ]);
 
 /**
@@ -494,16 +518,16 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
  *     multi-sport complex like "Sports Arena").
  */
 const SPORT_NAME_SIGNALS: ReadonlyMap<string, readonly string[]> = new Map([
-  ["table-tennis", ["table tennis", "ping pong"]],
-  ["turf-sports", ["football", "futsal", "soccer", "turf"]],
+  ["table-tennis", ["table tennis", "ping pong", "tt parlour", "tt parlor"]],
+  ["turf-sports", ["football", "futsal", "soccer", "turf", "five-a-side", "five a side", "5-a-side", "seven-a-side", "seven a side", "7-a-side", "astroturf"]],
   ["badminton", ["badminton", "shuttle"]],
   ["tennis", ["tennis"]],
   ["pickleball", ["pickleball"]],
   ["squash", ["squash"]],
-  ["basketball", ["basketball"]],
-  ["volleyball", ["volleyball"]],
-  ["cricket", ["cricket"]],
-  ["running-track", ["running track", "athletic track", "athletic field"]],
+  ["basketball", ["basketball", "hoops"]],
+  ["volleyball", ["volleyball", "volley ball", "volley"]],
+  ["cricket", ["cricket", "wicket"]],
+  ["running-track", ["running track", "athletic track", "athletic field", "athletics", "track and field", "jogging track", "joggers"]],
 ]);
 
 function nameMatchesSport(lowerName: string, categoryId: string): boolean {
@@ -559,6 +583,22 @@ const COMPETITION_DENY_DISPLAY_NAMES: ReadonlySet<string> = new Set([
   "religious organization",
   "social services organization",
   "welfare organization",
+  "store",
+  "shopping center",
+  "hotel",
+  "resort",
+  "hospital",
+  "clinic",
+  "factory",
+  "wholesaler",
+  "warehouse",
+  "contractor",
+  "real estate agency",
+  "travel agency",
+  "church",
+  "temple",
+  "mosque",
+  "place of worship",
 ]);
 
 export function shouldFilterCompetition(

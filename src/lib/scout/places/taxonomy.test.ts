@@ -21,6 +21,7 @@ import {
   publicTaxonomy,
   resolveCategories,
   resolveTerms,
+  shouldFilterCompetition,
   unknownCategoryIds,
 } from "./taxonomy";
 
@@ -224,6 +225,92 @@ describe("isSportMismatch", () => {
 
   it("filters a badminton court from squash results", () => {
     expect(isSportMismatch("ABC Badminton Court", "squash")).toBe(true);
+  });
+
+  it("filters a volleyball court from basketball results", () => {
+    expect(isSportMismatch("City Volleyball Arena", "basketball")).toBe(true);
+  });
+
+  it("filters a football turf from badminton results", () => {
+    expect(isSportMismatch("XYZ Football Turf", "badminton")).toBe(true);
+  });
+
+  it("filters a cricket nets place from tennis results", () => {
+    expect(isSportMismatch("Chennai Cricket Nets", "tennis")).toBe(true);
+  });
+
+  it("filters a running track from volleyball results", () => {
+    expect(isSportMismatch("City Athletics Track", "volleyball")).toBe(true);
+  });
+
+  it("keeps a pickleball court in pickleball results", () => {
+    expect(isSportMismatch("ABC Pickleball Arena", "pickleball")).toBe(false);
+  });
+
+  it("keeps a squash court in squash results", () => {
+    expect(isSportMismatch("Metro Squash Court", "squash")).toBe(false);
+  });
+
+  it("filters a five-a-side turf from cricket results", () => {
+    expect(isSportMismatch("Five A Side Arena", "cricket")).toBe(true);
+  });
+
+  it("filters a volley ball court from pickleball results", () => {
+    expect(isSportMismatch("Volley Ball Club", "pickleball")).toBe(true);
+  });
+
+  it("filters a joggers park from basketball results", () => {
+    expect(isSportMismatch("Joggers Park Running Track", "basketball")).toBe(true);
+  });
+});
+
+describe("shouldFilterCompetition across all categories", () => {
+  const allCompetition = CATEGORIES.filter((c) => c.side === "competition").map((c) => c.id);
+
+  it("filters sporting_goods_store for every competition category", () => {
+    for (const catId of allCompetition) {
+      expect(shouldFilterCompetition("sporting_goods_store", null, "Sports Shop", catId)).toBe(true);
+    }
+  });
+
+  it("filters hotel for every competition category", () => {
+    for (const catId of allCompetition) {
+      expect(shouldFilterCompetition("hotel", null, "Grand Hotel & Sports", catId)).toBe(true);
+    }
+  });
+
+  it("filters display name 'store' for every competition category", () => {
+    for (const catId of allCompetition) {
+      expect(shouldFilterCompetition("some_unknown_type", "Store", "ABC Sporting Goods", catId)).toBe(true);
+    }
+  });
+
+  it("filters display name 'contractor' for every competition category", () => {
+    for (const catId of allCompetition) {
+      expect(shouldFilterCompetition(null, "Contractor", "XYZ Turf Installers", catId)).toBe(true);
+    }
+  });
+
+  it("keeps a legitimate sports facility for its own category", () => {
+    expect(shouldFilterCompetition(null, null, "City Badminton Court", "badminton")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "Metro Squash Arena", "squash")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "Downtown Pickleball Club", "pickleball")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "Cricket Nets Zone", "cricket")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "Volleyball Arena", "volleyball")).toBe(false);
+  });
+
+  it("filters cross-sport results via name signals", () => {
+    expect(shouldFilterCompetition(null, null, "Cricket Academy", "badminton")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Football Turf XYZ", "tennis")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Badminton Club", "volleyball")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Basketball Arena", "cricket")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Tennis Court", "pickleball")).toBe(true);
+  });
+
+  it("filters cross-category Google type (athletic_field under non-running-track)", () => {
+    expect(shouldFilterCompetition("athletic_field", null, "City Ground", "turf-sports")).toBe(true);
+    expect(shouldFilterCompetition("athletic_field", null, "City Ground", "badminton")).toBe(true);
+    expect(shouldFilterCompetition("athletic_field", null, "City Ground", "running-track")).toBe(false);
   });
 });
 

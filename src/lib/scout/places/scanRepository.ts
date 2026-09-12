@@ -575,6 +575,7 @@ export interface ScanPlaceRow {
   readonly operatingWindow: Record<string, unknown> | null;
   readonly reviewsStored: number;
   readonly flooring: string | null;
+  readonly flooringDetail: string | null;
 }
 
 /** Raw: `places.location` is `Unsupported`, so lat/lng are projected out. */
@@ -591,10 +592,12 @@ export async function getScanPlaces(
       ST_Y(p.location::geometry) AS lat,
       ST_X(p.location::geometry) AS lng,
       (SELECT COUNT(*) FROM place_reviews pr WHERE pr.place_id = p.id)::int AS reviews_stored,
-      pt_floor.value AS flooring
+      pt_floor.value AS flooring,
+      pt_fdetail.value AS flooring_detail
     FROM scan_places sp
     INNER JOIN places p ON p.id = sp.place_id
     LEFT JOIN place_tags pt_floor ON pt_floor.place_id = p.id AND pt_floor.key = 'flooring'
+    LEFT JOIN place_tags pt_fdetail ON pt_fdetail.place_id = p.id AND pt_fdetail.key = 'flooring-detail'
     WHERE sp.scan_id = ${scanId}::uuid
     ORDER BY sp.distance_m ASC
   `);
@@ -620,6 +623,7 @@ export async function getScanPlaces(
     operatingWindow: (r.operating_window as Record<string, unknown> | null) ?? null,
     reviewsStored: Number(r.reviews_stored),
     flooring: (r.flooring as string | null) ?? null,
+    flooringDetail: (r.flooring_detail as string | null) ?? null,
   }));
 }
 

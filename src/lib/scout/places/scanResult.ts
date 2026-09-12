@@ -29,7 +29,7 @@ import {
   getScanPlaces,
   type ScanPlaceRow,
 } from "./scanRepository";
-import { CATEGORIES, COMPETITION_DENY_TYPES, isSportMismatch, getCategory } from "./taxonomy";
+import { CATEGORIES, shouldFilterCompetition, getCategory } from "./taxonomy";
 
 export interface ScanProgress {
   readonly scanId: string;
@@ -156,10 +156,11 @@ export async function getScanResult(
   ]);
 
   const places: ScanResultPlace[] = rows
-    .filter((r) => !(r.side === "competition" && r.primaryType && COMPETITION_DENY_TYPES.has(r.primaryType)))
     .filter((r) => {
       if (r.side !== "competition") return true;
-      return !r.categories.every((catId) => isSportMismatch(r.name, catId));
+      return !r.categories.every((catId) =>
+        shouldFilterCompetition(r.primaryType, r.primaryTypeDisplayName, r.name, catId),
+      );
     })
     .map((r) => ({
       ...r,

@@ -174,26 +174,50 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     return () => document.removeEventListener("click", handler);
   }, [flooringOpen]);
 
-  const saveFlooring = useCallback(async (placeId: string, value: string | null) => {
+  const saveFlooring = useCallback(async (placeId: string, value: string | null, detail?: string) => {
     setFlooringSaving(placeId);
     setFlooringOpen(null);
     try {
+      const values: Record<string, string> = { flooring: value ?? "" };
+      if (detail !== undefined) values["flooring-detail"] = detail;
+      if (!value) values["flooring-detail"] = "";
       await fetch(`/api/scout/places/${encodeURIComponent(placeId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values: { flooring: value ?? "" } }),
+        body: JSON.stringify({ values }),
       });
       setData((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
           places: prev.places.map((p) =>
-            p.placeId === placeId ? { ...p, flooring: value } : p,
+            p.placeId === placeId
+              ? { ...p, flooring: value, flooringDetail: detail !== undefined ? (detail || null) : p.flooringDetail }
+              : p,
           ),
         };
       });
     } catch { /* swallow */ }
     setFlooringSaving(null);
+  }, []);
+
+  const saveFlooringDetail = useCallback(async (placeId: string, detail: string) => {
+    try {
+      await fetch(`/api/scout/places/${encodeURIComponent(placeId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values: { "flooring-detail": detail } }),
+      });
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          places: prev.places.map((p) =>
+            p.placeId === placeId ? { ...p, flooringDetail: detail || null } : p,
+          ),
+        };
+      });
+    } catch { /* swallow */ }
   }, []);
 
   /* ---------------------------------------------------------- map layer */
@@ -1134,43 +1158,61 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                                   .join(" · ") || "No detail from Google"}
                               </span>
                               {group.side === "competition" && (
-                                <span className="inline-flex items-center gap-1 mt-1 relative">
+                                <span className="flex flex-wrap items-center gap-1.5 mt-1.5 relative">
                                   {flooringSaving === place.placeId ? (
-                                    <span className="text-[10px] text-slate-400 italic">saving…</span>
+                                    <span className="text-xs text-slate-400 italic">saving…</span>
                                   ) : place.flooring ? (
                                     <button
                                       type="button"
-                                      className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200 transition-colors"
+                                      className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setFlooringOpen(flooringOpen === place.placeId ? null : place.placeId);
                                       }}
                                       title="Change flooring type"
                                     >
-                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
                                       {place.flooring}
                                     </button>
                                   ) : (
                                     <button
                                       type="button"
-                                      className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-50 text-slate-400 border border-dashed border-slate-300 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                                      className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-slate-50 text-slate-500 border border-dashed border-slate-300 hover:bg-slate-100 hover:text-slate-700 hover:border-slate-400 transition-colors"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setFlooringOpen(flooringOpen === place.placeId ? null : place.placeId);
                                       }}
                                       title="Add flooring type"
                                     >
-                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                                      flooring
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                                      Add flooring
                                     </button>
                                   )}
+                                  {place.flooring && (
+                                    <input
+                                      type="text"
+                                      className="text-xs px-2 py-0.5 rounded border border-slate-200 bg-white text-slate-700 w-[140px] placeholder:text-slate-300 focus:outline-none focus:border-court-400 focus:ring-1 focus:ring-court-200"
+                                      placeholder="variant detail…"
+                                      defaultValue={place.flooringDetail ?? ""}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onBlur={(e) => {
+                                        const v = e.currentTarget.value.trim();
+                                        if (v !== (place.flooringDetail ?? "")) saveFlooringDetail(place.placeId, v);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.currentTarget.blur();
+                                        }
+                                      }}
+                                    />
+                                  )}
                                   {flooringOpen === place.placeId && (
-                                    <span className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[140px]">
+                                    <span className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl py-1.5 min-w-[160px]">
                                       {FLOORING_OPTIONS.map((opt) => (
                                         <button
                                           key={opt}
                                           type="button"
-                                          className={`block w-full text-left text-xs px-3 py-1.5 hover:bg-court-50 transition-colors ${place.flooring === opt ? "font-semibold text-court-600 bg-court-50" : "text-slate-700"}`}
+                                          className={`block w-full text-left text-sm px-4 py-2 hover:bg-court-50 transition-colors ${place.flooring === opt ? "font-semibold text-court-600 bg-court-50" : "text-slate-700"}`}
                                           onClick={(e) => { e.stopPropagation(); saveFlooring(place.placeId, opt); }}
                                         >
                                           {opt}
@@ -1179,7 +1221,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                                       {place.flooring && (
                                         <button
                                           type="button"
-                                          className="block w-full text-left text-xs px-3 py-1.5 text-red-500 hover:bg-red-50 border-t border-slate-100 mt-0.5 transition-colors"
+                                          className="block w-full text-left text-sm px-4 py-2 text-red-500 hover:bg-red-50 border-t border-slate-100 mt-1 transition-colors"
                                           onClick={(e) => { e.stopPropagation(); saveFlooring(place.placeId, null); }}
                                         >
                                           Remove

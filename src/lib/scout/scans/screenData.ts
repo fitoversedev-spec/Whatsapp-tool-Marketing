@@ -71,6 +71,7 @@ export async function getScanScreenData(
       businessStatus: p.businessStatus,
       googleMapsUri: p.googleMapsUri,
       flooring: p.flooring,
+      flooringDetail: p.flooringDetail,
     })),
     distinctPlaces: result.distinctPlaces,
     categories: result.categories.map((c) => ({

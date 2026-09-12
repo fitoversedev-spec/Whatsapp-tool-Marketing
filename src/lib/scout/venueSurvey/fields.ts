@@ -60,6 +60,13 @@ export const VENUE_SURVEY_FIELDS: readonly VenueFieldDef[] = [
     options: ["Turf", "Acrylic", "PU", "Concrete", "Wooden", "Clay", "Natural grass", "Other"],
   },
   {
+    id: "flooring-detail",
+    label: "Flooring detail",
+    help: "Variant, thickness, brand — e.g. '50mm FIFA-grade synthetic'.",
+    kind: "text",
+    placeholder: "e.g. 50mm synthetic grass",
+  },
+  {
     id: "setting",
     label: "Setting",
     help: "Whether play stops when it rains.",

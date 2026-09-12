@@ -527,6 +527,53 @@ export function isSportMismatch(placeName: string, categoryId: string): boolean 
   return false;
 }
 
+/**
+ * Map every Google `primaryType` used in a `nearby`-mode competition term
+ * back to the category it belongs to. When a place's primaryType maps to
+ * a *different* competition category, it's a cross-category leak — e.g.
+ * `athletic_field` (running-track) showing under football turfs.
+ */
+const TYPE_TO_CATEGORY: ReadonlyMap<string, string> = (() => {
+  const m = new Map<string, string>();
+  for (const c of COMPETITION) {
+    for (const t of c.terms) {
+      if (t.googleTypes) {
+        for (const gt of t.googleTypes) m.set(gt, c.id);
+      }
+    }
+  }
+  return m;
+})();
+
+/**
+ * Display names Google assigns to types that are never a sports facility.
+ * Checked as a fallback when the `primaryType` code is not in the deny list
+ * (some types don't have stable Table A codes, e.g. "Association / Organization").
+ */
+const COMPETITION_DENY_DISPLAY_NAMES: ReadonlySet<string> = new Set([
+  "association / organization",
+  "college",
+  "educational institution",
+  "organization",
+  "social club",
+  "religious organization",
+  "social services organization",
+  "welfare organization",
+]);
+
+export function shouldFilterCompetition(
+  primaryType: string | null,
+  displayName: string | null,
+  placeName: string,
+  categoryId: string,
+): boolean {
+  if (primaryType && COMPETITION_DENY_TYPES.has(primaryType)) return true;
+  if (displayName && COMPETITION_DENY_DISPLAY_NAMES.has(displayName.toLowerCase())) return true;
+  if (primaryType && TYPE_TO_CATEGORY.has(primaryType) && TYPE_TO_CATEGORY.get(primaryType) !== categoryId) return true;
+  if (isSportMismatch(placeName, categoryId)) return true;
+  return false;
+}
+
 export const PRESETS: readonly PresetDef[] = [
   {
     id: "quick-check",

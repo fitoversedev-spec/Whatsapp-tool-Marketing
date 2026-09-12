@@ -24,6 +24,7 @@ export interface ScanPlaceDto {
   readonly businessStatus: string | null;
   readonly googleMapsUri: string | null;
   readonly flooring: string | null;
+  readonly flooringDetail: string | null;
 }
 
 export interface ScanCategoryDto {

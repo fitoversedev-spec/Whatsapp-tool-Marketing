@@ -392,6 +392,19 @@ describe("shouldFilterCompetition across all categories", () => {
     expect(shouldFilterCompetition("athletic_field", null, "City Field", "badminton")).toBe(true);
     expect(shouldFilterCompetition("athletic_field", null, "City Field", "running-track")).toBe(false);
   });
+
+  it("does not false-positive on substrings: ring/mat/range/lane", () => {
+    expect(shouldFilterCompetition(null, null, "Engineering Sports Club", "badminton")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "Format Sports Arena", "tennis")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "Orange Cricket Academy", "cricket")).toBe(false);
+    expect(shouldFilterCompetition(null, null, "Planet Football Turf", "turf-sports")).toBe(false);
+  });
+
+  it("filters names with venue-deny keywords even with sport words", () => {
+    expect(shouldFilterCompetition(null, null, "Resort Cricket Ground", "cricket")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Dharamshala Sports Arena", "badminton")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Showroom Sports Center", "basketball")).toBe(true);
+  });
 });
 
 describe("publicTaxonomy", () => {

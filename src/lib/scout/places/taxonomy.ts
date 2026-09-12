@@ -732,11 +732,10 @@ const COMPETITION_ALLOW_TYPES: ReadonlySet<string> = new Set([
  * **none** of these is almost certainly noise from a fuzzy text search.
  */
 const FACILITY_KEYWORDS: readonly string[] = [
-  // Facility types
+  // Facility types (safe as substrings)
   "court", "turf", "arena", "academy", "club", "ground", "stadium",
   "nets", "field", "track", "centre", "center", "complex", "hub",
   "zone", "park", "gym", "fitness", "pitch", "cage", "dome", "rink",
-  "ring", "mat", "lane", "range",
   // Sport names
   "football", "futsal", "soccer", "badminton", "shuttle",
   "tennis", "pickleball", "squash", "basketball", "volleyball",

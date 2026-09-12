@@ -454,10 +454,30 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   // Entertainment
   "movie_theater",
   "night_club",
+  "amusement_park",
+  // Educational — valid demand anchors, never competition
+  "university",
+  "school",
+  "primary_school",
+  "secondary_school",
+  "library",
+  "preschool",
+  // Cultural & civic
+  "museum",
+  "art_gallery",
+  "community_center",
+  "convention_center",
+  "performing_arts_theater",
+  // Organizations
+  "non_governmental_organization",
   // Miscellaneous
   "parking",
   "storage",
   "courier_service",
+  "tourist_attraction",
+  "campground",
+  "zoo",
+  "aquarium",
 ]);
 
 /**

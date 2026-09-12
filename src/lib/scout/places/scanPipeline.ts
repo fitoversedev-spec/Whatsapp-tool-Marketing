@@ -64,7 +64,7 @@ import {
   type ClaimedTask,
   type ScanPlaceRow,
 } from "./scanRepository";
-import { getCategory, resolveTerms, unknownCategoryIds, type SkuTier } from "./taxonomy";
+import { COMPETITION_DENY_TYPES, getCategory, resolveTerms, unknownCategoryIds, type SkuTier } from "./taxonomy";
 
 export class ScanRequestError extends Error {
   constructor(
@@ -555,16 +555,18 @@ async function persistPlaces(
 
   const kept: Array<{ place: NormalisedPlace; distanceM: number }> = [];
   const seen = new Set<string>();
+  const category = getCategory(ctx.task.categoryId);
+  const denyByType = category?.side === "competition";
 
   for (const raw of googlePlaces) {
     const place = normalisePlace(raw);
     if (!place) continue;
-    // One tile can return the same place twice across a term's query strings.
     if (seen.has(place.placeId)) continue;
     seen.add(place.placeId);
 
     const distanceM = haversineDistanceM(scan.centre, place.location);
     if (distanceM > scan.radiusM) continue;
+    if (denyByType && place.primaryType && COMPETITION_DENY_TYPES.has(place.primaryType)) continue;
 
     kept.push({ place, distanceM });
   }

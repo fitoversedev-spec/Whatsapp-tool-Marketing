@@ -29,7 +29,7 @@ import {
   getScanPlaces,
   type ScanPlaceRow,
 } from "./scanRepository";
-import { CATEGORIES, getCategory } from "./taxonomy";
+import { CATEGORIES, COMPETITION_DENY_TYPES, getCategory } from "./taxonomy";
 
 export interface ScanProgress {
   readonly scanId: string;
@@ -155,10 +155,12 @@ export async function getScanResult(
     job ? getSaturationByTerm(job.id, database) : Promise.resolve([]),
   ]);
 
-  const places: ScanResultPlace[] = rows.map((r) => ({
-    ...r,
-    distanceMRounded: Math.round(r.distanceM),
-  }));
+  const places: ScanResultPlace[] = rows
+    .filter((r) => !(r.side === "competition" && r.primaryType && COMPETITION_DENY_TYPES.has(r.primaryType)))
+    .map((r) => ({
+      ...r,
+      distanceMRounded: Math.round(r.distanceM),
+    }));
 
   const saturatedTermIds = new Set(
     saturationRows.filter((s) => s.saturatedTiles > 0).map((s) => s.termId),

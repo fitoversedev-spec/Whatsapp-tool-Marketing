@@ -359,6 +359,93 @@ const DEMAND: readonly CategoryDef[] = [
 
 export const CATEGORIES: readonly CategoryDef[] = [...COMPETITION, ...DEMAND];
 
+/**
+ * Google `primaryType` values that are never a sports / activity facility.
+ *
+ * When a Text Search for "football turf" returns a general-contractor or a
+ * wholesaler, it matched the keyword but not the intent. Filtering on
+ * `primaryType` (the single most-specific type Google assigns) removes these
+ * without risking legitimate venues whose secondary types overlap.
+ *
+ * Only checked for **competition** categories — demand categories either use
+ * Nearby Search with explicit `includedTypes` (which already constrains) or
+ * are intentionally broad (kindergarten, apartments).
+ */
+export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
+  // Construction & trades
+  "general_contractor",
+  "roofing_contractor",
+  "electrician",
+  "plumber",
+  "painter",
+  "locksmith",
+  "moving_company",
+  // Wholesale & distribution
+  "wholesaler",
+  // Retail
+  "hardware_store",
+  "clothing_store",
+  "shoe_store",
+  "jewelry_store",
+  "electronics_store",
+  "furniture_store",
+  "home_goods_store",
+  "department_store",
+  "shopping_mall",
+  "supermarket",
+  "convenience_store",
+  "pet_store",
+  "book_store",
+  // Professional services
+  "accounting",
+  "lawyer",
+  "insurance_agency",
+  "real_estate_agency",
+  "travel_agency",
+  "employment_agency",
+  // Medical
+  "hospital",
+  "doctor",
+  "dentist",
+  "pharmacy",
+  "veterinary_care",
+  // Financial
+  "bank",
+  "atm",
+  // Automotive
+  "car_dealer",
+  "car_rental",
+  "car_repair",
+  "car_wash",
+  "gas_station",
+  // Personal care
+  "beauty_salon",
+  "hair_care",
+  "spa",
+  "laundry",
+  // Religious
+  "church",
+  "mosque",
+  "hindu_temple",
+  "synagogue",
+  // Government & civic
+  "city_hall",
+  "courthouse",
+  "fire_station",
+  "police",
+  "post_office",
+  // Lodging
+  "lodging",
+  // Transit
+  "airport",
+  "bus_station",
+  "train_station",
+  "subway_station",
+  // Funeral
+  "funeral_home",
+  "cemetery",
+]);
+
 export const PRESETS: readonly PresetDef[] = [
   {
     id: "quick-check",

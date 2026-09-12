@@ -142,34 +142,56 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
       </div>
 
       {/* Line items */}
-      <div className="mt-6 card overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th className="text-left">Particulars</th>
-              <th className="!text-right">Qty</th>
-              <th className="!text-right">Rate</th>
-              <th className="!text-right">GST%</th>
-              <th className="!text-right">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {inv.lineItems.filter((li) => li.included).map((li, i) => (
-              <tr key={i}>
-                <td className="text-slate-700">{li.name}</td>
-                <td className="text-right font-mono">{Math.round(li.areaSqFt).toLocaleString("en-IN")}{li.unit ? ` ${li.unit}` : ""}</td>
-                <td className="text-right font-mono">{inr(li.ratePerSqFt)}</td>
-                <td className="text-right font-mono">{li.gstPercent}%</td>
-                <td className="text-right font-mono">{inr(li.total)}</td>
+      <div className="mt-6 card overflow-hidden">
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {inv.lineItems.filter((li) => li.included).map((li, i) => (
+            <div key={i} className="p-4">
+              <div className="font-medium text-slate-900 text-sm mb-2">{li.name}</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <div className="flex justify-between"><span className="text-slate-500">Qty</span><span className="font-mono text-slate-700">{Math.round(li.areaSqFt).toLocaleString("en-IN")}{li.unit ? ` ${li.unit}` : ""}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Rate</span><span className="font-mono text-slate-700">{inr(li.ratePerSqFt)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">GST</span><span className="font-mono text-slate-700">{li.gstPercent}%</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Amount</span><span className="font-mono font-medium text-slate-900">{inr(li.total)}</span></div>
+              </div>
+            </div>
+          ))}
+          <div className="p-4 space-y-1 text-xs">
+            <div className="flex justify-between"><span className="text-slate-600">Subtotal</span><span className="font-mono">{inr(inv.subtotal)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">GST</span><span className="font-mono">{inr(inv.gstAmount)}</span></div>
+            <div className="flex justify-between font-semibold text-sm text-slate-900 pt-1 border-t border-slate-200"><span>Grand total</span><span className="font-mono">{inr(inv.grandTotal)}</span></div>
+          </div>
+        </div>
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th className="text-left">Particulars</th>
+                <th className="!text-right">Qty</th>
+                <th className="!text-right">Rate</th>
+                <th className="!text-right">GST%</th>
+                <th className="!text-right">Amount</th>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="text-slate-600"><td colSpan={4} className="text-right">Subtotal</td><td className="text-right font-mono">{inr(inv.subtotal)}</td></tr>
-            <tr className="text-slate-600"><td colSpan={4} className="text-right">GST</td><td className="text-right font-mono">{inr(inv.gstAmount)}</td></tr>
-            <tr className="font-semibold text-slate-900"><td colSpan={4} className="text-right">Grand total</td><td className="text-right font-mono">{inr(inv.grandTotal)}</td></tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody>
+              {inv.lineItems.filter((li) => li.included).map((li, i) => (
+                <tr key={i}>
+                  <td className="text-slate-700">{li.name}</td>
+                  <td className="text-right font-mono">{Math.round(li.areaSqFt).toLocaleString("en-IN")}{li.unit ? ` ${li.unit}` : ""}</td>
+                  <td className="text-right font-mono">{inr(li.ratePerSqFt)}</td>
+                  <td className="text-right font-mono">{li.gstPercent}%</td>
+                  <td className="text-right font-mono">{inr(li.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="text-slate-600"><td colSpan={4} className="text-right">Subtotal</td><td className="text-right font-mono">{inr(inv.subtotal)}</td></tr>
+              <tr className="text-slate-600"><td colSpan={4} className="text-right">GST</td><td className="text-right font-mono">{inr(inv.gstAmount)}</td></tr>
+              <tr className="font-semibold text-slate-900"><td colSpan={4} className="text-right">Grand total</td><td className="text-right font-mono">{inr(inv.grandTotal)}</td></tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
 
       {/* Payments */}

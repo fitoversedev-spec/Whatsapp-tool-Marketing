@@ -237,48 +237,72 @@ export default function AnalyticsClient({
             {templates.length === 0 ? (
               <EmptyState message="No template stats for this range." />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th className="text-left">Template</th>
-                      <th className="!text-right">Used</th>
-                      <th className="!text-right">Sent</th>
-                      <th className="!text-right">Deliv %</th>
-                      <th className="!text-right">Read %</th>
-                      <th className="!text-right">Fail %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {templates.map((t) => {
-                      const dRate = t.sent > 0 ? t.delivered / t.sent : 0;
-                      const rRate = t.delivered > 0 ? t.read / t.delivered : 0;
-                      const fRate = t.sent > 0 ? t.failed / t.sent : 0;
-                      return (
-                        <tr key={t.templateName}>
-                          <td>
-                            <div className="font-medium text-slate-900">{t.templateName}</div>
-                            <div className="text-xs text-slate-500">{t.category}</div>
-                          </td>
-                          <td className="!text-right font-mono text-slate-700">{t.broadcasts}</td>
-                          <td className="!text-right font-mono text-slate-700">{formatNumber(t.sent)}</td>
-                          <td className="!text-right font-mono">
-                            <span className={rateColor(dRate, "deliv")}>{formatPct(dRate)}</span>
-                          </td>
-                          <td className="!text-right font-mono">
-                            <span className={rateColor(rRate, "read")}>{formatPct(rRate)}</span>
-                          </td>
-                          <td className="!text-right font-mono">
-                            <span className={fRate > 0 ? "text-red-600" : "text-slate-400"}>
-                              {formatPct(fRate)}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                {/* Mobile cards */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {templates.map((t) => {
+                    const dRate = t.sent > 0 ? t.delivered / t.sent : 0;
+                    const rRate = t.delivered > 0 ? t.read / t.delivered : 0;
+                    const fRate = t.sent > 0 ? t.failed / t.sent : 0;
+                    return (
+                      <div key={t.templateName} className="p-4">
+                        <div className="font-medium text-slate-900 text-sm">{t.templateName}</div>
+                        <div className="text-xs text-slate-500 mb-2">{t.category}</div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div><span className="text-slate-500">Used</span><div className="font-mono font-medium text-slate-700">{t.broadcasts}</div></div>
+                          <div><span className="text-slate-500">Sent</span><div className="font-mono font-medium text-slate-700">{formatNumber(t.sent)}</div></div>
+                          <div><span className="text-slate-500">Deliv</span><div className={`font-mono font-medium ${rateColor(dRate, "deliv")}`}>{formatPct(dRate)}</div></div>
+                          <div><span className="text-slate-500">Read</span><div className={`font-mono font-medium ${rateColor(rRate, "read")}`}>{formatPct(rRate)}</div></div>
+                          <div><span className="text-slate-500">Fail</span><div className={`font-mono font-medium ${fRate > 0 ? "text-red-600" : "text-slate-400"}`}>{formatPct(fRate)}</div></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th className="text-left">Template</th>
+                        <th className="!text-right">Used</th>
+                        <th className="!text-right">Sent</th>
+                        <th className="!text-right">Deliv %</th>
+                        <th className="!text-right">Read %</th>
+                        <th className="!text-right">Fail %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {templates.map((t) => {
+                        const dRate = t.sent > 0 ? t.delivered / t.sent : 0;
+                        const rRate = t.delivered > 0 ? t.read / t.delivered : 0;
+                        const fRate = t.sent > 0 ? t.failed / t.sent : 0;
+                        return (
+                          <tr key={t.templateName}>
+                            <td>
+                              <div className="font-medium text-slate-900">{t.templateName}</div>
+                              <div className="text-xs text-slate-500">{t.category}</div>
+                            </td>
+                            <td className="!text-right font-mono text-slate-700">{t.broadcasts}</td>
+                            <td className="!text-right font-mono text-slate-700">{formatNumber(t.sent)}</td>
+                            <td className="!text-right font-mono">
+                              <span className={rateColor(dRate, "deliv")}>{formatPct(dRate)}</span>
+                            </td>
+                            <td className="!text-right font-mono">
+                              <span className={rateColor(rRate, "read")}>{formatPct(rRate)}</span>
+                            </td>
+                            <td className="!text-right font-mono">
+                              <span className={fRate > 0 ? "text-red-600" : "text-slate-400"}>
+                                {formatPct(fRate)}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </section>
 
@@ -352,60 +376,85 @@ export default function AnalyticsClient({
           {broadcasts.length === 0 ? (
             <EmptyState message="No broadcasts in this range." />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th className="text-left">Name</th>
-                    <th className="text-left">Template</th>
-                    <th className="text-left">Status</th>
-                    <th className="!text-right">Sent</th>
-                    <th className="!text-right">Deliv</th>
-                    <th className="!text-right">Read</th>
-                    <th className="!text-right">Fail</th>
-                    <th className="!text-right">Cost</th>
-                    <th className="text-left">When</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {broadcasts.map((b) => (
-                    <tr key={b.id}>
-                      <td>
-                        <Link
-                          href={`/broadcasts/${b.id}`}
-                          className="font-medium text-slate-900 hover:text-wa-dark"
-                        >
-                          {b.name}
-                        </Link>
-                        <div className="text-xs text-slate-500">by {b.createdByName}</div>
-                      </td>
-                      <td className="text-slate-700">{b.templateName}</td>
-                      <td>
-                        <span className={`badge ${STATUS_COLORS[b.status] ?? "bg-slate-100 text-slate-700"}`}>
-                          {b.status}
-                        </span>
-                      </td>
-                      <td className="!text-right font-mono text-slate-700">{b.sent}</td>
-                      <td className="!text-right font-mono text-emerald-700">{b.delivered}</td>
-                      <td className="!text-right font-mono text-court-700">{b.read}</td>
-                      <td className="!text-right font-mono">
-                        <span className={b.failed > 0 ? "text-red-600" : "text-slate-400"}>
-                          {b.failed}
-                        </span>
-                      </td>
-                      <td className="!text-right font-mono text-slate-700">{formatINR(b.cost)}</td>
-                      <td className="text-xs text-slate-500 whitespace-nowrap font-mono">
-                        {new Date(b.createdAt).toLocaleDateString("en-IN", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "2-digit",
-                        })}
-                      </td>
+            <>
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {broadcasts.map((b) => (
+                  <Link key={b.id} href={`/broadcasts/${b.id}`} className="block p-4 active:bg-slate-50">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <div className="font-medium text-slate-900 text-sm truncate">{b.name}</div>
+                        <div className="text-xs text-slate-500">{b.templateName} · by {b.createdByName}</div>
+                      </div>
+                      <span className={`badge shrink-0 ${STATUS_COLORS[b.status] ?? "bg-slate-100 text-slate-700"}`}>{b.status}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div><span className="text-slate-500">Sent</span><div className="font-mono font-medium text-slate-700">{b.sent}</div></div>
+                      <div><span className="text-slate-500">Deliv</span><div className="font-mono font-medium text-emerald-700">{b.delivered}</div></div>
+                      <div><span className="text-slate-500">Read</span><div className="font-mono font-medium text-court-700">{b.read}</div></div>
+                      <div><span className="text-slate-500">Fail</span><div className={`font-mono font-medium ${b.failed > 0 ? "text-red-600" : "text-slate-400"}`}>{b.failed}</div></div>
+                      <div><span className="text-slate-500">Cost</span><div className="font-mono font-medium text-slate-700">{formatINR(b.cost)}</div></div>
+                      <div><span className="text-slate-500">When</span><div className="font-mono font-medium text-slate-500">{new Date(b.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</div></div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th className="text-left">Name</th>
+                      <th className="text-left">Template</th>
+                      <th className="text-left">Status</th>
+                      <th className="!text-right">Sent</th>
+                      <th className="!text-right">Deliv</th>
+                      <th className="!text-right">Read</th>
+                      <th className="!text-right">Fail</th>
+                      <th className="!text-right">Cost</th>
+                      <th className="text-left">When</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {broadcasts.map((b) => (
+                      <tr key={b.id}>
+                        <td>
+                          <Link
+                            href={`/broadcasts/${b.id}`}
+                            className="font-medium text-slate-900 hover:text-wa-dark"
+                          >
+                            {b.name}
+                          </Link>
+                          <div className="text-xs text-slate-500">by {b.createdByName}</div>
+                        </td>
+                        <td className="text-slate-700">{b.templateName}</td>
+                        <td>
+                          <span className={`badge ${STATUS_COLORS[b.status] ?? "bg-slate-100 text-slate-700"}`}>
+                            {b.status}
+                          </span>
+                        </td>
+                        <td className="!text-right font-mono text-slate-700">{b.sent}</td>
+                        <td className="!text-right font-mono text-emerald-700">{b.delivered}</td>
+                        <td className="!text-right font-mono text-court-700">{b.read}</td>
+                        <td className="!text-right font-mono">
+                          <span className={b.failed > 0 ? "text-red-600" : "text-slate-400"}>
+                            {b.failed}
+                          </span>
+                        </td>
+                        <td className="!text-right font-mono text-slate-700">{formatINR(b.cost)}</td>
+                        <td className="text-xs text-slate-500 whitespace-nowrap font-mono">
+                          {new Date(b.createdAt).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "2-digit",
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
 

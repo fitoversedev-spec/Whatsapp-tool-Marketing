@@ -167,7 +167,7 @@ export default function AdCampaignsClient({
                   onClick={syncLeads}
                   disabled={syncing}
                   title="Pull the latest lead-gen submissions from Meta and ingest any that are missing, so Captured leads catches up to Insight leads."
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-court-200 bg-court-50 px-3 py-1.5 text-sm font-medium text-court-700 hover:bg-court-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-wa-green/30 bg-wa-green/10 px-3 py-1.5 text-sm font-medium text-wa-dark hover:bg-wa-green/20 active:bg-wa-green/30 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
                   <span className={syncing ? "animate-spin" : ""} aria-hidden>
                     ⟳

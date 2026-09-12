@@ -781,6 +781,100 @@ export function shouldFilterCompetition(
   return false;
 }
 
+/* ------------------------------------------------- demand-side filtering */
+
+/**
+ * Per-category name keywords that indicate Google misclassified a place.
+ *
+ * Demand categories mostly use `nearby` search with explicit `includedTypes`,
+ * so Google already constrains results by type. The remaining noise is places
+ * Google itself tagged incorrectly — e.g. a yoga centre given type `school`.
+ * The name is the last reliable signal to catch these.
+ */
+const DEMAND_DENY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map([
+  ["schools", [
+    // Spiritual / wellness — frequently tagged as "school" by Google
+    "yoga", "meditation", "spiritual", "ashram", "art of living", "vipassana",
+    // Libraries — not educational institutions
+    "library",
+    // Specialised non-K12 training — too small for sports demand
+    "driving school", "driving academy", "motor driving",
+    "music academy", "music school", "music class",
+    "dance academy", "dance school", "dance class",
+    "cooking class", "culinary",
+    "photography class", "film institute", "film academy",
+    // Combat sports — specific-sport facility, not a school
+    "karate", "martial art", "taekwondo", "judo", "kung fu", "self defence",
+    "swimming academy", "swimming school", "swimming class",
+    // Medical — not schools
+    "hospital", "clinic", "medical college", "nursing college",
+    // Beauty — not schools
+    "salon", "beauty school", "beauty academy",
+    // Food — not schools
+    "restaurant", "dhaba", "cafe", "bakery", "hotel",
+    // Sports facilities — these are competition, not demand anchors
+    "turf", "football court", "cricket nets", "badminton court",
+    "tennis court", "sports arena", "stadium",
+    // Industrial
+    "factory", "warehouse", "godown",
+  ]],
+  ["colleges", [
+    "yoga", "meditation", "spiritual", "ashram", "art of living",
+    "seminary", "madrasa",
+    "hospital", "clinic",
+    "salon", "beauty",
+    "restaurant", "dhaba", "cafe", "hotel",
+    "factory", "warehouse",
+    "driving", "motor driving",
+    "cooking", "culinary",
+    "turf", "stadium", "sports arena",
+  ]],
+  ["kindergarten", [
+    "yoga", "meditation",
+    "hospital", "clinic",
+    "salon", "beauty",
+    "restaurant", "cafe", "hotel",
+    "factory", "warehouse",
+    "library",
+  ]],
+  ["workplaces", [
+    "virtual office",
+    "yoga", "meditation",
+    "hospital", "clinic",
+    "restaurant", "cafe", "hotel",
+    "factory", "warehouse",
+    "salon", "beauty",
+    "temple", "church", "mosque",
+  ]],
+  ["it-companies", [
+    "yoga", "meditation",
+    "hospital", "clinic",
+    "restaurant", "cafe", "hotel",
+    "salon", "beauty",
+    "temple", "church", "mosque",
+    "computer repair", "mobile repair",
+    "factory", "warehouse",
+  ]],
+  ["apartments", [
+    "hotel", "hostel", "lodge", "dharamshala",
+    "hospital", "clinic",
+    "restaurant", "cafe",
+    "factory", "warehouse", "godown",
+    "temple", "church", "mosque",
+    "office complex", "coworking",
+  ]],
+]);
+
+export function shouldFilterDemand(
+  placeName: string,
+  categoryId: string,
+): boolean {
+  const denyList = DEMAND_DENY_BY_CATEGORY.get(categoryId);
+  if (!denyList) return false;
+  const lower = placeName.toLowerCase();
+  return denyList.some((kw) => lower.includes(kw));
+}
+
 export const PRESETS: readonly PresetDef[] = [
   {
     id: "quick-check",

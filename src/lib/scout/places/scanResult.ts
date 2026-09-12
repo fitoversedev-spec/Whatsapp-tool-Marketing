@@ -29,7 +29,7 @@ import {
   getScanPlaces,
   type ScanPlaceRow,
 } from "./scanRepository";
-import { CATEGORIES, shouldFilterCompetition, getCategory } from "./taxonomy";
+import { CATEGORIES, shouldFilterCompetition, shouldFilterDemand, getCategory } from "./taxonomy";
 
 export interface ScanProgress {
   readonly scanId: string;
@@ -157,10 +157,15 @@ export async function getScanResult(
 
   const places: ScanResultPlace[] = rows
     .filter((r) => {
-      if (r.side !== "competition") return true;
-      return !r.categories.every((catId) =>
-        shouldFilterCompetition(r.primaryType, r.primaryTypeDisplayName, r.name, catId),
-      );
+      if (r.side === "competition") {
+        return !r.categories.every((catId) =>
+          shouldFilterCompetition(r.primaryType, r.primaryTypeDisplayName, r.name, catId),
+        );
+      }
+      if (r.side === "demand") {
+        return !r.categories.every((catId) => shouldFilterDemand(r.name, catId));
+      }
+      return true;
     })
     .map((r) => ({
       ...r,

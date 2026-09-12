@@ -64,7 +64,7 @@ import {
   type ClaimedTask,
   type ScanPlaceRow,
 } from "./scanRepository";
-import { shouldFilterCompetition, getCategory, resolveTerms, unknownCategoryIds, type SkuTier } from "./taxonomy";
+import { shouldFilterCompetition, shouldFilterDemand, getCategory, resolveTerms, unknownCategoryIds, type SkuTier } from "./taxonomy";
 
 export class ScanRequestError extends Error {
   constructor(
@@ -567,6 +567,7 @@ async function persistPlaces(
     const distanceM = haversineDistanceM(scan.centre, place.location);
     if (distanceM > scan.radiusM) continue;
     if (denyByType && shouldFilterCompetition(place.primaryType, place.primaryTypeDisplayName, place.name, ctx.task.categoryId)) continue;
+    if (category?.side === "demand" && shouldFilterDemand(place.name, ctx.task.categoryId)) continue;
 
     kept.push({ place, distanceM });
   }

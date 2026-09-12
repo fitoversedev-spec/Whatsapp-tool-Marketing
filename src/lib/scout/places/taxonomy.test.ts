@@ -22,6 +22,7 @@ import {
   resolveCategories,
   resolveTerms,
   shouldFilterCompetition,
+  shouldFilterDemand,
   unknownCategoryIds,
 } from "./taxonomy";
 
@@ -404,6 +405,90 @@ describe("shouldFilterCompetition across all categories", () => {
     expect(shouldFilterCompetition(null, null, "Resort Cricket Ground", "cricket")).toBe(true);
     expect(shouldFilterCompetition(null, null, "Dharamshala Sports Arena", "badminton")).toBe(true);
     expect(shouldFilterCompetition(null, null, "Showroom Sports Center", "basketball")).toBe(true);
+  });
+});
+
+describe("shouldFilterDemand", () => {
+  it("filters yoga/meditation centres from schools", () => {
+    expect(shouldFilterDemand("Art of Living Yoga and Meditation Center", "schools")).toBe(true);
+    expect(shouldFilterDemand("The Art of Living Happiness Center", "schools")).toBe(true);
+    expect(shouldFilterDemand("Isha Yoga Centre", "schools")).toBe(true);
+    expect(shouldFilterDemand("Vipassana Meditation Centre", "schools")).toBe(true);
+  });
+
+  it("filters libraries from schools", () => {
+    expect(shouldFilterDemand("Little Library Explorers", "schools")).toBe(true);
+    expect(shouldFilterDemand("City Public Library", "schools")).toBe(true);
+  });
+
+  it("filters driving/music/dance schools from schools", () => {
+    expect(shouldFilterDemand("ABC Driving School", "schools")).toBe(true);
+    expect(shouldFilterDemand("XYZ Music Academy", "schools")).toBe(true);
+    expect(shouldFilterDemand("City Dance Academy", "schools")).toBe(true);
+  });
+
+  it("filters martial arts from schools", () => {
+    expect(shouldFilterDemand("Shotokan Karate Academy", "schools")).toBe(true);
+    expect(shouldFilterDemand("XYZ Taekwondo School", "schools")).toBe(true);
+  });
+
+  it("filters hospitals and restaurants from schools", () => {
+    expect(shouldFilterDemand("City Hospital School of Nursing", "schools")).toBe(true);
+    expect(shouldFilterDemand("Hotel School of Hospitality", "schools")).toBe(true);
+  });
+
+  it("keeps legitimate schools", () => {
+    expect(shouldFilterDemand("Delhi Public School", "schools")).toBe(false);
+    expect(shouldFilterDemand("St. Xavier's High School", "schools")).toBe(false);
+    expect(shouldFilterDemand("National Academy of Education", "schools")).toBe(false);
+    expect(shouldFilterDemand("Greenfield International School", "schools")).toBe(false);
+    expect(shouldFilterDemand("Kendriya Vidyalaya", "schools")).toBe(false);
+  });
+
+  it("filters misclassified places from colleges", () => {
+    expect(shouldFilterDemand("Yoga Institute", "colleges")).toBe(true);
+    expect(shouldFilterDemand("Culinary Arts College", "colleges")).toBe(true);
+    expect(shouldFilterDemand("Driving Training Center", "colleges")).toBe(true);
+  });
+
+  it("keeps legitimate colleges", () => {
+    expect(shouldFilterDemand("Indian Institute of Technology", "colleges")).toBe(false);
+    expect(shouldFilterDemand("Christ University", "colleges")).toBe(false);
+  });
+
+  it("filters misclassified places from workplaces", () => {
+    expect(shouldFilterDemand("Virtual Office Solutions", "workplaces")).toBe(true);
+    expect(shouldFilterDemand("Temple Street Cafe", "workplaces")).toBe(true);
+  });
+
+  it("keeps legitimate workplaces", () => {
+    expect(shouldFilterDemand("Prestige Tech Park", "workplaces")).toBe(false);
+    expect(shouldFilterDemand("WeWork Coworking Space", "workplaces")).toBe(false);
+  });
+
+  it("filters misclassified places from apartments", () => {
+    expect(shouldFilterDemand("Hotel Grand Palace", "apartments")).toBe(true);
+    expect(shouldFilterDemand("City Hostel and Lodge", "apartments")).toBe(true);
+  });
+
+  it("keeps legitimate apartments", () => {
+    expect(shouldFilterDemand("Prestige Lakeside Habitat", "apartments")).toBe(false);
+    expect(shouldFilterDemand("Brigade Millennium", "apartments")).toBe(false);
+  });
+
+  it("filters misclassified places from it-companies", () => {
+    expect(shouldFilterDemand("Computer Repair Shop", "it-companies")).toBe(true);
+    expect(shouldFilterDemand("Mobile Repair Center", "it-companies")).toBe(true);
+  });
+
+  it("keeps legitimate IT companies", () => {
+    expect(shouldFilterDemand("Infosys Technologies", "it-companies")).toBe(false);
+    expect(shouldFilterDemand("Wipro Software", "it-companies")).toBe(false);
+  });
+
+  it("returns false for competition categories (no demand deny list)", () => {
+    expect(shouldFilterDemand("Yoga Center", "turf-sports")).toBe(false);
+    expect(shouldFilterDemand("Library", "badminton")).toBe(false);
   });
 });
 

@@ -444,7 +444,68 @@ export const COMPETITION_DENY_TYPES: ReadonlySet<string> = new Set([
   // Funeral
   "funeral_home",
   "cemetery",
+  // Food & drink
+  "restaurant",
+  "cafe",
+  "bar",
+  "bakery",
+  "meal_delivery",
+  "meal_takeaway",
+  // Entertainment
+  "movie_theater",
+  "night_club",
+  // Miscellaneous
+  "parking",
+  "storage",
+  "courier_service",
 ]);
+
+/**
+ * Sport-keyword signals per competition category.
+ *
+ * Used to detect when a Google result clearly belongs to a *different* sport
+ * than the one being searched. E.g. "Indiranagar Basketball Club" returned for
+ * a "football turf" query — the name says basketball, not football.
+ *
+ * The check is two-step:
+ *  1. If the place name matches the **target** category's keywords → keep it.
+ *  2. If the name matches a **different** category's keywords → filter it.
+ *  3. If the name matches no sport keywords at all → keep it (could be a
+ *     multi-sport complex like "Sports Arena").
+ */
+const SPORT_NAME_SIGNALS: ReadonlyMap<string, readonly string[]> = new Map([
+  ["table-tennis", ["table tennis", "ping pong"]],
+  ["turf-sports", ["football", "futsal", "soccer", "turf"]],
+  ["badminton", ["badminton", "shuttle"]],
+  ["tennis", ["tennis"]],
+  ["pickleball", ["pickleball"]],
+  ["squash", ["squash"]],
+  ["basketball", ["basketball"]],
+  ["volleyball", ["volleyball"]],
+  ["cricket", ["cricket"]],
+  ["running-track", ["running track", "athletic track", "athletic field"]],
+]);
+
+function nameMatchesSport(lowerName: string, categoryId: string): boolean {
+  const signals = SPORT_NAME_SIGNALS.get(categoryId);
+  if (!signals) return false;
+  if (categoryId === "tennis") {
+    const stripped = lowerName.replace(/table\s+tennis/g, "");
+    return stripped.includes("tennis");
+  }
+  return signals.some((kw) => lowerName.includes(kw));
+}
+
+export function isSportMismatch(placeName: string, categoryId: string): boolean {
+  if (!SPORT_NAME_SIGNALS.has(categoryId)) return false;
+  const lower = placeName.toLowerCase();
+  if (nameMatchesSport(lower, categoryId)) return false;
+  for (const [id] of SPORT_NAME_SIGNALS) {
+    if (id === categoryId) continue;
+    if (nameMatchesSport(lower, id)) return true;
+  }
+  return false;
+}
 
 export const PRESETS: readonly PresetDef[] = [
   {

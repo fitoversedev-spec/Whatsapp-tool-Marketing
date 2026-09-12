@@ -16,6 +16,7 @@ import {
   CATEGORIES,
   getCategory,
   getPreset,
+  isSportMismatch,
   PRESETS,
   publicTaxonomy,
   resolveCategories,
@@ -180,6 +181,49 @@ describe("resolution", () => {
 
   it("resolves nothing for an empty selection", () => {
     expect(resolveTerms([])).toEqual([]);
+  });
+});
+
+describe("isSportMismatch", () => {
+  it("filters a basketball club from football turf results", () => {
+    expect(isSportMismatch("Indiranagar Basketball Club", "turf-sports")).toBe(true);
+  });
+
+  it("keeps a football turf in football turf results", () => {
+    expect(isSportMismatch("Turf Arena Football", "turf-sports")).toBe(false);
+  });
+
+  it("filters a tennis court from table-tennis results", () => {
+    expect(isSportMismatch("City Tennis Court", "table-tennis")).toBe(true);
+  });
+
+  it("filters a table tennis academy from tennis results", () => {
+    expect(isSportMismatch("Table Tennis Academy", "tennis")).toBe(true);
+  });
+
+  it("keeps a tennis club in tennis results", () => {
+    expect(isSportMismatch("City Tennis Club", "tennis")).toBe(false);
+  });
+
+  it("keeps a generic sports complex (no sport keyword)", () => {
+    expect(isSportMismatch("Sports Arena & Complex", "turf-sports")).toBe(false);
+  });
+
+  it("keeps a place whose name matches the target sport even if others appear", () => {
+    expect(isSportMismatch("Cricket & Football Turf", "turf-sports")).toBe(false);
+    expect(isSportMismatch("Cricket & Football Turf", "cricket")).toBe(false);
+  });
+
+  it("returns false for demand categories (no signals defined)", () => {
+    expect(isSportMismatch("Basketball Club", "schools")).toBe(false);
+  });
+
+  it("filters a cricket ground from badminton results", () => {
+    expect(isSportMismatch("Salem Cricket Ground", "badminton")).toBe(true);
+  });
+
+  it("filters a badminton court from squash results", () => {
+    expect(isSportMismatch("ABC Badminton Court", "squash")).toBe(true);
   });
 });
 

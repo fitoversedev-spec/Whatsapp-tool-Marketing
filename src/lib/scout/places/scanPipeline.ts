@@ -64,7 +64,7 @@ import {
   type ClaimedTask,
   type ScanPlaceRow,
 } from "./scanRepository";
-import { COMPETITION_DENY_TYPES, getCategory, resolveTerms, unknownCategoryIds, type SkuTier } from "./taxonomy";
+import { COMPETITION_DENY_TYPES, isSportMismatch, getCategory, resolveTerms, unknownCategoryIds, type SkuTier } from "./taxonomy";
 
 export class ScanRequestError extends Error {
   constructor(
@@ -567,6 +567,7 @@ async function persistPlaces(
     const distanceM = haversineDistanceM(scan.centre, place.location);
     if (distanceM > scan.radiusM) continue;
     if (denyByType && place.primaryType && COMPETITION_DENY_TYPES.has(place.primaryType)) continue;
+    if (denyByType && isSportMismatch(place.name, ctx.task.categoryId)) continue;
 
     kept.push({ place, distanceM });
   }

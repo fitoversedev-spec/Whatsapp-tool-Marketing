@@ -23,6 +23,7 @@ export interface ScanPlaceDto {
   readonly primaryTypeDisplayName: string | null;
   readonly businessStatus: string | null;
   readonly googleMapsUri: string | null;
+  readonly flooring: string | null;
 }
 
 export interface ScanCategoryDto {

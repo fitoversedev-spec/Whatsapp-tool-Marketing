@@ -36,6 +36,8 @@ import type {
 import type { ScoreResult } from "@/lib/scout/scoring/types";
 
 
+const FLOORING_OPTIONS = ["Turf", "Acrylic", "PU", "Concrete", "Wooden", "Clay", "Natural grass", "Other"] as const;
+
 const PRESET_RADII = [1, 2, 5, 10, 15, 20] as const;
 const SLIDER_MIN = 1;
 const SLIDER_MAX = 20;
@@ -162,6 +164,37 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   const [scoring, setScoring] = useState(false);
   const [score, setScore] = useState<ScoreResult | null>(initial?.score ?? null);
   const [themesPending, setThemesPending] = useState(false);
+  const [flooringOpen, setFlooringOpen] = useState<string | null>(null);
+  const [flooringSaving, setFlooringSaving] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!flooringOpen) return;
+    const handler = () => setFlooringOpen(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [flooringOpen]);
+
+  const saveFlooring = useCallback(async (placeId: string, value: string | null) => {
+    setFlooringSaving(placeId);
+    setFlooringOpen(null);
+    try {
+      await fetch(`/api/scout/places/${encodeURIComponent(placeId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values: { flooring: value ?? "" } }),
+      });
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          places: prev.places.map((p) =>
+            p.placeId === placeId ? { ...p, flooring: value } : p,
+          ),
+        };
+      });
+    } catch { /* swallow */ }
+    setFlooringSaving(null);
+  }, []);
 
   /* ---------------------------------------------------------- map layer */
 
@@ -1100,6 +1133,62 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                                   .filter(Boolean)
                                   .join(" · ") || "No detail from Google"}
                               </span>
+                              {group.side === "competition" && (
+                                <span className="inline-flex items-center gap-1 mt-1 relative">
+                                  {flooringSaving === place.placeId ? (
+                                    <span className="text-[10px] text-slate-400 italic">saving…</span>
+                                  ) : place.flooring ? (
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFlooringOpen(flooringOpen === place.placeId ? null : place.placeId);
+                                      }}
+                                      title="Change flooring type"
+                                    >
+                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+                                      {place.flooring}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-50 text-slate-400 border border-dashed border-slate-300 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFlooringOpen(flooringOpen === place.placeId ? null : place.placeId);
+                                      }}
+                                      title="Add flooring type"
+                                    >
+                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                                      flooring
+                                    </button>
+                                  )}
+                                  {flooringOpen === place.placeId && (
+                                    <span className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[140px]">
+                                      {FLOORING_OPTIONS.map((opt) => (
+                                        <button
+                                          key={opt}
+                                          type="button"
+                                          className={`block w-full text-left text-xs px-3 py-1.5 hover:bg-court-50 transition-colors ${place.flooring === opt ? "font-semibold text-court-600 bg-court-50" : "text-slate-700"}`}
+                                          onClick={(e) => { e.stopPropagation(); saveFlooring(place.placeId, opt); }}
+                                        >
+                                          {opt}
+                                        </button>
+                                      ))}
+                                      {place.flooring && (
+                                        <button
+                                          type="button"
+                                          className="block w-full text-left text-xs px-3 py-1.5 text-red-500 hover:bg-red-50 border-t border-slate-100 mt-0.5 transition-colors"
+                                          onClick={(e) => { e.stopPropagation(); saveFlooring(place.placeId, null); }}
+                                        >
+                                          Remove
+                                        </button>
+                                      )}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
                             </span>
                             <span className="text-xs text-slate-500 flex-none">
                               {formatDistance(place.distanceM)}

@@ -574,6 +574,7 @@ export interface ScanPlaceRow {
   readonly googleMapsUri: string | null;
   readonly operatingWindow: Record<string, unknown> | null;
   readonly reviewsStored: number;
+  readonly flooring: string | null;
 }
 
 /** Raw: `places.location` is `Unsupported`, so lat/lng are projected out. */
@@ -589,9 +590,11 @@ export async function getScanPlaces(
       p.business_status, p.google_maps_uri, p.operating_window,
       ST_Y(p.location::geometry) AS lat,
       ST_X(p.location::geometry) AS lng,
-      (SELECT COUNT(*) FROM place_reviews pr WHERE pr.place_id = p.id)::int AS reviews_stored
+      (SELECT COUNT(*) FROM place_reviews pr WHERE pr.place_id = p.id)::int AS reviews_stored,
+      pt_floor.value AS flooring
     FROM scan_places sp
     INNER JOIN places p ON p.id = sp.place_id
+    LEFT JOIN place_tags pt_floor ON pt_floor.place_id = p.id AND pt_floor.key = 'flooring'
     WHERE sp.scan_id = ${scanId}::uuid
     ORDER BY sp.distance_m ASC
   `);
@@ -616,6 +619,7 @@ export async function getScanPlaces(
     googleMapsUri: (r.google_maps_uri as string | null) ?? null,
     operatingWindow: (r.operating_window as Record<string, unknown> | null) ?? null,
     reviewsStored: Number(r.reviews_stored),
+    flooring: (r.flooring as string | null) ?? null,
   }));
 }
 

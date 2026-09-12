@@ -355,6 +355,43 @@ describe("shouldFilterCompetition across all categories", () => {
       expect(shouldFilterCompetition("market", null, "City Market", catId)).toBe(true);
     }
   });
+
+  it("filters additional business entities (traders, enterprises, consultancy)", () => {
+    expect(shouldFilterCompetition(null, null, "ABC Traders Sports", "badminton")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "XYZ Sports Enterprises", "tennis")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Sports Consultancy Firm", "cricket")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Sports Industries Pvt", "volleyball")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "XYZ Holdings Sports", "squash")).toBe(true);
+  });
+
+  it("filters non-sports venues by name (hotel, hospital, temple, restaurant)", () => {
+    expect(shouldFilterCompetition(null, null, "Hotel Sports Club", "turf-sports")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "City Hospital Sports Ground", "cricket")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Temple Sports Academy", "badminton")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Restaurant Sports Bar", "basketball")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Residency Tennis Club", "tennis")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "XYZ Apartment Sports", "volleyball")).toBe(true);
+  });
+
+  it("filters names with zero sport/facility keywords", () => {
+    expect(shouldFilterCompetition(null, null, "XYZ Pvt Ltd", "turf-sports")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Random Place", "badminton")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "ABC Services", "tennis")).toBe(true);
+    expect(shouldFilterCompetition(null, null, "Metro Solutions", "cricket")).toBe(true);
+  });
+
+  it("keeps venues with sport-related Google types even with generic names", () => {
+    expect(shouldFilterCompetition("sports_complex", null, "The XYZ", "badminton")).toBe(false);
+    expect(shouldFilterCompetition("sports_club", null, "Metro Plus", "tennis")).toBe(false);
+    expect(shouldFilterCompetition("stadium", null, "City One", "cricket")).toBe(false);
+    expect(shouldFilterCompetition("fitness_center", null, "Iron Hub", "basketball")).toBe(false);
+    expect(shouldFilterCompetition("gym", null, "The Den", "volleyball")).toBe(false);
+  });
+
+  it("still filters allowed types if they belong to a different category", () => {
+    expect(shouldFilterCompetition("athletic_field", null, "City Field", "badminton")).toBe(true);
+    expect(shouldFilterCompetition("athletic_field", null, "City Field", "running-track")).toBe(false);
+  });
 });
 
 describe("publicTaxonomy", () => {

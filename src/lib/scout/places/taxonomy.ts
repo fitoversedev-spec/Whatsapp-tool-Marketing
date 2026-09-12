@@ -640,6 +640,7 @@ const BUSINESS_NAME_SIGNALS: readonly string[] = [
   "furnishing",
   "interior decorator",
   "interior design",
+  "interiors",
   "sports goods",
   "sports equipment",
   "equipment store",
@@ -658,11 +659,102 @@ const BUSINESS_NAME_SIGNALS: readonly string[] = [
   "infrastructure ltd",
   "infrastructure co",
   "infrastructure company",
+  "traders",
+  "enterprises",
+  "consultancy",
+  "associates",
+  "ventures",
+  "holdings",
+  "corporation",
+  "industries",
+  "solutions pvt",
+  "solutions private",
+  "solutions ltd",
+  "solutions limited",
+  "agencies",
+  "marketing agency",
+  "advertising",
 ];
 
 function isBusinessEntity(placeName: string): boolean {
   const lower = placeName.toLowerCase();
   return BUSINESS_NAME_SIGNALS.some((kw) => lower.includes(kw));
+}
+
+/**
+ * Words in a place **name** that identify a non-sports venue type.
+ * Catches hotels, hospitals, temples, restaurants etc. when Google assigns
+ * a generic `primaryType` that our type-deny list doesn't cover.
+ */
+const VENUE_NAME_DENY: readonly string[] = [
+  // Hospitality
+  "hotel", "resort", "motel", "hostel", "dharamshala", "lodge",
+  // Medical
+  "hospital", "clinic", "diagnostic", "pathology",
+  // Religious (India-specific)
+  "temple", "mandir", "church", "mosque", "masjid", "gurudwara", "dargah",
+  // Food & drink
+  "restaurant", "dhaba", "canteen", "sweet shop", "food court", "bakery",
+  // Residential
+  "apartment", "residency", "township", "housing society",
+  // Retail
+  "showroom", "boutique", "emporium",
+  // Government / civic
+  "police station", "fire station", "post office",
+  // Education
+  "kindergarten", "preschool", "play school", "nursery school",
+];
+
+function isNonSportsVenue(placeName: string): boolean {
+  const lower = placeName.toLowerCase();
+  return VENUE_NAME_DENY.some((kw) => lower.includes(kw));
+}
+
+/**
+ * Google `primaryType` values that ARE sports or activity facilities.
+ * When a place carries one of these types and passes the deny/cross-category
+ * checks, skip the aggressive name-based heuristics — Google already
+ * classified it correctly.
+ */
+const COMPETITION_ALLOW_TYPES: ReadonlySet<string> = new Set([
+  "sports_complex",
+  "sports_club",
+  "stadium",
+  "athletic_field",
+  "fitness_center",
+  "gym",
+  "swimming_pool",
+  "golf_course",
+]);
+
+/**
+ * Sport / facility keywords. A competition result whose name contains
+ * **none** of these is almost certainly noise from a fuzzy text search.
+ */
+const FACILITY_KEYWORDS: readonly string[] = [
+  // Facility types
+  "court", "turf", "arena", "academy", "club", "ground", "stadium",
+  "nets", "field", "track", "centre", "center", "complex", "hub",
+  "zone", "park", "gym", "fitness", "pitch", "cage", "dome", "rink",
+  "ring", "mat", "lane", "range",
+  // Sport names
+  "football", "futsal", "soccer", "badminton", "shuttle",
+  "tennis", "pickleball", "squash", "basketball", "volleyball",
+  "volley", "cricket", "wicket", "running", "jogging", "joggers",
+  "table tennis", "ping pong", "tt parlour", "tt parlor",
+  "swimming", "hockey", "kabaddi", "athletics",
+  "astroturf", "five-a-side", "five a side", "5-a-side",
+  "seven-a-side", "seven a side", "7-a-side",
+  // Generic sports / activity words
+  "sports", "sport", "athletic", "play", "game", "recreation",
+  "coaching", "training", "practice",
+  "indoor", "outdoor",
+  "hoops", "smash",
+];
+
+function lacksFacilitySignal(placeName: string): boolean {
+  const lower = placeName.toLowerCase();
+  return !FACILITY_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 export function shouldFilterCompetition(
@@ -671,11 +763,22 @@ export function shouldFilterCompetition(
   placeName: string,
   categoryId: string,
 ): boolean {
+  // 1. Known non-sports Google type
   if (primaryType && COMPETITION_DENY_TYPES.has(primaryType)) return true;
+  // 2. Known non-sports display name
   if (displayName && COMPETITION_DENY_DISPLAY_NAMES.has(displayName.toLowerCase())) return true;
+  // 3. Google type belongs to a different sport category
   if (primaryType && TYPE_TO_CATEGORY.has(primaryType) && TYPE_TO_CATEGORY.get(primaryType) !== categoryId) return true;
+  // 4. Known sports Google type — trust it, skip name heuristics
+  if (primaryType && COMPETITION_ALLOW_TYPES.has(primaryType)) return false;
+  // 5. Name clearly identifies a different sport
   if (isSportMismatch(placeName, categoryId)) return true;
+  // 6. Name contains business-entity keywords
   if (isBusinessEntity(placeName)) return true;
+  // 7. Name contains non-sports venue keywords (hotel, hospital, temple…)
+  if (isNonSportsVenue(placeName)) return true;
+  // 8. Name lacks ANY sport or facility keyword — likely noise
+  if (lacksFacilitySignal(placeName)) return true;
   return false;
 }
 

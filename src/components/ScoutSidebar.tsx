@@ -129,6 +129,7 @@ export default function ScoutSidebar({ user }: Props) {
           transform transition-[width,transform] duration-200 ease-out
           ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
           md:w-[68px] ${collapsed ? "lg:w-[68px]" : "lg:w-60"}
+          pb-16 md:pb-0
         `}
       >
         <div

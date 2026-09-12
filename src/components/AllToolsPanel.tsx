@@ -307,16 +307,16 @@ export default function AllToolsPanel({
                         key={item.href}
                         href={item.href}
                         onClick={onClose}
-                        className={`relative flex items-start gap-3 p-3 rounded-xl border transition ${
+                        className={`relative flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl border transition overflow-hidden ${
                           active
                             ? "border-wa-green bg-wa-green/5 text-wa-dark"
                             : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-700"
                         }`}
                       >
-                        <span className="text-2xl shrink-0">{item.icon}</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-heading font-bold uppercase tracking-wide leading-tight flex items-center gap-1.5">
-                            {item.label}
+                        <span className="text-xl sm:text-2xl shrink-0">{item.icon}</span>
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                          <div className="text-xs sm:text-sm font-heading font-bold uppercase tracking-wide leading-tight flex items-center gap-1.5">
+                            <span className="break-words min-w-0">{item.label}</span>
                             {item.href === "/users" && pendingCount > 0 && (
                               <span className="inline-block bg-amber-500 text-white text-[11px] font-bold font-mono rounded-full px-1.5 py-0.5 leading-none">
                                 {pendingCount}

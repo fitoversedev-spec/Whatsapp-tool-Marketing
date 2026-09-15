@@ -170,9 +170,10 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   const [localExclusions, setLocalExclusions] = useState<
     Array<{ id: string; googlePlaceId: string; categoryId: string; locked: boolean }>
   >(initial?.exclusions ? [...initial.exclusions] : []);
-  const [undoQueue, setUndoQueue] = useState<
-    Array<{ id: string; googlePlaceId: string; categoryId: string; place: ScanPlaceDto; timer: ReturnType<typeof setTimeout> }>
+  const [excludedPlaces, setExcludedPlaces] = useState<
+    Array<{ exclusionId: string; place: ScanPlaceDto; categoryId: string; categoryLabel: string }>
   >([]);
+  const [removedOpen, setRemovedOpen] = useState(true);
 
   useEffect(() => {
     if (!flooringOpen) return;
@@ -227,7 +228,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     } catch { /* swallow */ }
   }, []);
 
-  const excludePlace = useCallback(async (place: ScanPlaceDto, categoryId: string) => {
+  const excludePlace = useCallback(async (place: ScanPlaceDto, categoryId: string, categoryLabel: string) => {
     if (!data?.scanId) return;
     try {
       const res = await fetch(`/api/scout/scans/${data.scanId}/exclusions`, {
@@ -238,10 +239,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
       if (!res.ok) return;
       const { exclusion } = await res.json();
       setLocalExclusions((prev) => [...prev, exclusion]);
-      const timer = setTimeout(() => {
-        setUndoQueue((prev) => prev.filter((u) => u.id !== exclusion.id));
-      }, 30_000);
-      setUndoQueue((prev) => [...prev, { id: exclusion.id, googlePlaceId: place.placeId, categoryId, place, timer }]);
+      setExcludedPlaces((prev) => [...prev, { exclusionId: exclusion.id, place, categoryId, categoryLabel }]);
       const screenRes = await fetch(`/api/scout/scans/${data.scanId}/screen`, { cache: "no-store" });
       if (screenRes.ok) {
         const json = (await screenRes.json()) as ScanScreenData;
@@ -253,9 +251,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
 
   const undoExclude = useCallback(async (exclusionId: string) => {
     if (!data?.scanId) return;
-    const entry = undoQueue.find((u) => u.id === exclusionId);
-    if (entry) clearTimeout(entry.timer);
-    setUndoQueue((prev) => prev.filter((u) => u.id !== exclusionId));
+    setExcludedPlaces((prev) => prev.filter((ep) => ep.exclusionId !== exclusionId));
     setLocalExclusions((prev) => prev.filter((ex) => ex.id !== exclusionId));
     try {
       await fetch(`/api/scout/scans/${data.scanId}/exclusions`, {
@@ -270,7 +266,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
         if (json.score) setScore(json.score);
       }
     } catch { /* swallow */ }
-  }, [data?.scanId, undoQueue]);
+  }, [data?.scanId]);
 
   const isPlaceExcluded = useCallback((placeId: string, categoryId: string) => {
     return localExclusions.some((ex) => ex.googlePlaceId === placeId && ex.categoryId === categoryId);
@@ -1310,7 +1306,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                               className="flex-none w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                excludePlace(place, group.id);
+                                excludePlace(place, group.id, group.label);
                               }}
                               title="Remove from results"
                             >
@@ -1600,25 +1596,58 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
         ) : null}
       </div>
 
-      {undoQueue.length > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2">
-          {undoQueue.map((entry) => (
-            <div
-              key={entry.id}
-              className="flex items-center gap-3 bg-slate-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-xl"
+      {excludedPlaces.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.12)] max-h-[45vh] flex flex-col">
+          <button
+            type="button"
+            className="flex items-center justify-between w-full px-4 py-3 text-left bg-white hover:bg-white transition-colors border-b border-slate-200 flex-none"
+            onClick={() => setRemovedOpen((v) => !v)}
+          >
+            <span className="text-sm font-semibold text-slate-700">
+              Removed ({excludedPlaces.length})
+            </span>
+            <svg
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              className={`text-slate-400 transition-transform ${removedOpen ? "rotate-180" : ""}`}
             >
-              <span className="truncate max-w-[200px]">{entry.place.name} removed</span>
-              {!isReportLocked && (
-                <button
-                  type="button"
-                  className="text-court-400 hover:text-court-300 font-semibold text-sm whitespace-nowrap"
-                  onClick={() => undoExclude(entry.id)}
+              <path d="m18 15-6-6-6 6" />
+            </svg>
+          </button>
+          {removedOpen && (
+            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
+              {excludedPlaces.map((ep) => (
+                <div
+                  key={ep.exclusionId}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
                 >
-                  Undo
-                </button>
-              )}
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-slate-900">{ep.place.name}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">
+                      {[
+                        ep.place.primaryTypeDisplayName,
+                        ep.place.rating === null
+                          ? null
+                          : `${ep.place.rating.toFixed(1)} ★ ${ep.place.reviewCount ?? 0}`,
+                      ].filter(Boolean).join(" · ") || "No detail"}
+                    </span>
+                    <span className="block text-xs text-slate-400 mt-0.5">
+                      from {ep.categoryLabel} · {ep.place.distanceM < 1000 ? `${Math.round(ep.place.distanceM)} m` : `${(ep.place.distanceM / 1000).toFixed(1)} km`}
+                    </span>
+                  </span>
+                  {!isReportLocked && (
+                    <button
+                      type="button"
+                      className="flex-none px-3 py-1.5 text-xs font-semibold rounded-lg bg-court-500 text-white hover:bg-court-600 transition-colors"
+                      onClick={() => undoExclude(ep.exclusionId)}
+                    >
+                      Undo
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

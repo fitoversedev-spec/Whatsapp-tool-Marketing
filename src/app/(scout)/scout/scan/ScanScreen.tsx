@@ -1597,7 +1597,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
       </div>
 
       {excludedPlaces.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.12)] max-h-[45vh] flex flex-col">
+        <div className="fixed bottom-0 left-0 right-0 z-[9999] bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.12)] max-h-[45vh] flex flex-col">
           <button
             type="button"
             className="flex items-center justify-between w-full px-4 py-3 text-left bg-white hover:bg-white transition-colors border-b border-slate-200 flex-none"

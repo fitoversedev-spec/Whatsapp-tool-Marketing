@@ -718,11 +718,8 @@ function isNonSportsVenue(placeName: string): boolean {
  */
 const COMPETITION_ALLOW_TYPES: ReadonlySet<string> = new Set([
   "sports_complex",
-  "sports_club",
   "stadium",
   "athletic_field",
-  "fitness_center",
-  "gym",
   "swimming_pool",
   "golf_course",
 ]);

@@ -101,6 +101,7 @@ model User {
   scoutPlaceTags    PlaceTag[]        @relation("ScoutPlaceTagAuthor")
   scoutApiUsage     ApiUsage[]        @relation("ScoutApiUsageUser")
   scanMarkers       ScanMarker[]      @relation("ScanMarkerAuthor")
+  excludedPlaces    ExcludedPlace[]   @relation("ExcludedPlaceOwner")
 
   @@map("users")
 }
@@ -2260,7 +2261,8 @@ model Scan {
   reviewThemes ReviewTheme[]
   apiUsage     ApiUsage[]
   job          ScanJob?
-  markers      ScanMarker[]
+  markers        ScanMarker[]
+  excludedPlaces ExcludedPlace[]
 
   @@index([ownerId], map: "scans_owner_idx")
   @@index([siteId], map: "scans_site_idx")
@@ -2322,6 +2324,24 @@ model ScanPlace {
   @@index([scanId, side], map: "scan_places_side_idx")
   @@index([categories], map: "scan_places_categories_gin", type: Gin)
   @@map("scan_places")
+}
+
+model ExcludedPlace {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId       String   @map("owner_id")
+  googlePlaceId String   @map("google_place_id") @db.VarChar(255)
+  categoryId    String   @map("category_id") @db.VarChar(100)
+  scanId        String   @map("scan_id") @db.Uuid
+  locked        Boolean  @default(false)
+  excludedAt    DateTime @default(now()) @map("excluded_at") @db.Timestamptz(6)
+
+  scan  Scan @relation(fields: [scanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "excluded_places_scan_id_scans_id_fk")
+  owner User @relation("ExcludedPlaceOwner", fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "excluded_places_owner_id_users_id_fk")
+
+  @@unique([ownerId, googlePlaceId, categoryId], map: "excluded_places_owner_place_category_idx")
+  @@index([ownerId], map: "excluded_places_owner_idx")
+  @@index([scanId], map: "excluded_places_scan_idx")
+  @@map("excluded_places")
 }
 
 model PlaceTag {

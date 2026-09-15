@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/scout/db";
 import { canAccessAllScans, type ScoutIdentity } from "@/lib/scout/identity";
+import { getExclusionsForOwner } from "@/lib/scout/places/exclusionRepository";
 import { getScan } from "@/lib/scout/places/scanRepository";
 import { getScanResult } from "@/lib/scout/places/scanResult";
 import { sanitiseSurveyorInputs } from "@/lib/scout/scoring/checklist";
@@ -28,7 +29,7 @@ export async function getScanScreenData(
   if (!scan) return null;
   if (scan.ownerId !== identity.userId && !canAccessAllScans(identity)) return null;
 
-  const [result, row] = await Promise.all([
+  const [result, row, exclusions] = await Promise.all([
     getScanResult(scanId),
     prisma.scan.findUnique({
       where: { id: scanId },
@@ -41,9 +42,26 @@ export async function getScanScreenData(
         fieldNotes: true,
       },
     }),
+    getExclusionsForOwner(scan.ownerId),
   ]);
 
   if (!result) return null;
+
+  const excludedSet = new Map<string, { id: string; locked: boolean; categoryId: string }[]>();
+  for (const ex of exclusions) {
+    const list = excludedSet.get(ex.googlePlaceId) ?? [];
+    list.push({ id: ex.id, locked: ex.locked, categoryId: ex.categoryId });
+    excludedSet.set(ex.googlePlaceId, list);
+  }
+
+  const filteredPlaces = result.places.filter((p) => {
+    const exList = excludedSet.get(p.placeId);
+    if (!exList) return true;
+    const remaining = p.categories.filter(
+      (catId) => !exList.some((ex) => ex.categoryId === catId),
+    );
+    return remaining.length > 0;
+  });
 
   const score = (row?.scoreBreakdown as unknown as ScoreResult | null) ?? null;
 
@@ -57,7 +75,7 @@ export async function getScanScreenData(
     status: result.status,
     categoryIds: readCategoryIds(scan.searchTerms),
 
-    places: result.places.map((p) => ({
+    places: filteredPlaces.map((p) => ({
       placeId: p.placeId,
       name: p.name,
       lat: p.location.lat,
@@ -73,23 +91,42 @@ export async function getScanScreenData(
       flooring: p.flooring,
       flooringDetail: p.flooringDetail,
     })),
-    distinctPlaces: result.distinctPlaces,
-    categories: result.categories.map((c) => ({
-      categoryId: c.categoryId,
-      label: c.label,
-      side: c.side,
-      count: c.count,
-      saturated: c.saturated,
-      reviewTotal: c.reviewTotal,
-      avgRating: c.avgRating,
-      nearestM: c.nearest?.distanceM ?? null,
-    })),
-    categoryCounts: result.categoryCounts,
+    distinctPlaces: filteredPlaces.length,
+    categories: result.categories
+      .map((c) => {
+        const members = filteredPlaces.filter((p) => p.categories.includes(c.categoryId));
+        const rated = members.filter((p) => typeof p.rating === "number");
+        return {
+          categoryId: c.categoryId,
+          label: c.label,
+          side: c.side,
+          count: members.length,
+          saturated: c.saturated,
+          reviewTotal: members.reduce((sum, p) => sum + (p.reviewCount ?? 0), 0),
+          avgRating: rated.length
+            ? Math.round((rated.reduce((s, p) => s + (p.rating ?? 0), 0) / rated.length) * 100) / 100
+            : null,
+          nearestM: members.length
+            ? Math.min(...members.map((p) => p.distanceMRounded))
+            : null,
+        };
+      })
+      .filter((c) => c.count > 0),
+    categoryCounts: Object.fromEntries(
+      result.categories
+        .map((c) => [c.categoryId, filteredPlaces.filter((p) => p.categories.includes(c.categoryId)).length] as const)
+        .filter(([, count]) => count > 0),
+    ),
 
-    competitionCount: result.competitionCount,
-    demandCount: result.demandCount,
-    reviewTotal: result.reviewTotal,
-    avgRating: result.avgRating,
+    competitionCount: filteredPlaces.filter((p) => p.side === "competition").length,
+    demandCount: filteredPlaces.filter((p) => p.side === "demand").length,
+    reviewTotal: filteredPlaces.reduce((sum, p) => sum + (p.reviewCount ?? 0), 0),
+    avgRating: (() => {
+      const rated = filteredPlaces.filter((p) => p.side === "competition" && typeof p.rating === "number");
+      return rated.length
+        ? Math.round((rated.reduce((s, p) => s + (p.rating ?? 0), 0) / rated.length) * 100) / 100
+        : null;
+    })(),
 
     anySaturated: result.saturation.anySaturated,
     saturatedTerms: result.saturation.terms.filter((t) => t.saturatedTiles > 0),
@@ -116,5 +153,12 @@ export async function getScanScreenData(
     scoredAt: row?.scoredAt ? row.scoredAt.toISOString() : null,
     surveyorInputs: sanitiseSurveyorInputs(row?.surveyorInputs),
     fieldNotes: row?.fieldNotes ?? null,
+
+    exclusions: exclusions.map((ex) => ({
+      id: ex.id,
+      googlePlaceId: ex.googlePlaceId,
+      categoryId: ex.categoryId,
+      locked: ex.locked,
+    })),
   };
 }

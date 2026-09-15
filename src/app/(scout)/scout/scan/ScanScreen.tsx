@@ -28,6 +28,7 @@ import {
   formatRating,
 } from "@/lib/scout/display/format";
 import type {
+  ScanExclusionDto,
   ScanPlaceDto,
   ScanProgressDto,
   ScanScreenData,
@@ -166,6 +167,12 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   const [themesPending, setThemesPending] = useState(false);
   const [flooringOpen, setFlooringOpen] = useState<string | null>(null);
   const [flooringSaving, setFlooringSaving] = useState<string | null>(null);
+  const [localExclusions, setLocalExclusions] = useState<
+    Array<{ id: string; googlePlaceId: string; categoryId: string; locked: boolean }>
+  >(initial?.exclusions ?? []);
+  const [undoQueue, setUndoQueue] = useState<
+    Array<{ id: string; googlePlaceId: string; categoryId: string; place: ScanPlaceDto; timer: ReturnType<typeof setTimeout> }>
+  >([]);
 
   useEffect(() => {
     if (!flooringOpen) return;
@@ -219,6 +226,57 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
       });
     } catch { /* swallow */ }
   }, []);
+
+  const excludePlace = useCallback(async (place: ScanPlaceDto, categoryId: string) => {
+    if (!data?.scanId) return;
+    try {
+      const res = await fetch(`/api/scout/scans/${data.scanId}/exclusions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ googlePlaceId: place.placeId, categoryId }),
+      });
+      if (!res.ok) return;
+      const { exclusion } = await res.json();
+      setLocalExclusions((prev) => [...prev, exclusion]);
+      const timer = setTimeout(() => {
+        setUndoQueue((prev) => prev.filter((u) => u.id !== exclusion.id));
+      }, 30_000);
+      setUndoQueue((prev) => [...prev, { id: exclusion.id, googlePlaceId: place.placeId, categoryId, place, timer }]);
+      const screenRes = await fetch(`/api/scout/scans/${data.scanId}/screen`, { cache: "no-store" });
+      if (screenRes.ok) {
+        const json = (await screenRes.json()) as ScanScreenData;
+        setData(json);
+        if (json.score) setScore(json.score);
+      }
+    } catch { /* swallow */ }
+  }, [data?.scanId]);
+
+  const undoExclude = useCallback(async (exclusionId: string) => {
+    if (!data?.scanId) return;
+    const entry = undoQueue.find((u) => u.id === exclusionId);
+    if (entry) clearTimeout(entry.timer);
+    setUndoQueue((prev) => prev.filter((u) => u.id !== exclusionId));
+    setLocalExclusions((prev) => prev.filter((ex) => ex.id !== exclusionId));
+    try {
+      await fetch(`/api/scout/scans/${data.scanId}/exclusions`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exclusionId }),
+      });
+      const screenRes = await fetch(`/api/scout/scans/${data.scanId}/screen`, { cache: "no-store" });
+      if (screenRes.ok) {
+        const json = (await screenRes.json()) as ScanScreenData;
+        setData(json);
+        if (json.score) setScore(json.score);
+      }
+    } catch { /* swallow */ }
+  }, [data?.scanId, undoQueue]);
+
+  const isPlaceExcluded = useCallback((placeId: string, categoryId: string) => {
+    return localExclusions.some((ex) => ex.googlePlaceId === placeId && ex.categoryId === categoryId);
+  }, [localExclusions]);
+
+  const isReportLocked = data?.status === "report_sent";
 
   /* ---------------------------------------------------------- map layer */
 
@@ -284,6 +342,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     setData(json);
     setProgress(json.progress);
     if (json.score) setScore(json.score);
+    if (json.exclusions) setLocalExclusions(json.exclusions as Array<{ id: string; googlePlaceId: string; categoryId: string; locked: boolean }>);
   }, []);
 
   useEffect(() => {
@@ -617,7 +676,18 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     [data?.places],
   );
 
-  const groups = useMemo(() => groupPlaces(data, taxonomy), [data, taxonomy]);
+  const groups = useMemo(() => {
+    const raw = groupPlaces(data, taxonomy);
+    if (localExclusions.length === 0) return raw;
+    return raw
+      .map((g) => ({
+        ...g,
+        places: g.places.filter(
+          (p) => !localExclusions.some((ex) => ex.googlePlaceId === p.placeId && ex.categoryId === g.id),
+        ),
+      }))
+      .filter((g) => g.places.length > 0);
+  }, [data, taxonomy, localExclusions]);
   const selectedPlace = useMemo(
     () => data?.places.find((p) => p.placeId === selectedPlaceId) ?? null,
     [data?.places, selectedPlaceId],
@@ -1237,6 +1307,19 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                             </span>
                             <button
                               type="button"
+                              className="flex-none w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                excludePlace(place, group.id);
+                              }}
+                              title="Remove from results"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M18 6 6 18M6 6l12 12" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
                               className={`flex-none w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
                                 isPinned
                                   ? "bg-purple-600 text-white"
@@ -1516,6 +1599,28 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
           </div>
         ) : null}
       </div>
+
+      {undoQueue.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2">
+          {undoQueue.map((entry) => (
+            <div
+              key={entry.id}
+              className="flex items-center gap-3 bg-slate-900 text-white text-sm rounded-lg px-4 py-2.5 shadow-xl"
+            >
+              <span className="truncate max-w-[200px]">{entry.place.name} removed</span>
+              {!isReportLocked && (
+                <button
+                  type="button"
+                  className="text-court-400 hover:text-court-300 font-semibold text-sm whitespace-nowrap"
+                  onClick={() => undoExclude(entry.id)}
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

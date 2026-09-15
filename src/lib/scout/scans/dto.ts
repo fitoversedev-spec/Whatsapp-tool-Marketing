@@ -94,6 +94,15 @@ export interface ScanScreenData {
   /** Sparse surveyor ratings, keyed by checklist field id. */
   readonly surveyorInputs: Readonly<Record<string, number>>;
   readonly fieldNotes: string | null;
+
+  readonly exclusions?: readonly ScanExclusionDto[];
+}
+
+export interface ScanExclusionDto {
+  readonly id: string;
+  readonly googlePlaceId: string;
+  readonly categoryId: string;
+  readonly locked: boolean;
 }
 
 /** The category/preset picker payload, from `publicTaxonomy()`. */

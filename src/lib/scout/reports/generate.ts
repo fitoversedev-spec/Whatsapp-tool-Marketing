@@ -28,6 +28,7 @@ import {
   recordShareRows,
   type ReportRow,
 } from "./repository";
+import { lockExclusionsForScan } from "@/lib/scout/places/exclusionRepository";
 import { reportStorage, ReportTooLargeError } from "./storage";
 
 /**
@@ -207,6 +208,8 @@ export async function runReportGeneration(
       generatedAt,
       expiresAt,
     });
+
+    await lockExclusionsForScan(existing.scanId).catch(() => {});
 
     return { ok: true, reportId };
   } catch (error) {
@@ -406,6 +409,10 @@ export async function runComparisonGeneration(
       generatedAt,
       expiresAt,
     });
+
+    for (const sid of subjectScanIds) {
+      await lockExclusionsForScan(sid).catch(() => {});
+    }
 
     return { ok: true, reportId };
   } catch (error) {

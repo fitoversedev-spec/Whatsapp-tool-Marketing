@@ -169,7 +169,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   const [flooringSaving, setFlooringSaving] = useState<string | null>(null);
   const [localExclusions, setLocalExclusions] = useState<
     Array<{ id: string; googlePlaceId: string; categoryId: string; locked: boolean }>
-  >(initial?.exclusions ?? []);
+  >(initial?.exclusions ? [...initial.exclusions] : []);
   const [undoQueue, setUndoQueue] = useState<
     Array<{ id: string; googlePlaceId: string; categoryId: string; place: ScanPlaceDto; timer: ReturnType<typeof setTimeout> }>
   >([]);

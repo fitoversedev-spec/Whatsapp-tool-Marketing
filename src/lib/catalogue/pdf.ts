@@ -727,74 +727,87 @@ export async function renderProjectPagesOnly(
     page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: BG });
     page.drawRectangle({ x: 0, y: PH - 4, width: PW, height: 4, color: ACCENT });
 
-    const titleH = 22 + 14 + 24;
-    const textH = 24 + (proj.location ? 20 : 0) + 24 + (proj.shortDescription ? 48 : 0);
-    const photoAvailH = usableH - titleH - textH;
+    const maxPhotoH = usableH * 0.45;
+    const photoW = CW * 0.85;
 
     let photoDrawW = 0;
     let photoDrawH = 0;
     if (proj.embeddedImage) {
       const img = proj.embeddedImage;
       const aspect = img.width / img.height;
-      photoDrawW = CW;
-      photoDrawH = CW / aspect;
-      if (photoDrawH > photoAvailH) { photoDrawH = photoAvailH; photoDrawW = photoAvailH * aspect; }
-      if (photoDrawW > CW) { photoDrawW = CW; photoDrawH = CW / aspect; }
+      photoDrawW = photoW;
+      photoDrawH = photoW / aspect;
+      if (photoDrawH > maxPhotoH) { photoDrawH = maxPhotoH; photoDrawW = maxPhotoH * aspect; }
+      if (photoDrawW > photoW) { photoDrawW = photoW; photoDrawH = photoW / aspect; }
     }
 
-    const totalContentH = titleH + photoDrawH + 20 + textH;
-    let y = PH - topPad - (usableH - totalContentH) / 2;
+    const titleBlockH = 28 + 16 + 30;
+    const nameH = 32;
+    const locH = proj.location ? 24 : 0;
+    const specH = 28;
+    const descH = proj.shortDescription ? 54 : 0;
+    const logoH = 36;
+    const textBlockH = nameH + locH + specH + descH + logoH;
+    const totalContentH = titleBlockH + photoDrawH + 24 + textBlockH;
+    let y = PH - topPad - Math.max(0, (usableH - totalContentH) / 2);
 
     const title = "Recent Fitoverse Projects";
-    const titleW = fontBold.widthOfTextAtSize(title, 22);
-    page.drawText(title, { x: pageCenterX - titleW / 2, y: y - 22, size: 22, font: fontBold, color: ACCENT });
-    y -= 36;
+    const titleW = fontBold.widthOfTextAtSize(title, 26);
+    page.drawText(title, { x: pageCenterX - titleW / 2, y: y - 26, size: 26, font: fontBold, color: ACCENT });
+    y -= 42;
     const sub = "Photos + specs from past work for context on what you can expect.";
-    const subW = font.widthOfTextAtSize(sub, 10);
-    page.drawText(sub, { x: pageCenterX - subW / 2, y: y - 10, size: 10, font, color: MID });
-    y -= 24;
+    const subW = font.widthOfTextAtSize(sub, 12);
+    page.drawText(sub, { x: pageCenterX - subW / 2, y: y - 12, size: 12, font, color: MID });
+    y -= 30;
 
     if (proj.embeddedImage && photoDrawH > 0) {
       const photoX = pageCenterX - photoDrawW / 2;
+      const r = 8;
+      page.drawRectangle({
+        x: photoX - 2, y: y - photoDrawH - 2,
+        width: photoDrawW + 4, height: photoDrawH + 4,
+        borderColor: rgb(0.82, 0.84, 0.88), borderWidth: 1,
+        color: rgb(1, 1, 1),
+      });
       page.drawImage(proj.embeddedImage, { x: photoX, y: y - photoDrawH, width: photoDrawW, height: photoDrawH });
-      y -= photoDrawH + 20;
+      y -= photoDrawH + 28;
     }
 
     const name = sanitize(proj.customerName);
-    const nameW = fontBold.widthOfTextAtSize(name, 20);
-    page.drawText(name, { x: pageCenterX - nameW / 2, y: y - 20, size: 20, font: fontBold, color: DARK });
-    y -= 28;
+    const nameW = fontBold.widthOfTextAtSize(name, 26);
+    page.drawText(name, { x: pageCenterX - nameW / 2, y: y - 26, size: 26, font: fontBold, color: DARK });
+    y -= 36;
 
     if (proj.location) {
       const loc = sanitize(proj.location);
-      const locW = font.widthOfTextAtSize(loc, 12);
-      page.drawText(loc, { x: pageCenterX - locW / 2, y: y - 12, size: 12, font, color: MID });
-      y -= 20;
+      const locW = font.widthOfTextAtSize(loc, 16);
+      page.drawText(loc, { x: pageCenterX - locW / 2, y: y - 16, size: 16, font, color: MID });
+      y -= 26;
     }
 
     const specLine = buildSpecLine(proj, font);
     if (specLine) {
-      page.drawLine({ start: { x: pageCenterX - 40, y: y }, end: { x: pageCenterX + 40, y: y }, thickness: 0.5, color: rgb(0.82, 0.84, 0.88) });
-      y -= 14;
-      const specW = font.widthOfTextAtSize(specLine, 11);
-      page.drawText(specLine, { x: pageCenterX - specW / 2, y: y - 11, size: 11, font, color: ACCENT });
-      y -= 20;
+      page.drawLine({ start: { x: pageCenterX - 60, y: y }, end: { x: pageCenterX + 60, y: y }, thickness: 0.5, color: rgb(0.82, 0.84, 0.88) });
+      y -= 16;
+      const specW = font.widthOfTextAtSize(specLine, 14);
+      page.drawText(specLine, { x: pageCenterX - specW / 2, y: y - 14, size: 14, font, color: ACCENT });
+      y -= 24;
     }
 
     if (proj.shortDescription) {
-      const lines = wrapText(sanitize(proj.shortDescription), font, 11, CW * 0.7);
+      const lines = wrapText(sanitize(proj.shortDescription), font, 13, CW * 0.75);
       for (const line of lines.slice(0, 3)) {
-        const lw = font.widthOfTextAtSize(line, 11);
-        page.drawText(line, { x: pageCenterX - lw / 2, y: y - 11, size: 11, font, color: DARK });
-        y -= 15;
+        const lw = font.widthOfTextAtSize(line, 13);
+        page.drawText(line, { x: pageCenterX - lw / 2, y: y - 13, size: 13, font, color: DARK });
+        y -= 18;
       }
     }
 
     if (logoImg) {
       const lAspect = logoImg.width / logoImg.height;
-      const lH = 22;
+      const lH = 28;
       const lW = lH * lAspect;
-      page.drawImage(logoImg, { x: pageCenterX - lW / 2, y: 24, width: lW, height: lH });
+      page.drawImage(logoImg, { x: pageCenterX - lW / 2, y: 30, width: lW, height: lH });
     }
   } else {
     for (let i = 0; i < embedded.length; i += 2) {
@@ -822,8 +835,7 @@ export async function renderProjectPagesOnly(
       const colGap = 24;
       const colW = right ? (CW - colGap) / 2 : CW * 0.65;
       const colUsableH = usableH - headerH;
-      const textBlockH = 80;
-      const maxPhotoH = colUsableH - textBlockH;
+      const maxPhotoH = colUsableH * 0.5;
 
       for (let ci = 0; ci < items.length; ci++) {
         const proj = items[ci];
@@ -846,35 +858,35 @@ export async function renderProjectPagesOnly(
         }
 
         const nameStr = sanitize(proj.customerName);
-        const nameSize = right ? 15 : 18;
+        const nameSize = right ? 18 : 22;
         const nw = fontBold.widthOfTextAtSize(nameStr, nameSize);
         page.drawText(nameStr, { x: colCenterX - nw / 2, y: cy - nameSize, size: nameSize, font: fontBold, color: DARK });
-        cy -= nameSize + 8;
+        cy -= nameSize + 10;
 
         if (proj.location) {
           const locStr = sanitize(proj.location);
-          const locSize = right ? 10 : 11;
+          const locSize = right ? 13 : 14;
           const lw = font.widthOfTextAtSize(locStr, locSize);
           page.drawText(locStr, { x: colCenterX - lw / 2, y: cy - locSize, size: locSize, font, color: MID });
-          cy -= locSize + 8;
+          cy -= locSize + 10;
         }
 
         const spec = buildSpecLine(proj, font);
         if (spec) {
-          const specSize = right ? 9 : 10;
+          const specSize = right ? 11 : 12;
           const sw = font.widthOfTextAtSize(spec, specSize);
           page.drawText(spec, { x: colCenterX - sw / 2, y: cy - specSize, size: specSize, font, color: ACCENT });
-          cy -= specSize + 8;
+          cy -= specSize + 10;
         }
 
         if (proj.shortDescription) {
-          const descSize = right ? 9 : 10;
+          const descSize = right ? 11 : 12;
           const descMaxW = colW - 10;
           const lines = wrapText(sanitize(proj.shortDescription), font, descSize, descMaxW);
           for (const line of lines.slice(0, 3)) {
             const lw = font.widthOfTextAtSize(line, descSize);
             page.drawText(line, { x: colCenterX - lw / 2, y: cy - descSize, size: descSize, font, color: DARK });
-            cy -= descSize + 3;
+            cy -= descSize + 4;
           }
         }
       }

@@ -115,12 +115,16 @@ export async function injectProjectPagesIntoOverride(
 ): Promise<Uint8Array> {
   if (projects.length === 0) return overrideBytes;
   try {
-    const projectPdf = await renderProjectPagesOnly(projects);
+    const overrideDoc = await PDFDocument.load(overrideBytes);
+    const pageCount = overrideDoc.getPageCount();
+
+    const refPage = overrideDoc.getPage(0);
+    const { width: pageW, height: pageH } = refPage.getSize();
+
+    const projectPdf = await renderProjectPagesOnly(projects, pageW, pageH);
     if (!projectPdf) return overrideBytes;
 
-    const overrideDoc = await PDFDocument.load(overrideBytes);
     const projectDoc = await PDFDocument.load(projectPdf);
-    const pageCount = overrideDoc.getPageCount();
 
     // Copy all project pages into the override document.
     const copiedPages = await overrideDoc.copyPages(

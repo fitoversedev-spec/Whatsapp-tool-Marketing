@@ -688,6 +688,8 @@ function drawCover(ctx: Ctx, meta: SportMeta) {
  */
 export async function renderProjectPagesOnly(
   projects: FeaturedProject[],
+  targetWidth?: number,
+  targetHeight?: number,
 ): Promise<Buffer | null> {
   if (projects.length === 0) return null;
 
@@ -705,8 +707,8 @@ export async function renderProjectPagesOnly(
   }
 
   const embedded = await preloadProjectPhotos(doc, projects);
-  const PW = A4_WIDTH;
-  const PH = A4_HEIGHT;
+  const PW = targetWidth ?? A4_WIDTH;
+  const PH = targetHeight ?? A4_HEIGHT;
   const PAD = 36;
   const CW = PW - PAD * 2;
   const pageCenterX = PW / 2;

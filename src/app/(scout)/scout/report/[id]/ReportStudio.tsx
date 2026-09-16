@@ -44,6 +44,7 @@ export interface ReportStudioProps {
   sweep: SweepDocument | null;
   initialBlocks: ReportBlockState;
   initialNotes: string;
+  initialSuggestions: string;
   preparedBy: string;
   initialReport: GeneratedReport | null;
 }
@@ -58,6 +59,7 @@ export function ReportStudio({
   sweep,
   initialBlocks,
   initialNotes,
+  initialSuggestions,
   preparedBy,
   initialReport,
 }: ReportStudioProps) {
@@ -66,7 +68,7 @@ export function ReportStudio({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const [suggestionsText, setSuggestionsText] = useState("");
+  const [suggestionsText, setSuggestionsText] = useState(initialSuggestions);
   const whatsappCaption = "";
 
   const [report, setReport] = useState<GeneratedReport | null>(initialReport);
@@ -75,7 +77,7 @@ export function ReportStudio({
   const [share, setShare] = useState<ShareResponse | null>(null);
   const [sharing, setSharing] = useState(false);
 
-  const loadedDraft = useRef(JSON.stringify({ blocks: initialBlocks, notes: initialNotes }));
+  const loadedDraft = useRef(JSON.stringify({ blocks: initialBlocks, notes: initialNotes, suggestionsText: initialSuggestions }));
   useEffect(() => {
     if (JSON.stringify({ blocks, notes, suggestionsText }) === loadedDraft.current) return;
     const controller = new AbortController();

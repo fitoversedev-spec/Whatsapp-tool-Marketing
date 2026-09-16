@@ -68,6 +68,7 @@ export default async function ReportPage({ params }: { params: { id: string } })
         sweep={sweep}
         initialBlocks={draft?.includedBlocks ?? defaultBlockState()}
         initialNotes={draft?.fieldNotes ?? scan.fieldNotes ?? ""}
+        initialSuggestions={draft?.suggestionsText ?? ""}
         preparedBy={author.displayName}
         initialReport={initialReport}
       />

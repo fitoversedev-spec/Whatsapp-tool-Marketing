@@ -4,8 +4,13 @@ import SearchClient from "./SearchClient";
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: { q?: string };
+  searchParams: { q?: string; date?: string };
 }) {
   await requireUser();
-  return <SearchClient initialQuery={searchParams.q ?? ""} />;
+  return (
+    <SearchClient
+      initialQuery={searchParams.q ?? ""}
+      initialDate={searchParams.date ?? ""}
+    />
+  );
 }

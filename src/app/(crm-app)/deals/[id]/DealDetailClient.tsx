@@ -205,7 +205,8 @@ export default function DealDetailClient({
             {deal.accountOwnerName && <div className="text-xs text-slate-500">Owner: {deal.accountOwnerName}</div>}
             {deal.contacts.map((c) => (
               <div key={c.id} className="text-sm text-slate-600 mt-1">
-                {c.name} {c.phone && <span className="font-mono">· {c.phone}</span>} {c.isPrimary && <span className="text-court-700">(primary)</span>}
+                <Link href={`/crm/contacts/${c.id}`} className="text-court-600 hover:text-court-800 hover:underline font-medium">{c.name}</Link>
+                {c.phone && <span className="font-mono"> · {c.phone}</span>} {c.isPrimary && <span className="text-court-700">(primary)</span>}
               </div>
             ))}
           </div>

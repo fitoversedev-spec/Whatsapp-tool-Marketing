@@ -673,6 +673,65 @@ function drawCover(ctx: Ctx, meta: SportMeta) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+//  Standalone project-pages renderer (for injection into override PDFs)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Renders ONLY the "Recent Projects" section as a standalone PDF — no
+ * cover, overview, surface tiers, etc. Used by the override-injection
+ * path: the override PDF already has the polished marketing pages, and
+ * we just need to splice in fresh project cards so portfolio updates
+ * propagate automatically.
+ *
+ * Returns null when there are no projects to render (callers should
+ * skip injection entirely in that case).
+ */
+export async function renderProjectPagesOnly(
+  projects: FeaturedProject[],
+): Promise<Buffer | null> {
+  if (projects.length === 0) return null;
+
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  let logoImg: PDFImage | null = null;
+  if (LOGO_BYTES) {
+    try {
+      logoImg = await doc.embedPng(LOGO_BYTES);
+    } catch {
+      logoImg = null;
+    }
+  }
+
+  const ctx: Ctx = {
+    doc,
+    font,
+    fontBold,
+    page: null as unknown as PDFPage,
+    y: 0,
+    pageNumber: 0,
+    logoImg,
+  };
+
+  const embeddedPhotos = await preloadProjectPhotos(doc, projects);
+
+  newPage(ctx);
+  heading1(ctx, "Recent Fitoverse projects");
+  paragraph(
+    ctx,
+    "A small selection of recent builds. Photos + specs from past work for context on what you can expect.",
+    4,
+  );
+  for (const project of embeddedPhotos) {
+    drawProjectCard(ctx, project);
+  }
+
+  const bytes = await doc.save();
+  return Buffer.from(bytes);
+}
+
+// ─────────────────────────────────────────────────────────────────────
 //  Photo pre-loading
 // ─────────────────────────────────────────────────────────────────────
 

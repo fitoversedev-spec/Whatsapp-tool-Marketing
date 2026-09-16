@@ -1,15 +1,22 @@
 // Generate + serve a sport-specific catalogue PDF. If an uploaded
 // Fitoverse-authored catalogue PDF has been registered for this sport
-// (Setting key `catalogue_<sport>_url`), redirect to it directly so the
-// customer sees the polished marketing PDF instead of the auto-rendered
-// one. Otherwise fall back to the auto generator (which inlines featured
-// portfolio projects).
+// (Setting key `catalogue_<sport>_url`), fetch it, inject fresh
+// "Recent Projects" pages from featured portfolio projects before the
+// last page, and serve the merged result. This way portfolio updates
+// always propagate — even when the base PDF is a static admin upload.
+//
+// When no override exists, falls back to the auto generator (which
+// inlines featured portfolio projects end to end).
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { renderCatalogue, type FeaturedProject } from "@/lib/catalogue/pdf";
+import { renderCatalogue } from "@/lib/catalogue/pdf";
 import { getSportMeta, type SportKey } from "@/lib/catalogue/sport-meta";
+import {
+  queryFeaturedProjects,
+  injectProjectPagesIntoOverride,
+} from "@/lib/quotation/attach-catalogue";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,32 +28,40 @@ export async function GET(_req: NextRequest, { params }: { params: { sport: stri
   const meta = getSportMeta(params.sport);
   if (!meta) return new NextResponse("unknown sport", { status: 404 });
 
-  // Override: if admin has uploaded a real catalogue PDF for this sport,
-  // serve that instead of running the auto-generator.
+  // Override path: fetch the admin-uploaded PDF and inject recent
+  // featured project pages so portfolio changes propagate.
   const override = await prisma.setting.findUnique({
     where: { key: `catalogue_${params.sport}_url` },
   });
   if (override?.value) {
-    return NextResponse.redirect(override.value, { status: 302 });
+    try {
+      const [overrideRes, projects] = await Promise.all([
+        fetch(override.value, { signal: AbortSignal.timeout(40000) }),
+        queryFeaturedProjects(params.sport),
+      ]);
+
+      if (overrideRes.ok) {
+        const overrideBytes = new Uint8Array(await overrideRes.arrayBuffer());
+        const merged = await injectProjectPagesIntoOverride(overrideBytes, projects);
+        return new NextResponse(merged, {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `inline; filename="fitoverse-${params.sport}-catalogue.pdf"`,
+            "Cache-Control": "private, no-cache",
+          },
+        });
+      }
+      // Override fetch failed — fall through to auto-generated path.
+      console.warn(
+        `[catalogue/pdf] override fetch failed (${overrideRes.status}), falling back to auto-render`,
+      );
+    } catch (err) {
+      console.warn("[catalogue/pdf] override fetch/inject failed, falling back:", err);
+    }
   }
 
-  const featured = await prisma.portfolioProject.findMany({
-    where: { sport: params.sport, featured: true, archived: false },
-    orderBy: [{ completionDate: "desc" }, { createdAt: "desc" }],
-    take: 6,
-  });
-
-  const projects: FeaturedProject[] = featured.map((p) => ({
-    customerName: p.customerName,
-    location: p.location,
-    completionDate: p.completionDate,
-    plotLengthFt: p.plotLengthFt,
-    plotWidthFt: p.plotWidthFt,
-    surfaceType: p.surfaceType,
-    surfaceGrade: p.surfaceGrade,
-    shortDescription: p.shortDescription,
-    heroPhotoUrl: p.heroPhotoUrl,
-  }));
+  // Auto-generated path: render the full catalogue from scratch.
+  const projects = await queryFeaturedProjects(params.sport);
 
   try {
     const pdfBuffer = await renderCatalogue(params.sport as SportKey, projects);

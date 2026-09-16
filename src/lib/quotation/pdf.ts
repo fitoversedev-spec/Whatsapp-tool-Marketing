@@ -171,6 +171,28 @@ function drawGradientBar(
   }
 }
 
+/** Double-line decorative border drawn around every page (Word-style). */
+function drawPageBorder(page: PDFPage) {
+  // Outer rectangle – 14pt inset from page edges, 1.2pt stroke
+  page.drawRectangle({
+    x: 14,
+    y: 14,
+    width: PAGE_W - 28,
+    height: PAGE_H - 28,
+    borderColor: COL.border,
+    borderWidth: 1.2,
+  });
+  // Inner rectangle – 18pt inset from page edges, 0.5pt stroke
+  page.drawRectangle({
+    x: 18,
+    y: 18,
+    width: PAGE_W - 36,
+    height: PAGE_H - 36,
+    borderColor: COL.border,
+    borderWidth: 0.5,
+  });
+}
+
 function inr(n: number): string {
   return n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
@@ -194,6 +216,7 @@ type Ctx = {
 
 function newPage(ctx: Ctx) {
   ctx.page = ctx.doc.addPage(PageSizes.A4);
+  drawPageBorder(ctx.page);
   ctx.y = MARGIN;
   ctx.pageNumber += 1;
   // Logo top-left on every page (the reference has no top colour bar).
@@ -2646,10 +2669,12 @@ export async function renderQuotationPdf(data: QuotationPdfData): Promise<Buffer
     font,
     bold,
     y: MARGIN,
+    // (page border applied below after ctx is fully initialised)
     quoteNumber: data.number,
     pageNumber: 1,
     logo: logoImage,
   };
+  drawPageBorder(ctx.page);
 
   const quoteDateStr = data.quoteDate
     .toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })

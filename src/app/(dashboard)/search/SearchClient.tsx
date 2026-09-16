@@ -46,35 +46,46 @@ type Results = {
   accountContacts: AccountContactHit[];
 };
 
-export default function SearchClient({ initialQuery }: { initialQuery: string }) {
+export default function SearchClient({
+  initialQuery,
+  initialDate,
+}: {
+  initialQuery: string;
+  initialDate: string;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const [query, setQuery] = useState(initialQuery);
+  const [date, setDate] = useState(initialDate);
   const [results, setResults] = useState<Results | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const q = query.trim();
-    if (!q) {
+    if (!q && !date) {
       setResults(null);
       return;
     }
     const handle = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        const url = new URL("/api/search", window.location.origin);
+        if (q) url.searchParams.set("q", q);
+        if (date) url.searchParams.set("date", date);
+        const res = await fetch(url.toString());
         if (res.ok) setResults(await res.json());
       } finally {
         setLoading(false);
       }
       // Sync URL so the result is shareable / browser-back-able
       const next = new URLSearchParams(params.toString());
-      next.set("q", q);
+      if (q) next.set("q", q); else next.delete("q");
+      if (date) next.set("date", date); else next.delete("date");
       router.replace(`/search?${next}`);
     }, 250);
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  }, [query, date]);
 
   const totalHits =
     (results?.messages.length ?? 0) +
@@ -92,31 +103,61 @@ export default function SearchClient({ initialQuery }: { initialQuery: string })
         description="Across messages, notes, contacts, and templates"
       />
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-        <div className="relative">
-          <input
-            autoFocus
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type to search…"
-            className="w-full px-4 py-3 text-base border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green pl-11"
-          />
-          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">🔍</span>
-          {loading && (
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400">
-              Searching…
-            </span>
-          )}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <input
+              autoFocus
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Type to search…"
+              className="w-full px-4 py-3 text-base border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green pl-11"
+            />
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">🔍</span>
+            {loading && (
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                Searching…
+              </span>
+            )}
+          </div>
+
+          <div className="relative w-full sm:w-[200px]">
+            <label className="absolute -top-5 left-1 text-[11px] text-slate-500">
+              Filter by date
+            </label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full px-4 py-3 text-base border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green"
+            />
+            {date && (
+              <button
+                type="button"
+                onClick={() => setDate("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm font-medium leading-none"
+                aria-label="Clear date filter"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         {!results && (
           <EmptyHint>
             Try searching for a phone number, customer name, message text, or template name.
+            You can also pick a date to see all activity from that day.
           </EmptyHint>
         )}
 
         {results && totalHits === 0 && (
-          <EmptyHint>No results for &ldquo;{results.query}&rdquo;.</EmptyHint>
+          <EmptyHint>
+            No results
+            {results.query ? <> for &ldquo;{results.query}&rdquo;</> : null}
+            {date ? <> on {date}</> : null}
+            .
+          </EmptyHint>
         )}
 
         {results && results.messages.length > 0 && (

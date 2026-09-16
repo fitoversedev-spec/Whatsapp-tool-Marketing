@@ -667,7 +667,7 @@ export default function ContactDetailClient({
             </p>
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2">
           {editing ? (
             <>
               <button onClick={() => setEditing(false)} disabled={saving} className="btn btn-secondary !px-3 !py-1.5 !text-sm disabled:opacity-50">

@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ScoutLayout({ children }: { children: ReactNode }) {
   const user = await requireUser();
+  if (user.role !== "admin") redirect("/inbox");
 
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-slate-50">

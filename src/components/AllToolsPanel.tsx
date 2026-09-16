@@ -56,6 +56,7 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
         label: "Site Scout",
         icon: "📍",
         description: "Scan an area for competitors & demand, score a plot",
+        adminOnly: true,
       },
       {
         href: "/products",

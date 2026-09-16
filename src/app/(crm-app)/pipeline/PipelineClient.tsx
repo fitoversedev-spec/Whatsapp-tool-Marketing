@@ -267,9 +267,11 @@ export default function PipelineClient({
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
           >
-            <div className="flex gap-4 items-start">
-              <AssignedRosterPanel cards={rosterCards} onCardClick={handleCardClick} />
-              <div className="flex gap-4 overflow-x-auto pb-4 flex-1 min-w-0">
+            <div className="flex flex-col md:flex-row gap-4 items-start">
+              <div className="hidden md:block">
+                <AssignedRosterPanel cards={rosterCards} onCardClick={handleCardClick} />
+              </div>
+              <div className="flex gap-4 overflow-x-auto pb-4 flex-1 min-w-0 w-full">
                 {stages.map((s) => (
                   <KanbanColumn
                     key={s.id}

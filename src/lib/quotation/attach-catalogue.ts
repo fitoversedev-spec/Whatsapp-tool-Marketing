@@ -19,7 +19,7 @@
 
 import { PDFDocument, PageSizes, type PDFPage } from "pdf-lib";
 import { prisma } from "@/lib/prisma";
-import { renderCatalogue, type FeaturedProject } from "@/lib/catalogue/pdf";
+import { renderCatalogue, renderProjectPagesOnly, type FeaturedProject } from "@/lib/catalogue/pdf";
 import { getSportMeta, type SportKey } from "@/lib/catalogue/sport-meta";
 
 // Not a performance cutoff — WhatsApp's own document-message limit
@@ -75,6 +75,78 @@ export async function curateOverridePages(bytes: Uint8Array, sport: string): Pro
   return await out.save();
 }
 
+// ─────────────────────────────────────────────────────────────────────
+//  Featured-project injection into override PDFs
+// ─────────────────────────────────────────────────────────────────────
+
+/** Query featured portfolio projects for a sport (shared by route + attach). */
+export async function queryFeaturedProjects(sport: string): Promise<FeaturedProject[]> {
+  const rows = await prisma.portfolioProject.findMany({
+    where: { sport, featured: true, archived: false },
+    orderBy: [{ completionDate: "desc" }, { createdAt: "desc" }],
+    take: 6,
+  });
+  return rows.map((p) => ({
+    customerName: p.customerName,
+    location: p.location,
+    completionDate: p.completionDate,
+    plotLengthFt: p.plotLengthFt,
+    plotWidthFt: p.plotWidthFt,
+    surfaceType: p.surfaceType,
+    surfaceGrade: p.surfaceGrade,
+    shortDescription: p.shortDescription,
+    heroPhotoUrl: p.heroPhotoUrl,
+  }));
+}
+
+/**
+ * Inject auto-rendered "Recent Projects" pages into an admin-uploaded
+ * override PDF. The project pages are inserted BEFORE the last page of
+ * the override (the last page is typically the QR/contact page and
+ * should stay at the end).
+ *
+ * Returns the original bytes unchanged when there are no featured
+ * projects or the injection fails for any reason — the override must
+ * never be broken by a failed injection.
+ */
+export async function injectProjectPagesIntoOverride(
+  overrideBytes: Uint8Array,
+  projects: FeaturedProject[],
+): Promise<Uint8Array> {
+  if (projects.length === 0) return overrideBytes;
+  try {
+    const projectPdf = await renderProjectPagesOnly(projects);
+    if (!projectPdf) return overrideBytes;
+
+    const overrideDoc = await PDFDocument.load(overrideBytes);
+    const projectDoc = await PDFDocument.load(projectPdf);
+    const pageCount = overrideDoc.getPageCount();
+
+    // Copy all project pages into the override document.
+    const copiedPages = await overrideDoc.copyPages(
+      projectDoc,
+      projectDoc.getPageIndices(),
+    );
+
+    // Insert before the last page. If the override has only 1 page,
+    // insert after it (index 1) rather than at index 0 — the single
+    // page is always the cover, not the QR page.
+    const insertIndex = pageCount > 1 ? pageCount - 1 : pageCount;
+
+    for (let i = 0; i < copiedPages.length; i++) {
+      overrideDoc.insertPage(insertIndex + i, copiedPages[i]);
+    }
+
+    return await overrideDoc.save();
+  } catch (err) {
+    console.error(
+      "[catalogue] project-page injection into override failed, returning override as-is:",
+      err,
+    );
+    return overrideBytes;
+  }
+}
+
 // In-memory, per-process cache of the fetched override bytes — even curated
 // to ~11 pages, the deck is 20-25MB (unmodified source images), which measured
 // 10-16s to fetch from Blob. That's uncomfortably close to the 40s timeout
@@ -89,45 +161,40 @@ export async function getSportCatalogueBytes(sport: string): Promise<Uint8Array 
       where: { key: `catalogue_${sport}_url` },
     });
     if (override?.value) {
+      let overrideBytes: Uint8Array | null = null;
       const cached = catalogueCache.get(override.value);
-      if (cached) return cached;
-      try {
-        // The stored file is already curated down to ~11 pages at upload
-        // time — much smaller than the 50MB+ raw deck, but still large
-        // enough (20-25MB) to need real headroom against a hung/slow fetch.
-        const r = await fetch(override.value, { signal: AbortSignal.timeout(40000) });
-        if (r.ok) {
-          const bytes = new Uint8Array(await r.arrayBuffer());
-          catalogueCache.set(override.value, bytes);
-          return bytes;
+      if (cached) {
+        overrideBytes = cached;
+      } else {
+        try {
+          // The stored file is already curated down to ~11 pages at upload
+          // time — much smaller than the 50MB+ raw deck, but still large
+          // enough (20-25MB) to need real headroom against a hung/slow fetch.
+          const r = await fetch(override.value, { signal: AbortSignal.timeout(40000) });
+          if (r.ok) {
+            overrideBytes = new Uint8Array(await r.arrayBuffer());
+            catalogueCache.set(override.value, overrideBytes);
+          }
+        } catch (err) {
+          console.warn(
+            `[quotation] catalogue override fetch failed for ${sport}, using the` +
+              ` auto-rendered fallback instead:`,
+            err,
+          );
         }
-      } catch (err) {
-        console.warn(
-          `[quotation] catalogue override fetch failed for ${sport}, using the` +
-            ` auto-rendered fallback instead:`,
-          err,
-        );
+      }
+
+      if (overrideBytes) {
+        // Inject recent featured project pages into the override so
+        // portfolio updates propagate even when using a static admin PDF.
+        const projects = await queryFeaturedProjects(sport);
+        return await injectProjectPagesIntoOverride(overrideBytes, projects);
       }
     }
 
     const meta = getSportMeta(sport);
     if (!meta) return null;
-    const featured = await prisma.portfolioProject.findMany({
-      where: { sport, featured: true, archived: false },
-      orderBy: [{ completionDate: "desc" }, { createdAt: "desc" }],
-      take: 6,
-    });
-    const projects: FeaturedProject[] = featured.map((p) => ({
-      customerName: p.customerName,
-      location: p.location,
-      completionDate: p.completionDate,
-      plotLengthFt: p.plotLengthFt,
-      plotWidthFt: p.plotWidthFt,
-      surfaceType: p.surfaceType,
-      surfaceGrade: p.surfaceGrade,
-      shortDescription: p.shortDescription,
-      heroPhotoUrl: p.heroPhotoUrl,
-    }));
+    const projects = await queryFeaturedProjects(sport);
     const buf = await renderCatalogue(sport as SportKey, projects);
     return new Uint8Array(buf);
   } catch (err) {

@@ -21,7 +21,10 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const raw = (req.nextUrl.searchParams.get("q") ?? "").trim();
-  if (!raw) {
+  const dateParam = (req.nextUrl.searchParams.get("date") ?? "").trim();
+
+  // When neither query nor date is provided, return empty results
+  if (!raw && !dateParam) {
     return NextResponse.json({
       query: "",
       messages: [],
@@ -37,7 +40,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Query too long" }, { status: 400 });
   }
 
-  const ilike = { contains: raw, mode: "insensitive" as const };
+  // Build date range filter when a date is provided
+  let dateFilter: { gte: Date; lt: Date } | undefined;
+  if (dateParam) {
+    const parsed = new Date(dateParam + "T00:00:00Z");
+    if (isNaN(parsed.getTime())) {
+      return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+    }
+    const nextDay = new Date(parsed);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+    dateFilter = { gte: parsed, lt: nextDay };
+  }
+
+  const ilike = raw ? { contains: raw, mode: "insensitive" as const } : undefined;
 
   // Conversation scope filter for messages and notes — mirrors inbox.
   const convoScope =
@@ -55,7 +70,8 @@ export async function GET(req: NextRequest) {
   ] = await Promise.all([
     prisma.message.findMany({
       where: {
-        body: ilike,
+        ...(ilike ? { body: ilike } : {}),
+        ...(dateFilter ? { createdAt: dateFilter } : {}),
         conversation: convoScope,
       },
       orderBy: { createdAt: "desc" },
@@ -68,7 +84,8 @@ export async function GET(req: NextRequest) {
     }),
     prisma.conversationNote.findMany({
       where: {
-        body: ilike,
+        ...(ilike ? { body: ilike } : {}),
+        ...(dateFilter ? { createdAt: dateFilter } : {}),
         conversation: convoScope,
       },
       orderBy: { createdAt: "desc" },
@@ -82,11 +99,16 @@ export async function GET(req: NextRequest) {
     }),
     prisma.contact.findMany({
       where: {
-        OR: [
-          { name: ilike },
-          { phone: { contains: raw } },
-          { fields: { contains: raw, mode: "insensitive" } },
-        ],
+        ...(dateFilter ? { createdAt: dateFilter } : {}),
+        ...(ilike
+          ? {
+              OR: [
+                { name: ilike },
+                { phone: { contains: raw } },
+                { fields: { contains: raw, mode: "insensitive" } },
+              ],
+            }
+          : {}),
       },
       orderBy: { name: "asc" },
       take: PER_TYPE,
@@ -94,10 +116,15 @@ export async function GET(req: NextRequest) {
     prisma.template.findMany({
       where: {
         deletedAt: null,
-        OR: [
-          { name: ilike },
-          { body: ilike },
-        ],
+        ...(dateFilter ? { createdAt: dateFilter } : {}),
+        ...(ilike
+          ? {
+              OR: [
+                { name: ilike },
+                { body: ilike },
+              ],
+            }
+          : {}),
       },
       orderBy: { name: "asc" },
       take: PER_TYPE,
@@ -106,14 +133,22 @@ export async function GET(req: NextRequest) {
       where: {
         deletedAt: null,
         ...dealScope,
-        OR: [{ title: ilike }, { code: ilike }, { account: { name: ilike } }],
+        ...(dateFilter ? { createdAt: dateFilter } : {}),
+        ...(ilike
+          ? { OR: [{ title: ilike }, { code: ilike }, { account: { name: ilike } }] }
+          : {}),
       },
       orderBy: { updatedAt: "desc" },
       take: PER_TYPE,
       include: { account: { select: { name: true } }, currentStage: { select: { name: true, colorHex: true } } },
     }),
     prisma.account.findMany({
-      where: { deletedAt: null, ...accountScope, name: ilike },
+      where: {
+        deletedAt: null,
+        ...accountScope,
+        ...(dateFilter ? { createdAt: dateFilter } : {}),
+        ...(ilike ? { name: ilike } : {}),
+      },
       orderBy: { updatedAt: "desc" },
       take: PER_TYPE,
       select: { id: true, name: true, city: true },
@@ -121,7 +156,10 @@ export async function GET(req: NextRequest) {
     prisma.accountContact.findMany({
       where: {
         deletedAt: null,
-        OR: [{ name: ilike }, { phone: { contains: raw } }, { email: ilike }],
+        ...(dateFilter ? { createdAt: dateFilter } : {}),
+        ...(ilike
+          ? { OR: [{ name: ilike }, { phone: { contains: raw } }, { email: ilike }] }
+          : {}),
         ...(isAdmin(user.role) ? {} : { account: { ownerUserId: user.id } }),
       },
       orderBy: { createdAt: "desc" },

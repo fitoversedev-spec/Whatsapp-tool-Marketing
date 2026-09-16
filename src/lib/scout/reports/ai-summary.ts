@@ -92,3 +92,46 @@ export async function generateAiSummary(
 
   return result.summary;
 }
+
+const POLISH_SYSTEM = `You are a professional sports facility consultant at Fitoverse. Take the rough notes provided by a salesperson and rewrite them into a clear, professional paragraph suitable for a client-facing report.
+
+Rules:
+- Keep the original intent and all specific details mentioned
+- Write in third person, professional tone
+- One to three paragraphs, under 250 words
+- Do not add information that was not in the original notes
+- Do not mention revenue figures or financial projections unless the original notes do
+- Format as clean prose, no bullet points or headings`;
+
+export async function polishSuggestions(
+  userId: string,
+  rawText: string,
+  context: { areaLabel: string; radiusM: number },
+): Promise<string> {
+  const prompt = [
+    `Location: ${context.areaLabel} (${(context.radiusM / 1000).toFixed(1)} km scan radius)`,
+    "",
+    "Salesperson's rough notes:",
+    rawText,
+  ].join("\n");
+
+  const result = await generateStructured<{ polished: string }>({
+    feature: "scout-polish-suggestions",
+    userId,
+    system: POLISH_SYSTEM,
+    user: prompt,
+    schema: {
+      type: "object",
+      properties: {
+        polished: {
+          type: "string",
+          description: "The polished professional paragraph(s) for the report.",
+        },
+      },
+      required: ["polished"],
+    },
+    maxTokens: 1000,
+  });
+
+  return result.polished;
+}

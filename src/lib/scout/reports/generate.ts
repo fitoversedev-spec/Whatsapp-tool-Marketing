@@ -7,7 +7,7 @@ import { formatFullDate } from "@/lib/scout/display/format";
 import { CATEGORIES } from "@/lib/scout/places/taxonomy";
 import { getCompareSubjects } from "@/lib/scout/scans/queries";
 
-import { canGenerateAiSummary, generateAiSummary } from "./ai-summary";
+import { canGenerateAiSummary, generateAiSummary, polishSuggestions } from "./ai-summary";
 import { reportBrand } from "./brand";
 import { buildComparisonDocument, renderComparisonHtml } from "./comparison";
 import { assembleReportInput } from "./data";
@@ -159,33 +159,24 @@ export async function runReportGeneration(
     });
     if (!input) throw new Error("The scan behind this report could not be read.");
 
-    let aiSummaryText: string | null = null;
-    if (input.blocks["ai-summary"] && canGenerateAiSummary()) {
+    let polishedSuggestions: string | null = null;
+    if (input.suggestionsText?.trim() && canGenerateAiSummary()) {
       try {
-        aiSummaryText = await generateAiSummary(author.userId, {
-          areaLabel: input.areaLabel,
-          radiusM: input.radiusM,
-          competitionCount: input.competitionCount,
-          demandCount: input.demandCount,
-          avgRating: input.avgRating,
-          reviewTotal: input.reviewTotal,
-          categories: input.categories,
-          places: input.places.map((p) => ({
-            name: p.name,
-            side: p.side,
-            rating: p.rating,
-            reviewCount: p.reviewCount,
-            distanceM: p.distanceM,
-          })),
-          scoreTotal: input.score?.totalRounded ?? null,
-          scoreVerdict: input.score?.verdict ?? null,
-        });
+        polishedSuggestions = await polishSuggestions(
+          author.userId,
+          input.suggestionsText.trim(),
+          { areaLabel: input.areaLabel, radiusM: input.radiusM },
+        );
       } catch (err) {
-        console.error(JSON.stringify({ tag: "report.ai-summary.failed", reportId, error: err instanceof Error ? err.message : "unknown" }));
+        console.error(JSON.stringify({ tag: "report.polish-suggestions.failed", reportId, error: err instanceof Error ? err.message : "unknown" }));
+        polishedSuggestions = input.suggestionsText.trim();
       }
     }
 
-    const document = buildReportDocument({ ...input, aiSummaryText });
+    const document = buildReportDocument({
+      ...input,
+      suggestionsText: polishedSuggestions ?? input.suggestionsText ?? null,
+    });
     const html = await renderReportHtml(document);
     const brand = reportBrand();
 

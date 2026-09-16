@@ -1,27 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button } from "@/components/scout/ui";
+import { Button } from "@/components/scout/ui";
 import { SectionLabel, StateBlock } from "@/components/scout/patterns";
 import { SiteMap, type SiteMapMarker } from "@/components/scout/map";
-import { SaturationPanel, ScorePanel } from "@/components/scout/score";
 import { EditableReportTitle } from "@/components/scout/reports";
 import {
-  atLeast,
-  formatCount,
   formatDistance,
   formatFullDate,
   formatRadius,
-  formatRating,
-  verdictLabel,
-  verdictTone,
 } from "@/lib/scout/display/format";
-import { POPULATION_LIMITATION_TEXT, populationLimitations } from "@/lib/scout/census/disclosure";
 import { REPORT_BLOCKS, type ReportBlockState } from "@/lib/scout/reports/blocks";
 import { deliveryNote, reportDelivery } from "@/lib/scout/reports/delivery";
 import type { ScanScreenData } from "@/lib/scout/scans/dto";
-import type { ScoreResult } from "@/lib/scout/scoring/types";
-import { markedCells, sweepStatusLabel, type SweepDocument } from "@/lib/scout/sweep/grid";
+import type { SweepDocument } from "@/lib/scout/sweep/grid";
 
 export interface GeneratedReport {
   id: string;
@@ -71,7 +63,6 @@ export function ReportStudio({
 }: ReportStudioProps) {
   const [blocks, setBlocks] = useState<ReportBlockState>(initialBlocks);
   const [notes, setNotes] = useState(initialNotes);
-  const [score, setScore] = useState<ScoreResult | null>(scan.score);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -173,8 +164,6 @@ export function ReportStudio({
     }
   }, [report, whatsappCaption]);
 
-  const on = useCallback((id: string) => blocks[id] === true, [blocks]);
-
   const markers = useMemo<SiteMapMarker[]>(
     () =>
       scan.places.slice(0, 120).map((p) => ({
@@ -191,9 +180,6 @@ export function ReportStudio({
       })),
     [scan.places],
   );
-
-  const sweepMarked = useMemo(() => (sweep ? markedCells(sweep.cells) : []), [sweep]);
-  const limitations = populationLimitations();
 
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden ssIn">
@@ -217,45 +203,20 @@ export function ReportStudio({
           ) : null}
         </div>
 
-        {/* AI Analysis — based on scan data */}
-        <div className="flex flex-col gap-3">
-          <SectionLabel weight={700}>AI analysis</SectionLabel>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 flex flex-col gap-2.5">
-            <div className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-court-600 mt-0.5 flex-none" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" /></svg>
-              <p className="m-0 text-xs leading-[1.6] text-slate-700">
-                The report will be generated with AI analysis covering: <strong>best sport for this area</strong>, <strong>revenue potential</strong>, <strong>existing competition</strong>, and <strong>area suitability</strong> — all based on the scan data.
-              </p>
-            </div>
-            {scan.competitionCount > 0 || scan.demandCount > 0 ? (
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded bg-white border border-slate-200 px-3 py-2">
-                  <div className="text-slate-500 text-[12px]">Facilities found</div>
-                  <div className="font-semibold text-slate-900">{atLeast(scan.competitionCount ?? 0, scan.anySaturated)}</div>
-                </div>
-                <div className="rounded bg-white border border-slate-200 px-3 py-2">
-                  <div className="text-slate-500 text-[12px]">Demand anchors</div>
-                  <div className="font-semibold text-slate-900">{atLeast(scan.demandCount ?? 0, scan.anySaturated)}</div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
         {error ? <StateBlock tone="error" title="Something failed" body={error} /> : null}
 
         <div className="flex flex-col gap-[9px]">
-          <SectionLabel weight={700}>Custom notes</SectionLabel>
+          <SectionLabel weight={700}>Our suggestions</SectionLabel>
+          <p className="m-0 text-[12.5px] leading-[1.6] text-slate-500">
+            Write your rough thoughts — AI will polish them into a professional paragraph for the report.
+          </p>
           <textarea
             className="w-full box-border min-h-[140px] resize-y font-sans text-[13.5px] leading-[1.65] text-slate-900 border border-slate-300 rounded-lg p-[14px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            aria-label="Custom notes for the report"
-            placeholder="Add any custom points you want included in the report — e.g. nearby upcoming developments, land cost observations, footfall patterns at 7pm, lighting and parking notes."
+            value={suggestionsText}
+            onChange={(e) => setSuggestionsText(e.target.value)}
+            aria-label="Your suggestions for the customer"
+            placeholder="e.g. good location for 5-a-side turf, only 2 competitors both indoor, lots of schools nearby, opportunity for outdoor facility with parking"
           />
-          <p className="m-0 text-[13px] leading-[1.65] text-slate-500">
-            These notes will be included in the AI-generated report alongside the scan data analysis.
-          </p>
           <div className="text-[12px] text-slate-500" aria-live="polite">
             {saveState === "saving"
               ? "Saving…"
@@ -265,20 +226,6 @@ export function ReportStudio({
                   ? "The draft did not save."
                   : ""}
           </div>
-        </div>
-
-        <div className="flex flex-col gap-[9px]">
-          <SectionLabel weight={700}>Our suggestions</SectionLabel>
-          <textarea
-            className="w-full box-border min-h-[120px] resize-y font-sans text-[13.5px] leading-[1.65] text-slate-900 border border-slate-300 rounded-lg p-[14px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
-            value={suggestionsText}
-            onChange={(e) => setSuggestionsText(e.target.value)}
-            aria-label="Your custom suggestions for the customer"
-            placeholder="Write your suggestions for the customer — e.g. recommended sports, facility layout ideas, pricing strategy, unique selling points for this location."
-          />
-          <p className="m-0 text-[13px] leading-[1.65] text-slate-500">
-            This section appears in the report as "Our Suggestions" — your custom recommendations to the customer.
-          </p>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -403,120 +350,9 @@ export function ReportStudio({
             </div>
           </div>
 
-          {score ? (
-            <div>
-              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Verdict</div>
-              <div style={{ marginTop: 8 }}>
-                <Badge tone={verdictTone(score.verdict)}>
-                  {verdictLabel(score.verdict)} · {score.totalRounded}/100
-                </Badge>
-              </div>
-            </div>
-          ) : null}
-
-          {on("stat-cards") ? (
-            <div className="grid grid-cols-4 gap-[14px]">
-              <div className="border border-slate-200 rounded-lg p-[14px]">
-                <div className="font-heading text-[22px] font-bold">
-                  {atLeast(scan.competitionCount, scan.anySaturated)}
-                </div>
-                <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[6px]">Facilities</div>
-              </div>
-              <div className="border border-slate-200 rounded-lg p-[14px]">
-                <div className="font-heading text-[22px] font-bold">{formatCount(scan.reviewTotal)}</div>
-                <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[6px]">Reviews</div>
-              </div>
-              <div className="border border-slate-200 rounded-lg p-[14px]">
-                <div className="font-heading text-[22px] font-bold">{formatRating(scan.avgRating)}</div>
-                <div className="text-[10px] tracking-[0.09em] uppercase text-slate-500 mt-[6px]">Avg rating</div>
-              </div>
-              <div className="bg-slate-900 text-white rounded-lg p-[14px]">
-                <div className="font-heading text-[22px] font-bold">
-                  {atLeast(scan.demandCount, scan.anySaturated)}
-                </div>
-                <div className="text-[10px] tracking-[0.09em] uppercase text-white/40 mt-[6px]">Demand places</div>
-              </div>
-            </div>
-          ) : null}
-
-          {on("score") && score ? (
-            <ScorePanel score={score} scoredAt={scan.scoredAt} />
-          ) : null}
-
-          {on("saturation") && score ? (
-            <SaturationPanel
-              score={score}
-              radiusM={scan.radiusM}
-              saturatedTerms={scan.saturatedTerms}
-            />
-          ) : null}
-
-          {on("count-table") && scan.categories.length > 0 ? (
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <div className="grid grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr] px-[15px] py-[11px] bg-slate-100 text-[9.5px] font-bold tracking-[0.09em] uppercase text-slate-500">
-                <span>Category</span>
-                <span className="text-right">Count</span>
-                <span className="text-right">Reviews</span>
-                <span className="text-right">Nearest</span>
-              </div>
-              {scan.categories.map((c) => (
-                <div key={c.categoryId} className="grid grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr] px-[15px] py-[11px] text-[12.5px] border-t border-slate-200 [&>span:first-child]:font-semibold">
-                  <span>{c.label}</span>
-                  <span className="text-right">{atLeast(c.count, c.saturated)}</span>
-                  <span className="text-right text-slate-500">
-                    {c.reviewTotal > 0 ? formatCount(c.reviewTotal) : "—"}
-                  </span>
-                  <span className="text-right text-slate-500">
-                    {c.nearestM === null ? "—" : formatDistance(c.nearestM)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {on("sports-areas") && scan.places.filter((p) => p.side === "competition").length > 0 ? (
-            <div>
-              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Available sports facilities</div>
-              <div className="border border-slate-200 rounded-lg overflow-hidden mt-[10px]">
-                <div className="grid grid-cols-[1.4fr_0.6fr_0.6fr] px-[15px] py-[11px] bg-slate-100 text-[9.5px] font-bold tracking-[0.09em] uppercase text-slate-500">
-                  <span>Facility</span>
-                  <span className="text-right">Distance</span>
-                  <span className="text-right">Rating</span>
-                </div>
-                {scan.places
-                  .filter((p) => p.side === "competition")
-                  .sort((a, b) => a.distanceM - b.distanceM)
-                  .slice(0, 15)
-                  .map((p) => (
-                    <div key={p.placeId} className="grid grid-cols-[1.4fr_0.6fr_0.6fr] px-[15px] py-[11px] text-[12.5px] border-t border-slate-200">
-                      <span className="font-semibold truncate">{p.name}</span>
-                      <span className="text-right text-slate-500">{formatDistance(p.distanceM)}</span>
-                      <span className="text-right text-slate-500">{formatRating(p.rating)} ★</span>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          ) : null}
-
-          {on("ai-summary") ? (
-            <div>
-              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">AI analysis</div>
-              <div className="mt-[10px] border-l-[3px] border-[#2e3192] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700">
-                AI analysis will be generated based on scan data — recommending the best sports for this location, revenue potential, and competitive positioning.
-              </div>
-            </div>
-          ) : null}
-
-          {on("suggestions") && suggestionsText ? (
-            <div>
-              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Our suggestions</div>
-              <div className="mt-[10px] border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 whitespace-pre-wrap">
-                {suggestionsText}
-              </div>
-            </div>
-          ) : null}
-
-          {on("map") ? (
+          {/* Section 1: Map */}
+          <div>
+            <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500 mb-2">Catchment map</div>
             <div className="h-[260px] rounded-lg overflow-hidden border border-slate-200 relative">
               <SiteMap
                 lat={scan.centre.lat}
@@ -528,61 +364,76 @@ export function ReportStudio({
                 ariaLabel={`Catchment map for ${scan.areaLabel}`}
               />
             </div>
-          ) : null}
-
-          {on("sweep") ? (
-            <div>
-              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Spaces sweep</div>
-              {sweepMarked.length === 0 ? (
-                <p className="text-[13.5px] leading-[1.75] text-slate-700 mt-[10px] whitespace-pre-wrap min-h-[60px]">
-                  No cells were marked in the sweep of this area.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-[7px] text-[12.5px] leading-[1.65] text-slate-700 mt-[10px]">
-                  {sweepMarked.map((cell) => (
-                    <div key={cell.id}>
-                      <strong>
-                        {cell.id} · {sweepStatusLabel(cell.status)}
-                      </strong>
-                      {cell.note ? ` — ${cell.note}` : ""}
-                    </div>
-                  ))}
-                  <p className="text-[11.5px] leading-[1.7] text-slate-500 mt-[10px]">
-                    Marked from satellite imagery only. Imagery is typically one to three years old.
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          {on("field-notes") ? (
-            <div>
-              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Field notes</div>
-              <div className="text-[13.5px] leading-[1.75] text-slate-700 mt-[10px] whitespace-pre-wrap min-h-[60px]">
-                {notes || "Field notes appear here as you type them."}
-              </div>
-            </div>
-          ) : null}
-
-          <div>
-            <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">{limitations.heading}</div>
-            {limitations.paragraphs.map((p) => (
-              <p key={p} className="text-[11.5px] leading-[1.7] text-slate-500 mt-[10px]">
-                {p}
-              </p>
-            ))}
-            {!limitations.paragraphs.includes(POPULATION_LIMITATION_TEXT) ? (
-              <p className="text-[11.5px] leading-[1.7] text-slate-500 mt-[10px]">{POPULATION_LIMITATION_TEXT}</p>
-            ) : null}
           </div>
 
+          {/* Section 2: Scan Results — grouped by category */}
+          {scan.categories.filter((c) => c.side === "competition" && c.count > 0).length > 0 ? (
+            <div>
+              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500 mb-3">Competition</div>
+              {scan.categories
+                .filter((c) => c.side === "competition" && c.count > 0)
+                .map((category) => (
+                  <div key={category.categoryId} className="mb-4">
+                    <div className="flex justify-between items-baseline border-b border-slate-200 pb-1 mb-2">
+                      <span className="font-semibold text-[13px]">{category.label}</span>
+                      <span className="text-[11px] text-slate-500">{category.count} found</span>
+                    </div>
+                    <div className="flex flex-col">
+                      {scan.places
+                        .filter((p) => p.side === "competition" && p.categories?.includes(category.categoryId))
+                        .sort((a, b) => a.distanceM - b.distanceM)
+                        .map((p) => (
+                          <div key={p.placeId} className="flex justify-between py-[6px] text-[12.5px] border-b border-slate-100">
+                            <span className="truncate mr-2">{p.name}</span>
+                            <span className="text-slate-500 whitespace-nowrap">{formatDistance(p.distanceM)}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : null}
+
+          {scan.categories.filter((c) => c.side === "demand" && c.count > 0).length > 0 ? (
+            <div>
+              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500 mb-3">Nearby places</div>
+              {scan.categories
+                .filter((c) => c.side === "demand" && c.count > 0)
+                .map((category) => (
+                  <div key={category.categoryId} className="mb-4">
+                    <div className="flex justify-between items-baseline border-b border-slate-200 pb-1 mb-2">
+                      <span className="font-semibold text-[13px]">{category.label}</span>
+                      <span className="text-[11px] text-slate-500">{category.count} found</span>
+                    </div>
+                    <div className="flex flex-col">
+                      {scan.places
+                        .filter((p) => p.side === "demand" && p.categories?.includes(category.categoryId))
+                        .sort((a, b) => a.distanceM - b.distanceM)
+                        .map((p) => (
+                          <div key={p.placeId} className="flex justify-between py-[6px] text-[12.5px] border-b border-slate-100">
+                            <span className="truncate mr-2">{p.name}</span>
+                            <span className="text-slate-500 whitespace-nowrap">{formatDistance(p.distanceM)}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : null}
+
+          {/* Section 3: Our Suggestions */}
+          {suggestionsText ? (
+            <div>
+              <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Our suggestions</div>
+              <div className="mt-[10px] border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 whitespace-pre-wrap">
+                {suggestionsText}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">AI will polish this text when generating the report</p>
+            </div>
+          ) : null}
+
           <div className="border-t border-slate-200 pt-[14px] text-[11px] text-slate-500 leading-[1.6]">
-            Prepared by {preparedBy} · Fitoverse · Data from public listings
-            {score ? ` · scored under model v${score.modelVersion}` : ""}
-            {scan.anySaturated
-              ? ` · counts marked "at least" are floors: a search returned the maximum results a single query can`
-              : ""}
-            . This report contains no projection of revenue or return.
+            Prepared by {preparedBy} · Fitoverse · Data from public listings.
           </div>
         </article>
       </div>

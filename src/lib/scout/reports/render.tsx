@@ -514,6 +514,58 @@ function Suggestions({ doc, n }: { doc: ReportDocument; n: number }) {
   );
 }
 
+/* ---------------------------------------------------------- scanResults */
+
+function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
+  const s = doc.scanResults;
+  if (!s) return null;
+
+  const renderGroup = (groups: typeof s.competitionGroups, heading: string) => {
+    if (groups.length === 0) return null;
+    return (
+      <>
+        <h3>{heading}</h3>
+        {groups.map((group) => (
+          <div key={group.categoryId} className="categoryGroup">
+            <div className="categoryHead">
+              <span className="catName">{group.label}</span>
+              <span className="catCount">{group.count} found</span>
+            </div>
+            {group.places.length === 0 ? (
+              <p className="small muted">No places found in this category.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th className="r">Distance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.places.map((place, i) => (
+                    <tr key={`${group.categoryId}:${place.name}:${i}`}>
+                      <td>{place.name}</td>
+                      <td className="r">{place.distance}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ))}
+      </>
+    );
+  };
+
+  return (
+    <section className="section">
+      <SectionHeading n={n} id="scanResults" />
+      {renderGroup(s.competitionGroups, "Competition")}
+      {renderGroup(s.demandGroups, "Nearby places")}
+    </section>
+  );
+}
+
 /* -------------------------------------------------------------------- map */
 
 function MapPage({ doc, n }: { doc: ReportDocument; n: number }) {
@@ -689,6 +741,8 @@ export function ReportBody({ doc }: { doc: ReportDocument }) {
             return <AiSummary key={id} doc={doc} n={n} />;
           case "suggestions":
             return <Suggestions key={id} doc={doc} n={n} />;
+          case "scanResults":
+            return <ScanResults key={id} doc={doc} n={n} />;
           case "map":
             return <MapPage key={id} doc={doc} n={n} />;
           case "sweep":

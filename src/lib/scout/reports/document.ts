@@ -64,6 +64,8 @@ import type {
   ObservationsSection,
   ReportDocument,
   ReportStat,
+  ScanResultCategoryGroup,
+  ScanResultsSection,
   SportsAreaRow,
   SportsAreasSection,
   SuggestionsSection,
@@ -455,6 +457,36 @@ function buildSportsAreas(input: ReportInput): SportsAreasSection | null {
   };
 }
 
+/* --------------------------------------------------------- scanResults */
+
+function buildScanResults(input: ReportInput): ScanResultsSection {
+  const groupFor = (side: "competition" | "demand"): ScanResultCategoryGroup[] => {
+    return input.categories
+      .filter((c) => c.side === side && c.count > 0)
+      .map((category) => {
+        const places = input.places
+          .filter((p) => p.side === side && p.categories.includes(category.categoryId))
+          .sort((a, b) => a.distanceM - b.distanceM)
+          .map((p) => ({
+            name: p.name,
+            distance: formatDistance(p.distanceM),
+            distanceM: p.distanceM,
+          }));
+        return {
+          categoryId: category.categoryId,
+          label: category.label,
+          count: category.count,
+          places,
+        };
+      });
+  };
+
+  return {
+    competitionGroups: groupFor("competition"),
+    demandGroups: groupFor("demand"),
+  };
+}
+
 /* ------------------------------------------------------------- document */
 
 export function buildReportDocument(input: ReportInput): ReportDocument {
@@ -632,9 +664,10 @@ export function buildReportDocument(input: ReportInput): ReportDocument {
     sportsAreas,
     aiSummary,
     suggestions,
-    map: on("map") ? input.map : null,
+    map: input.map,
     sweep,
     observations: surveyor,
+    scanResults: buildScanResults(input),
     limitations: {
       heading: limitationsBlock.heading,
       paragraphs: limitationsBlock.paragraphs.includes(POPULATION_LIMITATION_TEXT)

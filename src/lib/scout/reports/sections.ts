@@ -53,50 +53,28 @@ export interface SectionAvailability {
 
 const ORDER: readonly ReportSectionId[] = [
   "cover",
-  "verdict",
-  "catchment",
-  "competition",
-  "demand",
-  "sportsAreas",
-  "aiSummary",
-  "suggestions",
   "map",
-  "sweep",
-  "observations",
-  "limitations",
+  "scanResults",
+  "suggestions",
 ];
 
 /** Sections no composition can remove. */
 export const UNCONDITIONAL_SECTIONS: readonly ReportSectionId[] = [
   "cover",
-  "catchment",
-  "competition",
-  "demand",
-  "limitations",
+  "map",
+  "scanResults",
 ];
 
 export function sectionsFor(
-  blocks: ReportBlockState,
+  _blocks: ReportBlockState,
   available: SectionAvailability,
 ): ReportSectionId[] {
-  const on = (id: string) => blocks[id] === true;
-
   return ORDER.filter((section) => {
     switch (section) {
-      case "verdict":
-        return available.scored && on("score");
       case "map":
-        return on("map") && available.mapAvailable;
-      case "sportsAreas":
-        return on("sports-areas") && available.hasSportsAreas;
-      case "aiSummary":
-        return on("ai-summary") && available.hasAiSummary;
+        return available.mapAvailable;
       case "suggestions":
-        return on("suggestions") && available.hasSuggestions;
-      case "sweep":
-        return on("sweep") && available.sweepHasMarks;
-      case "observations":
-        return available.hasSurveyorContent;
+        return available.hasSuggestions;
       default:
         return true;
     }

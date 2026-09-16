@@ -189,6 +189,13 @@ td.r,th.r{ text-align:right; }
 }
 .suggestionsBlock{ border-left-color:var(--green); }
 
+/* --------------------------------------------------------- scanResults */
+
+.categoryGroup{ break-inside:avoid; margin-bottom:14pt; }
+.categoryHead{ display:flex; justify-content:space-between; align-items:baseline; gap:8pt; margin-bottom:6pt; padding-bottom:4pt; border-bottom:1pt solid var(--gray-200); }
+.catName{ font-weight:700; font-size:12pt; }
+.catCount{ font-size:9.5pt; color:var(--gray-500); font-weight:600; white-space:nowrap; }
+
 /* ------------------------------------------------------------------ map */
 
 .mapFrame{ break-inside:avoid; border:1pt solid var(--gray-200); border-radius:8pt; overflow:hidden; }

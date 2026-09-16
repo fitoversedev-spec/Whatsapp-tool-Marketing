@@ -30,7 +30,8 @@ export type ReportSectionId =
   | "map"
   | "sweep"
   | "observations"
-  | "limitations";
+  | "limitations"
+  | "scanResults";
 
 /** Section titles, in document order. Numbering on the page comes from here. */
 export const REPORT_SECTION_TITLES: Readonly<Record<ReportSectionId, string>> = {
@@ -46,6 +47,7 @@ export const REPORT_SECTION_TITLES: Readonly<Record<ReportSectionId, string>> = 
   sweep: "Marked open spaces",
   observations: "Surveyor observations",
   limitations: "What this report does not cover",
+  scanResults: "Scan results",
 };
 
 /* ------------------------------------------------------------------ meta */
@@ -291,6 +293,26 @@ export interface LimitationsSection {
   readonly bullets: readonly string[];
 }
 
+/* ---------------------------------------------------------- scanResults */
+
+export interface ScanResultPlaceRow {
+  readonly name: string;
+  readonly distance: string;
+  readonly distanceM: number;
+}
+
+export interface ScanResultCategoryGroup {
+  readonly categoryId: string;
+  readonly label: string;
+  readonly count: number;
+  readonly places: readonly ScanResultPlaceRow[];
+}
+
+export interface ScanResultsSection {
+  readonly competitionGroups: readonly ScanResultCategoryGroup[];
+  readonly demandGroups: readonly ScanResultCategoryGroup[];
+}
+
 /* -------------------------------------------------------------- document */
 
 export interface ReportFooter {
@@ -316,5 +338,6 @@ export interface ReportDocument {
   readonly sweep: SweepSection | null;
   readonly observations: ObservationsSection | null;
   readonly limitations: LimitationsSection;
+  readonly scanResults: ScanResultsSection | null;
   readonly footer: ReportFooter;
 }

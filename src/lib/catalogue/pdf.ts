@@ -721,14 +721,238 @@ export async function renderProjectPagesOnly(
   paragraph(
     ctx,
     "A small selection of recent builds. Photos + specs from past work for context on what you can expect.",
-    4,
+    12,
   );
-  for (const project of embeddedPhotos) {
-    drawProjectCard(ctx, project);
+
+  if (embeddedPhotos.length === 1) {
+    drawSingleProjectCentered(ctx, embeddedPhotos[0]);
+  } else {
+    const COL_GAP = 20;
+    const COL_W = (CONTENT_WIDTH - COL_GAP) / 2;
+    for (let i = 0; i < embeddedPhotos.length; i += 2) {
+      const left = embeddedPhotos[i];
+      const right = embeddedPhotos[i + 1] ?? null;
+      drawProjectRow(ctx, left, right, COL_W, COL_GAP);
+    }
   }
 
   const bytes = await doc.save();
   return Buffer.from(bytes);
+}
+
+function drawSingleProjectCentered(
+  ctx: Ctx,
+  project: FeaturedProject & { embeddedImage?: PDFImage | null },
+) {
+  const photoMaxW = CONTENT_WIDTH * 0.75;
+  const photoMaxH = 300;
+  const cardPad = 16;
+
+  let photoDrawW = 0;
+  let photoDrawH = 0;
+  if (project.embeddedImage) {
+    const img = project.embeddedImage;
+    const aspect = img.width / img.height;
+    photoDrawW = photoMaxW;
+    photoDrawH = photoMaxW / aspect;
+    if (photoDrawH > photoMaxH) {
+      photoDrawH = photoMaxH;
+      photoDrawW = photoMaxH * aspect;
+    }
+  }
+
+  const textBlockH = 80;
+  const totalH = (photoDrawH > 0 ? photoDrawH + 16 : 0) + textBlockH + cardPad * 2;
+  ensureSpace(ctx, totalH);
+
+  const cardX = MARGIN + (CONTENT_WIDTH - Math.max(photoDrawW + cardPad * 2, 340)) / 2;
+  const cardW = Math.max(photoDrawW + cardPad * 2, 340);
+  const startY = ctx.y;
+
+  ctx.page.drawRectangle({
+    x: cardX,
+    y: startY - totalH,
+    width: cardW,
+    height: totalH,
+    color: WHITE,
+    borderColor: LINE,
+    borderWidth: 0.6,
+  });
+
+  let curY = startY - cardPad;
+
+  if (project.embeddedImage && photoDrawW > 0) {
+    const photoX = cardX + (cardW - photoDrawW) / 2;
+    ctx.page.drawImage(project.embeddedImage, {
+      x: photoX,
+      y: curY - photoDrawH,
+      width: photoDrawW,
+      height: photoDrawH,
+    });
+    curY -= photoDrawH + 16;
+  }
+
+  const textCenterX = cardX + cardW / 2;
+  const nameW = ctx.fontBold.widthOfTextAtSize(sanitize(project.customerName), 16);
+  ctx.page.drawText(sanitize(project.customerName), {
+    x: textCenterX - nameW / 2,
+    y: curY - 16,
+    size: 16,
+    font: ctx.fontBold,
+    color: BLACK,
+  });
+  curY -= 22;
+
+  if (project.location) {
+    const locW = ctx.font.widthOfTextAtSize(sanitize(project.location), 11);
+    ctx.page.drawText(sanitize(project.location), {
+      x: textCenterX - locW / 2,
+      y: curY - 11,
+      size: 11,
+      font: ctx.font,
+      color: SLATE,
+    });
+    curY -= 16;
+  }
+
+  const specBits = buildSpecLine(project);
+  if (specBits) {
+    const specW = ctx.font.widthOfTextAtSize(specBits, 10);
+    ctx.page.drawText(specBits, {
+      x: textCenterX - specW / 2,
+      y: curY - 10,
+      size: 10,
+      font: ctx.font,
+      color: SLATE,
+    });
+    curY -= 14;
+  }
+
+  if (project.shortDescription) {
+    const descText = sanitize(project.shortDescription);
+    const descMaxW = cardW - cardPad * 2;
+    const lines = wrapText(descText, ctx.font, 10, descMaxW);
+    for (const line of lines.slice(0, 3)) {
+      const lw = ctx.font.widthOfTextAtSize(line, 10);
+      ctx.page.drawText(line, {
+        x: textCenterX - lw / 2,
+        y: curY - 10,
+        size: 10,
+        font: ctx.font,
+        color: BLACK,
+      });
+      curY -= 13;
+    }
+  }
+
+  ctx.y = startY - totalH - 12;
+}
+
+function drawProjectRow(
+  ctx: Ctx,
+  left: FeaturedProject & { embeddedImage?: PDFImage | null },
+  right: (FeaturedProject & { embeddedImage?: PDFImage | null }) | null,
+  colW: number,
+  gap: number,
+) {
+  const photoH = 180;
+  const textH = 90;
+  const pad = 10;
+  const cardH = photoH + textH + pad * 2;
+  ensureSpace(ctx, cardH + 12);
+  const startY = ctx.y;
+
+  const cols = right ? [left, right] : [left];
+  for (let ci = 0; ci < cols.length; ci++) {
+    const proj = cols[ci];
+    const cardX = ci === 0
+      ? (right ? MARGIN : MARGIN + (CONTENT_WIDTH - colW) / 2)
+      : MARGIN + colW + gap;
+
+    ctx.page.drawRectangle({
+      x: cardX,
+      y: startY - cardH,
+      width: colW,
+      height: cardH,
+      color: WHITE,
+      borderColor: LINE,
+      borderWidth: 0.6,
+    });
+
+    let curY = startY - pad;
+
+    if (proj.embeddedImage) {
+      const img = proj.embeddedImage;
+      const aspect = img.width / img.height;
+      const fitW = colW - pad * 2;
+      let drawW = fitW;
+      let drawH = fitW / aspect;
+      if (drawH > photoH) {
+        drawH = photoH;
+        drawW = photoH * aspect;
+      }
+      const photoX = cardX + (colW - drawW) / 2;
+      const photoY = curY - drawH;
+      ctx.page.drawImage(img, { x: photoX, y: photoY, width: drawW, height: drawH });
+    }
+    curY -= photoH + 12;
+
+    const textCX = cardX + colW / 2;
+    const nameStr = sanitize(proj.customerName);
+    const nameW = ctx.fontBold.widthOfTextAtSize(nameStr, 13);
+    ctx.page.drawText(nameStr, {
+      x: textCX - nameW / 2,
+      y: curY - 13,
+      size: 13,
+      font: ctx.fontBold,
+      color: BLACK,
+    });
+    curY -= 18;
+
+    if (proj.location) {
+      const locStr = sanitize(proj.location);
+      const locW = ctx.font.widthOfTextAtSize(locStr, 10);
+      ctx.page.drawText(locStr, {
+        x: textCX - locW / 2,
+        y: curY - 10,
+        size: 10,
+        font: ctx.font,
+        color: SLATE,
+      });
+      curY -= 14;
+    }
+
+    const specLine = buildSpecLine(proj);
+    if (specLine) {
+      const specW = ctx.font.widthOfTextAtSize(specLine, 9);
+      ctx.page.drawText(specLine, {
+        x: textCX - specW / 2,
+        y: curY - 9,
+        size: 9,
+        font: ctx.font,
+        color: SLATE,
+      });
+    }
+  }
+
+  ctx.y = startY - cardH - 12;
+}
+
+function buildSpecLine(project: FeaturedProject): string {
+  const bits: string[] = [];
+  if (project.plotLengthFt && project.plotWidthFt)
+    bits.push(`${project.plotLengthFt} x ${project.plotWidthFt} ft`);
+  if (project.surfaceType) bits.push(project.surfaceType);
+  if (project.surfaceGrade) bits.push(project.surfaceGrade);
+  if (project.completionDate) {
+    bits.push(
+      project.completionDate.toLocaleDateString("en-IN", {
+        month: "short",
+        year: "numeric",
+      }),
+    );
+  }
+  return bits.length > 0 ? sanitize(bits.join("  |  ")) : "";
 }
 
 // ─────────────────────────────────────────────────────────────────────

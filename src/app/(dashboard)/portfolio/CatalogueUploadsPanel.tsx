@@ -143,7 +143,7 @@ export default function CatalogueUploadsPanel({
             <div className="text-[10px] text-slate-500">
               {r.url ? (
                 <a
-                  href={r.url}
+                  href={`/api/catalogues/${r.sport}/pdf`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-court-700 hover:underline"

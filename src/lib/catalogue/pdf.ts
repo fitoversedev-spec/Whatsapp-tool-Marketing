@@ -742,10 +742,10 @@ export async function renderProjectPagesOnly(
     }
 
     const titleBlockH = 50 + 34;
-    const nameH = 42;
-    const locH = proj.location ? 30 : 0;
-    const specH = 46;
-    const descH = proj.shortDescription ? 66 : 0;
+    const nameH = 52;
+    const locH = proj.location ? 36 : 0;
+    const specH = 54;
+    const descH = proj.shortDescription ? 84 : 0;
     const logoH = 40;
     const textBlockH = nameH + locH + specH + descH + logoH;
     const totalContentH = titleBlockH + photoDrawH + 24 + textBlockH;
@@ -774,32 +774,32 @@ export async function renderProjectPagesOnly(
     }
 
     const name = sanitize(proj.customerName);
-    const nameW = fontBold.widthOfTextAtSize(name, 32);
-    page.drawText(name, { x: pageCenterX - nameW / 2, y: y - 32, size: 32, font: fontBold, color: DARK });
-    y -= 42;
+    const nameW = fontBold.widthOfTextAtSize(name, 40);
+    page.drawText(name, { x: pageCenterX - nameW / 2, y: y - 40, size: 40, font: fontBold, color: DARK });
+    y -= 52;
 
     if (proj.location) {
       const loc = sanitize(proj.location);
-      const locW = font.widthOfTextAtSize(loc, 20);
-      page.drawText(loc, { x: pageCenterX - locW / 2, y: y - 20, size: 20, font, color: MID });
-      y -= 30;
+      const locW = font.widthOfTextAtSize(loc, 26);
+      page.drawText(loc, { x: pageCenterX - locW / 2, y: y - 26, size: 26, font, color: MID });
+      y -= 36;
     }
 
     const specLine = buildSpecLine(proj, font);
     if (specLine) {
-      page.drawLine({ start: { x: pageCenterX - 80, y: y }, end: { x: pageCenterX + 80, y: y }, thickness: 0.5, color: rgb(0.82, 0.84, 0.88) });
-      y -= 18;
-      const specW = font.widthOfTextAtSize(specLine, 18);
-      page.drawText(specLine, { x: pageCenterX - specW / 2, y: y - 18, size: 18, font, color: ACCENT });
-      y -= 28;
+      page.drawLine({ start: { x: pageCenterX - 100, y: y }, end: { x: pageCenterX + 100, y: y }, thickness: 0.5, color: rgb(0.82, 0.84, 0.88) });
+      y -= 20;
+      const specW = font.widthOfTextAtSize(specLine, 24);
+      page.drawText(specLine, { x: pageCenterX - specW / 2, y: y - 24, size: 24, font, color: ACCENT });
+      y -= 34;
     }
 
     if (proj.shortDescription) {
-      const lines = wrapText(sanitize(proj.shortDescription), font, 16, CW * 0.75);
+      const lines = wrapText(sanitize(proj.shortDescription), font, 22, CW * 0.8);
       for (const line of lines.slice(0, 3)) {
-        const lw = font.widthOfTextAtSize(line, 16);
-        page.drawText(line, { x: pageCenterX - lw / 2, y: y - 16, size: 16, font, color: DARK });
-        y -= 22;
+        const lw = font.widthOfTextAtSize(line, 22);
+        page.drawText(line, { x: pageCenterX - lw / 2, y: y - 22, size: 22, font, color: DARK });
+        y -= 28;
       }
     }
 

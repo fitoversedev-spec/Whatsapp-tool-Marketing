@@ -788,38 +788,28 @@ export function shouldFilterCompetition(
  * Google itself tagged incorrectly — e.g. a yoga centre given type `school`.
  * The name is the last reliable signal to catch these.
  */
-/**
- * Per-category name keywords a place MUST match to be kept. When present,
- * any place whose name contains none of the allowed keywords is filtered
- * out — the remaining places still go through the deny list below.
- */
-const DEMAND_ALLOW_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map([
-  ["schools", [
-    "international",
-    "cbse",
-    "central board",
-  ]],
-  ["colleges", [
-    "engineering",
-    "university",
-    "arts and science",
-    "arts & science",
-    "institute of technology",
-  ]],
-]);
-
 const DEMAND_DENY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map([
   ["schools", [
     // Spiritual / wellness — frequently tagged as "school" by Google
     "yoga", "meditation", "spiritual", "ashram", "art of living", "vipassana",
     // Libraries — not educational institutions
     "library",
+    // Pre-primary — too small for meaningful sports demand
+    "preschool", "pre school", "pre-school", "play school", "playschool",
+    "kindergarten", "montessori", "nursery school", "day care", "daycare",
+    "creche", "toddler",
+    // Coaching / tuition centres — not real schools
+    "coaching", "tuition", "tutorial", "tutorials", "classes for",
+    "training institute", "training centre", "training center",
+    "competitive exam", "entrance exam", "ias academy", "neet", "jee",
     // Specialised non-K12 training — too small for sports demand
     "driving school", "driving academy", "motor driving",
     "music academy", "music school", "music class",
     "dance academy", "dance school", "dance class",
     "cooking class", "culinary",
     "photography class", "film institute", "film academy",
+    "computer institute", "computer class", "computer training",
+    "spoken english", "language school", "language class",
     // Combat sports — specific-sport facility, not a school
     "karate", "martial art", "taekwondo", "judo", "kung fu", "self defence",
     "swimming academy", "swimming school", "swimming class",
@@ -838,6 +828,11 @@ const DEMAND_DENY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map(
   ["colleges", [
     "yoga", "meditation", "spiritual", "ashram", "art of living",
     "seminary", "madrasa",
+    // Coaching / tuition — not actual colleges
+    "coaching", "tuition", "tutorial", "tutorials",
+    "competitive exam", "entrance exam", "ias academy", "neet", "jee",
+    "spoken english", "language class",
+    "computer institute", "computer class", "computer training",
     "hospital", "clinic",
     "salon", "beauty",
     "restaurant", "dhaba", "cafe", "hotel",
@@ -886,11 +881,9 @@ export function shouldFilterDemand(
   placeName: string,
   categoryId: string,
 ): boolean {
-  const lower = placeName.toLowerCase();
-  const allowList = DEMAND_ALLOW_BY_CATEGORY.get(categoryId);
-  if (allowList && !allowList.some((kw) => lower.includes(kw))) return true;
   const denyList = DEMAND_DENY_BY_CATEGORY.get(categoryId);
   if (!denyList) return false;
+  const lower = placeName.toLowerCase();
   return denyList.some((kw) => lower.includes(kw));
 }
 

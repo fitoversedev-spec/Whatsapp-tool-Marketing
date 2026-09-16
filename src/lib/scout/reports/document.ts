@@ -152,6 +152,7 @@ export interface ReportInput {
 
   readonly aiSummaryText?: string | null;
   readonly suggestionsText?: string | null;
+  readonly customTitle?: string | null;
 }
 
 /* ------------------------------------------------------------- formatting */
@@ -602,7 +603,7 @@ export function buildReportDocument(input: ReportInput): ReportDocument {
       scanId: input.scanId,
       reportId: input.reportId,
       version: input.version,
-      title: `${input.areaLabel} — Site Scout report`,
+      title: input.customTitle || `${input.areaLabel} — Site Scout report`,
       areaLabel: input.areaLabel,
       address: input.address,
       customerName: input.customerName,

@@ -119,7 +119,7 @@ export async function startReportGeneration(
     scanId,
     userId: author.userId,
     kind: "scan",
-    title: `${input.areaLabel} — Site Scout report`,
+    title: input.customTitle || `${input.areaLabel} — Site Scout report`,
     version: await nextReportVersion(scanId),
     includedBlocks: input.blocks as Record<string, boolean>,
     fieldNotes: input.fieldNotes ?? "",

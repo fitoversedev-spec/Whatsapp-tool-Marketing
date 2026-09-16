@@ -43,7 +43,7 @@ export async function GET(_req: NextRequest, { params }: { params: { sport: stri
       if (overrideRes.ok) {
         const overrideBytes = new Uint8Array(await overrideRes.arrayBuffer());
         const merged = await injectProjectPagesIntoOverride(overrideBytes, projects);
-        return new NextResponse(merged, {
+        return new NextResponse(Buffer.from(merged), {
           headers: {
             "Content-Type": "application/pdf",
             "Content-Disposition": `inline; filename="fitoverse-${params.sport}-catalogue.pdf"`,
@@ -65,7 +65,7 @@ export async function GET(_req: NextRequest, { params }: { params: { sport: stri
 
   try {
     const pdfBuffer = await renderCatalogue(params.sport as SportKey, projects);
-    return new NextResponse(new Uint8Array(pdfBuffer), {
+    return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="fitoverse-${params.sport}-catalogue.pdf"`,

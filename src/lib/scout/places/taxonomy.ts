@@ -828,6 +828,11 @@ const DEMAND_DENY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map(
   ["colleges", [
     "yoga", "meditation", "spiritual", "ashram", "art of living",
     "seminary", "madrasa",
+    // Alternative / traditional medicine — not mainstream colleges
+    "ayurveda", "ayurvedic", "siddha", "sidha", "unani", "homeopathy",
+    "homeopathic", "naturopathy", "naturopathic", "alternative medicine",
+    "medical training", "paramedical", "nursing college", "nursing school",
+    "pharmacy college", "dental college",
     // Coaching / tuition — not actual colleges
     "coaching", "tuition", "tutorial", "tutorials",
     "competitive exam", "entrance exam", "ias academy", "neet", "jee",

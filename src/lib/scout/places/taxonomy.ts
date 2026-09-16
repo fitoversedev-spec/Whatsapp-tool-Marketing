@@ -274,7 +274,7 @@ const DEMAND: readonly CategoryDef[] = [
         id: "school",
         label: "Schools",
         mode: "nearby",
-        googleTypes: ["school", "primary_school", "secondary_school"],
+        googleTypes: ["school", "secondary_school"],
       },
     ],
   },
@@ -796,8 +796,11 @@ const DEMAND_DENY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map(
     "library",
     // Pre-primary — too small for meaningful sports demand
     "preschool", "pre school", "pre-school", "play school", "playschool",
-    "kindergarten", "montessori", "nursery school", "day care", "daycare",
+    "kindergarten", "montessori", "nursery school", "nursery and primary",
+    "nursery & primary", "day care", "daycare",
     "creche", "toddler",
+    // Small / non-secondary schools
+    "elementary", "primary school",
     // Coaching / tuition centres — not real schools
     "coaching", "tuition", "tutorial", "tutorials", "classes for",
     "training institute", "training centre", "training center",
@@ -882,10 +885,38 @@ const DEMAND_DENY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map(
   ]],
 ]);
 
+const DEMAND_DENY_TYPES_BY_CATEGORY: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["schools", new Set([
+    "preschool",
+    "primary_school",
+    "child_care_agency",
+  ])],
+]);
+
+const DEMAND_DENY_DISPLAY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map([
+  ["schools", [
+    "preschool", "elementary school", "primary school",
+    "nursery", "child care", "day care",
+  ]],
+]);
+
 export function shouldFilterDemand(
   placeName: string,
   categoryId: string,
+  primaryType?: string | null,
+  displayName?: string | null,
 ): boolean {
+  if (primaryType) {
+    const denyTypes = DEMAND_DENY_TYPES_BY_CATEGORY.get(categoryId);
+    if (denyTypes?.has(primaryType)) return true;
+  }
+  if (displayName) {
+    const denyDisplay = DEMAND_DENY_DISPLAY_BY_CATEGORY.get(categoryId);
+    if (denyDisplay) {
+      const lowerDisplay = displayName.toLowerCase();
+      if (denyDisplay.some((kw) => lowerDisplay.includes(kw))) return true;
+    }
+  }
   const denyList = DEMAND_DENY_BY_CATEGORY.get(categoryId);
   if (!denyList) return false;
   const lower = placeName.toLowerCase();

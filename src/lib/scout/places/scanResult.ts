@@ -163,7 +163,7 @@ export async function getScanResult(
         );
       }
       if (r.side === "demand") {
-        return !r.categories.every((catId) => shouldFilterDemand(r.name, catId));
+        return !r.categories.every((catId) => shouldFilterDemand(r.name, catId, r.primaryType, r.primaryTypeDisplayName));
       }
       return true;
     })

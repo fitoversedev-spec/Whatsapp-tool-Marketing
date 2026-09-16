@@ -30,7 +30,7 @@ export interface ReportDraft {
  */
 export async function getReportDraft(scanId: string): Promise<ReportDraft | null> {
   const row = await prisma.report.findFirst({
-    where: { scanId },
+    where: { scanId, status: "draft" },
     orderBy: { createdAt: "desc" },
   });
 

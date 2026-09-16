@@ -103,14 +103,14 @@ const COMPETITION: readonly CategoryDef[] = [
         id: "football-turf-5s",
         label: "Football turf (5-a-side)",
         mode: "text",
-        queries: ["football turf", "box football", "5s turf"],
+        queries: ["turf", "football turf", "futsal"],
         sportFormat: "football-turf-5s",
       },
       {
         id: "football-turf-7s",
         label: "Football turf (7-a-side)",
         mode: "text",
-        queries: ["7s turf", "football ground"],
+        queries: ["football ground", "soccer ground"],
         sportFormat: "football-turf-7s",
       },
     ],
@@ -125,7 +125,7 @@ const COMPETITION: readonly CategoryDef[] = [
         id: "badminton",
         label: "Badminton",
         mode: "text",
-        queries: ["badminton court", "shuttle court", "badminton academy"],
+        queries: ["badminton", "badminton court", "badminton academy"],
         sportFormat: "badminton",
       },
     ],
@@ -140,7 +140,7 @@ const COMPETITION: readonly CategoryDef[] = [
         id: "tennis",
         label: "Tennis",
         mode: "text",
-        queries: ["tennis court", "tennis academy"],
+        queries: ["tennis", "tennis court", "tennis academy"],
         sportFormat: "tennis",
       },
     ],
@@ -155,7 +155,7 @@ const COMPETITION: readonly CategoryDef[] = [
         id: "pickleball",
         label: "Pickleball",
         mode: "text",
-        queries: ["pickleball court", "pickleball arena"],
+        queries: ["pickleball", "pickleball court"],
         sportFormat: "pickleball",
       },
     ],
@@ -170,7 +170,7 @@ const COMPETITION: readonly CategoryDef[] = [
         id: "squash",
         label: "Squash",
         mode: "text",
-        queries: ["squash court", "squash arena"],
+        queries: ["squash court", "squash arena", "squash club"],
         sportFormat: "squash",
       },
     ],
@@ -185,7 +185,7 @@ const COMPETITION: readonly CategoryDef[] = [
         id: "table-tennis",
         label: "Table tennis",
         mode: "text",
-        queries: ["table tennis academy", "TT academy"],
+        queries: ["table tennis", "TT academy", "ping pong"],
         sportFormat: "table-tennis",
       },
     ],
@@ -200,7 +200,7 @@ const COMPETITION: readonly CategoryDef[] = [
         id: "basketball",
         label: "Basketball",
         mode: "text",
-        queries: ["basketball court", "basketball arena"],
+        queries: ["basketball", "basketball court"],
         sportFormat: "basketball",
       },
     ],
@@ -215,7 +215,7 @@ const COMPETITION: readonly CategoryDef[] = [
         id: "volleyball",
         label: "Volleyball",
         mode: "text",
-        queries: ["volleyball court"],
+        queries: ["volleyball", "volleyball court"],
         sportFormat: "volleyball",
       },
     ],
@@ -231,7 +231,7 @@ const COMPETITION: readonly CategoryDef[] = [
         label: "Box cricket",
         mode: "text",
         // Google has no `cricket_ground` type — verified against Table A.
-        queries: ["box cricket", "box cricket arena"],
+        queries: ["cricket", "box cricket", "cricket turf"],
         sportFormat: "box-cricket",
       },
       {
@@ -788,6 +788,26 @@ export function shouldFilterCompetition(
  * Google itself tagged incorrectly — e.g. a yoga centre given type `school`.
  * The name is the last reliable signal to catch these.
  */
+/**
+ * Per-category name keywords a place MUST match to be kept. When present,
+ * any place whose name contains none of the allowed keywords is filtered
+ * out — the remaining places still go through the deny list below.
+ */
+const DEMAND_ALLOW_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map([
+  ["schools", [
+    "international",
+    "cbse",
+    "central board",
+  ]],
+  ["colleges", [
+    "engineering",
+    "university",
+    "arts and science",
+    "arts & science",
+    "institute of technology",
+  ]],
+]);
+
 const DEMAND_DENY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map([
   ["schools", [
     // Spiritual / wellness — frequently tagged as "school" by Google
@@ -866,9 +886,11 @@ export function shouldFilterDemand(
   placeName: string,
   categoryId: string,
 ): boolean {
+  const lower = placeName.toLowerCase();
+  const allowList = DEMAND_ALLOW_BY_CATEGORY.get(categoryId);
+  if (allowList && !allowList.some((kw) => lower.includes(kw))) return true;
   const denyList = DEMAND_DENY_BY_CATEGORY.get(categoryId);
   if (!denyList) return false;
-  const lower = placeName.toLowerCase();
   return denyList.some((kw) => lower.includes(kw));
 }
 

@@ -88,8 +88,8 @@ function notReady(): Response {
   );
 }
 
-function safeFilename(areaLabel: string, version: number): string {
-  const base = areaLabel.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "SiteScout";
+function safeFilename(label: string, version: number): string {
+  const base = label.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "SiteScout";
   return `${base}_SiteScout_v${version}.pdf`;
 }
 
@@ -121,7 +121,7 @@ export async function GET(request: Request, context: { params: { id: string } })
       "Content-Length": String(file.bytes.byteLength),
       // `inline` so WhatsApp's in-app viewer and Safari render it rather than
       // dropping a file into Downloads that the reader then has to find.
-      "Content-Disposition": `inline; filename="${safeFilename(row.areaLabel, row.version)}"`,
+      "Content-Disposition": `inline; filename="${safeFilename(row.title || row.areaLabel, row.version)}"`,
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
       "X-Robots-Tag": "noindex, nofollow",

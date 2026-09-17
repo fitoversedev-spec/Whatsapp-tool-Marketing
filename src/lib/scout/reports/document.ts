@@ -621,7 +621,7 @@ export function buildReportDocument(input: ReportInput): ReportDocument {
     },
     sections,
     cover: {
-      headline: `${input.areaLabel} — ${formatRadius(input.radiusM)} catchment`,
+      headline: `${input.customTitle || input.areaLabel} — ${formatRadius(input.radiusM)} catchment`,
       verdictLabel: score ? verdictLabel(score.verdict) : null,
       verdictTone: score ? verdictTone(score.verdict) : null,
       scoreLine: score ? `${score.totalRounded} out of 100` : null,

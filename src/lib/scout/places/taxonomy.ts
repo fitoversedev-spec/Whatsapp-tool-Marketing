@@ -806,6 +806,7 @@ const DEMAND_DENY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map(
     "training institute", "training centre", "training center",
     "competitive exam", "entrance exam", "ias academy", "neet", "jee",
     // Specialised non-K12 training — too small for sports demand
+    "typewriting", "shorthand",
     "driving school", "driving academy", "motor driving",
     "music academy", "music school", "music class",
     "dance academy", "dance school", "dance class",
@@ -831,6 +832,8 @@ const DEMAND_DENY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map(
   ["colleges", [
     "yoga", "meditation", "spiritual", "ashram", "art of living",
     "seminary", "madrasa",
+    // Vocational / non-degree — too small for sports demand
+    "typewriting", "shorthand", "stenography",
     // Alternative / traditional medicine — not mainstream colleges
     "ayurveda", "ayurvedic", "siddha", "sidha", "unani", "homeopathy",
     "homeopathic", "naturopathy", "naturopathic", "alternative medicine",

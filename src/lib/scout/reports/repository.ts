@@ -451,6 +451,7 @@ export interface PublicReportRow {
   readonly version: number;
   readonly expiresAt: Date | null;
   readonly areaLabel: string;
+  readonly title: string | null;
 }
 
 export async function getPublicReportRow(reportId: string): Promise<PublicReportRow | null> {
@@ -458,6 +459,7 @@ export async function getPublicReportRow(reportId: string): Promise<PublicReport
     where: { id: reportId },
     select: {
       id: true,
+      title: true,
       status: true,
       version: true,
       expiresAt: true,
@@ -471,6 +473,7 @@ export async function getPublicReportRow(reportId: string): Promise<PublicReport
     version: row.version,
     expiresAt: row.expiresAt,
     areaLabel: row.scan.areaLabel,
+    title: row.title,
   };
 }
 

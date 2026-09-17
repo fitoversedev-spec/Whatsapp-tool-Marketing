@@ -181,7 +181,7 @@ export async function runReportGeneration(
     const brand = reportBrand();
 
     const pdf = await renderPdf(html, {
-      headerText: `${document.meta.areaLabel} · ${document.meta.radiusLabel} · Site Scout report v${document.meta.version}`,
+      headerText: `${input.customTitle || document.meta.areaLabel} · ${document.meta.radiusLabel} · Site Scout report v${document.meta.version}`,
       footerText: [brand.legalName, brand.attribution, "Preliminary desk survey — not financial, investment, legal or planning advice"]
         .filter(Boolean)
         .join(" · "),

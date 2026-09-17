@@ -159,11 +159,11 @@ export async function getScanResult(
     .filter((r) => {
       if (r.side === "competition") {
         return !r.categories.every((catId) =>
-          shouldFilterCompetition(r.primaryType, r.primaryTypeDisplayName, r.name, catId),
+          shouldFilterCompetition(r.primaryType, r.primaryTypeDisplayName, r.name, catId, r.businessStatus),
         );
       }
       if (r.side === "demand") {
-        return !r.categories.every((catId) => shouldFilterDemand(r.name, catId, r.primaryType, r.primaryTypeDisplayName));
+        return !r.categories.every((catId) => shouldFilterDemand(r.name, catId, r.primaryType, r.primaryTypeDisplayName, r.businessStatus, r.address));
       }
       return true;
     })

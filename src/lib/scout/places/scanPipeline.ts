@@ -566,8 +566,8 @@ async function persistPlaces(
 
     const distanceM = haversineDistanceM(scan.centre, place.location);
     if (distanceM > scan.radiusM) continue;
-    if (denyByType && shouldFilterCompetition(place.primaryType, place.primaryTypeDisplayName, place.name, ctx.task.categoryId)) continue;
-    if (category?.side === "demand" && shouldFilterDemand(place.name, ctx.task.categoryId, place.primaryType, place.primaryTypeDisplayName)) continue;
+    if (denyByType && shouldFilterCompetition(place.primaryType, place.primaryTypeDisplayName, place.name, ctx.task.categoryId, place.businessStatus)) continue;
+    if (category?.side === "demand" && shouldFilterDemand(place.name, ctx.task.categoryId, place.primaryType, place.primaryTypeDisplayName, place.businessStatus, place.address)) continue;
 
     kept.push({ place, distanceM });
   }

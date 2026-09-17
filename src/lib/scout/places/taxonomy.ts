@@ -758,7 +758,10 @@ export function shouldFilterCompetition(
   displayName: string | null,
   placeName: string,
   categoryId: string,
+  businessStatus?: string | null,
 ): boolean {
+  // 0. Closed or not yet open — never a live competitor
+  if (businessStatus && businessStatus !== "OPERATIONAL") return true;
   // 1. Known non-sports Google type
   if (primaryType && COMPETITION_DENY_TYPES.has(primaryType)) return true;
   // 2. Known non-sports display name
@@ -894,6 +897,57 @@ const DEMAND_DENY_TYPES_BY_CATEGORY: ReadonlyMap<string, ReadonlySet<string>> = 
     "primary_school",
     "child_care_agency",
   ])],
+  ["colleges", new Set([
+    "preschool",
+    "primary_school",
+    "child_care_agency",
+    "school",
+    "secondary_school",
+  ])],
+  ["kindergarten", new Set([
+    "hospital",
+    "doctor",
+    "dentist",
+    "restaurant",
+    "cafe",
+    "beauty_salon",
+    "hair_care",
+  ])],
+  ["workplaces", new Set([
+    "restaurant",
+    "cafe",
+    "hospital",
+    "doctor",
+    "hindu_temple",
+    "church",
+    "mosque",
+    "beauty_salon",
+    "lodging",
+    "hotel",
+  ])],
+  ["it-companies", new Set([
+    "restaurant",
+    "cafe",
+    "hospital",
+    "doctor",
+    "beauty_salon",
+    "hindu_temple",
+    "church",
+    "mosque",
+    "car_repair",
+    "electronics_store",
+  ])],
+  ["apartments", new Set([
+    "hotel",
+    "lodging",
+    "resort_hotel",
+    "hospital",
+    "restaurant",
+    "cafe",
+    "hindu_temple",
+    "church",
+    "mosque",
+  ])],
 ]);
 
 const DEMAND_DENY_DISPLAY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = new Map([
@@ -901,14 +955,60 @@ const DEMAND_DENY_DISPLAY_BY_CATEGORY: ReadonlyMap<string, readonly string[]> = 
     "preschool", "elementary school", "primary school",
     "nursery", "child care", "day care",
   ]],
+  ["colleges", [
+    "preschool", "elementary school", "primary school",
+    "child care", "day care", "training center", "training centre",
+    "coaching center", "coaching centre", "institute of typing",
+  ]],
+  ["kindergarten", [
+    "hospital", "clinic", "beauty salon", "restaurant",
+  ]],
+  ["workplaces", [
+    "hospital", "clinic", "restaurant", "temple", "church", "mosque",
+    "salon", "hotel", "resort",
+  ]],
+  ["it-companies", [
+    "hospital", "clinic", "restaurant", "temple", "church", "mosque",
+    "salon", "repair shop", "electronics store",
+  ]],
+  ["apartments", [
+    "hotel", "resort", "hostel", "hospital", "clinic",
+    "restaurant", "temple", "church", "mosque",
+  ]],
 ]);
+
+/**
+ * Address substrings that indicate a small commercial unit rather than a real
+ * institution. A "university" at "2nd Floor, Shop No. 4" is not a university.
+ * Only applied to categories where institutions occupy their own buildings
+ * (schools, colleges).
+ */
+const SMALL_UNIT_ADDRESS_SIGNALS: readonly string[] = [
+  "floor", "1st floor", "2nd floor", "3rd floor", "4th floor", "5th floor",
+  "shop no", "shop number", "shop #", "shop -",
+  "room no", "room number",
+  "suite no", "suite number",
+  "stall no", "cabin no",
+  "door no",
+];
+
+const ADDRESS_FILTER_CATEGORIES = new Set(["schools", "colleges"]);
+
+function hasSmallUnitAddress(address: string | null | undefined, categoryId: string): boolean {
+  if (!address || !ADDRESS_FILTER_CATEGORIES.has(categoryId)) return false;
+  const lower = address.toLowerCase();
+  return SMALL_UNIT_ADDRESS_SIGNALS.some((kw) => lower.includes(kw));
+}
 
 export function shouldFilterDemand(
   placeName: string,
   categoryId: string,
   primaryType?: string | null,
   displayName?: string | null,
+  businessStatus?: string | null,
+  address?: string | null,
 ): boolean {
+  if (businessStatus && businessStatus !== "OPERATIONAL") return true;
   if (primaryType) {
     const denyTypes = DEMAND_DENY_TYPES_BY_CATEGORY.get(categoryId);
     if (denyTypes?.has(primaryType)) return true;
@@ -920,6 +1020,7 @@ export function shouldFilterDemand(
       if (denyDisplay.some((kw) => lowerDisplay.includes(kw))) return true;
     }
   }
+  if (hasSmallUnitAddress(address, categoryId)) return true;
   const denyList = DEMAND_DENY_BY_CATEGORY.get(categoryId);
   if (!denyList) return false;
   const lower = placeName.toLowerCase();

@@ -96,6 +96,7 @@ li{ margin-bottom:4pt; break-inside:avoid; }
 .eyebrow{
   font-family:var(--font-display); font-size:8pt; font-weight:700;
   letter-spacing:.13em; text-transform:uppercase; color:var(--gray-500);
+  break-after:avoid; page-break-after:avoid;
 }
 .sectionNo{ color:var(--gray-500); font-weight:400; }
 .muted{ color:var(--gray-500); }
@@ -210,7 +211,7 @@ td.r,th.r{ text-align:right; }
 /* --------------------------------------------------------- scanResults */
 
 .categoryGroup{ break-inside:avoid; margin-top:10pt; margin-bottom:10pt; }
-.categoryHead{ display:flex; justify-content:space-between; align-items:baseline; gap:8pt; margin-bottom:4pt; padding-bottom:4pt; border-bottom:1pt solid var(--gray-200); }
+.categoryHead{ display:flex; justify-content:space-between; align-items:baseline; gap:8pt; margin-bottom:4pt; padding-bottom:4pt; border-bottom:1pt solid var(--gray-200); break-after:avoid; page-break-after:avoid; }
 .catName{ font-weight:700; font-size:11.5pt; }
 .catCount{ font-size:9pt; color:var(--gray-500); font-weight:600; white-space:nowrap; }
 

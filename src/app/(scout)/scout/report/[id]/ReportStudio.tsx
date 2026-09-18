@@ -366,6 +366,37 @@ export function ReportStudio({
                 ariaLabel={`Catchment map for ${scan.areaLabel}`}
               />
             </div>
+            {/* Map legend — categorized place details */}
+            <div className="mt-3 space-y-2 text-[11px]">
+              {scan.categories
+                .filter((c) => c.count > 0)
+                .map((category) => {
+                  const color = category.side === "competition" ? "#159341" : "#00aeef";
+                  const members = scan.places
+                    .filter((p) => p.side === category.side && p.categories?.includes(category.categoryId))
+                    .sort((a, b) => a.distanceM - b.distanceM);
+                  if (members.length === 0) return null;
+                  return (
+                    <div key={category.categoryId}>
+                      <div className="flex items-center gap-2 text-slate-500 mb-1">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+                        <span className="font-medium">{category.label} ({members.length})</span>
+                      </div>
+                      <div className="ml-[18px] flex flex-col gap-[2px]">
+                        {members.slice(0, 10).map((p) => (
+                          <div key={p.placeId} className="flex justify-between text-slate-400">
+                            <span className="truncate mr-2">{p.name}{p.primaryTypeDisplayName ? ` · ${p.primaryTypeDisplayName}` : ""}</span>
+                            <span className="whitespace-nowrap">{formatDistance(p.distanceM)}</span>
+                          </div>
+                        ))}
+                        {members.length > 10 && (
+                          <span className="text-slate-400">+ {members.length - 10} more</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
           </div>
 
           {/* Section 2: Scan Results — grouped by category */}
@@ -374,25 +405,38 @@ export function ReportStudio({
               <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500 mb-3">Competition</div>
               {scan.categories
                 .filter((c) => c.side === "competition" && c.count > 0)
-                .map((category) => (
+                .map((category) => {
+                  const members = scan.places
+                    .filter((p) => p.side === "competition" && p.categories?.includes(category.categoryId))
+                    .sort((a, b) => a.distanceM - b.distanceM);
+                  const nearest = members[0];
+                  const farthest = members[members.length - 1];
+                  const distCtx = nearest && farthest
+                    ? `nearest ${formatDistance(nearest.distanceM)}, farthest ${formatDistance(farthest.distanceM)} from plot`
+                    : "";
+                  return (
                   <div key={category.categoryId} className="mb-4">
                     <div className="flex justify-between items-baseline border-b border-slate-200 pb-1 mb-2">
-                      <span className="font-semibold text-[13px]">{category.label}</span>
+                      <div>
+                        <span className="font-semibold text-[13px]">{category.label}</span>
+                        {distCtx ? <span className="text-[10px] text-slate-400 ml-1.5">({distCtx})</span> : null}
+                      </div>
                       <span className="text-[11px] text-slate-500">{category.count} found</span>
                     </div>
                     <div className="flex flex-col">
-                      {scan.places
-                        .filter((p) => p.side === "competition" && p.categories?.includes(category.categoryId))
-                        .sort((a, b) => a.distanceM - b.distanceM)
-                        .map((p) => (
+                      {members.map((p) => (
                           <div key={p.placeId} className="flex justify-between py-[6px] text-[12.5px] border-b border-slate-100">
-                            <span className="truncate mr-2">{p.name}</span>
+                            <span className="truncate mr-2">
+                              {p.name}
+                              {p.flooring ? <span className="text-[10px] text-slate-400 ml-1">· {p.flooring}{p.flooringDetail ? ` — ${p.flooringDetail}` : ""}</span> : null}
+                            </span>
                             <span className="text-slate-500 whitespace-nowrap">{formatDistance(p.distanceM)}</span>
                           </div>
                         ))}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
             </div>
           ) : null}
 

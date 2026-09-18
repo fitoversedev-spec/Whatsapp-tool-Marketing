@@ -1255,22 +1255,38 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                                     </button>
                                   )}
                                   {place.flooring && (
-                                    <input
-                                      type="text"
-                                      className="text-xs px-2 py-0.5 rounded border border-slate-200 bg-white text-slate-700 w-[140px] placeholder:text-slate-300 focus:outline-none focus:border-court-400 focus:ring-1 focus:ring-court-200"
-                                      placeholder="variant detail…"
-                                      defaultValue={place.flooringDetail ?? ""}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onBlur={(e) => {
-                                        const v = e.currentTarget.value.trim();
-                                        if (v !== (place.flooringDetail ?? "")) saveFlooringDetail(place.placeId, v);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          e.currentTarget.blur();
-                                        }
-                                      }}
-                                    />
+                                    <span className="inline-flex items-center gap-1">
+                                      <input
+                                        type="text"
+                                        className="text-xs px-2 py-0.5 rounded border border-slate-200 bg-white text-slate-700 w-[140px] placeholder:text-slate-300 focus:outline-none focus:border-court-400 focus:ring-1 focus:ring-court-200"
+                                        placeholder="variant detail…"
+                                        defaultValue={place.flooringDetail ?? ""}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onBlur={(e) => {
+                                          const v = e.currentTarget.value.trim();
+                                          if (v !== (place.flooringDetail ?? "")) saveFlooringDetail(place.placeId, v);
+                                        }}
+                                        onKeyDown={(e) => {
+                                          e.stopPropagation();
+                                          if (e.key === "Enter") {
+                                            e.currentTarget.blur();
+                                          }
+                                        }}
+                                      />
+                                      <button
+                                        type="button"
+                                        className="text-[10px] px-1.5 py-0.5 rounded bg-court-500 text-white hover:bg-court-600 active:bg-court-700 transition-colors shrink-0"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                                          const v = input.value.trim();
+                                          if (v !== (place.flooringDetail ?? "")) saveFlooringDetail(place.placeId, v);
+                                          input.blur();
+                                        }}
+                                      >
+                                        Save
+                                      </button>
+                                    </span>
                                   )}
                                   {flooringOpen === place.placeId && (
                                     <span className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl py-1.5 min-w-[160px]">

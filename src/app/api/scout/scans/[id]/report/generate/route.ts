@@ -2,17 +2,8 @@
  * `POST /api/scout/scans/{id}/report/generate` — start rendering the PDF.
  * `GET  /api/scout/scans/{id}/report/generate` — how the latest attempt is going.
  *
- * ## Why POST returns 202 and not the file
- *
- * A cold Chromium launch plus a render is seconds. Holding the request open for
- * that long is how a phone on a weak signal ends up with a timeout instead of a
- * report — and Phase 5's screen already anticipates the asynchronous shape with
- * its "Report ready" card. The work runs in `after()`, the client polls `GET`,
- * and the row carries the outcome either way, including the failure text.
- *
- * `maxDuration` is 120 s and the function wants ≥ 1024 MB of memory: Chromium
- * is killed mid-render below that, and a killed render is the one failure mode
- * that leaves no error message behind.
+ * PDF is built with pdf-lib (pure JS, no Chromium). The work runs in `after()`,
+ * the client polls `GET`, and the row carries the outcome either way.
  */
 
 import { NextResponse } from "next/server";
@@ -30,7 +21,7 @@ import {
 } from "@/lib/scout/reports/generate";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 function withLink(row: ReportGenerationRow | null) {

@@ -331,7 +331,7 @@ function Competition({ doc, n }: { doc: ReportDocument; n: number }) {
 
       {c.categories.map((category) => (
         <div key={category.categoryId}>
-          <h3>{category.label}</h3>
+          <h3>{category.label}{category.titleSuffix ? ` (${category.titleSuffix})` : ""}</h3>
           <p className="tiny">{category.countLine}</p>
           {category.rows.length === 0 ? (
             <p className="small muted">Nothing Google-listed in this category inside the radius.</p>
@@ -347,6 +347,7 @@ function Competition({ doc, n }: { doc: ReportDocument; n: number }) {
                   <span>{row.reviews} reviews</span>
                   <span>{row.window}</span>
                   <span>{row.priceTier}</span>
+                  {row.flooring ? <span>{row.flooring}</span> : null}
                 </div>
               </div>
             ))
@@ -520,7 +521,9 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
   const s = doc.scanResults;
   if (!s) return null;
 
-  const renderGroup = (groups: typeof s.competitionGroups, heading: string) => {
+  const hasFlooring = s.competitionGroups.some((g) => g.places.some((p) => p.flooring));
+
+  const renderGroup = (groups: typeof s.competitionGroups, heading: string, showFlooring: boolean) => {
     if (groups.length === 0) return null;
     return (
       <>
@@ -528,7 +531,7 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
         {groups.map((group) => (
           <div key={group.categoryId} className="categoryGroup">
             <div className="categoryHead">
-              <span className="catName">{group.label}</span>
+              <span className="catName">{group.label}{group.distanceContext ? ` (${group.distanceContext})` : ""}</span>
               <span className="catCount">{group.count} found</span>
             </div>
             {group.places.length === 0 ? (
@@ -538,6 +541,7 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
                 <thead>
                   <tr>
                     <th>Name</th>
+                    {showFlooring ? <th>Flooring</th> : null}
                     <th className="r">Distance</th>
                   </tr>
                 </thead>
@@ -545,6 +549,7 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
                   {group.places.map((place, i) => (
                     <tr key={`${group.categoryId}:${place.name}:${i}`}>
                       <td>{place.name}</td>
+                      {showFlooring ? <td>{place.flooring ?? "—"}</td> : null}
                       <td className="r">{place.distance}</td>
                     </tr>
                   ))}
@@ -560,8 +565,8 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
   return (
     <section className="section">
       <SectionHeading n={n} id="scanResults" />
-      {renderGroup(s.competitionGroups, "Competition")}
-      {renderGroup(s.demandGroups, "Nearby places")}
+      {renderGroup(s.competitionGroups, "Competition", hasFlooring)}
+      {renderGroup(s.demandGroups, "Nearby places", false)}
     </section>
   );
 }
@@ -571,6 +576,7 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
 function MapPage({ doc, n }: { doc: ReportDocument; n: number }) {
   const m = doc.map;
   if (!m) return null;
+  const sr = doc.scanResults;
   return (
     <section className="section">
       <SectionHeading n={n} id="map" />
@@ -584,6 +590,26 @@ function MapPage({ doc, n }: { doc: ReportDocument; n: number }) {
           <li key={line}>{line}</li>
         ))}
       </ul>
+      {sr && (sr.competitionGroups.length > 0 || sr.demandGroups.length > 0) && (
+        <div className="mapPlaces">
+          {[...sr.competitionGroups, ...sr.demandGroups]
+            .filter((g) => g.places.length > 0)
+            .map((g) => {
+              const color = sr.competitionGroups.includes(g) ? "Red" : "Blue";
+              return (
+                <div key={g.categoryId}>
+                  <p className="tiny"><strong>{color} — {g.label}</strong> ({g.count})</p>
+                  <ul className="tiny">
+                    {g.places.slice(0, 10).map((p, i) => (
+                      <li key={`${g.categoryId}:${i}`}>{p.name} — {p.distance}</li>
+                    ))}
+                    {g.places.length > 10 && <li>+ {g.places.length - 10} more</li>}
+                  </ul>
+                </div>
+              );
+            })}
+        </div>
+      )}
     </section>
   );
 }

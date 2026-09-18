@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, FormEvent, ChangeEvent } from "react";
+import { useState, useEffect, useRef, useTransition, FormEvent, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
@@ -51,7 +51,39 @@ export default function BroadcastsClient({
   approvedTemplates: Template[];
 }) {
   const router = useRouter();
+  const toast = useToast();
+  const [, startTransition] = useTransition();
   const [showComposer, setShowComposer] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  async function syncBroadcasts() {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/broadcasts/sync", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error || "Broadcast sync failed. Please try again.");
+        return;
+      }
+      const fixed: number = data.fixed ?? 0;
+      const completed: number = data.completed ?? 0;
+      const checked: number = data.checked ?? 0;
+      if (fixed > 0 || completed > 0) {
+        const parts: string[] = [];
+        if (fixed > 0) parts.push(`${fixed} counter${fixed === 1 ? "" : "s"} corrected`);
+        if (completed > 0) parts.push(`${completed} broadcast${completed === 1 ? "" : "s"} marked complete`);
+        toast.success(`Synced — ${parts.join(", ")}.`);
+      } else {
+        toast.info(`All ${checked} broadcast${checked === 1 ? "" : "s"} up to date.`);
+      }
+      startTransition(() => router.refresh());
+    } catch {
+      toast.error("Broadcast sync failed. Check your connection and try again.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   return (
     <>
@@ -59,14 +91,27 @@ export default function BroadcastsClient({
         title="Broadcasts"
         description="Send approved templates to a list of contacts."
         action={
-          <button
-            onClick={() => setShowComposer(true)}
-            className="btn btn-primary w-full sm:w-auto"
-            disabled={approvedTemplates.length === 0}
-            title={approvedTemplates.length === 0 ? "No approved templates yet" : ""}
-          >
-            + New broadcast
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={syncBroadcasts}
+              disabled={syncing}
+              title="Re-sync broadcast delivery counters from recipient data and complete stale broadcasts."
+              className="inline-flex items-center gap-1.5 rounded-lg border border-wa-green/30 bg-wa-green/10 px-3 py-1.5 text-sm font-medium text-wa-dark hover:bg-wa-green/20 active:bg-wa-green/30 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+            >
+              <span className={syncing ? "animate-spin" : ""} aria-hidden>
+                ⟳
+              </span>
+              {syncing ? "Syncing…" : "Sync"}
+            </button>
+            <button
+              onClick={() => setShowComposer(true)}
+              className="btn btn-primary w-full sm:w-auto"
+              disabled={approvedTemplates.length === 0}
+              title={approvedTemplates.length === 0 ? "No approved templates yet" : ""}
+            >
+              + New broadcast
+            </button>
+          </div>
         }
       />
 

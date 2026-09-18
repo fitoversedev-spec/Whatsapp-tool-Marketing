@@ -13,8 +13,8 @@ import { buildComparisonDocument, renderComparisonHtml } from "./comparison";
 import { assembleReportInput } from "./data";
 import { deliveryNote, reportDelivery, type DeliveryMode } from "./delivery";
 import { buildReportDocument } from "./document";
-import { PdfEngineUnavailableError, renderPdf } from "./pdf";
-import { renderReportHtml } from "./render";
+import { renderReportPdfLib } from "./pdf-report";
+import { renderPdf, PdfEngineUnavailableError } from "./pdf";
 import { expiryFromNow, linkTtlDays, signReportLink } from "./signing";
 import { normaliseRecipient } from "./share";
 import {
@@ -177,10 +177,9 @@ export async function runReportGeneration(
       ...input,
       suggestionsText: polishedSuggestions ?? input.suggestionsText ?? null,
     });
-    const html = await renderReportHtml(document);
     const brand = reportBrand();
 
-    const pdf = await renderPdf(html, {
+    const pdf = await renderReportPdfLib(document, {
       headerText: `${input.customTitle || document.meta.areaLabel} · ${document.meta.radiusLabel} · Site Scout report v${document.meta.version}`,
       footerText: [brand.legalName, brand.attribution, "Preliminary desk survey — not financial, investment, legal or planning advice"]
         .filter(Boolean)
@@ -381,12 +380,20 @@ export async function runComparisonGeneration(
     });
 
     const brand = reportBrand();
-    const pdf = await renderPdf(await renderComparisonHtml(doc), {
-      headerText: `${subjects.map((s) => s.areaLabel).join(" · ")} — Site Scout comparison v${existing.version}`,
-      footerText: [brand.legalName, brand.attribution, "Preliminary desk survey — not financial, investment, legal or planning advice"]
-        .filter(Boolean)
-        .join(" · "),
-    });
+    let pdf;
+    try {
+      pdf = await renderPdf(await renderComparisonHtml(doc), {
+        headerText: `${subjects.map((s) => s.areaLabel).join(" · ")} — Site Scout comparison v${existing.version}`,
+        footerText: [brand.legalName, brand.attribution, "Preliminary desk survey — not financial, investment, legal or planning advice"]
+          .filter(Boolean)
+          .join(" · "),
+      });
+    } catch (err) {
+      if (err instanceof PdfEngineUnavailableError) {
+        throw new Error("Comparison PDF requires a browser engine. Use the HTML preview at /scout/report/" + reportId + " instead.");
+      }
+      throw err;
+    }
 
     const stored = await reportStorage().put(reportId, pdf.bytes);
     const expiresAt = expiryFromNow(generatedAt, linkTtlDays());

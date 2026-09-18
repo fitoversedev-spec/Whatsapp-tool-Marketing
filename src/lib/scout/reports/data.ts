@@ -117,6 +117,8 @@ export async function assembleReportInput(
         earliestOpenMinute: window.earliestOpenMinute ?? null,
         latestCloseMinute: window.latestCloseMinute ?? null,
         alwaysOpen: window.alwaysOpen === true,
+        flooring: place.flooring ?? null,
+        flooringDetail: place.flooringDetail ?? null,
       };
     }),
     categories: result.categories.map((category) => ({

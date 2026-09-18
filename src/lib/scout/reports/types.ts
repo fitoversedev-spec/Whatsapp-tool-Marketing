@@ -172,11 +172,13 @@ export interface CompetitorRow {
   readonly distance: string;
   readonly window: string;
   readonly priceTier: string;
+  readonly flooring: string | null;
 }
 
 export interface CompetitorCategory {
   readonly categoryId: string;
   readonly label: string;
+  readonly titleSuffix: string;
   readonly countLine: string;
   readonly rows: readonly CompetitorRow[];
   readonly overflow: number;
@@ -299,12 +301,14 @@ export interface ScanResultPlaceRow {
   readonly name: string;
   readonly distance: string;
   readonly distanceM: number;
+  readonly flooring: string | null;
 }
 
 export interface ScanResultCategoryGroup {
   readonly categoryId: string;
   readonly label: string;
   readonly count: number;
+  readonly distanceContext: string;
   readonly places: readonly ScanResultPlaceRow[];
 }
 

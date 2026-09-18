@@ -201,6 +201,10 @@ td.r,th.r{ text-align:right; }
 .mapFrame{ break-inside:avoid; border:1pt solid var(--gray-200); border-radius:8pt; overflow:hidden; }
 .mapFrame img{ display:block; width:100%; height:auto; }
 
+.mapPlaces{ margin-top:10pt; }
+.mapPlaces ul{ margin:2pt 0 8pt 14pt; padding:0; }
+.mapPlaces li{ list-style:disc; margin:1pt 0; }
+
 /* --------------------------------------------------------------- notes */
 
 .fieldNotes{ white-space:pre-wrap; background:var(--gray-100); border-left:3pt solid var(--black); padding:9pt 11pt; font-size:11pt; line-height:1.55; break-inside:auto; }

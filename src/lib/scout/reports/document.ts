@@ -90,6 +90,8 @@ export interface ReportPlaceInput {
   readonly earliestOpenMinute: number | null;
   readonly latestCloseMinute: number | null;
   readonly alwaysOpen: boolean;
+  readonly flooring: string | null;
+  readonly flooringDetail: string | null;
 }
 
 export interface ReportCategoryInput {
@@ -272,18 +274,33 @@ function buildCompetition(input: ReportInput): CompetitionSection {
       .filter((p) => p.side === "competition" && p.categories.includes(category.categoryId))
       .sort((a, b) => (b.reviewCount ?? 0) - (a.reviewCount ?? 0));
 
-    const rows: CompetitorRow[] = members.slice(0, MAX_ROWS_PER_CATEGORY).map((place) => ({
-      name: place.name,
-      rating: formatRating(place.rating),
-      reviews: place.reviewCount === null ? "—" : formatCount(place.reviewCount),
-      distance: formatDistance(place.distanceM),
-      window: operatingWindowLabel(place),
-      priceTier: priceTierLabel(place.priceLevel),
-    }));
+    const rows: CompetitorRow[] = members.slice(0, MAX_ROWS_PER_CATEGORY).map((place) => {
+      const floorLabel = place.flooring
+        ? place.flooringDetail
+          ? `${place.flooring} — ${place.flooringDetail}`
+          : place.flooring
+        : null;
+      return {
+        name: place.name,
+        rating: formatRating(place.rating),
+        reviews: place.reviewCount === null ? "—" : formatCount(place.reviewCount),
+        distance: formatDistance(place.distanceM),
+        window: operatingWindowLabel(place),
+        priceTier: priceTierLabel(place.priceLevel),
+        flooring: floorLabel,
+      };
+    });
+
+    const nearest = members.length > 0 ? members.reduce((a, b) => (a.distanceM < b.distanceM ? a : b)) : null;
+    const farthest = members.length > 0 ? members.reduce((a, b) => (a.distanceM > b.distanceM ? a : b)) : null;
+    const titleSuffix = nearest && farthest
+      ? `nearest ${formatDistance(nearest.distanceM)}, farthest ${formatDistance(farthest.distanceM)} from plot`
+      : "";
 
     byCategory.push({
       categoryId: category.categoryId,
       label: category.label,
+      titleSuffix,
       countLine:
         `${atLeast(category.count, category.saturated)} found · ` +
         `${formatCount(category.reviewTotal)} reviews · ` +
@@ -468,15 +485,27 @@ function buildScanResults(input: ReportInput): ScanResultsSection {
         const places = input.places
           .filter((p) => p.side === side && p.categories.includes(category.categoryId))
           .sort((a, b) => a.distanceM - b.distanceM)
-          .map((p) => ({
-            name: p.name,
-            distance: formatDistance(p.distanceM),
-            distanceM: p.distanceM,
-          }));
+          .map((p) => {
+            const floorLabel = p.flooring
+              ? p.flooringDetail ? `${p.flooring} — ${p.flooringDetail}` : p.flooring
+              : null;
+            return {
+              name: p.name,
+              distance: formatDistance(p.distanceM),
+              distanceM: p.distanceM,
+              flooring: floorLabel,
+            };
+          });
+        const nearest = places[0];
+        const farthest = places[places.length - 1];
+        const distanceContext = nearest && farthest
+          ? `nearest ${nearest.distance}, farthest ${farthest.distance} from plot`
+          : "";
         return {
           categoryId: category.categoryId,
           label: category.label,
           count: category.count,
+          distanceContext,
           places,
         };
       });

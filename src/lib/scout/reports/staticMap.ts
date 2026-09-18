@@ -48,6 +48,8 @@ export interface StaticMapRequest {
 /** Colours match the report legend: competition green, demand blue. */
 const FACILITY_COLOUR = "0x159341";
 const DEMAND_COLOUR = "0x00aeef";
+const FACILITY_LABEL_COLOUR = "0x0E7A30";
+const DEMAND_LABEL_COLOUR = "0x0066BB";
 const RING_COLOUR = "0x0a0a0a";
 
 const MAX_MARKERS_PER_LAYER = 24;
@@ -99,7 +101,7 @@ export function radiusRing(centre: StaticMapPoint, radiusM: number): StaticMapPo
 }
 
 export function markerLabel(index: number): string {
-  return index < 9 ? String(index + 1) : String.fromCharCode(65 + index - 9);
+  return String.fromCharCode(65 + (index % 26));
 }
 
 function markerParam(colour: string, points: readonly StaticMapPoint[]): string | null {
@@ -143,11 +145,11 @@ export function staticMapRequest(input: StaticMapInput): StaticMapRequest | null
   if (input.labelMarkers) {
     const fSlice = input.facilities.slice(0, MAX_MARKERS_PER_LAYER);
     fSlice.forEach((p, i) => {
-      params.append("markers", `size:mid|color:${FACILITY_COLOUR}|label:${markerLabel(i)}|${p.lat.toFixed(5)},${p.lng.toFixed(5)}`);
+      params.append("markers", `size:mid|color:${FACILITY_LABEL_COLOUR}|label:${markerLabel(i)}|${p.lat.toFixed(5)},${p.lng.toFixed(5)}`);
     });
     const dSlice = input.demand.slice(0, MAX_MARKERS_PER_LAYER);
     dSlice.forEach((p, i) => {
-      params.append("markers", `size:mid|color:${DEMAND_COLOUR}|label:${markerLabel(fSlice.length + i)}|${p.lat.toFixed(5)},${p.lng.toFixed(5)}`);
+      params.append("markers", `size:mid|color:${DEMAND_LABEL_COLOUR}|label:${markerLabel(fSlice.length + i)}|${p.lat.toFixed(5)},${p.lng.toFixed(5)}`);
     });
   } else {
     const facilityMarkers = markerParam(FACILITY_COLOUR, input.facilities);

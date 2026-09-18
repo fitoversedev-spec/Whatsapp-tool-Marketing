@@ -174,7 +174,6 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     Array<{ exclusionId: string; place: ScanPlaceDto; categoryId: string; categoryLabel: string }>
   >(initial?.excludedPlaceDetails ? [...initial.excludedPlaceDetails] : []);
   const [removedOpen, setRemovedOpen] = useState(true);
-  const pendingExcludeIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (!flooringOpen) return;
@@ -232,52 +231,35 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   const excludePlace = useCallback(async (place: ScanPlaceDto, categoryId: string, categoryLabel: string) => {
     if (!data?.scanId) return;
 
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    pendingExcludeIdsRef.current.add(tempId);
-
+    const tempId = `pending_${Date.now()}`;
     setLocalExclusions((prev) => [...prev, { id: tempId, googlePlaceId: place.placeId, categoryId, locked: false }]);
     setExcludedPlaces((prev) => [...prev, { exclusionId: tempId, place, categoryId, categoryLabel }]);
 
     try {
-      const res = await fetch(`/api/scout/scans/${data.scanId}/exclusions`, {
+      await fetch(`/api/scout/scans/${data.scanId}/exclusions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ googlePlaceId: place.placeId, categoryId }),
       });
-      if (!res.ok) {
-        pendingExcludeIdsRef.current.delete(tempId);
-        setLocalExclusions((prev) => prev.filter((ex) => ex.id !== tempId));
-        setExcludedPlaces((prev) => prev.filter((ep) => ep.exclusionId !== tempId));
-        return;
-      }
-      const { exclusion } = await res.json();
-      pendingExcludeIdsRef.current.delete(tempId);
-      setLocalExclusions((prev) => prev.map((ex) => (ex.id === tempId ? exclusion : ex)));
-      setExcludedPlaces((prev) => prev.map((ep) => (ep.exclusionId === tempId ? { ...ep, exclusionId: exclusion.id } : ep)));
+    } catch { /* persist failed — will self-correct on reload */ }
 
-      const screenRes = await fetch(`/api/scout/scans/${data.scanId}/screen`, { cache: "no-store" });
-      if (screenRes.ok) {
-        const json = (await screenRes.json()) as ScanScreenData;
+    try {
+      const res = await fetch(`/api/scout/scans/${data.scanId}/screen`, { cache: "no-store" });
+      if (res.ok) {
+        const json = (await res.json()) as ScanScreenData;
         setData(json);
         if (json.score) setScore(json.score);
+        if (json.exclusions) setLocalExclusions(json.exclusions as Array<{ id: string; googlePlaceId: string; categoryId: string; locked: boolean }>);
+        if (json.excludedPlaceDetails) setExcludedPlaces([...json.excludedPlaceDetails]);
       }
-    } catch {
-      pendingExcludeIdsRef.current.delete(tempId);
-      setLocalExclusions((prev) => prev.filter((ex) => ex.id !== tempId));
-      setExcludedPlaces((prev) => prev.filter((ep) => ep.exclusionId !== tempId));
-    }
+    } catch { /* swallow */ }
   }, [data?.scanId]);
 
   const undoExclude = useCallback(async (exclusionId: string) => {
     if (!data?.scanId) return;
-    if (exclusionId.startsWith("temp_")) {
-      pendingExcludeIdsRef.current.delete(exclusionId);
-      setExcludedPlaces((prev) => prev.filter((ep) => ep.exclusionId !== exclusionId));
-      setLocalExclusions((prev) => prev.filter((ex) => ex.id !== exclusionId));
-      return;
-    }
     setExcludedPlaces((prev) => prev.filter((ep) => ep.exclusionId !== exclusionId));
     setLocalExclusions((prev) => prev.filter((ex) => ex.id !== exclusionId));
+    if (exclusionId.startsWith("pending_")) return;
     try {
       await fetch(`/api/scout/scans/${data.scanId}/exclusions`, {
         method: "DELETE",
@@ -363,29 +345,8 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     setData(json);
     setProgress(json.progress);
     if (json.score) setScore(json.score);
-    const hasPending = pendingExcludeIdsRef.current.size > 0;
-    if (json.exclusions) {
-      const serverExclusions = json.exclusions as Array<{ id: string; googlePlaceId: string; categoryId: string; locked: boolean }>;
-      if (hasPending) {
-        setLocalExclusions((prev) => {
-          const pending = prev.filter((ex) => pendingExcludeIdsRef.current.has(ex.id));
-          return [...serverExclusions, ...pending];
-        });
-      } else {
-        setLocalExclusions(serverExclusions);
-      }
-    }
-    if (json.excludedPlaceDetails) {
-      const serverDetails = [...json.excludedPlaceDetails];
-      if (hasPending) {
-        setExcludedPlaces((prev) => {
-          const pending = prev.filter((ep) => pendingExcludeIdsRef.current.has(ep.exclusionId));
-          return [...serverDetails, ...pending];
-        });
-      } else {
-        setExcludedPlaces(serverDetails);
-      }
-    }
+    if (json.exclusions) setLocalExclusions(json.exclusions as Array<{ id: string; googlePlaceId: string; categoryId: string; locked: boolean }>);
+    if (json.excludedPlaceDetails) setExcludedPlaces([...json.excludedPlaceDetails]);
   }, []);
 
   useEffect(() => {

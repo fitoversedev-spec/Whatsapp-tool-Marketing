@@ -176,6 +176,17 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   const [removedOpen, setRemovedOpen] = useState(true);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const main = document.querySelector("main");
+    if (!main) return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const apply = () => { main.style.overflowY = mq.matches ? "hidden" : ""; };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => { main.style.overflowY = ""; mq.removeEventListener("change", apply); };
+  }, []);
+
+  useEffect(() => {
     if (!flooringOpen) return;
     const handler = () => setFlooringOpen(null);
     document.addEventListener("click", handler);
@@ -784,7 +795,8 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
 
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-0 md:overflow-hidden ssIn">
-      <aside className="w-full md:w-[400px] md:h-full flex-none bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto pt-6 px-5 pb-8 flex flex-col gap-5 ss-scroll" ref={scrollTargetRef}>
+      <aside className="w-full md:w-[400px] md:h-full flex-none bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col" ref={scrollTargetRef}>
+        <div className="flex-1 min-h-0 overflow-y-auto pt-6 px-5 flex flex-col gap-5 ss-scroll">
         {/* ---------------------------------------------------- customer plot */}
         <div className="flex flex-col gap-2">
           <SectionLabel weight={700}>Customer plot</SectionLabel>
@@ -1383,59 +1395,63 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                 })}
               </div>
             ) : null}
+          </>
+        ) : null}
+        </div>
 
-            {excludedPlaces.length > 0 && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
-                <button
-                  type="button"
-                  className="flex items-center justify-between w-full px-4 py-3 text-left bg-slate-50 hover:bg-slate-100 transition-colors flex-none"
-                  onClick={() => setRemovedOpen((v) => !v)}
+        {/* ---- fixed bottom: Removed section + action buttons ---- */}
+        {data ? (
+          <div className="flex-none px-5 pb-5 pt-3 flex flex-col gap-3 border-t border-slate-200">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+              <button
+                type="button"
+                className="flex items-center justify-between w-full px-4 py-3 text-left bg-slate-50 hover:bg-slate-100 transition-colors flex-none"
+                onClick={() => setRemovedOpen((v) => !v)}
+              >
+                <span className="text-sm font-semibold text-slate-700">
+                  Removed ({excludedPlaces.length})
+                </span>
+                <svg
+                  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  className={`text-slate-400 transition-transform ${removedOpen ? "rotate-180" : ""}`}
                 >
-                  <span className="text-sm font-semibold text-slate-700">
-                    Removed ({excludedPlaces.length})
-                  </span>
-                  <svg
-                    width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                    className={`text-slate-400 transition-transform ${removedOpen ? "rotate-180" : ""}`}
-                  >
-                    <path d="m18 15-6-6-6 6" />
-                  </svg>
-                </button>
-                {removedOpen && (
-                  <div className="px-3 pb-3 space-y-2">
-                    {excludedPlaces.map((ep) => (
-                      <div
-                        key={ep.exclusionId}
-                        className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
-                      >
-                        <span className="flex-1 min-w-0">
-                          <span className="block text-sm font-semibold text-slate-900">{ep.place.name}</span>
-                          <span className="block text-xs text-slate-500 mt-0.5">
-                            {[
-                              ep.place.primaryTypeDisplayName,
-                              ep.place.rating === null
-                                ? null
-                                : `${ep.place.rating.toFixed(1)} ★ ${ep.place.reviewCount ?? 0}`,
-                            ].filter(Boolean).join(" · ") || "No detail"}
-                          </span>
-                          <span className="block text-xs text-slate-400 mt-0.5">
-                            from {ep.categoryLabel} · {ep.place.distanceM < 1000 ? `${Math.round(ep.place.distanceM)} m` : `${(ep.place.distanceM / 1000).toFixed(1)} km`}
-                          </span>
+                  <path d="m18 15-6-6-6 6" />
+                </svg>
+              </button>
+              {removedOpen && excludedPlaces.length > 0 && (
+                <div className="px-3 pb-3 space-y-2 max-h-[200px] overflow-y-auto ss-scroll">
+                  {excludedPlaces.map((ep) => (
+                    <div
+                      key={ep.exclusionId}
+                      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
+                    >
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-semibold text-slate-900">{ep.place.name}</span>
+                        <span className="block text-xs text-slate-500 mt-0.5">
+                          {[
+                            ep.place.primaryTypeDisplayName,
+                            ep.place.rating === null
+                              ? null
+                              : `${ep.place.rating.toFixed(1)} ★ ${ep.place.reviewCount ?? 0}`,
+                          ].filter(Boolean).join(" · ") || "No detail"}
                         </span>
-                        <button
-                          type="button"
-                          className="flex-none px-3 py-1.5 text-xs font-semibold rounded-lg bg-court-500 text-white hover:bg-court-600 transition-colors"
-                          onClick={() => undoExclude(ep.exclusionId)}
-                        >
-                          Undo
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                        <span className="block text-xs text-slate-400 mt-0.5">
+                          from {ep.categoryLabel} · {ep.place.distanceM < 1000 ? `${Math.round(ep.place.distanceM)} m` : `${(ep.place.distanceM / 1000).toFixed(1)} km`}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        className="flex-none px-3 py-1.5 text-xs font-semibold rounded-lg bg-court-500 text-white hover:bg-court-600 transition-colors"
+                        onClick={() => undoExclude(ep.exclusionId)}
+                      >
+                        Undo
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {scanId ? (
               <div className="flex flex-col gap-2">
@@ -1457,7 +1473,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                 </Button>
               </Link>
             ) : null}
-          </>
+          </div>
         ) : null}
       </aside>
 

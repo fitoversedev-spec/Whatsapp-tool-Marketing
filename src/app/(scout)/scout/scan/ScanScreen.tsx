@@ -1076,7 +1076,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
             </p>
 
             {data.categories.length > 0 ? (
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="border border-slate-200 rounded-lg overflow-hidden shrink-0">
                 <div className="grid grid-cols-[1.3fr_0.5fr_0.7fr_0.7fr] gap-[6px] py-[10px] px-3 bg-slate-100 text-xs font-bold text-slate-600">
                   <span>Category</span>
                   <span className="text-right">Count</span>
@@ -1402,7 +1402,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
               </div>
             ) : null}
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden shrink-0">
               <button
                 type="button"
                 className="flex items-center justify-between w-full px-4 py-3 text-left bg-slate-50 hover:bg-slate-100 transition-colors flex-none"

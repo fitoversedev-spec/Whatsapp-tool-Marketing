@@ -37,12 +37,15 @@ export interface StaticMapInput {
   readonly heightPx?: number;
   /** When true each marker gets its own numbered label (1-9 then A-Z). */
   readonly labelMarkers?: boolean;
+  /** Explicit zoom level. When set, overrides Google's auto-fit. */
+  readonly zoom?: number;
 }
 
 export interface StaticMapRequest {
   readonly url: string;
   readonly widthPx: number;
   readonly heightPx: number;
+  readonly zoom: number | null;
 }
 
 /** Colours match the report legend: competition green, demand blue. */
@@ -104,6 +107,41 @@ export function markerLabel(index: number): string {
   return String.fromCharCode(65 + (index % 26));
 }
 
+export function computeMapZoom(
+  centre: StaticMapPoint,
+  radiusM: number,
+  widthPx: number,
+  heightPx: number,
+): number {
+  const cosLat = Math.cos((centre.lat * Math.PI) / 180);
+  const metersPerPixelAtZoom0 = 156543.03 * Math.max(cosLat, 1e-6);
+  const fitDim = Math.min(widthPx, heightPx) * 0.85;
+  return Math.floor(Math.log2((metersPerPixelAtZoom0 * fitDim) / (2 * radiusM)));
+}
+
+export function latLngToPixel(
+  point: StaticMapPoint,
+  centre: StaticMapPoint,
+  zoom: number,
+  imgWidth: number,
+  imgHeight: number,
+): { x: number; y: number } {
+  const scale = Math.pow(2, zoom);
+  const toWorld = (lat: number, lng: number) => {
+    const siny = Math.max(-0.9999, Math.min(0.9999, Math.sin((lat * Math.PI) / 180)));
+    return {
+      x: 256 * (lng + 180) / 360,
+      y: 256 * (0.5 - Math.log((1 + siny) / (1 - siny)) / (4 * Math.PI)),
+    };
+  };
+  const cw = toWorld(centre.lat, centre.lng);
+  const pw = toWorld(point.lat, point.lng);
+  return {
+    x: (pw.x - cw.x) * scale + imgWidth / 2,
+    y: (pw.y - cw.y) * scale + imgHeight / 2,
+  };
+}
+
 function markerParam(colour: string, points: readonly StaticMapPoint[]): string | null {
   if (points.length === 0) return null;
   const coords = points
@@ -126,9 +164,12 @@ export function staticMapRequest(input: StaticMapInput): StaticMapRequest | null
   const widthPx = input.widthPx ?? 640;
   const heightPx = input.heightPx ?? 380;
 
+  const zoom = input.zoom ?? null;
+
   const params = new URLSearchParams();
   params.set("center", `${input.centre.lat.toFixed(6)},${input.centre.lng.toFixed(6)}`);
   params.set("size", `${widthPx}x${heightPx}`);
+  if (zoom !== null) params.set("zoom", String(zoom));
   // scale=2 so the image is 1280px wide inside a 640px frame — a 96 dpi PDF
   // page renders a scale=1 map visibly soft, and this is the page a reader
   // pinches into on a phone.
@@ -172,10 +213,10 @@ export function staticMapRequest(input: StaticMapInput): StaticMapRequest | null
     trimmed.delete("markers");
     const fallback = `https://maps.googleapis.com/maps/api/staticmap?${trimmed.toString()}`;
     if (fallback.length > STATIC_MAP_URL_LIMIT) return null;
-    return { url: fallback, widthPx, heightPx };
+    return { url: fallback, widthPx, heightPx, zoom };
   }
 
-  return { url, widthPx, heightPx };
+  return { url, widthPx, heightPx, zoom };
 }
 
 export const STATIC_MAP_LEGEND: readonly string[] = [

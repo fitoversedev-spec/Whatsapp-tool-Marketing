@@ -177,13 +177,20 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const aside = scrollTargetRef.current;
     const main = document.querySelector("main");
-    if (!main) return;
     const mq = window.matchMedia("(min-width: 768px)");
-    const apply = () => { main.style.overflowY = mq.matches ? "hidden" : ""; };
+    const apply = () => {
+      if (main) main.style.overflowY = mq.matches ? "hidden" : "";
+      if (aside) aside.style.maxHeight = mq.matches ? "100vh" : "";
+    };
     apply();
     mq.addEventListener("change", apply);
-    return () => { main.style.overflowY = ""; mq.removeEventListener("change", apply); };
+    return () => {
+      if (main) main.style.overflowY = "";
+      if (aside) aside.style.maxHeight = "";
+      mq.removeEventListener("change", apply);
+    };
   }, []);
 
   useEffect(() => {
@@ -795,7 +802,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
 
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-0 md:overflow-hidden ssIn">
-      <aside className="w-full md:w-[400px] md:max-h-screen flex-none bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto pt-6 px-5 pb-8 flex flex-col gap-5 ss-scroll" ref={scrollTargetRef}>
+      <aside className="w-full md:w-[400px] flex-none bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto pt-6 px-5 pb-8 flex flex-col gap-5 ss-scroll" ref={scrollTargetRef}>
         {/* ---------------------------------------------------- customer plot */}
         <div className="flex flex-col gap-2">
           <SectionLabel weight={700}>Customer plot</SectionLabel>

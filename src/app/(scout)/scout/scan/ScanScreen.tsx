@@ -783,7 +783,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row min-h-0 ssIn">
+    <div className="flex-1 flex flex-col md:flex-row min-h-0 md:overflow-hidden ssIn">
       <aside className="w-full md:w-[400px] flex-none bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto pt-6 px-5 pb-8 flex flex-col gap-5 ss-scroll" ref={scrollTargetRef}>
         {/* ---------------------------------------------------- customer plot */}
         <div className="flex flex-col gap-2">

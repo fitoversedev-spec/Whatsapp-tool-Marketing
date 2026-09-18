@@ -1,11 +1,9 @@
 import "server-only";
 
-import sharp from "sharp";
-
 import { env } from "@/lib/scout/env";
 
 import { STATIC_MAP_ATTRIBUTION } from "./brand";
-import { computeMapZoom, latLngToPixel, markerLabel, STATIC_MAP_LEGEND, staticMapRequest } from "./staticMap";
+import { STATIC_MAP_LEGEND, staticMapRequest } from "./staticMap";
 import type { CategoryMapSection, MapSection } from "./types";
 
 /**
@@ -87,76 +85,12 @@ export interface CategoryMapInput {
   readonly locations: ReadonlyArray<{ readonly lat: number; readonly lng: number }>;
 }
 
-const MAP_SCALE = 2;
-const LABEL_OFFSET = 55;
-const FONT_SIZE = 12;
-const BOX_PAD = 4;
-
-function buildCalloutSvg(
-  locations: ReadonlyArray<{ readonly lat: number; readonly lng: number }>,
-  centre: { readonly lat: number; readonly lng: number },
-  zoom: number,
-  cssWidth: number,
-  cssHeight: number,
-  color: string,
-): string {
-  const imgW = cssWidth * MAP_SCALE;
-  const imgH = cssHeight * MAP_SCALE;
-  const fs = FONT_SIZE * MAP_SCALE;
-  const pad = BOX_PAD * MAP_SCALE;
-  const offset = LABEL_OFFSET * MAP_SCALE;
-  const boxH = fs + pad * 2;
-  const boxW = fs + pad * 4;
-
-  let els = "";
-  for (let i = 0; i < locations.length; i++) {
-    const loc = locations[i];
-    const { x: px, y: py } = latLngToPixel(loc, centre, zoom, imgW, imgH);
-    const dx = px - imgW / 2;
-    const dy = py - imgH / 2;
-    const angle = Math.atan2(dy, dx);
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    let lx = imgW / 2 + Math.cos(angle) * (dist + offset);
-    let ly = imgH / 2 + Math.sin(angle) * (dist + offset);
-    const margin = 30 * MAP_SCALE;
-    lx = Math.max(margin, Math.min(imgW - margin, lx));
-    ly = Math.max(margin, Math.min(imgH - margin, ly));
-
-    const label = markerLabel(i);
-    els += `<line x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${lx.toFixed(1)}" y2="${ly.toFixed(1)}" stroke="${color}" stroke-width="${1.5 * MAP_SCALE}" opacity="0.8"/>`;
-    els += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${4 * MAP_SCALE}" fill="${color}"/>`;
-    els += `<rect x="${(lx - boxW / 2).toFixed(1)}" y="${(ly - boxH / 2).toFixed(1)}" width="${boxW}" height="${boxH}" rx="${3 * MAP_SCALE}" fill="white" stroke="${color}" stroke-width="${1.5 * MAP_SCALE}"/>`;
-    els += `<text x="${lx.toFixed(1)}" y="${(ly + fs * 0.35).toFixed(1)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fs}" font-weight="bold" fill="${color}">${label}</text>`;
-  }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${imgW}" height="${imgH}">${els}</svg>`;
-}
-
-async function annotateMapImage(
-  buffer: Buffer,
-  locations: ReadonlyArray<{ readonly lat: number; readonly lng: number }>,
-  centre: { readonly lat: number; readonly lng: number },
-  zoom: number,
-  cssWidth: number,
-  cssHeight: number,
-  color: string,
-): Promise<Buffer> {
-  const svg = buildCalloutSvg(locations, centre, zoom, cssWidth, cssHeight, color);
-  return sharp(buffer)
-    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
-    .png()
-    .toBuffer();
-}
-
 export async function fetchCategoryMaps(
   centre: { readonly lat: number; readonly lng: number },
   radiusM: number,
   areaLabel: string,
   categories: readonly CategoryMapInput[],
 ): Promise<CategoryMapSection[]> {
-  const cssWidth = 640;
-  const cssHeight = 380;
-  const zoom = computeMapZoom(centre, radiusM, cssWidth, cssHeight);
-
   const results = await Promise.all(
     categories
       .filter((c) => c.locations.length > 0)
@@ -167,11 +101,10 @@ export async function fetchCategoryMaps(
           facilities: c.side === "competition" ? c.locations : [],
           demand: c.side === "demand" ? c.locations : [],
           apiKey: env.googleMapsServerKey,
-          zoom,
+          labelMarkers: true,
         });
         if (!request) return null;
 
-        const color = c.side === "competition" ? "#159341" : "#0066BB";
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
         try {
@@ -179,18 +112,14 @@ export async function fetchCategoryMaps(
           if (!response.ok) return null;
           const contentType = response.headers.get("content-type") ?? "";
           if (!contentType.startsWith("image/")) return null;
-          let buffer = Buffer.from(await response.arrayBuffer());
+          const buffer = Buffer.from(await response.arrayBuffer());
           if (buffer.byteLength === 0 || buffer.byteLength > MAX_MAP_BYTES) return null;
-
-          try {
-            buffer = await annotateMapImage(buffer, c.locations, centre, zoom, cssWidth, cssHeight, color) as Buffer<ArrayBuffer>;
-          } catch { /* fall back to unannotated image */ }
 
           return {
             categoryId: c.categoryId,
             label: c.label,
             side: c.side,
-            url: `data:image/png;base64,${buffer.toString("base64")}`,
+            url: `data:${contentType.split(";")[0]};base64,${buffer.toString("base64")}`,
             alt: `Map showing ${c.label} within ${(radiusM / 1000).toFixed(1)} km of ${areaLabel}.`,
             attribution: STATIC_MAP_ATTRIBUTION,
             placeCount: c.locations.length,

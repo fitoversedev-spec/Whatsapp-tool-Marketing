@@ -45,6 +45,7 @@ export interface ReportStudioProps {
   initialBlocks: ReportBlockState;
   initialNotes: string;
   initialSuggestions: string;
+  initialPolishedSuggestions: string;
   preparedBy: string;
   initialReport: GeneratedReport | null;
 }
@@ -60,6 +61,7 @@ export function ReportStudio({
   initialBlocks,
   initialNotes,
   initialSuggestions,
+  initialPolishedSuggestions,
   preparedBy,
   initialReport,
 }: ReportStudioProps) {
@@ -71,6 +73,7 @@ export function ReportStudio({
   const [suggestionsText, setSuggestionsText] = useState(initialSuggestions);
   const whatsappCaption = "";
 
+  const [polishedSuggestions, setPolishedSuggestions] = useState(initialPolishedSuggestions);
   const [polishedText, setPolishedText] = useState<string | null>(null);
   const [polishing, setPolishing] = useState(false);
   const [polishError, setPolishError] = useState<string | null>(null);
@@ -81,9 +84,9 @@ export function ReportStudio({
   const [share, setShare] = useState<ShareResponse | null>(null);
   const [sharing, setSharing] = useState(false);
 
-  const loadedDraft = useRef(JSON.stringify({ blocks: initialBlocks, notes: initialNotes, suggestionsText: initialSuggestions }));
+  const loadedDraft = useRef(JSON.stringify({ blocks: initialBlocks, notes: initialNotes, suggestionsText: initialSuggestions, polishedSuggestions: initialPolishedSuggestions }));
   useEffect(() => {
-    if (JSON.stringify({ blocks, notes, suggestionsText }) === loadedDraft.current) return;
+    if (JSON.stringify({ blocks, notes, suggestionsText, polishedSuggestions }) === loadedDraft.current) return;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setSaveState("saving");
@@ -92,7 +95,7 @@ export function ReportStudio({
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           signal: controller.signal,
-          body: JSON.stringify({ includedBlocks: blocks, fieldNotes: notes, suggestionsText }),
+          body: JSON.stringify({ includedBlocks: blocks, fieldNotes: notes, suggestionsText, polishedSuggestions }),
         });
         setSaveState(res.ok ? "saved" : "error");
       } catch (e) {
@@ -103,7 +106,7 @@ export function ReportStudio({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [blocks, notes, suggestionsText, scan.scanId]);
+  }, [blocks, notes, suggestionsText, polishedSuggestions, scan.scanId]);
 
   const polishWithAi = useCallback(async () => {
     if (!suggestionsText.trim()) return;
@@ -137,7 +140,7 @@ export function ReportStudio({
         await fetch(`/api/scout/scans/${scan.scanId}/report`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ includedBlocks: blocks, fieldNotes: notes, suggestionsText, title: reportName.trim() }),
+          body: JSON.stringify({ includedBlocks: blocks, fieldNotes: notes, suggestionsText, polishedSuggestions, title: reportName.trim() }),
         });
       }
       const res = await fetch(`/api/scout/scans/${scan.scanId}/report/generate`, { method: "POST" });
@@ -166,7 +169,7 @@ export function ReportStudio({
     } finally {
       setGenerating(false);
     }
-  }, [scan.scanId, reportName, blocks, notes, suggestionsText]);
+  }, [scan.scanId, reportName, blocks, notes, suggestionsText, polishedSuggestions]);
 
   const shareOnWhatsApp = useCallback(async () => {
     if (!report) return;
@@ -243,7 +246,7 @@ export function ReportStudio({
             className="w-full box-border min-h-[140px] resize-y font-sans text-[13.5px] leading-[1.65] text-slate-900 border border-slate-300 rounded-lg p-[14px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
             value={suggestionsText}
             onChange={(e) => { setSuggestionsText(e.target.value); setPolishedText(null); }}
-            aria-label="Your suggestions for the customer"
+            aria-label="Your raw suggestions for AI to polish"
             placeholder="e.g. good location for 5-a-side turf, only 2 competitors both indoor, lots of schools nearby, opportunity for outdoor facility with parking"
           />
           <div className="flex items-center justify-between gap-2">
@@ -286,7 +289,7 @@ export function ReportStudio({
                 <button
                   type="button"
                   className="rounded-lg border border-[#159341] bg-[#159341] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#127a36] transition-colors"
-                  onClick={() => { setSuggestionsText(polishedText ?? ""); setPolishedText(null); }}
+                  onClick={() => { setPolishedSuggestions(polishedText ?? ""); setPolishedText(null); }}
                 >
                   Use this version
                 </button>
@@ -298,6 +301,27 @@ export function ReportStudio({
                   Discard
                 </button>
               </div>
+            </div>
+          ) : null}
+          {polishedSuggestions && polishedText === null ? (
+            <div className="flex flex-col gap-[6px]">
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] font-semibold text-[#159341] uppercase tracking-wide">Accepted AI version (used in report)</div>
+                <button
+                  type="button"
+                  className="text-[11px] text-red-500 hover:text-red-700 font-semibold transition-colors"
+                  onClick={() => setPolishedSuggestions("")}
+                >
+                  Remove
+                </button>
+              </div>
+              <textarea
+                className="w-full box-border min-h-[100px] resize-y border-l-[3px] border-[#159341] bg-[#f0fdf4] rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 font-sans outline-none focus:ring-2 focus:ring-[#159341]"
+                value={polishedSuggestions}
+                onChange={(e) => setPolishedSuggestions(e.target.value)}
+                aria-label="Edit accepted AI-polished text"
+              />
+              <p className="m-0 text-[11px] text-slate-400">This version will appear in the report. Edit your raw text above and re-polish to generate a new version.</p>
             </div>
           ) : null}
         </div>
@@ -523,14 +547,14 @@ export function ReportStudio({
           ) : null}
 
           {/* Section 3: Our Suggestions */}
-          {suggestionsText || polishedText ? (
+          {suggestionsText || polishedSuggestions || polishedText ? (
             <div>
               <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Our suggestions</div>
               <div className="mt-[10px] border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 whitespace-pre-wrap">
-                {polishedText ?? suggestionsText}
+                {polishedText ?? polishedSuggestions ?? suggestionsText}
               </div>
               <p className="text-[11px] text-slate-400 mt-1">
-                {polishedText ? "Showing AI-polished version" : "AI will polish this text when generating the report"}
+                {polishedText ? "Showing AI-polished preview" : polishedSuggestions ? "Showing accepted AI version" : "AI will polish this text when generating the report"}
               </p>
             </div>
           ) : null}

@@ -96,6 +96,7 @@ export interface ScanScreenData {
   readonly fieldNotes: string | null;
 
   readonly exclusions?: readonly ScanExclusionDto[];
+  readonly excludedPlaceDetails?: readonly ExcludedPlaceDetailDto[];
 }
 
 export interface ScanExclusionDto {
@@ -103,6 +104,13 @@ export interface ScanExclusionDto {
   readonly googlePlaceId: string;
   readonly categoryId: string;
   readonly locked: boolean;
+}
+
+export interface ExcludedPlaceDetailDto {
+  readonly exclusionId: string;
+  readonly categoryId: string;
+  readonly categoryLabel: string;
+  readonly place: ScanPlaceDto;
 }
 
 /** The category/preset picker payload, from `publicTaxonomy()`. */

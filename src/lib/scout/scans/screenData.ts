@@ -63,6 +63,33 @@ export async function getScanScreenData(
     return remaining.length > 0;
   });
 
+  const categoryLabelMap = new Map(result.categories.map((c) => [c.categoryId, c.label]));
+  const excludedPlaceDetails = exclusions.flatMap((ex) => {
+    const place = result.places.find((p) => p.placeId === ex.googlePlaceId);
+    if (!place) return [];
+    return [{
+      exclusionId: ex.id,
+      categoryId: ex.categoryId,
+      categoryLabel: categoryLabelMap.get(ex.categoryId) ?? ex.categoryId,
+      place: {
+        placeId: place.placeId,
+        name: place.name,
+        lat: place.location.lat,
+        lng: place.location.lng,
+        distanceM: place.distanceMRounded,
+        side: place.side,
+        categories: place.categories,
+        rating: place.rating,
+        reviewCount: place.reviewCount,
+        primaryTypeDisplayName: place.primaryTypeDisplayName,
+        businessStatus: place.businessStatus,
+        googleMapsUri: place.googleMapsUri,
+        flooring: place.flooring,
+        flooringDetail: place.flooringDetail,
+      },
+    }];
+  });
+
   const score = (row?.scoreBreakdown as unknown as ScoreResult | null) ?? null;
 
   return {
@@ -160,5 +187,6 @@ export async function getScanScreenData(
       categoryId: ex.categoryId,
       locked: ex.locked,
     })),
+    excludedPlaceDetails,
   };
 }

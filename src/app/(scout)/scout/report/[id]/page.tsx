@@ -69,6 +69,7 @@ export default async function ReportPage({ params }: { params: { id: string } })
         initialBlocks={draft?.includedBlocks ?? defaultBlockState()}
         initialNotes={draft?.fieldNotes ?? scan.fieldNotes ?? ""}
         initialSuggestions={draft?.suggestionsText ?? ""}
+        initialPolishedSuggestions={draft?.polishedSuggestions ?? ""}
         preparedBy={author.displayName}
         initialReport={initialReport}
       />

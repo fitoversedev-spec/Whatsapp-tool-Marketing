@@ -156,6 +156,7 @@ export interface ReportInput {
 
   readonly aiSummaryText?: string | null;
   readonly suggestionsText?: string | null;
+  readonly polishedSuggestions?: string | null;
   readonly customTitle?: string | null;
 }
 

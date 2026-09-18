@@ -159,8 +159,8 @@ export async function runReportGeneration(
     });
     if (!input) throw new Error("The scan behind this report could not be read.");
 
-    let polishedSuggestions: string | null = null;
-    if (input.suggestionsText?.trim() && canGenerateAiSummary()) {
+    let polishedSuggestions: string | null = input.polishedSuggestions?.trim() || null;
+    if (!polishedSuggestions && input.suggestionsText?.trim() && canGenerateAiSummary()) {
       try {
         polishedSuggestions = await polishSuggestions(
           author.userId,

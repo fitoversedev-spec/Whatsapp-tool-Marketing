@@ -57,6 +57,7 @@ export async function PUT(request: Request, context: { params: { id: string } })
     includedBlocks?: unknown;
     fieldNotes?: unknown;
     suggestionsText?: unknown;
+    polishedSuggestions?: unknown;
     title?: unknown;
   };
 
@@ -66,6 +67,7 @@ export async function PUT(request: Request, context: { params: { id: string } })
     includedBlocks: payload.includedBlocks,
     fieldNotes: typeof payload.fieldNotes === "string" ? payload.fieldNotes : "",
     suggestionsText: typeof payload.suggestionsText === "string" ? payload.suggestionsText : undefined,
+    polishedSuggestions: typeof payload.polishedSuggestions === "string" ? payload.polishedSuggestions : undefined,
     title: typeof payload.title === "string" ? payload.title : undefined,
   });
 

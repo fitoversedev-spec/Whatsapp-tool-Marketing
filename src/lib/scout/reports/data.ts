@@ -167,6 +167,7 @@ export async function assembleReportInput(
     blocks: sanitiseBlockState(blocks),
     brand: reportBrand(),
     suggestionsText: draft?.suggestionsText || null,
+    polishedSuggestions: draft?.polishedSuggestions || null,
     customTitle: draft?.title || null,
   };
 }

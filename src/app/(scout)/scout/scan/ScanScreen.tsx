@@ -172,7 +172,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   >(initial?.exclusions ? [...initial.exclusions] : []);
   const [excludedPlaces, setExcludedPlaces] = useState<
     Array<{ exclusionId: string; place: ScanPlaceDto; categoryId: string; categoryLabel: string }>
-  >([]);
+  >(initial?.excludedPlaceDetails ? [...initial.excludedPlaceDetails] : []);
   const [removedOpen, setRemovedOpen] = useState(true);
 
   useEffect(() => {

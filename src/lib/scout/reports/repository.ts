@@ -15,6 +15,7 @@ export interface ReportDraft {
   readonly includedBlocks: ReportBlockState;
   readonly fieldNotes: string;
   readonly suggestionsText: string;
+  readonly polishedSuggestions: string;
   readonly status: string;
   readonly channel: "whatsapp" | "pdf" | "email" | null;
   readonly updatedAt: string;
@@ -37,6 +38,7 @@ export async function getReportDraft(scanId: string): Promise<ReportDraft | null
   if (!row) return null;
   const rawBlocks = row.includedBlocks as Record<string, unknown> | null;
   const suggestionsText = typeof rawBlocks?._suggestionsText === "string" ? rawBlocks._suggestionsText : "";
+  const polishedSuggestions = typeof rawBlocks?._polishedSuggestions === "string" ? rawBlocks._polishedSuggestions : "";
   return {
     id: row.id,
     scanId: row.scanId,
@@ -44,6 +46,7 @@ export async function getReportDraft(scanId: string): Promise<ReportDraft | null
     includedBlocks: sanitiseBlockState(row.includedBlocks),
     fieldNotes: row.fieldNotes ?? "",
     suggestionsText,
+    polishedSuggestions,
     status: row.status,
     channel: row.channel,
     updatedAt: row.updatedAt.toISOString(),
@@ -56,6 +59,7 @@ export interface SaveReportDraftInput {
   readonly includedBlocks: unknown;
   readonly fieldNotes: string;
   readonly suggestionsText?: string;
+  readonly polishedSuggestions?: string;
   readonly title?: string | null;
   readonly scoreModelVersion?: string | null;
 }
@@ -71,9 +75,13 @@ export interface SaveReportDraftInput {
  */
 export async function saveReportDraft(input: SaveReportDraftInput): Promise<ReportDraft> {
   const blocks = sanitiseBlockState(input.includedBlocks);
-  const blocksWithMeta = input.suggestionsText
-    ? { ...blocks, _suggestionsText: input.suggestionsText.slice(0, 4000) }
-    : blocks;
+  let blocksWithMeta: Record<string, unknown> = { ...blocks };
+  if (input.suggestionsText !== undefined) {
+    blocksWithMeta._suggestionsText = input.suggestionsText.slice(0, 4000);
+  }
+  if (input.polishedSuggestions !== undefined) {
+    blocksWithMeta._polishedSuggestions = input.polishedSuggestions.slice(0, 4000);
+  }
   const notes = input.fieldNotes.slice(0, 4000);
 
   const existing = await prisma.report.findFirst({
@@ -131,6 +139,7 @@ export async function saveReportDraft(input: SaveReportDraftInput): Promise<Repo
     includedBlocks: defaultBlockState(),
     fieldNotes: notes,
     suggestionsText: input.suggestionsText ?? "",
+    polishedSuggestions: input.polishedSuggestions ?? "",
     status: "draft",
     channel: null,
     updatedAt: new Date().toISOString(),

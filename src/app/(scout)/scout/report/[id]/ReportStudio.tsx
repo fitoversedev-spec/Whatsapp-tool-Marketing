@@ -282,7 +282,7 @@ export function ReportStudio({
               {sharing ? "Recording the share…" : "Share on WhatsApp"}
             </button>
 
-            <Button variant="secondary" block onClick={() => window.open(report.link!.url, "_blank", "noopener,noreferrer")}>
+            <Button variant="secondary" block onClick={() => window.open(`/api/scout/reports/${report.id}/pdf`, "_blank", "noopener,noreferrer")}>
               Open the PDF
             </Button>
 

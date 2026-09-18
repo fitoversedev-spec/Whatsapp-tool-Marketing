@@ -95,13 +95,13 @@ export async function fetchCategoryMaps(
     categories
       .filter((c) => c.locations.length > 0)
       .map(async (c): Promise<CategoryMapSection | null> => {
-        const colour = c.side === "competition" ? "0x159341" : "0x00aeef";
         const request = staticMapRequest({
           centre,
           radiusM,
           facilities: c.side === "competition" ? c.locations : [],
           demand: c.side === "demand" ? c.locations : [],
           apiKey: env.googleMapsServerKey,
+          labelMarkers: true,
         });
         if (!request) return null;
 

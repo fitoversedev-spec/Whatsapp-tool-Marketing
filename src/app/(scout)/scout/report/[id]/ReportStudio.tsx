@@ -273,17 +273,20 @@ export function ReportStudio({
           {polishError ? (
             <p className="m-0 text-[12px] text-red-600">{polishError}</p>
           ) : null}
-          {polishedText ? (
+          {polishedText !== null ? (
             <div className="flex flex-col gap-[6px]">
               <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">AI-polished preview</div>
-              <div className="border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 whitespace-pre-wrap">
-                {polishedText}
-              </div>
+              <textarea
+                className="w-full box-border min-h-[140px] resize-y border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 font-sans outline-none focus:ring-2 focus:ring-[#159341]"
+                value={polishedText}
+                onChange={(e) => setPolishedText(e.target.value)}
+                aria-label="Edit AI-polished text"
+              />
               <div className="flex gap-2">
                 <button
                   type="button"
                   className="rounded-lg border border-[#159341] bg-[#159341] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#127a36] transition-colors"
-                  onClick={() => { setSuggestionsText(polishedText); setPolishedText(null); }}
+                  onClick={() => { setSuggestionsText(polishedText ?? ""); setPolishedText(null); }}
                 >
                   Use this version
                 </button>

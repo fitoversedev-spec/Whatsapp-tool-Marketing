@@ -35,6 +35,8 @@ export interface StaticMapInput {
   /** Rendered width in CSS pixels. The API doubles it at `scale=2`. */
   readonly widthPx?: number;
   readonly heightPx?: number;
+  /** When true each marker gets its own numbered label (1-9 then A-Z). */
+  readonly labelMarkers?: boolean;
 }
 
 export interface StaticMapRequest {
@@ -96,6 +98,10 @@ export function radiusRing(centre: StaticMapPoint, radiusM: number): StaticMapPo
   return ring;
 }
 
+export function markerLabel(index: number): string {
+  return index < 9 ? String(index + 1) : String.fromCharCode(65 + index - 9);
+}
+
 function markerParam(colour: string, points: readonly StaticMapPoint[]): string | null {
   if (points.length === 0) return null;
   const coords = points
@@ -134,10 +140,21 @@ export function staticMapRequest(input: StaticMapInput): StaticMapRequest | null
     )}`,
   );
 
-  const facilityMarkers = markerParam(FACILITY_COLOUR, input.facilities);
-  const demandMarkers = markerParam(DEMAND_COLOUR, input.demand);
-  if (facilityMarkers) params.append("markers", facilityMarkers);
-  if (demandMarkers) params.append("markers", demandMarkers);
+  if (input.labelMarkers) {
+    const fSlice = input.facilities.slice(0, MAX_MARKERS_PER_LAYER);
+    fSlice.forEach((p, i) => {
+      params.append("markers", `size:mid|color:${FACILITY_COLOUR}|label:${markerLabel(i)}|${p.lat.toFixed(5)},${p.lng.toFixed(5)}`);
+    });
+    const dSlice = input.demand.slice(0, MAX_MARKERS_PER_LAYER);
+    dSlice.forEach((p, i) => {
+      params.append("markers", `size:mid|color:${DEMAND_COLOUR}|label:${markerLabel(fSlice.length + i)}|${p.lat.toFixed(5)},${p.lng.toFixed(5)}`);
+    });
+  } else {
+    const facilityMarkers = markerParam(FACILITY_COLOUR, input.facilities);
+    const demandMarkers = markerParam(DEMAND_COLOUR, input.demand);
+    if (facilityMarkers) params.append("markers", facilityMarkers);
+    if (demandMarkers) params.append("markers", demandMarkers);
+  }
   // The plot itself, drawn last so it sits above the rest.
   params.append(
     "markers",

@@ -20,6 +20,7 @@
 
 import { REPORT_FONT_LINK, reportCss } from "./css";
 import { FITOVERSE_LOGO_DATA_URI } from "./logo-data";
+import { markerLabel } from "./staticMap";
 import { renderStaticMarkup } from "./staticMarkup";
 import { REPORT_SECTION_TITLES, type CategoryMapSection, type ReportDocument, type ReportSectionId } from "./types";
 
@@ -531,7 +532,7 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
         {groups.map((group) => (
           <div key={group.categoryId} className="categoryGroup">
             <div className="categoryHead">
-              <span className="catName"><span style={{color: dotColor}}>&#x25CF;</span> {group.label}{group.distanceContext ? ` (${group.distanceContext})` : ""}</span>
+              <span className="catName"><span style={{ display: "inline-block", width: "9pt", height: "9pt", borderRadius: "50%", backgroundColor: dotColor, marginRight: "6pt", verticalAlign: "middle" }} /> {group.label}{group.distanceContext ? ` (${group.distanceContext})` : ""}</span>
               <span className="catCount">{group.count} found</span>
             </div>
             {group.places.length === 0 ? (
@@ -749,7 +750,7 @@ function PlaceGroup({
       ) : null}
       <div className="categoryHead">
         <span className="catName">
-          <span style={{ color: dotColor, marginRight: "6pt", fontSize: "14pt" }}>&#x25CF;</span>
+          <span style={{ display: "inline-block", width: "9pt", height: "9pt", borderRadius: "50%", backgroundColor: dotColor, marginRight: "6pt", verticalAlign: "middle", flexShrink: 0 }} />
           {group.label}
           {group.distanceContext ? (
             <span className="tiny" style={{ marginLeft: "6pt", fontWeight: 400 }}>
@@ -762,6 +763,9 @@ function PlaceGroup({
       {group.places.map((place, i) => (
         <div key={`${group.categoryId}:${place.name}:${i}`} className="placeRow">
           <span className="placeName">
+            {categoryMap ? (
+              <span style={{ display: "inline-block", width: "14pt", fontWeight: 700, fontSize: "9pt", color: dotColor, flexShrink: 0 }}>{markerLabel(i)}</span>
+            ) : null}
             {place.name}
             {showFlooring && place.flooring ? (
               <span className="tiny" style={{ marginLeft: "4pt" }}>· {place.flooring}</span>

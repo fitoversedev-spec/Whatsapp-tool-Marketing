@@ -1400,7 +1400,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
         ) : null}
 
         {excludedPlaces.length > 0 && (
-          <div className="fixed md:sticky bottom-0 left-0 right-0 md:left-auto md:right-auto z-[9999] md:z-20 md:-mx-5 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.12)] max-h-[45vh] flex flex-col">
+          <div className="sticky bottom-0 z-20 -mx-5 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.12)] max-h-[45vh] flex flex-col">
             <button
               type="button"
               className="flex items-center justify-between w-full px-4 py-3 text-left bg-white hover:bg-white transition-colors border-b border-slate-200 flex-none"
@@ -1438,15 +1438,13 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                         from {ep.categoryLabel} · {ep.place.distanceM < 1000 ? `${Math.round(ep.place.distanceM)} m` : `${(ep.place.distanceM / 1000).toFixed(1)} km`}
                       </span>
                     </span>
-                    {!isReportLocked && (
-                      <button
-                        type="button"
-                        className="flex-none px-3 py-1.5 text-xs font-semibold rounded-lg bg-court-500 text-white hover:bg-court-600 transition-colors"
-                        onClick={() => undoExclude(ep.exclusionId)}
-                      >
-                        Undo
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="flex-none px-3 py-1.5 text-xs font-semibold rounded-lg bg-court-500 text-white hover:bg-court-600 transition-colors"
+                      onClick={() => undoExclude(ep.exclusionId)}
+                    >
+                      Undo
+                    </button>
                   </div>
                 ))}
               </div>

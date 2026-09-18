@@ -317,3 +317,25 @@ html.dark pre, html.dark code {
 html.dark .leaflet-control-zoom a { background: var(--panel); color: rgb(var(--tx)); border-color: rgb(var(--line)); }
 html.dark .leaflet-control-attribution { background: rgba(20,20,23,0.7) !important; color: rgb(var(--dim)); }
 html.dark .leaflet-control-attribution a { color: rgb(var(--sub)); }
+
+/* Site Scout — permanent place-name labels on map pins */
+.ss-name-label {
+  background: rgba(255,255,255,.92) !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  border-radius: 4px !important;
+  padding: 1px 5px !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: #1c1c1e !important;
+  white-space: nowrap !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15) !important;
+  max-width: 140px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.ss-name-label::before { display: none !important; }
+html.dark .ss-name-label {
+  background: rgba(30,30,34,.92) !important;
+  border-color: rgba(255,255,255,.12) !important;
+  color: #e5e5ea !important;
+}

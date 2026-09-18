@@ -71,6 +71,10 @@ export function ReportStudio({
   const [suggestionsText, setSuggestionsText] = useState(initialSuggestions);
   const whatsappCaption = "";
 
+  const [polishedText, setPolishedText] = useState<string | null>(null);
+  const [polishing, setPolishing] = useState(false);
+  const [polishError, setPolishError] = useState<string | null>(null);
+
   const [report, setReport] = useState<GeneratedReport | null>(initialReport);
   const [generating, setGenerating] = useState(false);
   const [reportName, setReportName] = useState(initialReport?.title ?? "");
@@ -100,6 +104,29 @@ export function ReportStudio({
       controller.abort();
     };
   }, [blocks, notes, suggestionsText, scan.scanId]);
+
+  const polishWithAi = useCallback(async () => {
+    if (!suggestionsText.trim()) return;
+    setPolishing(true);
+    setPolishError(null);
+    try {
+      const res = await fetch(`/api/scout/scans/${scan.scanId}/report/polish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawText: suggestionsText }),
+      });
+      const json = (await res.json()) as { polished?: string; error?: string };
+      if (!res.ok || !json.polished) {
+        setPolishError(json.error ?? "Polishing failed.");
+        return;
+      }
+      setPolishedText(json.polished);
+    } catch {
+      setPolishError("Could not reach the server. Try again.");
+    } finally {
+      setPolishing(false);
+    }
+  }, [scan.scanId, suggestionsText]);
 
   const generate = useCallback(async () => {
     setGenerating(true);
@@ -215,19 +242,61 @@ export function ReportStudio({
           <textarea
             className="w-full box-border min-h-[140px] resize-y font-sans text-[13.5px] leading-[1.65] text-slate-900 border border-slate-300 rounded-lg p-[14px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
             value={suggestionsText}
-            onChange={(e) => setSuggestionsText(e.target.value)}
+            onChange={(e) => { setSuggestionsText(e.target.value); setPolishedText(null); }}
             aria-label="Your suggestions for the customer"
             placeholder="e.g. good location for 5-a-side turf, only 2 competitors both indoor, lots of schools nearby, opportunity for outdoor facility with parking"
           />
-          <div className="text-[12px] text-slate-500" aria-live="polite">
-            {saveState === "saving"
-              ? "Saving…"
-              : saveState === "saved"
-                ? "Draft saved"
-                : saveState === "error"
-                  ? "The draft did not save."
-                  : ""}
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[12px] text-slate-500" aria-live="polite">
+              {saveState === "saving"
+                ? "Saving…"
+                : saveState === "saved"
+                  ? "Draft saved"
+                  : saveState === "error"
+                    ? "The draft did not save."
+                    : ""}
+            </div>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              disabled={polishing || !suggestionsText.trim()}
+              onClick={() => void polishWithAi()}
+            >
+              {polishing ? (
+                <>
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  Polishing…
+                </>
+              ) : polishedText ? "Regenerate with AI" : "Polish with AI"}
+            </button>
           </div>
+          {polishError ? (
+            <p className="m-0 text-[12px] text-red-600">{polishError}</p>
+          ) : null}
+          {polishedText ? (
+            <div className="flex flex-col gap-[6px]">
+              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">AI-polished preview</div>
+              <div className="border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 whitespace-pre-wrap">
+                {polishedText}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-[#159341] bg-[#159341] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#127a36] transition-colors"
+                  onClick={() => { setSuggestionsText(polishedText); setPolishedText(null); }}
+                >
+                  Use this version
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                  onClick={() => setPolishedText(null)}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -451,13 +520,15 @@ export function ReportStudio({
           ) : null}
 
           {/* Section 3: Our Suggestions */}
-          {suggestionsText ? (
+          {suggestionsText || polishedText ? (
             <div>
               <div className="text-[12px] font-bold tracking-[0.12em] uppercase text-slate-500">Our suggestions</div>
               <div className="mt-[10px] border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 whitespace-pre-wrap">
-                {suggestionsText}
+                {polishedText ?? suggestionsText}
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">AI will polish this text when generating the report</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {polishedText ? "Showing AI-polished version" : "AI will polish this text when generating the report"}
+              </p>
             </div>
           ) : null}
 

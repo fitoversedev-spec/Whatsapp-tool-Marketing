@@ -522,6 +522,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   const customMarkersRef = useRef(customMarkers);
   customMarkersRef.current = customMarkers;
   const [placementMode, setPlacementMode] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
   // Read inside the map's `click` handler, which SiteMap binds once (via
   // `onReady`) and never rebinds — a plain `placementMode` closure would go
   // stale the moment the toolbar button is toggled after that.
@@ -1498,60 +1499,79 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
               {placementMode ? "Click the map to place" : "Add marker"}
             </button>
           ) : null}
-          <div className="bg-white border border-slate-200 rounded-lg py-[13px] px-[15px] flex flex-col gap-2 shadow-[0_6px_18px_rgba(0,0,0,0.1)]">
-          <SectionLabel weight={700}>Legend</SectionLabel>
-          <span className="flex items-center gap-2 text-xs text-slate-700">
-            <span
-              className="w-[9px] h-[9px] rounded-full flex-none"
-              style={{ background: MARKER_COLORS.facility }}
-              aria-hidden="true"
-            />
-            Sports facility
-          </span>
-          <span className="flex items-center gap-2 text-xs text-slate-700">
-            <span
-              className="w-[9px] h-[9px] rounded-full flex-none"
-              style={{ background: MARKER_COLORS.demand }}
-              aria-hidden="true"
-            />
-            Demand anchor
-          </span>
-          <span className="flex items-center gap-2 text-xs text-slate-700">
-            <span
-              className="w-[9px] h-[9px] rounded-full flex-none"
-              style={{ background: MARKER_COLORS.plot }}
-              aria-hidden="true"
-            />
-            Customer plot
-          </span>
-          {scanId ? (
-            <>
-              <span className="flex items-center gap-2 text-xs text-slate-700">
-                <span
-                  className="w-[9px] h-[9px] rotate-45 flex-none"
-                  style={{ background: CUSTOM_MARKER_COLORS.customer }}
-                  aria-hidden="true"
-                />
-                Customer location
-              </span>
-              <span className="flex items-center gap-2 text-xs text-slate-700">
-                <span
-                  className="w-[9px] h-[9px] rotate-45 flex-none"
-                  style={{ background: CUSTOM_MARKER_COLORS.competitor }}
-                  aria-hidden="true"
-                />
-                Competitor area
-              </span>
-              <span className="flex items-center gap-2 text-xs text-slate-700">
-                <span
-                  className="w-[9px] h-[9px] rotate-45 flex-none"
-                  style={{ background: CUSTOM_MARKER_COLORS.custom }}
-                  aria-hidden="true"
-                />
-                Custom note
-              </span>
-            </>
-          ) : null}
+          <div className="bg-white border border-slate-200 rounded-lg shadow-[0_6px_18px_rgba(0,0,0,0.1)] overflow-hidden">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between gap-2 py-[10px] px-[15px] bg-transparent border-0 cursor-pointer hover:bg-slate-50 transition-colors"
+              onClick={() => setLegendOpen((v) => !v)}
+              aria-expanded={legendOpen}
+            >
+              <SectionLabel weight={700}>Legend</SectionLabel>
+              <svg
+                width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                className={`text-slate-400 transition-transform duration-200 ${legendOpen ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            {legendOpen ? (
+              <div className="flex flex-col gap-2 px-[15px] pb-[13px]">
+                <span className="flex items-center gap-2 text-xs text-slate-700">
+                  <span
+                    className="w-[9px] h-[9px] rounded-full flex-none"
+                    style={{ background: MARKER_COLORS.facility }}
+                    aria-hidden="true"
+                  />
+                  Sports facility
+                </span>
+                <span className="flex items-center gap-2 text-xs text-slate-700">
+                  <span
+                    className="w-[9px] h-[9px] rounded-full flex-none"
+                    style={{ background: MARKER_COLORS.demand }}
+                    aria-hidden="true"
+                  />
+                  Demand anchor
+                </span>
+                <span className="flex items-center gap-2 text-xs text-slate-700">
+                  <span
+                    className="w-[9px] h-[9px] rounded-full flex-none"
+                    style={{ background: MARKER_COLORS.plot }}
+                    aria-hidden="true"
+                  />
+                  Customer plot
+                </span>
+                {scanId ? (
+                  <>
+                    <span className="flex items-center gap-2 text-xs text-slate-700">
+                      <span
+                        className="w-[9px] h-[9px] rotate-45 flex-none"
+                        style={{ background: CUSTOM_MARKER_COLORS.customer }}
+                        aria-hidden="true"
+                      />
+                      Customer location
+                    </span>
+                    <span className="flex items-center gap-2 text-xs text-slate-700">
+                      <span
+                        className="w-[9px] h-[9px] rotate-45 flex-none"
+                        style={{ background: CUSTOM_MARKER_COLORS.competitor }}
+                        aria-hidden="true"
+                      />
+                      Competitor area
+                    </span>
+                    <span className="flex items-center gap-2 text-xs text-slate-700">
+                      <span
+                        className="w-[9px] h-[9px] rotate-45 flex-none"
+                        style={{ background: CUSTOM_MARKER_COLORS.custom }}
+                        aria-hidden="true"
+                      />
+                      Custom note
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
 

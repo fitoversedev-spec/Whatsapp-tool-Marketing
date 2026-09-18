@@ -256,6 +256,16 @@ export interface MapSection {
   readonly legend: readonly string[];
 }
 
+export interface CategoryMapSection {
+  readonly categoryId: string;
+  readonly label: string;
+  readonly side: "competition" | "demand";
+  readonly url: string;
+  readonly alt: string;
+  readonly attribution: string;
+  readonly placeCount: number;
+}
+
 /* ----------------------------------------------------------------- sweep */
 
 export interface SweepSection {
@@ -339,6 +349,7 @@ export interface ReportDocument {
   readonly aiSummary: AiSummarySection | null;
   readonly suggestions: SuggestionsSection | null;
   readonly map: MapSection | null;
+  readonly categoryMaps: readonly CategoryMapSection[];
   readonly sweep: SweepSection | null;
   readonly observations: ObservationsSection | null;
   readonly limitations: LimitationsSection;

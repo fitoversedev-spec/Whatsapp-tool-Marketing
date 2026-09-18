@@ -290,13 +290,16 @@ export function SiteMap({
         const marker = L.marker([m.lat, m.lng], { icon: dotIcon(L, m.type) })
           .addTo(layer)
           .on("click", () => onMarkerTapRef.current?.(m));
-        if (popupsRef.current && m.name) {
-          marker.bindTooltip(markerPopupHtml(m), {
+        if (m.name) {
+          marker.bindTooltip(String(m.name), {
+            permanent: true,
             direction: "top",
-            offset: [0, -10],
-            opacity: 1,
-            className: "ss-popup",
+            offset: [0, -12],
+            className: "ss-name-label",
           });
+          if (popupsRef.current) {
+            marker.bindPopup(markerPopupHtml(m), { offset: [0, -8], className: "ss-popup" });
+          }
         }
       }
     }
@@ -529,13 +532,16 @@ export function SiteMap({
       const marker = L.marker([m.lat, m.lng], { icon: dotIcon(L, m.type) })
         .addTo(layer)
         .on("click", () => onMarkerTapRef.current?.(m));
-      if (popupsRef.current && m.name) {
-        marker.bindTooltip(markerPopupHtml(m), {
+      if (m.name) {
+        marker.bindTooltip(String(m.name), {
+          permanent: true,
           direction: "top",
-          offset: [0, -10],
-          opacity: 1,
-          className: "ss-popup",
+          offset: [0, -12],
+          className: "ss-name-label",
         });
+        if (popupsRef.current) {
+          marker.bindPopup(markerPopupHtml(m), { offset: [0, -8], className: "ss-popup" });
+        }
       }
     }
   }, [markers]);

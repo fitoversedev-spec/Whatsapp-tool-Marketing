@@ -4,7 +4,7 @@ import { env } from "@/lib/scout/env";
 
 import { STATIC_MAP_ATTRIBUTION } from "./brand";
 import { STATIC_MAP_LEGEND, staticMapRequest } from "./staticMap";
-import type { MapSection } from "./types";
+import type { CategoryMapSection, MapSection } from "./types";
 
 /**
  * Fetch the catchment map and inline it into the document.
@@ -76,4 +76,59 @@ export async function fetchStaticMap(input: StaticMapFetchInput): Promise<MapSec
   } finally {
     clearTimeout(timer);
   }
+}
+
+export interface CategoryMapInput {
+  readonly categoryId: string;
+  readonly label: string;
+  readonly side: "competition" | "demand";
+  readonly locations: ReadonlyArray<{ readonly lat: number; readonly lng: number }>;
+}
+
+export async function fetchCategoryMaps(
+  centre: { readonly lat: number; readonly lng: number },
+  radiusM: number,
+  areaLabel: string,
+  categories: readonly CategoryMapInput[],
+): Promise<CategoryMapSection[]> {
+  const results = await Promise.all(
+    categories
+      .filter((c) => c.locations.length > 0)
+      .map(async (c): Promise<CategoryMapSection | null> => {
+        const colour = c.side === "competition" ? "0x159341" : "0x00aeef";
+        const request = staticMapRequest({
+          centre,
+          radiusM,
+          facilities: c.side === "competition" ? c.locations : [],
+          demand: c.side === "demand" ? c.locations : [],
+          apiKey: env.googleMapsServerKey,
+        });
+        if (!request) return null;
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+        try {
+          const response = await fetch(request.url, { signal: controller.signal });
+          if (!response.ok) return null;
+          const contentType = response.headers.get("content-type") ?? "";
+          if (!contentType.startsWith("image/")) return null;
+          const buffer = Buffer.from(await response.arrayBuffer());
+          if (buffer.byteLength === 0 || buffer.byteLength > MAX_MAP_BYTES) return null;
+          return {
+            categoryId: c.categoryId,
+            label: c.label,
+            side: c.side,
+            url: `data:${contentType.split(";")[0]};base64,${buffer.toString("base64")}`,
+            alt: `Map showing ${c.label} within ${(radiusM / 1000).toFixed(1)} km of ${areaLabel}.`,
+            attribution: STATIC_MAP_ATTRIBUTION,
+            placeCount: c.locations.length,
+          };
+        } catch {
+          return null;
+        } finally {
+          clearTimeout(timer);
+        }
+      }),
+  );
+  return results.filter((r): r is CategoryMapSection => r !== null);
 }

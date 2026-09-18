@@ -21,7 +21,7 @@
 import { REPORT_FONT_LINK, reportCss } from "./css";
 import { FITOVERSE_LOGO_DATA_URI } from "./logo-data";
 import { renderStaticMarkup } from "./staticMarkup";
-import { REPORT_SECTION_TITLES, type ReportDocument, type ReportSectionId } from "./types";
+import { REPORT_SECTION_TITLES, type CategoryMapSection, type ReportDocument, type ReportSectionId } from "./types";
 
 /* ----------------------------------------------------------- small parts */
 
@@ -732,13 +732,21 @@ function PlaceGroup({
   group,
   dotColor,
   showFlooring,
+  categoryMap,
 }: {
   group: { categoryId: string; label: string; count: number; distanceContext: string; places: readonly { name: string; distance: string; flooring: string | null }[] };
   dotColor: string;
   showFlooring: boolean;
+  categoryMap?: CategoryMapSection | null;
 }) {
   return (
     <div className="categoryGroup">
+      {categoryMap ? (
+        <div className="mapFrame" style={{ marginBottom: "8pt" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={categoryMap.url} alt={categoryMap.alt} />
+        </div>
+      ) : null}
       <div className="categoryHead">
         <span className="catName">
           <span style={{ color: dotColor, marginRight: "6pt", fontSize: "14pt" }}>&#x25CF;</span>
@@ -770,6 +778,7 @@ export function ReportBody({ doc }: { doc: ReportDocument }) {
   const { meta, map } = doc;
   const sr = doc.scanResults;
   const hasFlooring = sr ? sr.competitionGroups.some((g) => g.places.some((p) => p.flooring)) : false;
+  const catMapLookup = new Map(doc.categoryMaps.map((m) => [m.categoryId, m]));
 
   return (
     <div className="page">
@@ -822,7 +831,7 @@ export function ReportBody({ doc }: { doc: ReportDocument }) {
         <div style={{ marginTop: "20pt" }}>
           <div className="eyebrow">Competition</div>
           {sr.competitionGroups.map((group) => (
-            <PlaceGroup key={group.categoryId} group={group} dotColor="#159341" showFlooring={hasFlooring} />
+            <PlaceGroup key={group.categoryId} group={group} dotColor="#159341" showFlooring={hasFlooring} categoryMap={catMapLookup.get(group.categoryId)} />
           ))}
         </div>
       ) : null}
@@ -832,14 +841,14 @@ export function ReportBody({ doc }: { doc: ReportDocument }) {
         <div style={{ marginTop: "20pt" }}>
           <div className="eyebrow">Nearby places</div>
           {sr.demandGroups.map((group) => (
-            <PlaceGroup key={group.categoryId} group={group} dotColor="#00aeef" showFlooring={false} />
+            <PlaceGroup key={group.categoryId} group={group} dotColor="#00aeef" showFlooring={false} categoryMap={catMapLookup.get(group.categoryId)} />
           ))}
         </div>
       ) : null}
 
       {/* Suggestions */}
       {doc.suggestions?.text ? (
-        <div style={{ marginTop: "20pt" }}>
+        <div style={{ breakBefore: "page", pageBreakBefore: "always" }}>
           <div className="eyebrow">Our suggestions</div>
           <div className="suggestionsBlock" style={{ marginTop: "8pt" }}>
             {doc.suggestions.text}

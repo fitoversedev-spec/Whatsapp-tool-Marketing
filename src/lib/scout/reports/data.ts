@@ -13,7 +13,7 @@ import { defaultBlockState, sanitiseBlockState, type ReportBlockState } from "./
 import { reportBrand } from "./brand";
 import type { ReportInput, ReportThemeInput } from "./document";
 import { getComplaintThemeRows, getReportDraft, getReportScanFacts } from "./repository";
-import { fetchStaticMap } from "./staticMapServer";
+import { fetchStaticMap, fetchCategoryMaps, type CategoryMapInput } from "./staticMapServer";
 
 /**
  * Everything the report renderer needs, gathered once.
@@ -88,6 +88,24 @@ export async function assembleReportInput(
         demand: result.places.filter((p) => p.side === "demand").map((p) => p.location),
       });
 
+  const categoryMaps = options.skipMap
+    ? []
+    : await fetchCategoryMaps(
+        result.centre,
+        result.radiusM,
+        result.areaLabel,
+        result.categories
+          .filter((c) => c.count > 0)
+          .map((c): CategoryMapInput => ({
+            categoryId: c.categoryId,
+            label: c.label,
+            side: c.side,
+            locations: result.places
+              .filter((p) => p.categories.includes(c.categoryId))
+              .map((p) => p.location),
+          })),
+      );
+
   return {
     scanId,
     reportId: options.reportId ?? null,
@@ -144,6 +162,7 @@ export async function assembleReportInput(
     sweep: parseSweepDocument(row?.sweep ?? null),
 
     map,
+    categoryMaps,
     themes,
     blocks: sanitiseBlockState(blocks),
     brand: reportBrand(),

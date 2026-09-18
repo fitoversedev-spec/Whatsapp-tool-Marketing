@@ -54,6 +54,7 @@ import { buildObservations, OBSERVATIONS_NOTE } from "./observations";
 import { sectionsFor } from "./sections";
 import type {
   AiSummarySection,
+  CategoryMapSection,
   CatchmentAnchorRow,
   CompetitionSection,
   CompetitorCategory,
@@ -143,6 +144,7 @@ export interface ReportInput {
 
   /** Resolved by the server: an inlined image, or `null` for no map at all. */
   readonly map: MapSection | null;
+  readonly categoryMaps: readonly CategoryMapSection[];
   readonly themes: {
     readonly analysed: boolean;
     readonly reviewedCompetitors: number;
@@ -691,6 +693,7 @@ export function buildReportDocument(input: ReportInput): ReportDocument {
     aiSummary,
     suggestions,
     map: input.map,
+    categoryMaps: input.categoryMaps ?? [],
     sweep,
     observations: surveyor,
     scanResults: buildScanResults(input),

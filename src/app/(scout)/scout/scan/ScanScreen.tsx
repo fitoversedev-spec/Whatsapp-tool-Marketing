@@ -1376,6 +1376,59 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
               </div>
             ) : null}
 
+            {excludedPlaces.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full px-4 py-3 text-left bg-slate-50 hover:bg-slate-100 transition-colors flex-none"
+                  onClick={() => setRemovedOpen((v) => !v)}
+                >
+                  <span className="text-sm font-semibold text-slate-700">
+                    Removed ({excludedPlaces.length})
+                  </span>
+                  <svg
+                    width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                    className={`text-slate-400 transition-transform ${removedOpen ? "rotate-180" : ""}`}
+                  >
+                    <path d="m18 15-6-6-6 6" />
+                  </svg>
+                </button>
+                {removedOpen && (
+                  <div className="px-3 pb-3 space-y-2">
+                    {excludedPlaces.map((ep) => (
+                      <div
+                        key={ep.exclusionId}
+                        className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
+                      >
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-semibold text-slate-900">{ep.place.name}</span>
+                          <span className="block text-xs text-slate-500 mt-0.5">
+                            {[
+                              ep.place.primaryTypeDisplayName,
+                              ep.place.rating === null
+                                ? null
+                                : `${ep.place.rating.toFixed(1)} ★ ${ep.place.reviewCount ?? 0}`,
+                            ].filter(Boolean).join(" · ") || "No detail"}
+                          </span>
+                          <span className="block text-xs text-slate-400 mt-0.5">
+                            from {ep.categoryLabel} · {ep.place.distanceM < 1000 ? `${Math.round(ep.place.distanceM)} m` : `${(ep.place.distanceM / 1000).toFixed(1)} km`}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          className="flex-none px-3 py-1.5 text-xs font-semibold rounded-lg bg-court-500 text-white hover:bg-court-600 transition-colors"
+                          onClick={() => undoExclude(ep.exclusionId)}
+                        >
+                          Undo
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {scanId ? (
               <div className="flex flex-col gap-2">
                 <Link href={`/scout/report/${scanId}`}>
@@ -1398,59 +1451,6 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
             ) : null}
           </>
         ) : null}
-
-        {excludedPlaces.length > 0 && (
-          <div className="sticky bottom-0 z-20 -mx-5 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.12)] max-h-[45vh] flex flex-col">
-            <button
-              type="button"
-              className="flex items-center justify-between w-full px-4 py-3 text-left bg-white hover:bg-white transition-colors border-b border-slate-200 flex-none"
-              onClick={() => setRemovedOpen((v) => !v)}
-            >
-              <span className="text-sm font-semibold text-slate-700">
-                Removed ({excludedPlaces.length})
-              </span>
-              <svg
-                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                className={`text-slate-400 transition-transform ${removedOpen ? "rotate-180" : ""}`}
-              >
-                <path d="m18 15-6-6-6 6" />
-              </svg>
-            </button>
-            {removedOpen && (
-              <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
-                {excludedPlaces.map((ep) => (
-                  <div
-                    key={ep.exclusionId}
-                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
-                  >
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-semibold text-slate-900">{ep.place.name}</span>
-                      <span className="block text-xs text-slate-500 mt-0.5">
-                        {[
-                          ep.place.primaryTypeDisplayName,
-                          ep.place.rating === null
-                            ? null
-                            : `${ep.place.rating.toFixed(1)} ★ ${ep.place.reviewCount ?? 0}`,
-                        ].filter(Boolean).join(" · ") || "No detail"}
-                      </span>
-                      <span className="block text-xs text-slate-400 mt-0.5">
-                        from {ep.categoryLabel} · {ep.place.distanceM < 1000 ? `${Math.round(ep.place.distanceM)} m` : `${(ep.place.distanceM / 1000).toFixed(1)} km`}
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      className="flex-none px-3 py-1.5 text-xs font-semibold rounded-lg bg-court-500 text-white hover:bg-court-600 transition-colors"
-                      onClick={() => undoExclude(ep.exclusionId)}
-                    >
-                      Undo
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </aside>
 
       <div className="flex-1 min-w-0 relative min-h-[320px] md:min-h-0">

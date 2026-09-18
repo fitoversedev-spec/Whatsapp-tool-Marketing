@@ -339,6 +339,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
     setProgress(json.progress);
     if (json.score) setScore(json.score);
     if (json.exclusions) setLocalExclusions(json.exclusions as Array<{ id: string; googlePlaceId: string; categoryId: string; locked: boolean }>);
+    if (json.excludedPlaceDetails) setExcludedPlaces([...json.excludedPlaceDetails]);
   }, []);
 
   useEffect(() => {

@@ -783,8 +783,8 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row min-h-0 md:overflow-hidden ssIn">
-      <aside className="w-full md:w-[400px] md:h-full flex-none bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto pt-6 px-5 pb-8 flex flex-col gap-5 ss-scroll" ref={scrollTargetRef}>
+    <div className="flex-1 flex flex-col md:flex-row min-h-0 md:relative md:overflow-hidden ssIn">
+      <aside className="w-full md:w-[400px] md:absolute md:top-0 md:bottom-0 md:left-0 flex-none bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto pt-6 px-5 pb-8 flex flex-col gap-5 ss-scroll" ref={scrollTargetRef}>
         {/* ---------------------------------------------------- customer plot */}
         <div className="flex flex-col gap-2">
           <SectionLabel weight={700}>Customer plot</SectionLabel>
@@ -1461,7 +1461,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
         ) : null}
       </aside>
 
-      <div className="flex-1 min-w-0 relative min-h-[320px] md:min-h-0">
+      <div className="flex-1 min-w-0 relative min-h-[320px] md:min-h-0 md:ml-[400px]">
         <SiteMap
           className="absolute inset-0 block"
           lat={centre.lat}

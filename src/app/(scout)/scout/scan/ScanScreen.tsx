@@ -795,8 +795,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
 
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-0 md:overflow-hidden ssIn">
-      <aside className="w-full md:w-[400px] md:h-full flex-none bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col" ref={scrollTargetRef}>
-        <div className="flex-1 min-h-0 overflow-y-auto pt-6 px-5 flex flex-col gap-5 ss-scroll">
+      <aside className="w-full md:w-[400px] md:h-full flex-none bg-white border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto pt-6 px-5 pb-8 flex flex-col gap-5 ss-scroll" ref={scrollTargetRef}>
         {/* ---------------------------------------------------- customer plot */}
         <div className="flex flex-col gap-2">
           <SectionLabel weight={700}>Customer plot</SectionLabel>
@@ -1395,13 +1394,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                 })}
               </div>
             ) : null}
-          </>
-        ) : null}
-        </div>
 
-        {/* ---- fixed bottom: Removed section + action buttons ---- */}
-        {data ? (
-          <div className="flex-none px-5 pb-5 pt-3 flex flex-col gap-3 border-t border-slate-200">
             <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
               <button
                 type="button"
@@ -1420,7 +1413,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                 </svg>
               </button>
               {removedOpen && excludedPlaces.length > 0 && (
-                <div className="px-3 pb-3 space-y-2 max-h-[200px] overflow-y-auto ss-scroll">
+                <div className="px-3 pb-3 space-y-2">
                   {excludedPlaces.map((ep) => (
                     <div
                       key={ep.exclusionId}
@@ -1473,7 +1466,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                 </Button>
               </Link>
             ) : null}
-          </div>
+          </>
         ) : null}
       </aside>
 

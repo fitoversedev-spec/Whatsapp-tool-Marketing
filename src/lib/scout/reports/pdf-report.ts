@@ -636,12 +636,6 @@ async function renderMap(
     cursor.y -= 12;
   }
 
-  // Legend
-  for (const line of m.legend) {
-    page = drawWrapped(page, `- ${line}`, MARGIN, cursor, fonts.regular, 6.5, COL.muted, CONTENT_W, 9, doc, fonts, footerText, pageNum);
-    cursor.y -= 2;
-  }
-
   // Simple color legend under map (dot + category + count)
   const sr = report.scanResults;
   if (sr) {

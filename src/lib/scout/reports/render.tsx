@@ -585,11 +585,6 @@ function MapPage({ doc, n }: { doc: ReportDocument; n: number }) {
         <img src={m.url} alt={m.alt} />
       </div>
       <p className="tiny">{m.attribution}</p>
-      <ul className="small">
-        {m.legend.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
       {sr && (sr.competitionGroups.length > 0 || sr.demandGroups.length > 0) && (
         <div className="mapPlaces">
           {sr.competitionGroups

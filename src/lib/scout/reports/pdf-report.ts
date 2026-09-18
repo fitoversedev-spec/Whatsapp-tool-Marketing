@@ -642,34 +642,23 @@ async function renderMap(
     cursor.y -= 2;
   }
 
-  // Place details under map (from scanResults)
+  // Simple color legend under map (dot + category + count)
   const sr = report.scanResults;
   if (sr) {
     cursor.y -= 6;
-    const allGroups = [...sr.competitionGroups, ...sr.demandGroups].filter((g) => g.places.length > 0);
-    for (const g of allGroups) {
-      page = needPage(doc, fonts, cursor, 14, footerText, pageNum);
-      const color = sr.competitionGroups.includes(g) ? "Red" : "Blue";
-      page.drawText(sanitize(`${color} - ${g.label} (${g.count})`), {
-        x: MARGIN, y: cursor.y, size: 6.5, font: fonts.bold, color: COL.muted,
-      });
-      cursor.y -= 9;
-
-      for (const p of g.places.slice(0, 10)) {
-        page = needPage(doc, fonts, cursor, 8, footerText, pageNum);
-        page.drawText(sanitize(`  ${p.name} - ${p.distance}`), {
-          x: MARGIN + 4, y: cursor.y, size: 6, font: fonts.regular, color: COL.muted,
-        });
-        cursor.y -= 8;
-      }
-      if (g.places.length > 10) {
-        page.drawText(sanitize(`  + ${g.places.length - 10} more`), {
-          x: MARGIN + 4, y: cursor.y, size: 6, font: fonts.italic, color: COL.muted,
-        });
-        cursor.y -= 8;
-      }
-      cursor.y -= 4;
+    let legendX = MARGIN;
+    const groups = [
+      ...sr.competitionGroups.filter((g) => g.places.length > 0).map((g) => ({ ...g, dotColor: rgb(21 / 255, 147 / 255, 65 / 255) })),
+      ...sr.demandGroups.filter((g) => g.places.length > 0).map((g) => ({ ...g, dotColor: rgb(0, 174 / 255, 239 / 255) })),
+    ];
+    page = needPage(doc, fonts, cursor, 12, footerText, pageNum);
+    for (const g of groups) {
+      page.drawCircle({ x: legendX + 3, y: cursor.y + 2, size: 3, color: g.dotColor });
+      const label = sanitize(`${g.label} (${g.count})`);
+      page.drawText(label, { x: legendX + 9, y: cursor.y, size: 6.5, font: fonts.regular, color: COL.muted });
+      legendX += 9 + fonts.regular.widthOfTextAtSize(label, 6.5) + 16;
     }
+    cursor.y -= 10;
   }
 
   return page;

@@ -80,6 +80,7 @@ body{
 .section{ break-before:page; }
 .section:first-of-type{ break-before:auto; }
 .section > *:first-child{ margin-top:0; }
+.page > *:first-child{ margin-top:0; }
 
 h1,h2,h3,h4{ break-after:avoid; page-break-after:avoid; margin:0; }
 h1{ font-family:var(--font-display); font-size:22pt; line-height:1.25; letter-spacing:-.01em; font-weight:700; }
@@ -189,21 +190,38 @@ td.r,th.r{ text-align:right; }
 }
 .suggestionsBlock{ border-left-color:var(--green); }
 
+/* ------------------------------------------------------------ header */
+
+.reportHeader{ margin-bottom:16pt; }
+.reportHeaderRow{ display:flex; justify-content:space-between; align-items:center; padding-bottom:10pt; border-bottom:2pt solid var(--black); }
+.headerLeft{ display:flex; align-items:center; gap:8pt; }
+.headerLogo{ height:24pt; width:auto; }
+.headerTitle{ font-family:var(--font-display); font-size:10pt; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+.headerDate{ font-size:9pt; color:var(--gray-500); }
+
+.areaBlock{ margin-bottom:10pt; }
+
+/* --------------------------------------------------------- legend */
+
+.legendRow{ display:flex; flex-wrap:wrap; gap:6pt 14pt; margin-top:8pt; font-size:9pt; color:var(--gray-500); }
+.legendItem{ display:inline-flex; align-items:center; gap:4pt; }
+.legendDot{ display:inline-block; width:8pt; height:8pt; border-radius:50%; flex-shrink:0; }
+
 /* --------------------------------------------------------- scanResults */
 
-.categoryGroup{ break-inside:avoid; margin-bottom:14pt; }
-.categoryHead{ display:flex; justify-content:space-between; align-items:baseline; gap:8pt; margin-bottom:6pt; padding-bottom:4pt; border-bottom:1pt solid var(--gray-200); }
-.catName{ font-weight:700; font-size:12pt; }
-.catCount{ font-size:9.5pt; color:var(--gray-500); font-weight:600; white-space:nowrap; }
+.categoryGroup{ break-inside:avoid; margin-top:10pt; margin-bottom:10pt; }
+.categoryHead{ display:flex; justify-content:space-between; align-items:baseline; gap:8pt; margin-bottom:4pt; padding-bottom:4pt; border-bottom:1pt solid var(--gray-200); }
+.catName{ font-weight:700; font-size:11.5pt; }
+.catCount{ font-size:9pt; color:var(--gray-500); font-weight:600; white-space:nowrap; }
+
+.placeRow{ display:flex; justify-content:space-between; align-items:baseline; gap:8pt; padding:4pt 0; border-bottom:0.5pt solid var(--gray-100); break-inside:avoid; }
+.placeName{ font-size:10.5pt; overflow:hidden; text-overflow:ellipsis; }
+.placeDist{ font-size:10pt; color:var(--gray-500); white-space:nowrap; flex-shrink:0; }
 
 /* ------------------------------------------------------------------ map */
 
 .mapFrame{ break-inside:avoid; border:1pt solid var(--gray-200); border-radius:8pt; overflow:hidden; }
 .mapFrame img{ display:block; width:100%; height:auto; }
-
-.mapPlaces{ margin-top:10pt; }
-.mapPlaces ul{ margin:2pt 0 8pt 14pt; padding:0; }
-.mapPlaces li{ list-style:disc; margin:1pt 0; }
 
 /* --------------------------------------------------------------- notes */
 
@@ -211,7 +229,7 @@ td.r,th.r{ text-align:right; }
 
 /* ------------------------------------------------------------ end page */
 
-.endMatter{ margin-top:14pt; padding-top:8pt; border-top:1pt solid var(--gray-200); }
+.endMatter{ margin-top:20pt; padding-top:10pt; border-top:1pt solid var(--gray-200); }
 .disclaimer{ font-size:9pt; line-height:1.45; color:var(--gray-700); }
 
 /* Screen preview only — on paper the page box already provides the frame. */

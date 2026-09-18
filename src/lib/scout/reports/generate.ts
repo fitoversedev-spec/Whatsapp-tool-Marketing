@@ -13,8 +13,8 @@ import { buildComparisonDocument, renderComparisonHtml } from "./comparison";
 import { assembleReportInput } from "./data";
 import { deliveryNote, reportDelivery, type DeliveryMode } from "./delivery";
 import { buildReportDocument } from "./document";
-import { renderReportPdfLib } from "./pdf-report";
-import { renderPdf, PdfEngineUnavailableError } from "./pdf";
+import { renderPdf, PdfEngineUnavailableError, headerTemplate, footerTemplate } from "./pdf";
+import { renderReportHtml } from "./render";
 import { expiryFromNow, linkTtlDays, signReportLink } from "./signing";
 import { normaliseRecipient } from "./share";
 import {
@@ -179,12 +179,12 @@ export async function runReportGeneration(
     });
     const brand = reportBrand();
 
-    const pdf = await renderReportPdfLib(document, {
-      headerText: `${input.customTitle || document.meta.areaLabel} · ${document.meta.radiusLabel} · Site Scout report v${document.meta.version}`,
-      footerText: [brand.legalName, brand.attribution, "Preliminary desk survey — not financial, investment, legal or planning advice"]
-        .filter(Boolean)
-        .join(" · "),
-    });
+    const html = await renderReportHtml(document);
+    const headerText = `${input.customTitle || document.meta.areaLabel} · ${document.meta.radiusLabel} · Site Scout report v${document.meta.version}`;
+    const footerText = [brand.legalName, brand.attribution, "Preliminary desk survey — not financial, investment, legal or planning advice"]
+      .filter(Boolean)
+      .join(" · ");
+    const pdf = await renderPdf(html, { headerText, footerText });
 
     const stored = await reportStorage().put(reportId, pdf.bytes);
     const expiresAt = expiryFromNow(generatedAt, linkTtlDays());

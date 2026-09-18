@@ -43,8 +43,8 @@ export interface StaticMapRequest {
   readonly heightPx: number;
 }
 
-/** Colours match the on-screen map: competition red, demand blue. */
-const FACILITY_COLOUR = "0xd7263d";
+/** Colours match the report legend: competition green, demand blue. */
+const FACILITY_COLOUR = "0x159341";
 const DEMAND_COLOUR = "0x00aeef";
 const RING_COLOUR = "0x0a0a0a";
 

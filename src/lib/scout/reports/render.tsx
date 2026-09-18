@@ -728,48 +728,131 @@ function Limitations({ doc, n }: { doc: ReportDocument; n: number }) {
 
 /* ------------------------------------------------------------------ body */
 
+function PlaceGroup({
+  group,
+  dotColor,
+  showFlooring,
+}: {
+  group: { categoryId: string; label: string; count: number; distanceContext: string; places: readonly { name: string; distance: string; flooring: string | null }[] };
+  dotColor: string;
+  showFlooring: boolean;
+}) {
+  return (
+    <div className="categoryGroup">
+      <div className="categoryHead">
+        <span className="catName">
+          <span style={{ color: dotColor, marginRight: "6pt", fontSize: "14pt" }}>&#x25CF;</span>
+          {group.label}
+          {group.distanceContext ? (
+            <span className="tiny" style={{ marginLeft: "6pt", fontWeight: 400 }}>
+              ({group.distanceContext})
+            </span>
+          ) : null}
+        </span>
+        <span className="catCount">{group.count} found</span>
+      </div>
+      {group.places.map((place, i) => (
+        <div key={`${group.categoryId}:${place.name}:${i}`} className="placeRow">
+          <span className="placeName">
+            {place.name}
+            {showFlooring && place.flooring ? (
+              <span className="tiny" style={{ marginLeft: "4pt" }}>· {place.flooring}</span>
+            ) : null}
+          </span>
+          <span className="placeDist">{place.distance}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ReportBody({ doc }: { doc: ReportDocument }) {
-  /**
-   * The cover is the title page and carries no number, so the numbered
-   * sequence starts at the verdict. A document whose first visible heading is
-   * "2." reads like a page went missing.
-   */
-  let n = 0;
+  const { meta, map } = doc;
+  const sr = doc.scanResults;
+  const hasFlooring = sr ? sr.competitionGroups.some((g) => g.places.some((p) => p.flooring)) : false;
+
   return (
     <div className="page">
-      {doc.sections.map((id) => {
-        if (id !== "cover") n += 1;
-        switch (id) {
-          case "cover":
-            return <Cover key={id} doc={doc} />;
-          case "verdict":
-            return <Verdict key={id} doc={doc} n={n} />;
-          case "catchment":
-            return <Catchment key={id} doc={doc} n={n} />;
-          case "competition":
-            return <Competition key={id} doc={doc} n={n} />;
-          case "demand":
-            return <Demand key={id} doc={doc} n={n} />;
-          case "sportsAreas":
-            return <SportsAreas key={id} doc={doc} n={n} />;
-          case "aiSummary":
-            return <AiSummary key={id} doc={doc} n={n} />;
-          case "suggestions":
-            return <Suggestions key={id} doc={doc} n={n} />;
-          case "scanResults":
-            return <ScanResults key={id} doc={doc} n={n} />;
-          case "map":
-            return <MapPage key={id} doc={doc} n={n} />;
-          case "sweep":
-            return <Sweep key={id} doc={doc} n={n} />;
-          case "observations":
-            return <Observations key={id} doc={doc} n={n} />;
-          case "limitations":
-            return <Limitations key={id} doc={doc} n={n} />;
-          default:
-            return null;
-        }
-      })}
+      {/* Header */}
+      <div className="reportHeader">
+        <div className="reportHeaderRow">
+          <div className="headerLeft">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={FITOVERSE_LOGO_DATA_URI} alt="Fitoverse" className="headerLogo" />
+            <span className="headerTitle">Site Scout report</span>
+          </div>
+          <span className="headerDate">{meta.generatedAtLabel}</span>
+        </div>
+      </div>
+
+      {/* Area */}
+      <div className="areaBlock">
+        <div className="eyebrow">Area</div>
+        <h1 style={{ marginTop: "6pt" }}>
+          {meta.title || meta.areaLabel} — {meta.radiusLabel} radius
+        </h1>
+      </div>
+
+      {/* Map */}
+      {map ? (
+        <div style={{ marginTop: "16pt" }}>
+          <div className="eyebrow">Catchment map</div>
+          <div className="mapFrame" style={{ marginTop: "8pt" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={map.url} alt={map.alt} />
+          </div>
+          {sr ? (
+            <div className="legendRow">
+              {[
+                ...sr.competitionGroups.filter((g) => g.places.length > 0).map((g) => ({ ...g, color: "#159341" })),
+                ...sr.demandGroups.filter((g) => g.places.length > 0).map((g) => ({ ...g, color: "#00aeef" })),
+              ].map((g) => (
+                <span key={g.categoryId} className="legendItem">
+                  <span className="legendDot" style={{ background: g.color }} />
+                  {g.label} ({g.count})
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Competition */}
+      {sr && sr.competitionGroups.length > 0 ? (
+        <div style={{ marginTop: "20pt" }}>
+          <div className="eyebrow">Competition</div>
+          {sr.competitionGroups.map((group) => (
+            <PlaceGroup key={group.categoryId} group={group} dotColor="#159341" showFlooring={hasFlooring} />
+          ))}
+        </div>
+      ) : null}
+
+      {/* Nearby places */}
+      {sr && sr.demandGroups.length > 0 ? (
+        <div style={{ marginTop: "20pt" }}>
+          <div className="eyebrow">Nearby places</div>
+          {sr.demandGroups.map((group) => (
+            <PlaceGroup key={group.categoryId} group={group} dotColor="#00aeef" showFlooring={false} />
+          ))}
+        </div>
+      ) : null}
+
+      {/* Suggestions */}
+      {doc.suggestions?.text ? (
+        <div style={{ marginTop: "20pt" }}>
+          <div className="eyebrow">Our suggestions</div>
+          <div className="suggestionsBlock" style={{ marginTop: "8pt" }}>
+            {doc.suggestions.text}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Footer */}
+      <div className="endMatter">
+        <p className="tiny">
+          Prepared by {meta.preparedBy} · Fitoverse · Data from public listings.
+        </p>
+      </div>
     </div>
   );
 }

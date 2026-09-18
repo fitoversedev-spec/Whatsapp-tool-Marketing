@@ -419,11 +419,12 @@ function renderCompetitorTable(
 ): PDFPage {
   page = needPage(doc, fonts, cursor, 28, footerText, pageNum);
 
+  page.drawCircle({ x: MARGIN + 3.5, y: cursor.y + 3, size: 3.5, color: rgb(21 / 255, 147 / 255, 65 / 255) });
   const titleText = category.titleSuffix
     ? `${category.label} (${category.titleSuffix})`
     : category.label;
   page.drawText(sanitize(titleText), {
-    x: MARGIN, y: cursor.y, size: 9, font: fonts.bold, color: COL.ink,
+    x: MARGIN + 11, y: cursor.y, size: 9, font: fonts.bold, color: COL.ink,
   });
   cursor.y -= 12;
   page.drawText(sanitize(category.countLine), {
@@ -731,15 +732,16 @@ function renderLimitations(
 function renderScanResultGroup(
   doc: PDFDocument, page: PDFPage, group: ScanResultCategoryGroup,
   fonts: Fonts, cursor: Cursor, footerText: string, pageNum: { n: number },
-  showFlooring: boolean,
+  showFlooring: boolean, dotColor: ReturnType<typeof rgb>,
 ): PDFPage {
   page = needPage(doc, fonts, cursor, 24, footerText, pageNum);
 
+  page.drawCircle({ x: MARGIN + 3, y: cursor.y + 2.5, size: 3, color: dotColor });
   const titleText = group.distanceContext
     ? `${group.label} (${group.distanceContext})`
     : group.label;
   page.drawText(sanitize(titleText), {
-    x: MARGIN, y: cursor.y, size: 8, font: fonts.bold, color: COL.ink,
+    x: MARGIN + 10, y: cursor.y, size: 8, font: fonts.bold, color: COL.ink,
   });
   const countText = sanitize(`${group.count} found`);
   const countW = fonts.regular.widthOfTextAtSize(countText, 6.5);
@@ -783,7 +785,7 @@ function renderScanResults(
     page.drawText("Competition", { x: MARGIN, y: cursor.y, size: 9, font: fonts.bold, color: COL.ink });
     cursor.y -= 14;
     for (const group of s.competitionGroups) {
-      page = renderScanResultGroup(doc, page, group, fonts, cursor, footerText, pageNum, hasFlooring);
+      page = renderScanResultGroup(doc, page, group, fonts, cursor, footerText, pageNum, hasFlooring, rgb(21 / 255, 147 / 255, 65 / 255));
     }
   }
 
@@ -792,7 +794,7 @@ function renderScanResults(
     page.drawText("Nearby places", { x: MARGIN, y: cursor.y, size: 9, font: fonts.bold, color: COL.ink });
     cursor.y -= 14;
     for (const group of s.demandGroups) {
-      page = renderScanResultGroup(doc, page, group, fonts, cursor, footerText, pageNum, false);
+      page = renderScanResultGroup(doc, page, group, fonts, cursor, footerText, pageNum, false, rgb(0, 174 / 255, 239 / 255));
     }
   }
 

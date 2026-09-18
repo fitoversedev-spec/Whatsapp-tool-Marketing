@@ -134,30 +134,7 @@ const postgresStorage: ReportStorage = {
  * does not block report generation entirely.
  */
 export function reportStorage(): ReportStorage {
-  if (!env.hasBlobReadWriteToken) return postgresStorage;
-
-  const blob = blobStorage();
-  return {
-    name: "blob-with-pg-fallback",
-    async put(reportId, bytes, contentType) {
-      try {
-        return await blob.put(reportId, bytes, contentType);
-      } catch {
-        return postgresStorage.put(reportId, bytes, contentType);
-      }
-    },
-    async get(reportId) {
-      try {
-        const result = await blob.get(reportId);
-        if (result) return result;
-      } catch { /* fall through */ }
-      return postgresStorage.get(reportId);
-    },
-    async remove(reportId) {
-      try { await blob.remove(reportId); } catch { /* ignore */ }
-      try { await postgresStorage.remove(reportId); } catch { /* ignore */ }
-    },
-  };
+  return postgresStorage;
 }
 
 /* ------------------------------------------------------------------------- *

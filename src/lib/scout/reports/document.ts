@@ -291,10 +291,8 @@ function buildCompetition(input: ReportInput): CompetitionSection {
       };
     });
 
-    const nearest = members.length > 0 ? members.reduce((a, b) => (a.distanceM < b.distanceM ? a : b)) : null;
-    const farthest = members.length > 0 ? members.reduce((a, b) => (a.distanceM > b.distanceM ? a : b)) : null;
-    const titleSuffix = nearest && farthest
-      ? `nearest ${formatDistance(nearest.distanceM)}, farthest ${formatDistance(farthest.distanceM)} from plot`
+    const titleSuffix = members.length > 0
+      ? `Nearest ${category.label.toLowerCase()} from our plot`
       : "";
 
     byCategory.push({
@@ -496,10 +494,8 @@ function buildScanResults(input: ReportInput): ScanResultsSection {
               flooring: floorLabel,
             };
           });
-        const nearest = places[0];
-        const farthest = places[places.length - 1];
-        const distanceContext = nearest && farthest
-          ? `nearest ${nearest.distance}, farthest ${farthest.distance} from plot`
+        const distanceContext = places.length > 0
+          ? `Nearest ${category.label.toLowerCase()} from our plot`
           : "";
         return {
           categoryId: category.categoryId,

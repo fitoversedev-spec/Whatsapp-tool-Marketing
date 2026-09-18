@@ -1257,6 +1257,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill }: Sca
                                   {place.flooring && (
                                     <span className="inline-flex items-center gap-1">
                                       <input
+                                        key={`${place.placeId}:fd:${place.flooringDetail ?? ""}`}
                                         type="text"
                                         className="text-xs px-2 py-0.5 rounded border border-slate-200 bg-white text-slate-700 w-[140px] placeholder:text-slate-300 focus:outline-none focus:border-court-400 focus:ring-1 focus:ring-court-200"
                                         placeholder="variant detail…"

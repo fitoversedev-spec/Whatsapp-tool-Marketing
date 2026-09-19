@@ -31,7 +31,9 @@ export type ReportSectionId =
   | "sweep"
   | "observations"
   | "limitations"
-  | "scanResults";
+  | "scanResults"
+  | "analysisOverview"
+  | "placeInsights";
 
 /** Section titles, in document order. Numbering on the page comes from here. */
 export const REPORT_SECTION_TITLES: Readonly<Record<ReportSectionId, string>> = {
@@ -48,6 +50,8 @@ export const REPORT_SECTION_TITLES: Readonly<Record<ReportSectionId, string>> = 
   observations: "Surveyor observations",
   limitations: "What this report does not cover",
   scanResults: "Scan results",
+  analysisOverview: "AI area analysis",
+  placeInsights: "Per-place AI insights",
 };
 
 /* ------------------------------------------------------------------ meta */
@@ -327,6 +331,68 @@ export interface ScanResultsSection {
   readonly demandGroups: readonly ScanResultCategoryGroup[];
 }
 
+/* -------------------------------------------------------- analysisOverview */
+
+export interface CompetitorLearningRow {
+  readonly complaint: string;
+  readonly seenAt: string;
+  readonly ourRule: string;
+}
+
+export interface OpportunityRow {
+  readonly title: string;
+  readonly detail: string;
+}
+
+export interface PromotionRow {
+  readonly channel: string;
+  readonly action: string;
+  readonly timeline: string;
+}
+
+export interface ChecklistRow {
+  readonly task: string;
+  readonly priority: string;
+  readonly when: string;
+}
+
+export interface AnalysisOverviewSection {
+  readonly marketSaturation: {
+    readonly level: string;
+    readonly explanation: string;
+  };
+  readonly opportunityScore: { readonly score: number; readonly reasoning: string };
+  readonly risks: readonly string[];
+  readonly executiveRecommendation: string;
+  readonly competitorLearnings: readonly CompetitorLearningRow[];
+  readonly opportunities: readonly OpportunityRow[];
+  readonly promotionPlan: readonly PromotionRow[];
+  readonly launchChecklist: readonly ChecklistRow[];
+  readonly oneLineStrategy: string | null;
+}
+
+/* --------------------------------------------------------- placeInsights */
+
+export interface PlaceInsightSection {
+  readonly places: readonly PlaceInsightEntry[];
+}
+
+export interface PlaceInsightEntry {
+  readonly name: string;
+  readonly establishedDate: string;
+  readonly popularTimes: string;
+  readonly googleReviewsTone: string;
+  readonly googleReviewsSummary: string;
+  readonly socialMediaSummary: string;
+  readonly whatWorks: readonly string[];
+  readonly whatDoesnt: readonly string[];
+  readonly suitability: string;
+  readonly suitabilityReasoning: string;
+  readonly confidence: string;
+  readonly citations: readonly { readonly url: string; readonly title: string }[];
+  readonly pricingNote: string | null;
+}
+
 /* -------------------------------------------------------------- document */
 
 export interface ReportFooter {
@@ -354,5 +420,7 @@ export interface ReportDocument {
   readonly observations: ObservationsSection | null;
   readonly limitations: LimitationsSection;
   readonly scanResults: ScanResultsSection | null;
+  readonly analysisOverview: AnalysisOverviewSection | null;
+  readonly placeInsights: PlaceInsightSection | null;
   readonly footer: ReportFooter;
 }

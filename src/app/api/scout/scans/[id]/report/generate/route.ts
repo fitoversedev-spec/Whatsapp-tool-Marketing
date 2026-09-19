@@ -15,7 +15,9 @@ import { getScan } from "@/lib/scout/places/scanRepository";
 import {
   latestGeneratedReport,
   reportLink,
+  runAnalysisReportGeneration,
   runReportGeneration,
+  startAnalysisReportGeneration,
   startReportGeneration,
   type ReportGenerationRow,
 } from "@/lib/scout/reports/generate";
@@ -60,10 +62,29 @@ export async function GET(_request: Request, context: { params: { id: string } }
   );
 }
 
-export async function POST(_request: Request, context: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: { id: string } }) {
   const { id } = context.params;
   const auth = await authorise(id);
   if ("error" in auth) return auth.error;
+
+  const url = new URL(request.url);
+  const kind = url.searchParams.get("kind") as "scan" | "analysis" | "combined" | null;
+  const analysisId = url.searchParams.get("analysisId");
+
+  if ((kind === "analysis" || kind === "combined") && analysisId) {
+    const row = await startAnalysisReportGeneration(auth.author, id, analysisId, kind);
+    if (!row) {
+      return NextResponse.json({ error: "This scan has no results to report on." }, { status: 409 });
+    }
+    const author = auth.author;
+    after(async () => {
+      await runAnalysisReportGeneration(author, row.id, kind);
+    });
+    return NextResponse.json(
+      { scanId: id, report: withLink(row) },
+      { status: 202, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   const row = await startReportGeneration(auth.author, id);
   if (!row) {

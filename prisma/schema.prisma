@@ -102,6 +102,7 @@ model User {
   scoutApiUsage     ApiUsage[]        @relation("ScoutApiUsageUser")
   scanMarkers       ScanMarker[]      @relation("ScanMarkerAuthor")
   excludedPlaces    ExcludedPlace[]   @relation("ExcludedPlaceOwner")
+  scoutAnalyses     ScoutAnalysis[]   @relation("ScoutAnalysisOwner")
 
   @@map("users")
 }
@@ -2176,8 +2177,20 @@ enum ReportStatus {
 enum ReportKind {
   scan
   comparison
+  analysis
+  combined
 
   @@map("report_kind")
+}
+
+enum AnalysisStatus {
+  pending
+  running
+  partial
+  completed
+  failed
+
+  @@map("analysis_status")
 }
 
 model Site {
@@ -2255,14 +2268,15 @@ model Scan {
   owner        User          @relation(fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "scans_owner_id_users_id_fk")
   site         Site?         @relation(fields: [siteId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "scans_site_id_sites_id_fk")
   scoreModel   ScoreModel?   @relation(fields: [scoreModelId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "scans_score_model_id_score_models_id_fk")
-  scanPlaces   ScanPlace[]
-  reports      Report[]
-  reportShares ReportShare[]
-  reviewThemes ReviewTheme[]
-  apiUsage     ApiUsage[]
-  job          ScanJob?
+  scanPlaces     ScanPlace[]
+  reports        Report[]
+  reportShares   ReportShare[]
+  reviewThemes   ReviewTheme[]
+  apiUsage       ApiUsage[]
+  job            ScanJob?
   markers        ScanMarker[]
   excludedPlaces ExcludedPlace[]
+  scoutAnalyses  ScoutAnalysis[]
 
   @@index([ownerId], map: "scans_owner_idx")
   @@index([siteId], map: "scans_site_idx")
@@ -2297,10 +2311,11 @@ model Place {
   createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  scanPlaces   ScanPlace[]
-  tags         PlaceTag[]
-  reviews      PlaceReview[]
-  reviewThemes ReviewTheme[]
+  scanPlaces         ScanPlace[]
+  tags               PlaceTag[]
+  reviews            PlaceReview[]
+  reviewThemes       ReviewTheme[]
+  scoutPlaceInsights ScoutPlaceInsight[]
 
   @@index([cacheExpiresAt], map: "places_cache_expires_idx")
   @@map("places")
@@ -2547,6 +2562,7 @@ model Report {
   createdBy         String        @map("created_by")
   title             String?       @db.VarChar(240)
   kind              ReportKind    @default(scan)
+  analysisId        String?       @map("analysis_id") @db.Uuid
   subjectScanIds    Json?         @map("subject_scan_ids")
   includedBlocks    Json?         @map("included_blocks")
   fieldNotes        String?       @map("field_notes")
@@ -2568,14 +2584,16 @@ model Report {
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  scan   Scan          @relation(fields: [scanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "reports_scan_id_scans_id_fk")
-  author User          @relation("ScoutReportAuthor", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "reports_created_by_users_id_fk")
-  file   ReportFile?
-  shares ReportShare[]
+  scan     Scan           @relation(fields: [scanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "reports_scan_id_scans_id_fk")
+  author   User           @relation("ScoutReportAuthor", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "reports_created_by_users_id_fk")
+  analysis ScoutAnalysis? @relation(fields: [analysisId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "reports_analysis_id_scout_analyses_id_fk")
+  file     ReportFile?
+  shares   ReportShare[]
 
   @@index([scanId], map: "reports_scan_idx")
   @@index([createdBy], map: "reports_created_by_idx")
   @@index([status], map: "reports_status_idx")
+  @@index([analysisId], map: "reports_analysis_idx")
   @@map("reports")
 }
 
@@ -2632,4 +2650,67 @@ model ScanMarker {
 
   @@index([scanId], map: "scan_markers_scan_idx")
   @@map("scan_markers")
+}
+
+// ── Scout AI Analysis ──
+
+model ScoutAnalysis {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scanId           String         @map("scan_id") @db.Uuid
+  ownerId          String         @map("owner_id")
+  sourceAnalysisId String?        @map("source_analysis_id") @db.Uuid
+  status           AnalysisStatus @default(pending)
+  totalPlaces      Int            @default(0) @map("total_places")
+  completedPlaces  Int            @default(0) @map("completed_places")
+  failedPlaces     Int            @default(0) @map("failed_places")
+  areaSummary      Json?          @map("area_summary")
+  costEstimate     Json?          @map("cost_estimate")
+  inputTokens      Int            @default(0) @map("input_tokens")
+  outputTokens     Int            @default(0) @map("output_tokens")
+  error            String?
+  startedAt        DateTime?      @map("started_at") @db.Timestamptz(6)
+  finishedAt       DateTime?      @map("finished_at") @db.Timestamptz(6)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  scan           Scan              @relation(fields: [scanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scout_analyses_scan_id_scans_id_fk")
+  owner          User              @relation("ScoutAnalysisOwner", fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "scout_analyses_owner_id_users_id_fk")
+  sourceAnalysis ScoutAnalysis?    @relation("AnalysisClone", fields: [sourceAnalysisId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "scout_analyses_source_id_fk")
+  clones         ScoutAnalysis[]   @relation("AnalysisClone")
+  insights       ScoutPlaceInsight[]
+  reports        Report[]
+
+  @@unique([scanId, ownerId], map: "scout_analyses_scan_owner_uniq")
+  @@index([ownerId], map: "scout_analyses_owner_idx")
+  @@index([status], map: "scout_analyses_status_idx")
+  @@map("scout_analyses")
+}
+
+model ScoutPlaceInsight {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  analysisId      String         @map("analysis_id") @db.Uuid
+  placeId         String         @map("place_id") @db.Uuid
+  googlePlaceId   String         @map("google_place_id") @db.VarChar(255)
+  status          AnalysisStatus @default(pending)
+  retryCount      Int            @default(0) @map("retry_count")
+  establishedDate Json?          @map("established_date")
+  popularTimes    Json?          @map("popular_times")
+  sentiment       Json?
+  suitability     Json?
+  rawSources      Json?          @map("raw_sources")
+  editedFields    Json?          @map("edited_fields")
+  inputTokens     Int            @default(0) @map("input_tokens")
+  outputTokens    Int            @default(0) @map("output_tokens")
+  error           String?
+  analysedAt      DateTime?      @map("analysed_at") @db.Timestamptz(6)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  analysis ScoutAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scout_place_insights_analysis_id_fk")
+  place    Place         @relation(fields: [placeId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scout_place_insights_place_id_fk")
+
+  @@unique([analysisId, placeId], map: "scout_place_insights_analysis_place_uniq")
+  @@index([placeId], map: "scout_place_insights_place_idx")
+  @@index([status], map: "scout_place_insights_status_idx")
+  @@map("scout_place_insights")
 }

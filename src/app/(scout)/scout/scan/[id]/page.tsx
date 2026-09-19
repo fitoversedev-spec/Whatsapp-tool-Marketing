@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import BackButton from "@/components/BackButton";
-import { getScoutIdentity } from "@/lib/scout/identity";
+import { getScoutIdentity, getScoutProfile } from "@/lib/scout/identity";
 import { env } from "@/lib/scout/env";
 import { publicTaxonomy } from "@/lib/scout/places/taxonomy";
+import { defaultBlockState } from "@/lib/scout/reports/blocks";
+import { latestGeneratedReport, reportLink } from "@/lib/scout/reports/generate";
+import { getReportDraft } from "@/lib/scout/reports/repository";
 import { getScanScreenData } from "@/lib/scout/scans/screenData";
-import { ScanScreen } from "../ScanScreen";
+import { ScanPageClient } from "../ScanPageClient";
 
 export const dynamic = "force-dynamic";
 
@@ -21,32 +24,45 @@ export async function generateMetadata({
   return { title: data ? `${data.areaLabel} — Site Scout` : "Scan — Site Scout" };
 }
 
-/**
- * D2, showing a saved scan.
- *
- * Rendered on the server so the first paint carries whatever has landed —
- * including a scan that is still running, which `getScanResult` supports on
- * purpose. The client then polls progress and repaints.
- */
 export default async function ScanDetailPage({ params }: { params: { id: string } }) {
   const identity = await getScoutIdentity();
   if (!identity) redirect("/login");
   if (!identity.canRunScans) notFound();
 
   const { id } = params;
-  const data = await getScanScreenData(identity, id);
-  // A scan belonging to someone else is a 404, not a 403.
+  const [data, author] = await Promise.all([
+    getScanScreenData(identity, id),
+    getScoutProfile(),
+  ]);
   if (!data) notFound();
+
+  const [draft, generated] = await Promise.all([
+    getReportDraft(id),
+    latestGeneratedReport(id),
+  ]);
+
+  const initialReport =
+    generated && generated.expiresAt
+      ? { ...generated, link: reportLink(generated.id, new Date(generated.expiresAt)) }
+      : generated
+        ? { ...generated, link: null }
+        : null;
 
   return (
     <>
       <div className="px-4 sm:px-6 lg:px-8 pt-3">
         <BackButton backHref="/scout/sites" />
       </div>
-      <ScanScreen
+      <ScanPageClient
         taxonomy={publicTaxonomy()}
         initial={data}
         googleKeyMissing={!env.hasGoogleServerKey}
+        preparedBy={author?.displayName ?? ""}
+        initialBlocks={draft?.includedBlocks ?? defaultBlockState()}
+        initialNotes={draft?.fieldNotes ?? data.fieldNotes ?? ""}
+        initialSuggestions={draft?.suggestionsText ?? ""}
+        initialPolished={draft?.polishedSuggestions ?? ""}
+        initialReport={initialReport}
       />
     </>
   );

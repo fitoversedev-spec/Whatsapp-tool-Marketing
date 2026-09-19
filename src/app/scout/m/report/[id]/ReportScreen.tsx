@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FieldHeader,
   StickyFooter,
-  SurveyChecklist,
   apiFetch,
   ApiError,
   formatCount,
@@ -15,11 +14,10 @@ import {
   formatRating,
   useDebounced,
   useOnline,
-  type ChecklistPayload,
 } from "@/components/scout/mobile";
 import { SectionLabel } from "@/components/scout/patterns";
 import { Button } from "@/components/scout/ui";
-import { POPULATION_LIMITATION_TEXT } from "@/lib/scout/census/disclosure";
+
 import { deliveryNote, reportDelivery } from "@/lib/scout/reports/delivery";
 import type { ScanResult } from "@/lib/scout/places/scanResult";
 import type { ScoreResult } from "@/lib/scout/scoring";
@@ -87,18 +85,21 @@ interface ShareResponse {
  * salesperson standing in front of a customer should not have to guess any of
  * the three.
  */
+type ReportKind = "scan" | "analysis" | "combined";
+
 export function ReportScreen({ scanId }: { scanId: string }) {
   const online = useOnline();
 
   const [result, setResult] = useState<ScanResult | null>(null);
-  const [checklist, setChecklist] = useState<ChecklistPayload | null>(null);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState("");
   const [score, setScore] = useState<ScoreResult | null>(null);
-  const [scoring, setScoring] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /* ------------------------------------------------ report kind */
+
+  const [reportKind, setReportKind] = useState<ReportKind>("scan");
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [hasAnalysis, setHasAnalysis] = useState(false);
 
   /* ------------------------------------------------- report generation */
 
@@ -123,8 +124,13 @@ export function ReportScreen({ scanId }: { scanId: string }) {
     setGenerating(true);
     setError(null);
     try {
+      let genUrl = `/api/scout/scans/${scanId}/report/generate`;
+      if ((reportKind === "analysis" || reportKind === "combined") && analysisId) {
+        genUrl += `?kind=${reportKind}&analysisId=${analysisId}`;
+      }
+
       const started = await apiFetch<{ report: GeneratedReport }>(
-        `/api/scout/scans/${scanId}/report/generate`,
+        genUrl,
         { method: "POST", timeoutMs: 40_000 },
       );
       setReport(started.data.report);
@@ -147,7 +153,7 @@ export function ReportScreen({ scanId }: { scanId: string }) {
     } finally {
       setGenerating(false);
     }
-  }, [scanId]);
+  }, [scanId, reportKind, analysisId]);
 
   /**
    * Record the hand-over, then hand off to WhatsApp.
@@ -185,12 +191,10 @@ export function ReportScreen({ scanId }: { scanId: string }) {
       try {
         const [scan, survey] = await Promise.all([
           apiFetch<ScanResult>(`/api/scout/scans/${scanId}`),
-          apiFetch<ChecklistPayload & { fieldNotes: string | null }>(`/api/scout/scans/${scanId}/survey`),
+          apiFetch<{ fieldNotes: string | null }>(`/api/scout/scans/${scanId}/survey`),
         ]);
         if (cancelled) return;
         setResult(scan.data);
-        setChecklist(survey.data);
-        setAnswers({ ...survey.data.answers });
         setNotes(survey.data.fieldNotes ?? "");
       } catch (e) {
         if (!cancelled) setError(e instanceof ApiError ? e.message : "Could not load this scan.");
@@ -202,6 +206,18 @@ export function ReportScreen({ scanId }: { scanId: string }) {
       } catch {
         // No score yet is a normal state here; the strip says so.
       }
+
+      try {
+        const { data } = await apiFetch<{ analysis?: { id: string; status: string } }>(
+          `/api/scout/scans/${scanId}/analysis`,
+        );
+        if (!cancelled && data.analysis && (data.analysis.status === "completed" || data.analysis.status === "partial")) {
+          setAnalysisId(data.analysis.id);
+          setHasAnalysis(true);
+        }
+      } catch {
+        // No analysis is fine.
+      }
     }
 
     void load();
@@ -210,77 +226,28 @@ export function ReportScreen({ scanId }: { scanId: string }) {
     };
   }, [scanId]);
 
-  /* ------------------------------------------------- save, then rescore */
+  /* ------------------------------------------------- save field notes */
 
-  const pending = useDebounced(JSON.stringify({ answers, notes }), 700);
-  const lastSaved = useRef<string | null>(null);
-
-  const save = useCallback(
-    async (payload: string) => {
-      const parsed = JSON.parse(payload) as { answers: Record<string, number>; notes: string };
-      setSaveStatus("Saving…");
-      setSaveError(false);
-      try {
-        const { data } = await apiFetch<{ rejected: string[]; rescoreRequired: boolean }>(
-          `/api/scout/scans/${scanId}/survey`,
-          {
-            method: "PUT",
-            body: { answers: parsed.answers, fieldNotes: parsed.notes },
-            timeoutMs: 25_000,
-          },
-        );
-        lastSaved.current = payload;
-
-        if (data.rejected.length > 0) {
-          setSaveStatus(`Saved, but these were not accepted: ${data.rejected.join(", ")}.`);
-          setSaveError(true);
-        } else {
-          setSaveStatus("Saved.");
-        }
-
-        // The PUT's own `rescoreRequired` says the number is now out of date.
-        if (data.rescoreRequired) {
-          setScoring(true);
-          try {
-            const { data: scored } = await apiFetch<ScoreResponse>(`/api/scout/scans/${scanId}/score`, {
-              method: "POST",
-              timeoutMs: 40_000,
-            });
-            setScore(scored.score);
-          } catch {
-            setSaveStatus("Saved, but the score could not be recalculated yet.");
-            setSaveError(true);
-          } finally {
-            setScoring(false);
-          }
-        }
-      } catch (e) {
-        setSaveStatus(
-          e instanceof ApiError
-            ? `Not saved — ${e.message} Nothing has been queued to send later.`
-            : "Not saved. Nothing has been queued to send later.",
-        );
-        setSaveError(true);
-      }
-    },
-    [scanId],
-  );
+  const pendingNotes = useDebounced(notes, 700);
+  const lastSavedNotes = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!checklist) return;
-    if (lastSaved.current === null) {
-      // Seed the baseline so the initial load does not trigger a write.
-      lastSaved.current = pending;
+    if (lastSavedNotes.current === null) {
+      lastSavedNotes.current = pendingNotes;
       return;
     }
-    if (lastSaved.current === pending) return;
-    void save(pending);
-  }, [pending, checklist, save]);
+    if (lastSavedNotes.current === pendingNotes) return;
+    lastSavedNotes.current = pendingNotes;
+    void apiFetch(`/api/scout/scans/${scanId}/survey`, {
+      method: "PUT",
+      body: { answers: {}, fieldNotes: pendingNotes },
+      timeoutMs: 25_000,
+    }).catch(() => {});
+  }, [pendingNotes, scanId]);
 
   /* ------------------------------------------------------------- render */
 
   const exact = result ? !result.saturation.anySaturated : true;
-  const answeredCount = Object.keys(answers).length;
 
   return (
     <div className="mScreen">
@@ -323,20 +290,12 @@ export function ReportScreen({ scanId }: { scanId: string }) {
         {/* --------------------------------------------- live score */}
         {score ? (
           <section
-            className={`flex items-center gap-3.5 bg-[var(--black)] text-[color:var(--on-dark)] rounded-[var(--radius-16)] py-3.5 px-4${scoring ? " opacity-60" : ""}`}
+            className="flex items-center gap-3.5 bg-[var(--black)] text-[color:var(--on-dark)] rounded-[var(--radius-16)] py-3.5 px-4"
             aria-label="Site score"
-            aria-busy={scoring}
           >
             <span className="font-display text-[28px] font-bold tracking-[0.02em] leading-none flex-none">{score.totalRounded}</span>
             <span className="min-w-0 text-[length:var(--text-11-5)] leading-normal text-[color:var(--on-dark-muted-strong)]">
               {`${score.verdict} · ${score.confidence.level} confidence · model v${score.modelVersion}`}
-              {score.basis === "desk_only" ? (
-                <span className="block text-[color:var(--sky)] mt-[3px]">{score.basisLabel}</span>
-              ) : (
-                <span className="block text-turf-100 mt-[3px]">
-                  Full assessment — the site survey is included.
-                </span>
-              )}
             </span>
           </section>
         ) : null}
@@ -347,29 +306,39 @@ export function ReportScreen({ scanId }: { scanId: string }) {
           </p>
         ))}
 
-        {/* --------------------------------------- surveyor checklist */}
-        <div className="flex flex-col gap-[9px]">
-          <SectionLabel as="h2">Site survey</SectionLabel>
-          <p className="text-[length:var(--text-11-5)] text-[color:var(--m-muted)] leading-normal">
-            {answeredCount === 0
-              ? "Nothing recorded yet, so the score is a desk assessment. Four answers is enough to turn it into a full one."
-              : answeredCount < 4
-                ? `${4 - answeredCount} more answer${4 - answeredCount === 1 ? "" : "s"} and the score stops being a desk assessment.`
-                : "The site survey is counted in the score."}
-          </p>
-          {checklist ? (
-            <SurveyChecklist
-              checklist={checklist}
-              answers={answers}
-              onChange={setAnswers}
-              status={saveStatus}
-              statusIsError={saveError}
-              disabled={!online}
-            />
-          ) : (
-            <p className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-[13px] px-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--m-muted-on-white)]">Loading the checklist…</p>
-          )}
-        </div>
+        {/* ------------------------------------- report type selector */}
+        {hasAnalysis ? (
+          <div className="flex flex-col gap-[9px]">
+            <SectionLabel as="h2">Report type</SectionLabel>
+            <div className="flex flex-col gap-2">
+              {(
+                [
+                  { value: "scan", label: "Scan Report", desc: "Site data only" },
+                  { value: "analysis", label: "AI Analysis Report", desc: "AI insights only" },
+                  { value: "combined", label: "Combined Report", desc: "Site data + AI insights" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={[
+                    "w-full text-left bg-[var(--surface-card)] border rounded-[var(--radius-12)] py-3 px-3.5 font-sans cursor-pointer min-h-[var(--m-touch)]",
+                    reportKind === opt.value
+                      ? "border-court-500 ring-1 ring-court-500"
+                      : "border-[var(--border-default)]",
+                  ].join(" ")}
+                  onClick={() => {
+                    setReportKind(opt.value);
+                    setReport(null);
+                  }}
+                >
+                  <span className="block text-[length:var(--text-13-5)] font-semibold text-[var(--ink)]">{opt.label}</span>
+                  <span className="block text-[length:var(--text-11-5)] text-[var(--m-muted-on-white)] mt-0.5">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {/* ------------------------------------------- field notes */}
         <div className="flex flex-col gap-[9px]">
@@ -382,12 +351,6 @@ export function ReportScreen({ scanId }: { scanId: string }) {
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
-
-        {/*
-         * Required on any document carrying a saturation figure, and the report
-         * carries one. Placed where the person about to send it will read it.
-         */}
-        <p className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-[13px] px-3.5 text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--m-muted-on-white)]">{POPULATION_LIMITATION_TEXT}</p>
 
         {ready && report?.link ? (
           <section className="bg-[var(--surface-card)] border border-turf-500 rounded-[var(--radius-16)] p-4 flex items-center gap-3 [animation:ssIn_0.22s_var(--ease-standard)] motion-reduce:[animation:none]">

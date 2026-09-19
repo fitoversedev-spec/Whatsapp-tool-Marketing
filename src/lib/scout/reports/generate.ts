@@ -8,15 +8,25 @@ import { CATEGORIES } from "@/lib/scout/places/taxonomy";
 import { getCompareSubjects } from "@/lib/scout/scans/queries";
 
 import { canGenerateAiSummary, generateAiSummary, polishSuggestions } from "./ai-summary";
+import { buildAnalysisDocument, type AnalysisDocumentInput } from "./analysis-document";
+import { buildCombinedDocument } from "./combined-document";
 import { reportBrand } from "./brand";
 import { buildComparisonDocument, renderComparisonHtml } from "./comparison";
 import { assembleReportInput } from "./data";
 import { deliveryNote, reportDelivery, type DeliveryMode } from "./delivery";
 import { buildReportDocument } from "./document";
+import type { ReportDocument } from "./types";
 import { renderPdf, PdfEngineUnavailableError, headerTemplate, footerTemplate } from "./pdf";
 import { renderReportHtml } from "./render";
 import { expiryFromNow, linkTtlDays, signReportLink } from "./signing";
 import { normaliseRecipient } from "./share";
+import type {
+  AreaSummaryResult,
+  Citation,
+  InsightField,
+  PlaceInsightResult,
+  SuitabilityDetail,
+} from "@/lib/scout/analysis/types";
 import {
   createGenerationRow,
   findLatestGenerationRow,
@@ -319,6 +329,152 @@ export async function recordShare(input: {
     link,
     recipientName,
   };
+}
+
+/* -------------------------------------------------- analysis reports */
+
+export async function startAnalysisReportGeneration(
+  author: ScoutProfile,
+  scanId: string,
+  analysisId: string,
+  kind: "analysis" | "combined",
+): Promise<ReportGenerationRow | null> {
+  const input = await assembleReportInput(author, scanId, { skipMap: true });
+  if (!input) return null;
+
+  const title = kind === "combined"
+    ? `${input.areaLabel} — Combined Report`
+    : `${input.areaLabel} — AI Analysis Report`;
+
+  const row = await createGenerationRow({
+    scanId,
+    userId: author.userId,
+    kind,
+    title,
+    version: await nextReportVersion(scanId),
+    includedBlocks: input.blocks as Record<string, boolean>,
+    fieldNotes: input.fieldNotes ?? "",
+    scoreModelVersion: input.score?.modelVersion ?? null,
+    analysisId,
+  });
+
+  return row ? toRow(row) : null;
+}
+
+export async function runAnalysisReportGeneration(
+  author: ScoutProfile,
+  reportId: string,
+  kind: "analysis" | "combined",
+): Promise<GenerationOutcome> {
+  const { prisma } = await import("@/lib/prisma");
+
+  const existing = await getReportRow(reportId);
+  if (!existing) return { ok: false, reportId, error: "The report row no longer exists." };
+
+  try {
+    const generatedAt = new Date();
+    const reportRow = await findReportRow(reportId);
+    if (!reportRow) throw new Error("Report not found.");
+
+    const analysisId = reportRow.analysisId;
+    if (!analysisId) throw new Error("No analysis linked to this report.");
+
+    const { getScan } = await import("@/lib/scout/places/scanRepository");
+
+    const [analysis, scan] = await Promise.all([
+      prisma.scoutAnalysis.findUniqueOrThrow({
+        where: { id: analysisId },
+        include: {
+          insights: {
+            where: { status: "completed" },
+            include: { place: { select: { name: true } } },
+          },
+        },
+      }),
+      getScan(existing.scanId),
+    ]);
+
+    if (!scan) throw new Error("Scan not found.");
+
+    const scanRow = await prisma.scan.findUniqueOrThrow({
+      where: { id: existing.scanId },
+      select: { address: true, customerName: true },
+    });
+
+    const analysisDocInput: AnalysisDocumentInput = {
+      scanId: existing.scanId,
+      reportId,
+      version: existing.version,
+      areaLabel: scan.areaLabel,
+      address: scanRow.address,
+      customerName: scanRow.customerName,
+      preparedBy: author.displayName,
+      generatedAt: generatedAt.toISOString(),
+      radiusM: scan.radiusM,
+      centre: scan.centre,
+      areaSummary: analysis.areaSummary as unknown as AreaSummaryResult | null,
+      insights: analysis.insights.map((i) => {
+        const edited = i.editedFields as unknown as Record<string, unknown> | null;
+        return {
+          name: i.place.name,
+          insight: {
+            establishedDate: i.establishedDate as unknown as InsightField,
+            popularTimes: i.popularTimes as unknown as InsightField,
+            sentiment: i.sentiment as unknown as PlaceInsightResult["sentiment"],
+            suitability: i.suitability as unknown as SuitabilityDetail,
+            citations: (i.rawSources as unknown as Citation[] | null) ?? [],
+          },
+          pricingNote: (edited?.pricing as string) ?? null,
+        };
+      }),
+    };
+
+    const analysisDoc = buildAnalysisDocument(analysisDocInput);
+    const brand = reportBrand();
+    let doc: ReportDocument;
+
+    if (kind === "combined") {
+      const scanInput = await assembleReportInput(author, existing.scanId, {
+        reportId,
+        version: existing.version,
+        generatedAt,
+      });
+      if (!scanInput) throw new Error("The scan could not be read.");
+      const scanDoc = buildReportDocument({
+        ...scanInput,
+        suggestionsText: scanInput.suggestionsText ?? null,
+      });
+      doc = buildCombinedDocument(scanDoc, analysisDoc);
+    } else {
+      doc = analysisDoc;
+    }
+
+    const html = await renderReportHtml(doc);
+    const headerText = `${doc.meta.title} · ${doc.meta.radiusLabel} · v${doc.meta.version}`;
+    const footerText = [brand.legalName, brand.attribution, "Preliminary desk survey — not financial, investment, legal or planning advice"]
+      .filter(Boolean)
+      .join(" · ");
+    const pdf = await renderPdf(html, { headerText, footerText });
+
+    const stored = await reportStorage().put(reportId, pdf.bytes);
+    const expiresAt = expiryFromNow(generatedAt, linkTtlDays());
+
+    await markReportGenerated(reportId, {
+      blobKey: stored.key,
+      byteSize: stored.byteSize,
+      sha256: stored.sha256,
+      pageCount: pdf.pageCount,
+      engine: pdf.engine,
+      generatedAt,
+      expiresAt,
+    });
+
+    return { ok: true, reportId };
+  } catch (error) {
+    const message = failureMessage(error, "The analysis report could not be generated");
+    await markReportFailed(reportId, message);
+    return { ok: false, reportId, error: message };
+  }
 }
 
 /* -------------------------------------------------- comparison reports */

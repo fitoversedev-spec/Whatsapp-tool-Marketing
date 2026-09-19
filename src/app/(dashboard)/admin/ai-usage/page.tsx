@@ -9,6 +9,7 @@ import { requireUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { monthPeriod } from "@/lib/analytics/periodPresets";
+import { AI_ANALYSIS_DAILY_CAP } from "@/lib/scout/analysis/guardrails";
 import PageHeader from "@/components/PageHeader";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,8 @@ function fmtInr(n: number): string {
 const FEATURE_LABEL: Record<string, string> = {
   template: "Template drafting",
   analytics: "Analytics reports",
+  "scout-analysis-place": "Scout AI — per place",
+  "scout-analysis-summary": "Scout AI — area summary",
 };
 
 export default async function AiUsagePage() {
@@ -35,7 +38,10 @@ export default async function AiUsagePage() {
   const now = new Date();
   const mp = monthPeriod(now.getFullYear(), now.getMonth());
 
-  const [total, monthCount, byUser, byFeature, totals] = await Promise.all([
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [total, monthCount, byUser, byFeature, totals, analysisToday] = await Promise.all([
     prisma.aiUsage.count(),
     prisma.aiUsage.count({ where: { createdAt: { gte: mp.start, lte: mp.end } } }),
     prisma.aiUsage.groupBy({
@@ -45,6 +51,9 @@ export default async function AiUsagePage() {
     }),
     prisma.aiUsage.groupBy({ by: ["feature"], _count: { _all: true } }),
     prisma.aiUsage.aggregate({ _sum: { inputTokens: true, outputTokens: true } }),
+    prisma.aiUsage.count({
+      where: { feature: { startsWith: "scout-analysis" }, createdAt: { gte: todayStart } },
+    }),
   ]);
 
   const users = byUser.length
@@ -88,6 +97,11 @@ export default async function AiUsagePage() {
         <Card label="This month" value={monthCount.toLocaleString("en-IN")} />
         <Card label="People using AI" value={String(rows.length)} />
         <Card label="Est. total spend" value={fmtInr(totalCost)} hint="Approx, at current rates" />
+        <Card
+          label="Scout AI today"
+          value={`${analysisToday} / ${AI_ANALYSIS_DAILY_CAP}`}
+          hint="Per-user daily cap"
+        />
       </div>
 
       {byFeature.length > 0 && (

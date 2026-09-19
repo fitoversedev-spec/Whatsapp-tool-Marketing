@@ -43,7 +43,7 @@ export class ApiError extends Error {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   timeoutMs?: number;
   /** Retries for idempotent reads. Writes are never retried. */

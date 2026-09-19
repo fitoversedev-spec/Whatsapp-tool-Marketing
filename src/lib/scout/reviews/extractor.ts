@@ -52,7 +52,7 @@ import type {
  * rather than a deploy, and so the extractor can be pointed at a cheaper model
  * if the client's volume ever makes that the right trade.
  */
-export const DEFAULT_THEME_MODEL = "claude-opus-5";
+export const DEFAULT_THEME_MODEL = "claude-sonnet-5";
 
 /**
  * The output schema.

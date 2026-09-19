@@ -1,6 +1,6 @@
 // Typed error for the AI layer so API routes can map failures to friendly
 // HTTP responses instead of leaking raw SDK errors to the client.
-export type AiErrorCode = "not_configured" | "no_credit" | "limit" | "refusal" | "failed";
+export type AiErrorCode = "not_configured" | "no_credit" | "limit" | "rate_limit" | "refusal" | "failed";
 
 export class AiError extends Error {
   code: AiErrorCode;
@@ -17,8 +17,9 @@ export function aiErrorStatus(code: AiErrorCode): number {
     case "not_configured":
       return 503;
     case "no_credit":
-      return 402; // Payment Required — the AI balance is exhausted.
+      return 402;
     case "limit":
+    case "rate_limit":
       return 429;
     default:
       return 500;
@@ -44,6 +45,18 @@ export function mapAnthropicError(e: unknown): AiError {
   }
   if (status === 401 || message.includes("invalid api key") || message.includes("authentication")) {
     return new AiError("The AI key looks invalid — check the ANTHROPIC_API_KEY.", "not_configured");
+  }
+  if (status === 429 || message.includes("rate limit") || message.includes("overloaded")) {
+    return new AiError(
+      "Too many requests — wait a few seconds and try again.",
+      "rate_limit",
+    );
+  }
+  if (status === 529 || message.includes("overloaded")) {
+    return new AiError(
+      "The AI service is temporarily overloaded — try again in a moment.",
+      "rate_limit",
+    );
   }
   return new AiError("The AI request failed — please try again in a moment.", "failed");
 }

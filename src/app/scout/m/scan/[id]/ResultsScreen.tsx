@@ -451,14 +451,24 @@ export function ResultsScreen({ scanId }: { scanId: string }) {
               : undefined
         }
       >
-        <Button
-          block
-          size="lg"
-          disabled={!result || Boolean(staleAt)}
-          onClick={() => router.push(`/scout/m/report/${scanId}`)}
-        >
-          Create report
-        </Button>
+        <div className="flex flex-col gap-2 w-full">
+          <Button
+            block
+            size="lg"
+            disabled={!result || Boolean(staleAt)}
+            onClick={() => router.push(`/scout/m/analysis/${scanId}`)}
+          >
+            AI Analysis
+          </Button>
+          <Button
+            block
+            variant="secondary"
+            disabled={!result || Boolean(staleAt)}
+            onClick={() => router.push(`/scout/m/report/${scanId}`)}
+          >
+            Skip to report
+          </Button>
+        </div>
       </StickyFooter>
     </div>
   );

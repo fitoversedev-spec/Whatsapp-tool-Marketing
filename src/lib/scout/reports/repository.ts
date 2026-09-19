@@ -274,13 +274,14 @@ export async function nextReportVersion(scanId: string): Promise<number> {
 export interface CreateGenerationInput {
   readonly scanId: string;
   readonly userId: string;
-  readonly kind: "scan" | "comparison";
+  readonly kind: "scan" | "comparison" | "analysis" | "combined";
   readonly title: string;
   readonly version: number;
   readonly includedBlocks?: Record<string, boolean> | null;
   readonly fieldNotes?: string | null;
   readonly scoreModelVersion?: string | null;
   readonly subjectScanIds?: string[] | null;
+  readonly analysisId?: string | null;
 }
 
 export async function createGenerationRow(input: CreateGenerationInput): Promise<ReportRow | null> {
@@ -298,6 +299,7 @@ export async function createGenerationRow(input: CreateGenerationInput): Promise
       fieldNotes: input.fieldNotes ?? null,
       scoreModelVersion: input.scoreModelVersion ?? null,
       subjectScanIds: (input.subjectScanIds ?? Prisma.DbNull) as Prisma.InputJsonValue,
+      analysisId: input.analysisId ?? null,
       status: "generating",
     },
   });

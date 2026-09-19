@@ -91,6 +91,18 @@ export const REPORT_BLOCKS: readonly ReportBlockDef[] = [
     defaultOn: true,
   },
   {
+    id: "analysis-overview",
+    label: "AI area analysis",
+    help: "Market saturation, opportunity score, risks and executive recommendation from AI analysis.",
+    defaultOn: true,
+  },
+  {
+    id: "place-insights",
+    label: "Per-place AI insights",
+    help: "Establishment dates, popular times, sentiment, suitability for each analysed place.",
+    defaultOn: true,
+  },
+  {
     id: "limitations",
     label: "Limitations",
     help: "What this assessment does not cover. Printed on any document carrying a saturation figure.",

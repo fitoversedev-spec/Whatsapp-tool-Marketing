@@ -233,6 +233,89 @@ td.r,th.r{ text-align:right; }
 .endMatter{ margin-top:20pt; padding-top:10pt; border-top:1pt solid var(--gray-200); }
 .disclaimer{ font-size:9pt; line-height:1.45; color:var(--gray-700); }
 
+/* ── Analysis sections ── */
+.analysis-overview{ margin-top:12pt; }
+
+/* AT A GLANCE box */
+.at-a-glance{ background:var(--gray-100); border-radius:6pt; padding:10pt 12pt; margin-bottom:14pt; break-inside:avoid; }
+.glance-row{ display:flex; gap:10pt; justify-content:space-between; }
+.glance-item{ flex:1; text-align:center; }
+.glance-label{ display:block; font-size:7pt; font-weight:700; text-transform:uppercase; letter-spacing:0.6pt; color:var(--gray-500); margin-bottom:4pt; }
+.glance-score{ font-family:var(--font-display); font-size:18pt; font-weight:700; display:block; }
+.saturation-badge{ display:inline-block; padding:2pt 8pt; border-radius:4pt; font-size:10pt; font-weight:700; }
+.saturation-low{ background:var(--green-100); color:var(--green); }
+.saturation-moderate{ background:#fef3c7; color:#92400e; }
+.saturation-high{ background:#fde8e8; color:var(--red); }
+.saturation-oversaturated{ background:var(--red-100); color:var(--red); }
+
+/* Subheadings for analysis sections */
+.analysis-subheading{ font-size:10pt; font-weight:700; text-transform:uppercase; letter-spacing:0.5pt; margin:14pt 0 6pt; padding-bottom:4pt; border-bottom:1.2pt solid var(--gray-200); break-after:avoid; page-break-after:avoid; }
+
+/* What This Means bullets */
+.means-list{ margin:0 0 8pt; padding-left:14pt; font-size:10pt; line-height:1.5; }
+.means-list li{ margin-bottom:4pt; }
+
+/* Risks */
+.risks-list{ margin:0 0 8pt; padding-left:14pt; font-size:9.5pt; line-height:1.45; }
+.risks-list li{ margin-bottom:3pt; color:var(--red); }
+
+/* Numbered lists for opportunities + promotion */
+.numbered-list{ margin:0 0 8pt; padding-left:18pt; font-size:9.5pt; line-height:1.5; }
+.numbered-list li{ margin-bottom:6pt; break-inside:avoid; }
+.numbered-list li strong{ font-size:10pt; }
+.item-detail{ font-size:9pt; color:var(--gray-700); }
+.timeline-tag{ display:inline-block; margin-left:6pt; padding:1pt 5pt; background:var(--gray-100); border-radius:3pt; font-size:7.5pt; font-weight:600; color:var(--gray-500); }
+
+/* Strategy pitch */
+.strategy-pitch{ margin:14pt 0; padding:10pt 12pt; background:var(--black); color:var(--white); border-radius:6pt; break-inside:avoid; }
+.pitch-label{ font-size:8pt; font-weight:700; text-transform:uppercase; letter-spacing:0.5pt; color:rgba(255,255,255,.55); }
+.pitch-text{ font-size:12pt; font-style:italic; line-height:1.5; margin:4pt 0 0; }
+
+/* Learnings table */
+.learnings-table{ width:100%; border-collapse:collapse; font-size:9pt; margin-bottom:8pt; }
+.learnings-table th{ font-size:7.5pt; font-weight:700; text-transform:uppercase; letter-spacing:0.5pt; color:var(--gray-500); border-bottom:1.4pt solid var(--black); padding:4pt 5pt; text-align:left; }
+.learnings-table td{ border-bottom:1pt solid var(--gray-200); padding:5pt; vertical-align:top; }
+.our-rule{ font-weight:600; color:var(--green); }
+
+/* Checklist table */
+.checklist-table{ width:100%; border-collapse:collapse; font-size:9pt; margin-bottom:8pt; }
+.checklist-table th{ font-size:7.5pt; font-weight:700; text-transform:uppercase; letter-spacing:0.5pt; color:var(--gray-500); border-bottom:1.4pt solid var(--black); padding:4pt 5pt; text-align:left; }
+.checklist-table td{ border-bottom:1pt solid var(--gray-200); padding:5pt; vertical-align:top; }
+.timeline-cell{ white-space:nowrap; color:var(--gray-700); }
+.priority-badge{ display:inline-block; padding:1pt 6pt; border-radius:3pt; font-size:7.5pt; font-weight:700; }
+.priority-high{ background:var(--red-100); color:var(--red); }
+.priority-medium{ background:#fef3c7; color:#92400e; }
+.priority-low{ background:var(--gray-200); color:var(--gray-500); }
+
+/* ── Place insights ── */
+.place-insights{ margin-top:12pt; }
+
+/* Competitors summary table */
+.competitors-summary{ width:100%; border-collapse:collapse; font-size:9pt; margin-bottom:14pt; }
+.competitors-summary th{ font-size:7.5pt; font-weight:700; text-transform:uppercase; letter-spacing:0.5pt; color:var(--gray-500); border-bottom:1.4pt solid var(--black); padding:4pt 5pt; text-align:left; }
+.competitors-summary td{ border-bottom:1pt solid var(--gray-200); padding:5pt; vertical-align:top; }
+.name-cell{ font-weight:600; }
+
+/* Competitor profiles — 2-column What Works / Doesn't */
+.competitor-profile{ break-inside:avoid; page-break-inside:avoid; border:1pt solid var(--gray-200); border-radius:6pt; padding:8pt 10pt; margin-bottom:8pt; }
+.profile-name{ font-size:10.5pt; font-weight:700; margin:0 0 6pt; }
+.profile-columns{ display:flex; gap:6pt; }
+.profile-col{ flex:1; padding:5pt 7pt; border-radius:4pt; font-size:8.5pt; break-inside:avoid; }
+.profile-col ul{ margin:3pt 0 0 12pt; padding:0; }
+.profile-col li{ margin-bottom:2pt; line-height:1.4; }
+.profile-col-heading{ font-weight:700; font-size:7.5pt; text-transform:uppercase; letter-spacing:0.4pt; display:block; margin-bottom:3pt; }
+.profile-positive{ background:var(--green-100); border-left:2pt solid var(--green); }
+.profile-positive .profile-col-heading{ color:var(--green); }
+.profile-negative{ background:var(--red-100); border-left:2pt solid var(--red); }
+.profile-negative .profile-col-heading{ color:var(--red); }
+.profile-verdict{ font-size:8.5pt; color:var(--gray-700); margin:6pt 0 0; line-height:1.4; }
+
+/* Confidence badges */
+.confidence-badge{ display:inline-block; padding:2pt 6pt; border-radius:3pt; font-size:8pt; font-weight:600; }
+.confidence-high{ background:var(--green-100); color:var(--green); }
+.confidence-medium{ background:#fef3c7; color:#92400e; }
+.confidence-low{ background:var(--gray-200); color:var(--gray-500); }
+
 /* Screen preview only — on paper the page box already provides the frame. */
 @media screen{
   body{ background:var(--gray-100); }

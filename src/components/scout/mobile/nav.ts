@@ -58,6 +58,12 @@ export function fieldNavItems(ctx: FieldNavContext = {}): FieldNavItem[] {
       href: placeId && scanId ? `/scout/m/place/${encodeURIComponent(placeId)}?scan=${scanId}` : null,
     },
     {
+      key: "analysis",
+      label: "AI Analysis",
+      hint: scanId ? "" : "Run a scan first",
+      href: scanId ? `/scout/m/analysis/${scanId}` : null,
+    },
+    {
       key: "report",
       label: "Report & share",
       hint: "",

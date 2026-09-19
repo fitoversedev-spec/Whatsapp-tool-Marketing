@@ -698,6 +698,8 @@ export function buildReportDocument(input: ReportInput): ReportDocument {
     sweep,
     observations: surveyor,
     scanResults: buildScanResults(input),
+    analysisOverview: null,
+    placeInsights: null,
     limitations: {
       heading: limitationsBlock.heading,
       paragraphs: limitationsBlock.paragraphs.includes(POPULATION_LIMITATION_TEXT)

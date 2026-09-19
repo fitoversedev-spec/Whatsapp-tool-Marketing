@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getScoutProfile, canAccessAllScans } from "@/lib/scout/identity";
 import { getScan } from "@/lib/scout/places/scanRepository";
 import { canGenerateAiSummary, polishSuggestions } from "@/lib/scout/reports/ai-summary";
+import { AiError, aiErrorStatus } from "@/lib/ai/errors";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -48,6 +49,12 @@ export async function POST(request: Request, context: { params: { id: string } }
     return NextResponse.json({ polished });
   } catch (err) {
     console.error(JSON.stringify({ tag: "report.polish.api-error", scanId: id, error: err instanceof Error ? err.message : "unknown" }));
+    if (err instanceof AiError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: aiErrorStatus(err.code) },
+      );
+    }
     return NextResponse.json({ error: "Polishing failed. Please try again." }, { status: 500 });
   }
 }

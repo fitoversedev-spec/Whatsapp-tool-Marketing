@@ -21,6 +21,7 @@
 import { REPORT_FONT_LINK, reportCss } from "./css";
 import { FITOVERSE_LOGO_DATA_URI } from "./logo-data";
 import { markerLabel } from "./staticMap";
+import { AnalysisOverview, PlaceInsights } from "./render-analysis";
 import { renderStaticMarkup } from "./staticMarkup";
 import { REPORT_SECTION_TITLES, type CategoryMapSection, type ReportDocument, type ReportSectionId } from "./types";
 
@@ -857,6 +858,22 @@ export function ReportBody({ doc }: { doc: ReportDocument }) {
           <div className="suggestionsBlock" style={{ marginTop: "8pt" }}>
             {doc.suggestions.text}
           </div>
+        </div>
+      ) : null}
+
+      {/* AI Analysis Overview */}
+      {doc.analysisOverview ? (
+        <div style={{ breakBefore: "page", pageBreakBefore: "always" }}>
+          <div className="eyebrow">AI Area Analysis</div>
+          <AnalysisOverview section={doc.analysisOverview} />
+        </div>
+      ) : null}
+
+      {/* Per-place AI Insights */}
+      {doc.placeInsights ? (
+        <div style={{ breakBefore: "page", pageBreakBefore: "always" }}>
+          <div className="eyebrow">Per-place AI Insights</div>
+          <PlaceInsights section={doc.placeInsights} />
         </div>
       ) : null}
 

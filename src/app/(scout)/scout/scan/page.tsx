@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import { getScoutIdentity } from "@/lib/scout/identity";
 import { env } from "@/lib/scout/env";
-import { publicTaxonomy } from "@/lib/scout/places/taxonomy";
+import { prisma } from "@/lib/scout/db";
+import { publicTaxonomy, type CustomCategoryRow } from "@/lib/scout/places/taxonomy";
 import { ScanScreen } from "./ScanScreen";
 
 export const metadata: Metadata = { title: "Scan Area — Site Scout" };
@@ -32,13 +33,18 @@ export default async function ScanPage({
       ? { lat, lng, address: searchParams.address ?? "" }
       : null;
 
+  const customs = await prisma.customCategory.findMany({
+    select: { id: true, label: true, side: true, searchQuery: true, googleType: true },
+    orderBy: { createdAt: "asc" },
+  }) as CustomCategoryRow[];
+
   return (
     <>
       <div className="px-4 sm:px-6 lg:px-8 pt-3">
         <BackButton backHref={prefill ? "/scout/sweep" : "/scout/dashboard"} />
       </div>
       <ScanScreen
-        taxonomy={publicTaxonomy()}
+        taxonomy={publicTaxonomy(customs)}
         initial={null}
         googleKeyMissing={!env.hasGoogleServerKey}
         prefill={prefill}

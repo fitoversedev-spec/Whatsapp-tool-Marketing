@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import { getScoutIdentity, getScoutProfile } from "@/lib/scout/identity";
 import { env } from "@/lib/scout/env";
-import { publicTaxonomy } from "@/lib/scout/places/taxonomy";
+import { prisma } from "@/lib/scout/db";
+import { publicTaxonomy, type CustomCategoryRow } from "@/lib/scout/places/taxonomy";
 import { defaultBlockState } from "@/lib/scout/reports/blocks";
 import { latestGeneratedReport, reportLink } from "@/lib/scout/reports/generate";
 import { getReportDraft } from "@/lib/scout/reports/repository";
@@ -30,9 +31,13 @@ export default async function ScanDetailPage({ params }: { params: { id: string 
   if (!identity.canRunScans) notFound();
 
   const { id } = params;
-  const [data, author] = await Promise.all([
+  const [data, author, customs] = await Promise.all([
     getScanScreenData(identity, id),
     getScoutProfile(),
+    prisma.customCategory.findMany({
+      select: { id: true, label: true, side: true, searchQuery: true, googleType: true },
+      orderBy: { createdAt: "asc" },
+    }) as Promise<CustomCategoryRow[]>,
   ]);
   if (!data) notFound();
 
@@ -54,7 +59,7 @@ export default async function ScanDetailPage({ params }: { params: { id: string 
         <BackButton backHref="/scout/sites" />
       </div>
       <ScanPageClient
-        taxonomy={publicTaxonomy()}
+        taxonomy={publicTaxonomy(customs)}
         initial={data}
         googleKeyMissing={!env.hasGoogleServerKey}
         preparedBy={author?.displayName ?? ""}

@@ -64,7 +64,7 @@ import {
   type ClaimedTask,
   type ScanPlaceRow,
 } from "./scanRepository";
-import { shouldFilterCompetition, shouldFilterDemand, getCategory, resolveTerms, unknownCategoryIds, type SkuTier } from "./taxonomy";
+import { shouldFilterCompetition, shouldFilterDemand, getCategory, resolveTerms, unknownCategoryIds, type CustomCategoryRow, type SkuTier } from "./taxonomy";
 
 export class ScanRequestError extends Error {
   constructor(
@@ -118,7 +118,11 @@ export async function createScan(
     throw new ScanRequestError("Select at least one category to scan.", "NO_CATEGORIES");
   }
 
-  const unknown = unknownCategoryIds(request.categoryIds);
+  const customRows = await database.customCategory.findMany({
+    select: { id: true, label: true, side: true, searchQuery: true, googleType: true },
+  }) as CustomCategoryRow[];
+
+  const unknown = unknownCategoryIds(request.categoryIds, customRows);
   if (unknown.length > 0) {
     throw new ScanRequestError(`Unknown categories: ${unknown.join(", ")}`, "UNKNOWN_CATEGORY");
   }
@@ -142,7 +146,7 @@ export async function createScan(
     );
   }
 
-  const terms = resolveTerms(request.categoryIds);
+  const terms = resolveTerms(request.categoryIds, customRows);
   const estimate = estimateScan({
     categoryIds: request.categoryIds,
     radiusM,

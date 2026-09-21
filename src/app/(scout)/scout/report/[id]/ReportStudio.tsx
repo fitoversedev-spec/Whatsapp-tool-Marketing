@@ -84,6 +84,23 @@ export function ReportStudio({
   const [share, setShare] = useState<ShareResponse | null>(null);
   const [sharing, setSharing] = useState(false);
 
+  const suggestionsRef = useRef<HTMLTextAreaElement>(null);
+  const polishedRef = useRef<HTMLTextAreaElement>(null);
+  const acceptedRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = suggestionsRef.current;
+    if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }
+  }, [suggestionsText]);
+  useEffect(() => {
+    const el = polishedRef.current;
+    if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }
+  }, [polishedText]);
+  useEffect(() => {
+    const el = acceptedRef.current;
+    if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }
+  }, [polishedSuggestions]);
+
   const loadedDraft = useRef(JSON.stringify({ blocks: initialBlocks, notes: initialNotes, suggestionsText: initialSuggestions, polishedSuggestions: initialPolishedSuggestions }));
   useEffect(() => {
     if (JSON.stringify({ blocks, notes, suggestionsText, polishedSuggestions }) === loadedDraft.current) return;
@@ -243,7 +260,8 @@ export function ReportStudio({
             Write your rough thoughts — AI will polish them into a professional paragraph for the report.
           </p>
           <textarea
-            className="w-full box-border min-h-[140px] resize-y font-sans text-[13.5px] leading-[1.65] text-slate-900 border border-slate-300 rounded-lg p-[14px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
+            ref={suggestionsRef}
+            className="w-full box-border min-h-[110px] resize-none overflow-hidden font-sans text-[13.5px] leading-[1.65] text-slate-900 border border-slate-300 rounded-lg p-[14px] outline-none focus:border-wa-green focus:ring-2 focus:ring-wa-green"
             value={suggestionsText}
             onChange={(e) => { setSuggestionsText(e.target.value); setPolishedText(null); }}
             aria-label="Your raw suggestions for AI to polish"
@@ -280,7 +298,8 @@ export function ReportStudio({
             <div className="flex flex-col gap-[6px]">
               <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">AI-polished preview</div>
               <textarea
-                className="w-full box-border min-h-[140px] resize-y border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 font-sans outline-none focus:ring-2 focus:ring-[#159341]"
+                ref={polishedRef}
+                className="w-full box-border min-h-[110px] resize-none overflow-hidden border-l-[3px] border-[#159341] bg-slate-50 rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 font-sans outline-none focus:ring-2 focus:ring-[#159341]"
                 value={polishedText}
                 onChange={(e) => setPolishedText(e.target.value)}
                 aria-label="Edit AI-polished text"
@@ -316,7 +335,8 @@ export function ReportStudio({
                 </button>
               </div>
               <textarea
-                className="w-full box-border min-h-[100px] resize-y border-l-[3px] border-[#159341] bg-[#f0fdf4] rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 font-sans outline-none focus:ring-2 focus:ring-[#159341]"
+                ref={acceptedRef}
+                className="w-full box-border min-h-[80px] resize-none overflow-hidden border-l-[3px] border-[#159341] bg-[#f0fdf4] rounded-r-lg px-4 py-3 text-[13px] leading-[1.7] text-slate-700 font-sans outline-none focus:ring-2 focus:ring-[#159341]"
                 value={polishedSuggestions}
                 onChange={(e) => setPolishedSuggestions(e.target.value)}
                 aria-label="Edit accepted AI-polished text"

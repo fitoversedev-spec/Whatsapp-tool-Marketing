@@ -1050,6 +1050,30 @@ export const PRESETS: readonly PresetDef[] = [
 
 /* ------------------------------------------------------------- accessors */
 
+export interface CustomCategoryRow {
+  readonly id: string;
+  readonly label: string;
+  readonly side: Side;
+  readonly searchQuery: string;
+  readonly googleType: string | null;
+}
+
+function customToCategoryDef(row: CustomCategoryRow): CategoryDef {
+  return {
+    id: row.id,
+    label: row.label,
+    side: row.side,
+    fields: row.side === "competition" ? "ENTERPRISE_ATMOSPHERE" : "PRO",
+    anchorWeight: row.side === "demand" ? 0.7 : undefined,
+    terms: [{
+      id: `custom-${row.id}`,
+      label: row.label,
+      mode: "text" as const,
+      queries: [row.searchQuery],
+    }],
+  };
+}
+
 const BY_ID = new Map(CATEGORIES.map((c) => [c.id, c]));
 const PRESET_BY_ID = new Map(PRESETS.map((p) => [p.id, p]));
 
@@ -1062,14 +1086,16 @@ export function getPreset(id: string): PresetDef | undefined {
 }
 
 /** Category ids that exist, in taxonomy order, dropping unknown ids. */
-export function resolveCategories(ids: readonly string[]): CategoryDef[] {
+export function resolveCategories(ids: readonly string[], customs: readonly CustomCategoryRow[] = []): CategoryDef[] {
   const wanted = new Set(ids);
-  return CATEGORIES.filter((c) => wanted.has(c.id));
+  const customDefs = customs.map(customToCategoryDef);
+  return [...CATEGORIES, ...customDefs].filter((c) => wanted.has(c.id));
 }
 
 /** Ids in `ids` that no longer exist — a scan saved before a taxonomy edit. */
-export function unknownCategoryIds(ids: readonly string[]): string[] {
-  return ids.filter((id) => !BY_ID.has(id));
+export function unknownCategoryIds(ids: readonly string[], customs: readonly CustomCategoryRow[] = []): string[] {
+  const customIds = new Set(customs.map((c) => c.id));
+  return ids.filter((id) => !BY_ID.has(id) && !customIds.has(id));
 }
 
 export function categoriesForPreset(presetId: string): CategoryDef[] {
@@ -1086,8 +1112,8 @@ export interface ResolvedTerm {
 }
 
 /** Flatten a category selection into the term list the pipeline will execute. */
-export function resolveTerms(categoryIds: readonly string[]): ResolvedTerm[] {
-  return resolveCategories(categoryIds).flatMap((category) =>
+export function resolveTerms(categoryIds: readonly string[], customs: readonly CustomCategoryRow[] = []): ResolvedTerm[] {
+  return resolveCategories(categoryIds, customs).flatMap((category) =>
     category.terms.map((term) => ({
       categoryId: category.id,
       categoryLabel: category.label,
@@ -1114,15 +1140,18 @@ export function allSportFormats(): string[] {
  * there is nothing secret in it, and Phases 4 and 5 need labels, presets and
  * term counts to render the picker and the live estimate.
  */
-export function publicTaxonomy() {
+export function publicTaxonomy(customs: readonly CustomCategoryRow[] = []) {
+  const customDefs = customs.map(customToCategoryDef);
+  const allCategories = [...CATEGORIES, ...customDefs];
   return {
-    categories: CATEGORIES.map((c) => ({
+    categories: allCategories.map((c) => ({
       id: c.id,
       label: c.label,
       side: c.side,
       anchorWeight: c.anchorWeight,
       termCount: c.terms.length,
       terms: c.terms.map((t) => ({ id: t.id, label: t.label, sportFormat: t.sportFormat })),
+      custom: !BY_ID.has(c.id),
     })),
     presets: PRESETS.map((p) => ({
       id: p.id,

@@ -525,7 +525,7 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
 
   const hasFlooring = s.competitionGroups.some((g) => g.places.some((p) => p.flooring));
 
-  const renderGroup = (groups: typeof s.competitionGroups, heading: string, showFlooring: boolean, dotColor: string) => {
+  const renderGroup = (groups: typeof s.competitionGroups, heading: string, showFlooring: boolean, dotColor: string, showNotes = false) => {
     if (groups.length === 0) return null;
     return (
       <>
@@ -544,6 +544,7 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
                   <tr>
                     <th>Name</th>
                     {showFlooring ? <th>Flooring</th> : null}
+                    {showNotes ? <th>Note</th> : null}
                     <th className="r">Distance</th>
                   </tr>
                 </thead>
@@ -552,6 +553,7 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
                     <tr key={`${group.categoryId}:${place.name}:${i}`}>
                       <td>{place.name}</td>
                       {showFlooring ? <td>{place.flooring ?? "—"}</td> : null}
+                      {showNotes ? <td style={{ fontSize: "7pt", color: "#6b7280", fontStyle: place.note ? "italic" : "normal" }}>{place.note ?? "—"}</td> : null}
                       <td className="r">{place.distance}</td>
                     </tr>
                   ))}
@@ -568,7 +570,7 @@ function ScanResults({ doc, n }: { doc: ReportDocument; n: number }) {
     <section className="section">
       <SectionHeading n={n} id="scanResults" />
       {renderGroup(s.competitionGroups, "Competition", hasFlooring, "#159341")}
-      {renderGroup(s.demandGroups, "Nearby places", false, "#00aeef")}
+      {renderGroup(s.demandGroups, "Nearby places", false, "#00aeef", true)}
     </section>
   );
 }
@@ -734,11 +736,13 @@ function PlaceGroup({
   group,
   dotColor,
   showFlooring,
+  showNotes,
   categoryMap,
 }: {
-  group: { categoryId: string; label: string; count: number; distanceContext: string; places: readonly { name: string; distance: string; flooring: string | null }[] };
+  group: { categoryId: string; label: string; count: number; distanceContext: string; places: readonly { name: string; distance: string; flooring: string | null; note?: string | null }[] };
   dotColor: string;
   showFlooring: boolean;
+  showNotes?: boolean;
   categoryMap?: CategoryMapSection | null;
 }) {
   return (
@@ -770,6 +774,9 @@ function PlaceGroup({
             {place.name}
             {showFlooring && place.flooring ? (
               <span className="tiny" style={{ marginLeft: "4pt" }}>· {place.flooring}</span>
+            ) : null}
+            {showNotes && place.note ? (
+              <span className="tiny" style={{ marginLeft: "4pt", fontStyle: "italic", color: "#6b7280" }}>— {place.note}</span>
             ) : null}
           </span>
           <span className="placeDist">{place.distance}</span>
@@ -846,7 +853,7 @@ export function ReportBody({ doc }: { doc: ReportDocument }) {
         <div style={{ marginTop: "20pt" }}>
           <div className="eyebrow">Nearby places</div>
           {sr.demandGroups.map((group) => (
-            <PlaceGroup key={group.categoryId} group={group} dotColor="#00aeef" showFlooring={false} categoryMap={catMapLookup.get(group.categoryId)} />
+            <PlaceGroup key={group.categoryId} group={group} dotColor="#00aeef" showFlooring={false} showNotes categoryMap={catMapLookup.get(group.categoryId)} />
           ))}
         </div>
       ) : null}

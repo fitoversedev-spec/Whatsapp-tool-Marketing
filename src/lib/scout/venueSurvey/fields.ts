@@ -147,6 +147,11 @@ export function sanitiseVenueSurvey(raw: unknown): {
     }
 
     if (field.kind === "choice") {
+      if (key === "flooring") {
+        if (trimmed.length > 40) { rejected.push(key); continue; }
+        values[key] = trimmed;
+        continue;
+      }
       if (!field.options?.includes(trimmed)) {
         rejected.push(key);
         continue;

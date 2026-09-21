@@ -213,7 +213,25 @@ export async function PUT(request: Request, context: { params: { placeId: string
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
 
-  const { values, rejected } = sanitiseVenueSurvey((raw as { values?: unknown })?.values ?? raw);
+  const body = raw as Record<string, unknown>;
+  const rawValues = (body?.values as Record<string, unknown>) ?? (raw as Record<string, unknown>);
+
+  // `note` is not a venue-survey field — handle it separately.
+  const noteRaw = rawValues?.note;
+  const { note: _note, ...surveyValues } = rawValues as Record<string, unknown>;
+  const { values, rejected } = sanitiseVenueSurvey(surveyValues);
+  if (typeof noteRaw === "string") {
+    const trimmed = noteRaw.trim();
+    if (trimmed === "") {
+      await prisma.placeTag.deleteMany({ where: { placeId: place.id, key: "note" } });
+    } else if (trimmed.length <= 500) {
+      await prisma.placeTag.upsert({
+        where: { placeId_key: { placeId: place.id, key: "note" } },
+        create: { placeId: place.id, key: "note", value: trimmed, createdBy: identity.userId },
+        update: { value: trimmed, createdBy: identity.userId },
+      });
+    }
+  }
 
   /**
    * Upsert each field. An empty string deletes the row rather than storing a

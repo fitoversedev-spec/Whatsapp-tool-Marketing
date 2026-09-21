@@ -316,6 +316,7 @@ export interface ScanResultPlaceRow {
   readonly distance: string;
   readonly distanceM: number;
   readonly flooring: string | null;
+  readonly note: string | null;
 }
 
 export interface ScanResultCategoryGroup {

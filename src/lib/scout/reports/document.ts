@@ -93,6 +93,7 @@ export interface ReportPlaceInput {
   readonly alwaysOpen: boolean;
   readonly flooring: string | null;
   readonly flooringDetail: string | null;
+  readonly note: string | null;
 }
 
 export interface ReportCategoryInput {
@@ -495,6 +496,7 @@ function buildScanResults(input: ReportInput): ScanResultsSection {
               distance: formatDistance(p.distanceM),
               distanceM: p.distanceM,
               flooring: floorLabel,
+              note: p.note ?? null,
             };
           });
         const distanceContext = places.length > 0

@@ -254,7 +254,7 @@ export async function renderReportPdfLib(
     page = drawSectionLabel(page, "NEARBY PLACES", fonts, cursor, pdfDoc, footerText, pageNum);
 
     for (const group of sr.demandGroups) {
-      page = renderCategoryGroup(pdfDoc, page, group, fonts, cursor, footerText, pageNum, false, COL.blue);
+      page = renderCategoryGroup(pdfDoc, page, group, fonts, cursor, footerText, pageNum, false, COL.blue, true);
     }
   }
 
@@ -392,6 +392,7 @@ function renderCategoryGroup(
   doc: PDFDocument, page: PDFPage, group: ScanResultCategoryGroup,
   fonts: Fonts, cursor: Cursor, footerText: string, pageNum: { n: number },
   showFlooring: boolean, dotColor: ReturnType<typeof rgb>,
+  showNotes = false,
 ): PDFPage {
   page = needPage(doc, fonts, cursor, 24, footerText, pageNum);
 
@@ -441,6 +442,14 @@ function renderCategoryGroup(
     });
 
     cursor.y -= 9;
+
+    if (showNotes && place.note) {
+      page = needPage(doc, fonts, cursor, 8, footerText, pageNum);
+      page.drawText(sanitize(place.note).substring(0, 80), {
+        x: MARGIN + 8, y: cursor.y, size: 5.5, font: fonts.regular, color: COL.muted,
+      });
+      cursor.y -= 8;
+    }
 
     // Light separator between rows
     page.drawLine({

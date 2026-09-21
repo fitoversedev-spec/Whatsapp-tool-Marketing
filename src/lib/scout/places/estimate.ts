@@ -14,11 +14,12 @@
 import { countTiles } from "@/lib/scout/geo/tiling";
 
 import { costOfCalls, PLACES_DEFAULTS, TEXT_MAX_PAGES } from "./config";
-import { resolveTerms, type SkuTier } from "./taxonomy";
+import { resolveTerms, type CustomCategoryRow, type SkuTier } from "./taxonomy";
 
 export interface EstimateOptions {
   readonly categoryIds: readonly string[];
   readonly radiusM: number;
+  readonly customs?: readonly CustomCategoryRow[];
   readonly tileRadiusM?: number;
   readonly tileOverlap?: number;
   /** Parallel in-flight Google calls. Drives the duration estimate only. */
@@ -72,7 +73,7 @@ export function estimateScan(options: EstimateOptions): ScanEstimate {
 
   const radiusM = Number.isFinite(options.radiusM) && options.radiusM > 0 ? options.radiusM : 0;
   const tiles = radiusM === 0 ? 0 : countTiles(radiusM, tileRadiusM, tileOverlap);
-  const terms = resolveTerms(options.categoryIds);
+  const terms = resolveTerms(options.categoryIds, options.customs);
 
   const nearbyTerms = terms.filter((t) => t.term.mode === "nearby").length;
   const textTerms = terms.length - nearbyTerms;

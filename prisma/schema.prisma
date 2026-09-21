@@ -2714,3 +2714,16 @@ model ScoutPlaceInsight {
   @@index([status], map: "scout_place_insights_status_idx")
   @@map("scout_place_insights")
 }
+
+model CustomCategory {
+  id          String    @id @default(uuid()) @db.Uuid
+  label       String    @db.VarChar(60)
+  side        PlaceSide
+  searchQuery String    @map("search_query") @db.VarChar(120)
+  googleType  String?   @map("google_type") @db.VarChar(60)
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([side, label], map: "custom_categories_side_label_uniq")
+  @@map("custom_categories")
+}

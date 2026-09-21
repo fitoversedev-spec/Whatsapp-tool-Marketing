@@ -25,6 +25,7 @@ export interface ScanPlaceDto {
   readonly googleMapsUri: string | null;
   readonly flooring: string | null;
   readonly flooringDetail: string | null;
+  readonly note: string | null;
 }
 
 export interface ScanCategoryDto {
@@ -95,6 +96,8 @@ export interface ScanScreenData {
   readonly surveyorInputs: Readonly<Record<string, number>>;
   readonly fieldNotes: string | null;
 
+  readonly customFlooringTypes: readonly string[];
+
   readonly exclusions?: readonly ScanExclusionDto[];
   readonly excludedPlaceDetails?: readonly ExcludedPlaceDetailDto[];
 }
@@ -126,6 +129,7 @@ export interface TaxonomyDto {
       readonly label: string;
       readonly sportFormat?: string;
     }>;
+    readonly custom?: boolean;
   }>;
   readonly presets: ReadonlyArray<{
     readonly id: string;

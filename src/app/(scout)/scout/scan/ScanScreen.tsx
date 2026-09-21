@@ -168,6 +168,12 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
   const [themesPending, setThemesPending] = useState(false);
   const [flooringOpen, setFlooringOpen] = useState<string | null>(null);
   const [flooringSaving, setFlooringSaving] = useState<string | null>(null);
+  const [flooringCustomMode, setFlooringCustomMode] = useState<string | null>(null);
+  const [flooringCustomInput, setFlooringCustomInput] = useState("");
+  const [localCustomFlooring, setLocalCustomFlooring] = useState<string[]>(
+    initial?.customFlooringTypes ? [...initial.customFlooringTypes] : [],
+  );
+  const [highlightedCategory, setHighlightedCategory] = useState<string | null>(null);
   const [localExclusions, setLocalExclusions] = useState<
     Array<{ id: string; googlePlaceId: string; categoryId: string; locked: boolean }>
   >(initial?.exclusions ? [...initial.exclusions] : []);
@@ -196,10 +202,16 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
 
   useEffect(() => {
     if (!flooringOpen) return;
-    const handler = () => setFlooringOpen(null);
+    const handler = () => { setFlooringOpen(null); setFlooringCustomMode(null); };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, [flooringOpen]);
+
+  const allFlooringOptions = useMemo(() => {
+    const base = FLOORING_OPTIONS.filter((o) => o !== "Other");
+    const custom = localCustomFlooring.filter((c) => !(base as readonly string[]).includes(c));
+    return [...base, ...custom, "Other"] as const;
+  }, [localCustomFlooring]);
 
   const saveFlooring = useCallback(async (placeId: string, value: string | null, detail?: string) => {
     setFlooringSaving(placeId);
@@ -245,6 +257,30 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
         };
       });
     } catch { /* swallow */ }
+  }, []);
+
+  const [noteOpen, setNoteOpen] = useState<string | null>(null);
+  const [noteSaving, setNoteSaving] = useState<string | null>(null);
+
+  const saveNote = useCallback(async (placeId: string, note: string) => {
+    setNoteSaving(placeId);
+    try {
+      await fetch(`/api/scout/places/${encodeURIComponent(placeId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values: { note } }),
+      });
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          places: prev.places.map((p) =>
+            p.placeId === placeId ? { ...p, note: note || null } : p,
+          ),
+        };
+      });
+    } catch { /* swallow */ }
+    setNoteSaving(null);
   }, []);
 
   const excludePlace = useCallback(async (place: ScanPlaceDto, categoryId: string, categoryLabel: string) => {
@@ -690,14 +726,16 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
         lng: p.lng,
         type: p.side === "competition" ? "facility" : "demand",
         placeId: p.placeId,
-        name: p.name,
+        name: highlightedCategory
+          ? (p.categories.includes(highlightedCategory) ? p.name : undefined)
+          : p.name,
         rating: p.rating,
         reviewCount: p.reviewCount,
         distanceM: p.distanceM,
         primaryTypeDisplayName: p.primaryTypeDisplayName,
         googleMapsUri: p.googleMapsUri,
       })),
-    [data?.places],
+    [data?.places, highlightedCategory],
   );
 
   const groups = useMemo(() => {
@@ -773,16 +811,23 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
     });
   }, [pinnedPlaceIds, plotPinned, centre.lat, centre.lng, data?.places]);
 
+  const [addedCustoms, setAddedCustoms] = useState<TaxonomyDto["categories"][number][]>([]);
+
+  const allCategories = useMemo(() => {
+    const ids = new Set(taxonomy.categories.map((c) => c.id));
+    return [...taxonomy.categories, ...addedCustoms.filter((c) => !ids.has(c.id))];
+  }, [taxonomy.categories, addedCustoms]);
+
   const selectedTermCount = useMemo(
     () =>
-      taxonomy.categories
+      allCategories
         .filter((c) => selectedCategories.includes(c.id))
         .reduce((sum, c) => sum + c.termCount, 0),
-    [taxonomy.categories, selectedCategories],
+    [allCategories, selectedCategories],
   );
 
-  const competition = taxonomy.categories.filter((c) => c.side === "competition");
-  const demand = taxonomy.categories.filter((c) => c.side === "demand");
+  const competition = allCategories.filter((c) => c.side === "competition");
+  const demand = allCategories.filter((c) => c.side === "demand");
 
   const scrollTargetRef = useRef<HTMLDivElement | null>(null);
 
@@ -921,6 +966,14 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                   </Tag>
                 ))}
               </div>
+              <CategorySearchInput
+                side="competition"
+                centre={centre}
+                onAdd={(cat) => {
+                  setAddedCustoms((prev) => prev.some((p) => p.id === cat.id) ? prev : [...prev, cat]);
+                  setSelectedCategories((prev) => prev.includes(cat.id) ? prev : [...prev, cat.id]);
+                }}
+              />
             </div>
 
             <div className="flex flex-col gap-[10px]">
@@ -937,6 +990,14 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                   </Tag>
                 ))}
               </div>
+              <CategorySearchInput
+                side="demand"
+                centre={centre}
+                onAdd={(cat) => {
+                  setAddedCustoms((prev) => prev.some((p) => p.id === cat.id) ? prev : [...prev, cat]);
+                  setSelectedCategories((prev) => prev.includes(cat.id) ? prev : [...prev, cat.id]);
+                }}
+              />
             </div>
 
             {/* ------------------------------------------------- live estimate */}
@@ -1085,7 +1146,15 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                   <span className="text-right">Nearest</span>
                 </div>
                 {data.categories.map((c) => (
-                  <div key={c.categoryId} className="grid grid-cols-[1.3fr_0.5fr_0.7fr_0.7fr] gap-[6px] py-[10px] px-3 text-xs border-t border-slate-200 [&>span:first-child]:font-semibold">
+                  <div
+                    key={c.categoryId}
+                    className={`grid grid-cols-[1.3fr_0.5fr_0.7fr_0.7fr] gap-[6px] py-[10px] px-3 text-xs border-t border-slate-200 cursor-pointer transition-colors [&>span:first-child]:font-semibold ${highlightedCategory === c.categoryId ? "bg-court-50 border-l-[3px] border-l-court-500 pl-[9px]" : "hover:bg-slate-50"}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setHighlightedCategory((prev) => prev === c.categoryId ? null : c.categoryId)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setHighlightedCategory((prev) => prev === c.categoryId ? null : c.categoryId); } }}
+                    title={highlightedCategory === c.categoryId ? "Click to show all names on map" : `Click to show only ${c.label} names on map`}
+                  >
                     <span>{c.label}</span>
                     <span className="text-right">
                       {atLeast(c.count, c.saturated)}
@@ -1209,8 +1278,8 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                       {shown.map((place) => {
                         const isPinned = pinnedPlaceIds.includes(place.placeId);
                         return (
+                          <div key={place.placeId} className="flex flex-col gap-0">
                           <div
-                            key={place.placeId}
                             data-place-row={place.placeId}
                             className={`flex items-center gap-[10px] border rounded-lg py-2 px-3 w-full text-left bg-white font-sans cursor-pointer ${
                               selectedPlaceId === place.placeId
@@ -1318,25 +1387,90 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                                     </span>
                                   )}
                                   {flooringOpen === place.placeId && (
-                                    <span className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl py-1.5 min-w-[160px]">
-                                      {FLOORING_OPTIONS.map((opt) => (
-                                        <button
-                                          key={opt}
-                                          type="button"
-                                          className={`block w-full text-left text-sm px-4 py-2 hover:bg-court-50 transition-colors ${place.flooring === opt ? "font-semibold text-court-600 bg-court-50" : "text-slate-700"}`}
-                                          onClick={(e) => { e.stopPropagation(); saveFlooring(place.placeId, opt); }}
-                                        >
-                                          {opt}
-                                        </button>
-                                      ))}
-                                      {place.flooring && (
-                                        <button
-                                          type="button"
-                                          className="block w-full text-left text-sm px-4 py-2 text-red-500 hover:bg-red-50 border-t border-slate-100 mt-1 transition-colors"
-                                          onClick={(e) => { e.stopPropagation(); saveFlooring(place.placeId, null); }}
-                                        >
-                                          Remove
-                                        </button>
+                                    <span className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl py-1.5 min-w-[180px]" onClick={(e) => e.stopPropagation()}>
+                                      {flooringCustomMode === place.placeId ? (
+                                        <span className="flex flex-col gap-1.5 px-3 py-2">
+                                          <span className="text-[11px] font-semibold text-slate-500">Custom flooring type</span>
+                                          <input
+                                            type="text"
+                                            className="text-sm px-2.5 py-1.5 rounded border border-slate-300 bg-white text-slate-800 w-full placeholder:text-slate-400 focus:outline-none focus:border-court-400 focus:ring-1 focus:ring-court-200"
+                                            placeholder="e.g. Rubber"
+                                            value={flooringCustomInput}
+                                            onChange={(e) => setFlooringCustomInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                              e.stopPropagation();
+                                              if (e.key === "Enter") {
+                                                const v = flooringCustomInput.trim();
+                                                if (v) {
+                                                  saveFlooring(place.placeId, v);
+                                                  if (!localCustomFlooring.includes(v)) setLocalCustomFlooring((prev) => [...prev, v].sort());
+                                                  setFlooringCustomMode(null);
+                                                  setFlooringCustomInput("");
+                                                }
+                                              }
+                                              if (e.key === "Escape") {
+                                                setFlooringCustomMode(null);
+                                                setFlooringCustomInput("");
+                                              }
+                                            }}
+                                            autoFocus
+                                            maxLength={40}
+                                          />
+                                          <span className="flex gap-1.5">
+                                            <button
+                                              type="button"
+                                              className="flex-1 text-xs px-2 py-1 rounded bg-court-500 text-white font-semibold hover:bg-court-600 disabled:opacity-50 transition-colors"
+                                              disabled={!flooringCustomInput.trim()}
+                                              onClick={() => {
+                                                const v = flooringCustomInput.trim();
+                                                if (v) {
+                                                  saveFlooring(place.placeId, v);
+                                                  if (!localCustomFlooring.includes(v)) setLocalCustomFlooring((prev) => [...prev, v].sort());
+                                                  setFlooringCustomMode(null);
+                                                  setFlooringCustomInput("");
+                                                }
+                                              }}
+                                            >
+                                              Save
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors"
+                                              onClick={() => { setFlooringCustomMode(null); setFlooringCustomInput(""); }}
+                                            >
+                                              Cancel
+                                            </button>
+                                          </span>
+                                        </span>
+                                      ) : (
+                                        <>
+                                          {allFlooringOptions.map((opt) => (
+                                            <button
+                                              key={opt}
+                                              type="button"
+                                              className={`block w-full text-left text-sm px-4 py-2 hover:bg-court-50 transition-colors ${place.flooring === opt ? "font-semibold text-court-600 bg-court-50" : "text-slate-700"}`}
+                                              onClick={() => {
+                                                if (opt === "Other") {
+                                                  setFlooringCustomMode(place.placeId);
+                                                  setFlooringCustomInput("");
+                                                } else {
+                                                  saveFlooring(place.placeId, opt);
+                                                }
+                                              }}
+                                            >
+                                              {opt === "Other" ? "Other…" : opt}
+                                            </button>
+                                          ))}
+                                          {place.flooring && (
+                                            <button
+                                              type="button"
+                                              className="block w-full text-left text-sm px-4 py-2 text-red-500 hover:bg-red-50 border-t border-slate-100 mt-1 transition-colors"
+                                              onClick={() => saveFlooring(place.placeId, null)}
+                                            >
+                                              Remove
+                                            </button>
+                                          )}
+                                        </>
                                       )}
                                     </span>
                                   )}
@@ -1381,6 +1515,69 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                                 <circle cx="12" cy="10" r="3" />
                               </svg>
                             </button>
+                          </div>
+                          {group.side === "demand" && (
+                            <div className="flex items-start gap-1.5 ml-1">
+                              <button
+                                type="button"
+                                className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded transition-colors ${
+                                  place.note
+                                    ? "text-blue-700 bg-blue-50 hover:bg-blue-100"
+                                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                                }`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setNoteOpen((prev) => prev === place.placeId ? null : place.placeId);
+                                }}
+                                title={place.note ? "Edit note" : "Add note"}
+                              >
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                                </svg>
+                                {place.note ? "Note" : "Add note"}
+                              </button>
+                              {noteOpen === place.placeId && (
+                                <span className="flex-1 flex items-center gap-1.5">
+                                  <input
+                                    key={`${place.placeId}:note:${place.note ?? ""}`}
+                                    type="text"
+                                    className="flex-1 text-xs px-2 py-1 rounded border border-slate-200 bg-white text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-court-400 focus:ring-1 focus:ring-court-200"
+                                    placeholder="Add a note about this place…"
+                                    defaultValue={place.note ?? ""}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onBlur={(e) => {
+                                      const v = e.currentTarget.value.trim();
+                                      if (v !== (place.note ?? "")) saveNote(place.placeId, v);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      e.stopPropagation();
+                                      if (e.key === "Enter") e.currentTarget.blur();
+                                      if (e.key === "Escape") setNoteOpen(null);
+                                    }}
+                                    autoFocus
+                                    maxLength={500}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="text-[10px] px-1.5 py-0.5 rounded bg-court-500 text-white hover:bg-court-600 active:bg-court-700 transition-colors shrink-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                                      const v = input.value.trim();
+                                      if (v !== (place.note ?? "")) saveNote(place.placeId, v);
+                                      setNoteOpen(null);
+                                    }}
+                                  >
+                                    Save
+                                  </button>
+                                </span>
+                              )}
+                              {!noteOpen || noteOpen !== place.placeId ? (
+                                place.note && <span className="text-[11px] text-slate-500 truncate max-w-[180px]">{place.note}</span>
+                              ) : null}
+                              {noteSaving === place.placeId && <span className="text-[10px] text-slate-400 italic">saving…</span>}
+                            </div>
+                          )}
                           </div>
                         );
                       })}
@@ -1723,9 +1920,109 @@ function toggleCategory(
   set: React.Dispatch<React.SetStateAction<string[]>>,
   id: string,
 ): void {
-  // Optimistic by construction: the picker is local state, and the estimate
-  // that depends on it is recomputed rather than awaited.
   set((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+}
+
+function CategorySearchInput({
+  side,
+  centre,
+  onAdd,
+}: {
+  side: "competition" | "demand";
+  centre: { lat: number; lng: number };
+  onAdd: (cat: TaxonomyDto["categories"][number]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Array<{ type: string; text: string; secondary: string; googleType: string | null }>>([]);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    if (query.length < 2) { setResults([]); setOpen(false); return; }
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      setBusy(true);
+      try {
+        const res = await fetch(
+          `/api/scout/autocomplete?q=${encodeURIComponent(query)}&lat=${centre.lat}&lng=${centre.lng}`,
+        );
+        const data = await res.json();
+        setResults(data.suggestions ?? []);
+        setOpen(true);
+      } catch { setResults([]); }
+      finally { setBusy(false); }
+    }, 300);
+    return () => clearTimeout(timerRef.current);
+  }, [query, centre.lat, centre.lng]);
+
+  const save = async (label: string, googleType: string | null) => {
+    const res = await fetch("/api/scout/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, side, searchQuery: label.toLowerCase(), googleType }),
+    });
+    const data = await res.json();
+    if (data.category) {
+      onAdd({
+        id: data.category.id,
+        label: data.category.label,
+        side: data.category.side as "competition" | "demand",
+        termCount: 1,
+        terms: [{ id: `custom-${data.category.id}`, label: data.category.label }],
+        custom: true,
+      });
+    }
+    setQuery("");
+    setResults([]);
+    setOpen(false);
+  };
+
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-2 border border-slate-300 rounded-lg py-2 px-3 focus-within:border-court-500 focus-within:ring-1 focus-within:ring-court-500/20">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 flex-none" aria-hidden="true">
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          className="flex-1 min-w-0 border-0 outline-none font-sans text-sm bg-transparent text-slate-900 placeholder:text-slate-400"
+          placeholder={side === "competition" ? "Add a sport or activity…" : "Add a nearby place type…"}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && query.trim().length >= 2) {
+              e.preventDefault();
+              void save(capitalize(query.trim()), null);
+            }
+            if (e.key === "Escape") { setOpen(false); }
+          }}
+        />
+        {busy && <span className="text-xs text-slate-400 flex-none">…</span>}
+      </div>
+      {open && results.length > 0 && (
+        <ul className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden max-h-48 overflow-y-auto list-none m-0 p-0">
+          {results.map((r, i) => (
+            <li key={i}>
+              <button
+                type="button"
+                className="block w-full text-left bg-white border-0 py-2.5 px-3 font-sans text-sm text-slate-900 cursor-pointer hover:bg-slate-100"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void save(r.text, r.googleType)}
+              >
+                {r.text}
+                {r.secondary ? <span className="text-xs text-slate-500 ml-1.5">{r.secondary}</span> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 interface ResultGroup {

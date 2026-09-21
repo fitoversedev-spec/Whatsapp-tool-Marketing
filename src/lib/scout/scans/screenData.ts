@@ -8,8 +8,13 @@ import { getScanResult } from "@/lib/scout/places/scanResult";
 import { sanitiseSurveyorInputs } from "@/lib/scout/scoring/checklist";
 import type { ScoreResult } from "@/lib/scout/scoring/types";
 
+import { VENUE_SURVEY_FIELDS } from "@/lib/scout/venueSurvey/fields";
 import { readCategoryIds } from "./queries";
 import type { ScanScreenData } from "./dto";
+
+const PREDEFINED_FLOORING = new Set(
+  VENUE_SURVEY_FIELDS.find((f) => f.id === "flooring")?.options ?? [],
+);
 
 /**
  * Assemble the D2 payload for one scan.
@@ -29,7 +34,7 @@ export async function getScanScreenData(
   if (!scan) return null;
   if (scan.ownerId !== identity.userId && !canAccessAllScans(identity)) return null;
 
-  const [result, row, exclusions] = await Promise.all([
+  const [result, row, exclusions, customFlooringRows] = await Promise.all([
     getScanResult(scanId),
     prisma.scan.findUnique({
       where: { id: scanId },
@@ -43,6 +48,11 @@ export async function getScanScreenData(
       },
     }),
     getExclusionsForOwner(scan.ownerId),
+    prisma.placeTag.findMany({
+      where: { key: "flooring", value: { not: null } },
+      distinct: ["value"],
+      select: { value: true },
+    }),
   ]);
 
   if (!result) return null;
@@ -86,6 +96,7 @@ export async function getScanScreenData(
         googleMapsUri: place.googleMapsUri,
         flooring: place.flooring,
         flooringDetail: place.flooringDetail,
+        note: place.note,
       },
     }];
   });
@@ -117,6 +128,7 @@ export async function getScanScreenData(
       googleMapsUri: p.googleMapsUri,
       flooring: p.flooring,
       flooringDetail: p.flooringDetail,
+      note: p.note,
     })),
     distinctPlaces: filteredPlaces.length,
     categories: result.categories
@@ -180,6 +192,11 @@ export async function getScanScreenData(
     scoredAt: row?.scoredAt ? row.scoredAt.toISOString() : null,
     surveyorInputs: sanitiseSurveyorInputs(row?.surveyorInputs),
     fieldNotes: row?.fieldNotes ?? null,
+
+    customFlooringTypes: customFlooringRows
+      .map((r) => r.value!)
+      .filter((v) => v && !PREDEFINED_FLOORING.has(v))
+      .sort(),
 
     exclusions: exclusions.map((ex) => ({
       id: ex.id,

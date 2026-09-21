@@ -137,6 +137,7 @@ export async function assembleReportInput(
         alwaysOpen: window.alwaysOpen === true,
         flooring: place.flooring ?? null,
         flooringDetail: place.flooringDetail ?? null,
+        note: place.note ?? null,
       };
     }),
     categories: result.categories.map((category) => ({

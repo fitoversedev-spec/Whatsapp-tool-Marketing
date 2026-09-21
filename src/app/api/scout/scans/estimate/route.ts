@@ -10,9 +10,10 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import { prisma } from "@/lib/scout/db";
 import { getScoutIdentity } from "@/lib/scout/identity";
 import { estimateScan, formatDuration } from "@/lib/scout/places/estimate";
-import { categoriesForPreset, publicTaxonomy } from "@/lib/scout/places/taxonomy";
+import { categoriesForPreset, publicTaxonomy, type CustomCategoryRow } from "@/lib/scout/places/taxonomy";
 
 export const runtime = "nodejs";
 
@@ -23,8 +24,12 @@ export async function GET(request: NextRequest) {
 
   const params = request.nextUrl.searchParams;
 
+  const customs = await prisma.customCategory.findMany({
+    select: { id: true, label: true, side: true, searchQuery: true, googleType: true },
+  }) as CustomCategoryRow[];
+
   if (params.get("taxonomy") === "1") {
-    return NextResponse.json(publicTaxonomy());
+    return NextResponse.json(publicTaxonomy(customs));
   }
 
   const radiusM = Number(params.get("radiusM") ?? 2_000);
@@ -33,7 +38,7 @@ export async function GET(request: NextRequest) {
     ? categoriesForPreset(presetId).map((c) => c.id)
     : (params.get("categoryIds")?.split(",").map((s) => s.trim()).filter(Boolean) ?? []);
 
-  const estimate = estimateScan({ categoryIds, radiusM, cacheHitRate: 0.15 });
+  const estimate = estimateScan({ categoryIds, radiusM, customs, cacheHitRate: 0.15 });
 
   return NextResponse.json({
     ...estimate,

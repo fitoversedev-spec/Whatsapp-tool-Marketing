@@ -19,7 +19,13 @@ export type StructuredOptions = {
   maxTokens?: number;
 };
 
-export async function generateStructured<T>(opts: StructuredOptions): Promise<T> {
+export type StructuredResult<T> = {
+  result: T;
+  inputTokens: number;
+  outputTokens: number;
+};
+
+export async function generateStructured<T>(opts: StructuredOptions): Promise<StructuredResult<T>> {
   await assertWithinDailyCap(opts.userId);
   const client = getAnthropic();
 
@@ -59,5 +65,9 @@ export async function generateStructured<T>(opts: StructuredOptions): Promise<T>
     (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "respond",
   );
   if (!block) throw new AiError("AI returned no structured result", "failed");
-  return block.input as T;
+  return {
+    result: block.input as T,
+    inputTokens: res.usage.input_tokens,
+    outputTokens: res.usage.output_tokens,
+  };
 }

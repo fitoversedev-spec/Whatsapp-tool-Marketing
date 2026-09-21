@@ -286,7 +286,7 @@ export async function draftTemplate(
     .filter(Boolean)
     .join("\n\n");
 
-  const raw = await generateStructured<Partial<TemplateDraft>>({
+  const { result: raw } = await generateStructured<Partial<TemplateDraft>>({
     feature: "template",
     userId: input.userId,
     system,
@@ -295,7 +295,6 @@ export async function draftTemplate(
     cacheSystem: true,
   });
 
-  // Post-process into a value that always satisfies the create schema.
   return {
     name: sanitizeName(raw.name),
     language: "en",

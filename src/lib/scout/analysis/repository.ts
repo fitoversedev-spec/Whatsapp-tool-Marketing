@@ -3,7 +3,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { AnalysisStatus } from "@prisma/client";
-import type { PlaceInsightResult, PlaceContext } from "./types";
+import type { PlaceInsightResult, PlaceContext, DataQuality } from "./types";
 
 export async function createAnalysis(scanId: string, ownerId: string, totalPlaces: number) {
   return prisma.scoutAnalysis.create({
@@ -180,6 +180,13 @@ export async function getAnalysisPlaces(scanId: string): Promise<PlaceContext[]>
       rating: sp.place.rating,
       reviewCount: sp.place.reviewCount,
       primaryType: sp.place.primaryType,
+      primaryTypeDisplayName: sp.place.primaryTypeDisplayName,
+      priceLevel: sp.place.priceLevel,
+      websiteUri: sp.place.website,
+      phone: sp.place.phone,
+      googleTypes: sp.place.googleTypes,
+      businessStatus: sp.place.businessStatus,
+      operatingWindow: sp.place.operatingWindow as Record<string, unknown> | null,
       reviewThemes: sp.place.reviewThemes
         .filter((t): t is typeof t & { sentiment: string } => t.sentiment != null)
         .map((t) => ({
@@ -263,6 +270,62 @@ export async function resetInsightsForReanalysis(analysisId: string, placeIds: s
       error: null,
       analysedAt: null,
       updatedAt: new Date(),
+    },
+  });
+}
+
+const CACHE_TTL_DAYS = 7;
+
+export interface CachedInsight {
+  insight: PlaceInsightResult;
+  inputTokens: number;
+  outputTokens: number;
+  dataQuality: DataQuality;
+}
+
+export async function getCachedInsight(googlePlaceId: string): Promise<CachedInsight | null> {
+  const cached = await prisma.scoutInsightCache.findUnique({
+    where: { googlePlaceId },
+  });
+  if (!cached || cached.expiresAt < new Date()) return null;
+
+  return {
+    insight: cached.insight as unknown as PlaceInsightResult,
+    inputTokens: cached.inputTokens,
+    outputTokens: cached.outputTokens,
+    dataQuality: (cached.dataQuality as DataQuality) ?? "good",
+  };
+}
+
+export async function cacheInsight(
+  googlePlaceId: string,
+  placeName: string,
+  insight: PlaceInsightResult,
+  tokens: { input: number; output: number },
+  dataQuality: DataQuality,
+): Promise<void> {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + CACHE_TTL_DAYS);
+
+  await prisma.scoutInsightCache.upsert({
+    where: { googlePlaceId },
+    create: {
+      googlePlaceId,
+      placeName,
+      insight: insight as unknown as Prisma.InputJsonValue,
+      inputTokens: tokens.input,
+      outputTokens: tokens.output,
+      dataQuality,
+      expiresAt,
+    },
+    update: {
+      placeName,
+      insight: insight as unknown as Prisma.InputJsonValue,
+      inputTokens: tokens.input,
+      outputTokens: tokens.output,
+      dataQuality,
+      cachedAt: new Date(),
+      expiresAt,
     },
   });
 }

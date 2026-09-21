@@ -14,7 +14,7 @@ export async function generateAreaSummary(
   radiusM: number,
   insights: ReadonlyArray<{ name: string; insight: PlaceInsightResult }>,
 ): Promise<AreaSummaryResult> {
-  return generateStructured<AreaSummaryResult>({
+  const { result } = await generateStructured<AreaSummaryResult>({
     feature: "scout-analysis-summary",
     userId,
     system: AREA_SUMMARY_SYSTEM,
@@ -23,4 +23,5 @@ export async function generateAreaSummary(
     cacheSystem: true,
     maxTokens: 4000,
   });
+  return result;
 }

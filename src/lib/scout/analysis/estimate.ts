@@ -1,12 +1,12 @@
 import type { CostEstimate } from "./types";
 
-const TOKENS_PER_PLACE_INPUT = 2000;
-const TOKENS_PER_PLACE_OUTPUT = 3000;
-const SUMMARY_INPUT = 1500;
-const SUMMARY_OUTPUT = 1000;
+const TOKENS_PER_PLACE_INPUT = 120_000;
+const TOKENS_PER_PLACE_OUTPUT = 3500;
+const SUMMARY_INPUT = 5000;
+const SUMMARY_OUTPUT = 2000;
 
-const SONNET_INPUT_PER_MTOK_USD = 2;
-const SONNET_OUTPUT_PER_MTOK_USD = 10;
+const SONNET_INPUT_PER_MTOK_USD = 3;
+const SONNET_OUTPUT_PER_MTOK_USD = 15;
 const USD_TO_INR = 84;
 
 export function estimateAnalysisCost(placeCount: number): CostEstimate {

@@ -11,7 +11,7 @@ import {
   EXTRACTION_SYSTEM,
   EXTRACTION_SCHEMA,
 } from "./prompts";
-import type { PlaceContext, PlaceInsightResult, AnalysisPlaceResult } from "./types";
+import type { PlaceContext, PlaceInsightResult, AnalysisPlaceResult, DataQuality } from "./types";
 
 const MAX_SEARCH_ROUNDS = 10;
 
@@ -36,27 +36,36 @@ export async function analysePlace(
   });
 
   // Step 2: Structured extraction from search results
-  const extractionPrompt = [
+  const extractionParts = [
     `Here are the web search results for "${place.name}":`,
     "",
     searchContent.text,
     "",
+  ];
+  if (searchContent.searchLimited) {
+    extractionParts.push(
+      "WARNING: The web search hit the maximum number of rounds and may be incomplete. Mark any fields that rely solely on incomplete search data as Low confidence.",
+      "",
+    );
+  }
+  extractionParts.push(
     "Extract structured insights from these search results. For anything not found in the results, use null and Low confidence.",
-  ].join("\n");
+  );
 
-  const insight = await generateStructured<PlaceInsightResult>({
-    feature: "scout-analysis-place-extract",
-    userId,
-    system: EXTRACTION_SYSTEM,
-    user: extractionPrompt,
-    schema: EXTRACTION_SCHEMA,
-    maxTokens: 2000,
-  });
+  const { result: insight, inputTokens: extInput, outputTokens: extOutput } =
+    await generateStructured<PlaceInsightResult>({
+      feature: "scout-analysis-place-extract",
+      userId,
+      system: EXTRACTION_SYSTEM,
+      user: extractionParts.join("\n"),
+      schema: EXTRACTION_SCHEMA,
+      maxTokens: 2000,
+    });
 
-  // generateStructured already logs usage internally, but we need the token
-  // counts for progress tracking. Estimate extraction at ~500 in + ~1500 out.
-  totalInput += 500;
-  totalOutput += 1500;
+  totalInput += extInput;
+  totalOutput += extOutput;
+
+  const dataQuality = assessDataQuality(insight, searchContent.searchLimited);
 
   return {
     placeInternalId: place.placeInternalId,
@@ -64,19 +73,34 @@ export async function analysePlace(
     insight,
     inputTokens: totalInput,
     outputTokens: totalOutput,
+    dataQuality,
   };
+}
+
+function assessDataQuality(insight: PlaceInsightResult, searchLimited: boolean): DataQuality {
+  if (searchLimited) return "search_limited";
+
+  const isEmpty =
+    insight.establishedDate.value === null &&
+    insight.popularTimes.value === null &&
+    insight.sentiment.googleReviews.tone === "Insufficient data" &&
+    (!insight.sentiment.whatWorks || insight.sentiment.whatWorks.length === 0) &&
+    (!insight.sentiment.whatDoesnt || insight.sentiment.whatDoesnt.length === 0);
+
+  return isEmpty ? "limited" : "good";
 }
 
 async function runWebSearch(
   client: Anthropic,
   place: PlaceContext,
-): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
+): Promise<{ text: string; inputTokens: number; outputTokens: number; searchLimited: boolean }> {
   const messages: Anthropic.MessageParam[] = [
     { role: "user", content: buildSearchPrompt(place) },
   ];
 
   let totalInput = 0;
   let totalOutput = 0;
+  const accumulatedText: string[] = [];
 
   try {
     let response: Anthropic.Message;
@@ -97,11 +121,13 @@ async function runWebSearch(
       totalOutput += response.usage.output_tokens;
 
       if (response.stop_reason === "pause_turn") {
+        for (const b of response.content) {
+          if (b.type === "text" && b.text) accumulatedText.push(b.text);
+        }
         messages.push({ role: "assistant", content: response.content });
         continue;
       }
 
-      // end_turn or tool_use that isn't pause — extract text
       const textParts = response.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text);
@@ -110,13 +136,19 @@ async function runWebSearch(
         text: textParts.join("\n\n") || "No search results found.",
         inputTokens: totalInput,
         outputTokens: totalOutput,
+        searchLimited: false,
       };
     }
 
+    console.warn(
+      JSON.stringify({ event: "scout_search_max_rounds", place: place.name, rounds }),
+    );
+
     return {
-      text: "Search exceeded maximum rounds.",
+      text: accumulatedText.join("\n\n") || "No search results found after maximum search rounds.",
       inputTokens: totalInput,
       outputTokens: totalOutput,
+      searchLimited: true,
     };
   } catch (e) {
     throw mapAnthropicError(e);

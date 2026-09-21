@@ -19,6 +19,33 @@ Rules:
 - Search using the place name combined with the city/area for best results.
 - For reviews, be thorough — search for the place on Google Maps, read multiple reviews, and extract concrete specifics, not vague generalisations.`;
 
+const PRICE_LABELS: Record<number, string> = {
+  0: "Free",
+  1: "Inexpensive",
+  2: "Moderate",
+  3: "Expensive",
+  4: "Very Expensive",
+};
+
+function formatOperatingWindow(ow: Record<string, unknown> | null): string | null {
+  if (!ow) return null;
+  const periods = ow.periods as Array<{ open?: { day?: number; hour?: number; minute?: number }; close?: { day?: number; hour?: number; minute?: number } }> | undefined;
+  if (!Array.isArray(periods) || periods.length === 0) return null;
+
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const lines: string[] = [];
+  for (const p of periods) {
+    const openDay = p.open?.day ?? 0;
+    const openH = p.open?.hour ?? 0;
+    const openM = p.open?.minute ?? 0;
+    const closeH = p.close?.hour ?? 0;
+    const closeM = p.close?.minute ?? 0;
+    const fmt = (h: number, m: number) => `${h}:${String(m).padStart(2, "0")}`;
+    lines.push(`${dayNames[openDay]}: ${fmt(openH, openM)}–${fmt(closeH, closeM)}`);
+  }
+  return lines.join(", ");
+}
+
 export function buildSearchPrompt(place: PlaceContext): string {
   const parts = [
     `Analyse this facility:`,
@@ -26,8 +53,25 @@ export function buildSearchPrompt(place: PlaceContext): string {
   ];
   if (place.address) parts.push(`Address: ${place.address}`);
   if (place.googleMapsUri) parts.push(`Google Maps: ${place.googleMapsUri}`);
-  if (place.primaryType) parts.push(`Type: ${place.primaryType}`);
+  if (place.primaryType) {
+    const display = place.primaryTypeDisplayName && place.primaryTypeDisplayName !== place.primaryType
+      ? `${place.primaryTypeDisplayName} (${place.primaryType})`
+      : place.primaryType;
+    parts.push(`Type: ${display}`);
+  }
   if (place.rating != null) parts.push(`Rating: ${place.rating}/5 (${place.reviewCount ?? 0} reviews)`);
+  if (place.priceLevel != null) parts.push(`Price level: ${PRICE_LABELS[place.priceLevel] ?? `Level ${place.priceLevel}`}`);
+  if (place.websiteUri) parts.push(`Website: ${place.websiteUri}`);
+  if (place.phone) parts.push(`Phone: ${place.phone}`);
+  if (place.businessStatus && place.businessStatus !== "OPERATIONAL") {
+    parts.push(`Business status: ${place.businessStatus} (NOT currently operational)`);
+  }
+  if (place.googleTypes.length > 0) {
+    parts.push(`Google categories: ${place.googleTypes.join(", ")}`);
+  }
+
+  const hoursStr = formatOperatingWindow(place.operatingWindow);
+  if (hoursStr) parts.push(`Operating hours: ${hoursStr}`);
 
   if (place.reviewThemes.length > 0) {
     parts.push("", "Existing review theme analysis (from Google Reviews):");
@@ -38,7 +82,8 @@ export function buildSearchPrompt(place: PlaceContext): string {
 
   parts.push(
     "",
-    "Search for: establishment date, popular times, Google Reviews (read individual reviews to find specific things that work well and specific complaints), social media mentions, and whether this area is suitable for a new sports facility.",
+    "The data above is verified from Google Places — do NOT re-search for these facts.",
+    "Focus your web search on what is NOT provided above: establishment date, popular times, Google Reviews (read individual reviews to find specific things that work well and specific complaints), social media mentions, and whether this area is suitable for a new sports facility.",
     "Focus especially on extracting concrete 'what works' and 'what doesn't work' from customer reviews.",
   );
   return parts.join("\n");

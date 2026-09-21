@@ -72,7 +72,7 @@ export async function generateAiSummary(
       .map((p) => `  - ${p.name}: ${(p.distanceM / 1000).toFixed(1)} km away, rating ${p.rating?.toFixed(1) ?? "N/A"}, ${p.reviewCount ?? 0} reviews`),
   ].filter(Boolean).join("\n");
 
-  const result = await generateStructured<AiSummaryResult>({
+  const { result } = await generateStructured<AiSummaryResult>({
     feature: "scout-ai-summary",
     userId,
     system: SYSTEM,
@@ -115,7 +115,7 @@ export async function polishSuggestions(
     rawText,
   ].join("\n");
 
-  const result = await generateStructured<{ polished: string }>({
+  const { result } = await generateStructured<{ polished: string }>({
     feature: "scout-polish-suggestions",
     userId,
     system: POLISH_SYSTEM,

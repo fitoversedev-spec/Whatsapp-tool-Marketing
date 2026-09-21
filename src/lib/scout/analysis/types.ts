@@ -89,6 +89,13 @@ export interface PlaceContext {
   rating: number | null;
   reviewCount: number | null;
   primaryType: string | null;
+  primaryTypeDisplayName: string | null;
+  priceLevel: number | null;
+  websiteUri: string | null;
+  phone: string | null;
+  googleTypes: string[];
+  businessStatus: string | null;
+  operatingWindow: Record<string, unknown> | null;
   reviewThemes: ReadonlyArray<{
     theme: string;
     sentiment: string;
@@ -96,12 +103,15 @@ export interface PlaceContext {
   }>;
 }
 
+export type DataQuality = "good" | "limited" | "search_limited";
+
 export interface AnalysisPlaceResult {
   placeInternalId: string;
   googlePlaceId: string;
   insight: PlaceInsightResult;
   inputTokens: number;
   outputTokens: number;
+  dataQuality: DataQuality;
 }
 
 export interface CostEstimate {

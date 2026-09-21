@@ -2727,3 +2727,19 @@ model CustomCategory {
   @@unique([side, label], map: "custom_categories_side_label_uniq")
   @@map("custom_categories")
 }
+
+model ScoutInsightCache {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  googlePlaceId String   @map("google_place_id") @db.VarChar(255)
+  placeName     String   @map("place_name") @db.VarChar(300)
+  insight       Json
+  inputTokens   Int      @default(0) @map("input_tokens")
+  outputTokens  Int      @default(0) @map("output_tokens")
+  dataQuality   String   @default("good") @map("data_quality") @db.VarChar(20)
+  cachedAt      DateTime @default(now()) @map("cached_at") @db.Timestamptz(6)
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@unique([googlePlaceId], map: "scout_insight_cache_place_uniq")
+  @@index([expiresAt], map: "scout_insight_cache_expires_idx")
+  @@map("scout_insight_cache")
+}

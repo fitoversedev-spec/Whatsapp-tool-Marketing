@@ -12,13 +12,15 @@ import {
   markInsightFailed,
   saveInsightResult,
   updateAnalysisStatus,
+  getCachedInsight,
+  cacheInsight,
 } from "./repository";
 import { estimateAnalysisCost } from "./estimate";
 import { assertWithinAnalysisCap } from "./guardrails";
 import type { PlaceContext, PlaceInsightResult } from "./types";
 
-const BATCH_SIZE = 1;
-const CONCURRENCY = 1;
+const BATCH_SIZE = 2;
+const CONCURRENCY = 2;
 const MAX_RETRIES = 3;
 
 export async function startAnalysis(scanId: string, userId: string) {
@@ -52,9 +54,27 @@ export async function runAnalysis(
   await updateAnalysisStatus(analysisId, "running", { startedAt: new Date() });
 
   const completedInsights: Array<{ name: string; insight: PlaceInsightResult }> = [];
+  const uncachedPlaces: PlaceContext[] = [];
 
-  for (let i = 0; i < places.length; i += BATCH_SIZE) {
-    const batch = places.slice(i, i + BATCH_SIZE);
+  for (const place of places) {
+    const cached = await getCachedInsight(place.googlePlaceId);
+    if (cached) {
+      await saveInsightResult(
+        analysisId,
+        place.placeInternalId,
+        cached.insight,
+        0,
+        0,
+      );
+      completedInsights.push({ name: place.name, insight: cached.insight });
+      await incrementAnalysisProgress(analysisId, 1, 0, 0, 0);
+    } else {
+      uncachedPlaces.push(place);
+    }
+  }
+
+  for (let i = 0; i < uncachedPlaces.length; i += BATCH_SIZE) {
+    const batch = uncachedPlaces.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(
       batch.map((place) => analysePlaceWithRetry(userId, place)),
     );
@@ -80,6 +100,14 @@ export async function runAnalysis(
         batchCompleted++;
         batchInput += result.inputTokens;
         batchOutput += result.outputTokens;
+
+        await cacheInsight(
+          result.googlePlaceId,
+          place.name,
+          result.insight,
+          { input: result.inputTokens, output: result.outputTokens },
+          result.dataQuality,
+        ).catch(() => {});
       } else {
         const errorMsg =
           settled.reason instanceof Error ? settled.reason.message : "Unknown error";
@@ -106,14 +134,15 @@ export async function runAnalysis(
   }
 
   // Generate area summary from completed insights
-  const finalStatus = completedInsights.length === 0 ? "failed" : (
-    completedInsights.length < places.length ? "partial" : "completed"
-  );
+  let insightsStatus: "failed" | "partial" | "completed" =
+    completedInsights.length === 0 ? "failed" : (
+      completedInsights.length < places.length ? "partial" : "completed"
+    );
 
-  let areaSummary = undefined;
+  let areaSummary: Prisma.InputJsonValue | undefined = undefined;
+  let summaryFailed = false;
   if (completedInsights.length > 0) {
     try {
-      // We need scan info for the summary — fetch from the analysis
       const { prisma } = await import("@/lib/prisma");
       const analysis = await prisma.scoutAnalysis.findUniqueOrThrow({
         where: { id: analysisId },
@@ -125,20 +154,27 @@ export async function runAnalysis(
         analysis.scan.areaLabel,
         analysis.scan.radiusM,
         completedInsights,
-      );
+      ) as unknown as Prisma.InputJsonValue;
     } catch (e) {
-      console.warn(
+      summaryFailed = true;
+      const errorMsg = e instanceof Error ? e.message : "unknown";
+      console.error(
         JSON.stringify({
           event: "scout_analysis_summary_failed",
           analysisId,
-          error: e instanceof Error ? e.message : "unknown",
+          error: errorMsg,
         }),
       );
+      areaSummary = { error: true, message: `Area summary generation failed: ${errorMsg}` } as unknown as Prisma.InputJsonValue;
     }
   }
 
+  const finalStatus = insightsStatus === "failed" ? "failed" : (
+    summaryFailed || insightsStatus === "partial" ? "partial" : "completed"
+  );
+
   await updateAnalysisStatus(analysisId, finalStatus, {
-    areaSummary: areaSummary as unknown as Prisma.InputJsonValue | undefined,
+    areaSummary,
     finishedAt: new Date(),
     ...(finalStatus === "failed" && completedInsights.length === 0
       ? { error: "All place analyses failed" }
@@ -160,7 +196,8 @@ async function analysePlaceWithRetry(userId: string, place: PlaceContext) {
         throw e;
       }
       if (attempt < MAX_RETRIES) {
-        await sleep(1000 * attempt);
+        const isRateLimit = e instanceof AiError && e.code === "rate_limit";
+        await sleep(isRateLimit ? 30_000 * attempt : 2000 * attempt);
       }
     }
   }
@@ -185,6 +222,15 @@ export async function analyseSinglePlace(
       result.outputTokens,
     );
     await incrementAnalysisProgress(analysisId, 1, 0, result.inputTokens, result.outputTokens);
+
+    await cacheInsight(
+      result.googlePlaceId,
+      place.name,
+      result.insight,
+      { input: result.inputTokens, output: result.outputTokens },
+      result.dataQuality,
+    ).catch(() => {});
+
     return result;
   } catch (e) {
     const errorMsg = e instanceof Error ? e.message : "Unknown error";

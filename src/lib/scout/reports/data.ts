@@ -1,5 +1,6 @@
 import "server-only";
 
+import { prisma } from "@/lib/prisma";
 import { canAccessAllScans, type ScoutProfile } from "@/lib/scout/identity";
 import { UNKNOWN_OPERATING_WINDOW, type OperatingWindow } from "@/lib/scout/places/normalise";
 import { getScan } from "@/lib/scout/places/scanRepository";
@@ -60,12 +61,12 @@ export async function assembleReportInput(
   scanId: string,
   options: AssembleOptions = {},
 ): Promise<ReportInput | null> {
-  const scan = await getScan(scanId);
+  const scan = await getScan(scanId, prisma as any);
   if (!scan) return null;
   if (scan.ownerId !== author.userId && !canAccessAllScans(author)) return null;
 
   const [result, row, draft] = await Promise.all([
-    getScanResult(scanId),
+    getScanResult(scanId, prisma as any),
     getReportScanFacts(scanId),
     getReportDraft(scanId),
   ]);

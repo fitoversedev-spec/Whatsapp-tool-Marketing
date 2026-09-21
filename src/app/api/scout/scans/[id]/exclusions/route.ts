@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { prisma } from "@/lib/prisma";
 import { getScoutIdentity } from "@/lib/scout/identity";
 import { getScan } from "@/lib/scout/places/scanRepository";
 import {
@@ -16,7 +17,7 @@ async function resolveOwner(scanId: string) {
   if (!identity) return { error: NextResponse.json({ error: "Not signed in." }, { status: 401 }) };
   if (!identity.canRunScans) return { error: NextResponse.json({ error: "Not permitted." }, { status: 403 }) };
 
-  const scan = await getScan(scanId);
+  const scan = await getScan(scanId, prisma as any);
   if (!scan || scan.ownerId !== identity.userId) {
     return { error: NextResponse.json({ error: "Scan not found." }, { status: 404 }) };
   }
@@ -29,7 +30,7 @@ export async function GET(_request: Request, context: { params: { id: string } }
   const resolved = await resolveOwner(id);
   if ("error" in resolved) return resolved.error;
 
-  const rows = await getExclusionsForOwner(resolved.scan.ownerId);
+  const rows = await getExclusionsForOwner(resolved.scan.ownerId, prisma as any);
   return NextResponse.json({ exclusions: rows });
 }
 

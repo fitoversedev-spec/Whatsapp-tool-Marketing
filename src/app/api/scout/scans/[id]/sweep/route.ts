@@ -18,6 +18,7 @@ import { canAccessAllScans, getScoutIdentity } from "@/lib/scout/identity";
 import { getScan } from "@/lib/scout/places/scanRepository";
 import { parseSweepDocument } from "@/lib/scout/sweep/grid";
 import { getSweep, saveSweep } from "@/lib/scout/sweep/repository";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ async function authorise(id: string) {
   if (!identity.canRunScans) {
     return { error: NextResponse.json({ error: "Not permitted." }, { status: 403 }) };
   }
-  const scan = await getScan(id);
+  const scan = await getScan(id, prisma as any);
   // Someone else's scan is a 404, not a 403 — a 403 confirms the id exists.
   if (!scan || (scan.ownerId !== identity.userId && !canAccessAllScans(identity))) {
     return { error: NextResponse.json({ error: "Scan not found." }, { status: 404 }) };

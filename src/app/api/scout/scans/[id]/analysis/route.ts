@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { after } from "@/lib/scout/after";
 import { canAccessAllScans, getScoutProfile } from "@/lib/scout/identity";
+import { prisma } from "@/lib/prisma";
 import { getScan } from "@/lib/scout/places/scanRepository";
 import { AiError, aiErrorStatus } from "@/lib/ai/errors";
 import { aiConfigured } from "@/lib/ai/client";
@@ -22,7 +23,7 @@ async function authorise(id: string) {
   if (!author.canRunScans) {
     return { error: NextResponse.json({ error: "Not permitted." }, { status: 403 }) };
   }
-  const scan = await getScan(id);
+  const scan = await getScan(id, prisma as any);
   if (!scan || (scan.ownerId !== author.userId && !canAccessAllScans(author))) {
     return { error: NextResponse.json({ error: "Scan not found." }, { status: 404 }) };
   }

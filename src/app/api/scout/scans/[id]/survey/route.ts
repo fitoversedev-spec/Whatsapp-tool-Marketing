@@ -23,6 +23,7 @@ import { NextResponse } from "next/server";
 import { Prisma, prisma } from "@/lib/scout/db";
 import { canAccessAllScans, getScoutIdentity } from "@/lib/scout/identity";
 import { getScan } from "@/lib/scout/places/scanRepository";
+import { prisma as simplePrisma } from "@/lib/prisma";
 import {
   CHECKLIST_GROUPS,
   CHECKLIST_MAX_RATING,
@@ -41,7 +42,7 @@ async function authorise(id: string) {
   if (!identity.canRunScans) {
     return { error: NextResponse.json({ error: "Not permitted." }, { status: 403 }) };
   }
-  const scan = await getScan(id);
+  const scan = await getScan(id, simplePrisma as any);
   if (!scan || (scan.ownerId !== identity.userId && !canAccessAllScans(identity))) {
     return { error: NextResponse.json({ error: "Scan not found." }, { status: 404 }) };
   }

@@ -26,6 +26,7 @@
 import { NextResponse } from "next/server";
 
 import { Prisma, prisma } from "@/lib/scout/db";
+import { prisma as simplePrisma } from "@/lib/prisma";
 import { canAccessAllScans, getScoutIdentity } from "@/lib/scout/identity";
 import { compassDirection } from "@/lib/scout/geo/bearing";
 import { getScan } from "@/lib/scout/places/scanRepository";
@@ -113,7 +114,7 @@ export async function GET(request: Request, context: { params: { placeId: string
   } | null = null;
 
   if (scanId) {
-    const scan = await getScan(scanId);
+    const scan = await getScan(scanId, simplePrisma as any);
     // Someone else's scan returns 404, never 403 — a 403 confirms the id exists.
     if (!scan || (scan.ownerId !== identity.userId && !canAccessAllScans(identity))) {
       return NextResponse.json({ error: "Scan not found." }, { status: 404 });

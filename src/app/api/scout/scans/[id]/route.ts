@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { canAccessAllScans, getScoutIdentity } from "@/lib/scout/identity";
 import { getScan } from "@/lib/scout/places/scanRepository";
 import { getScanResult } from "@/lib/scout/places/scanResult";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
@@ -22,13 +23,13 @@ export async function GET(_request: Request, context: { params: { id: string } }
 
   const { id } = context.params;
 
-  const scan = await getScan(id);
+  const scan = await getScan(id, prisma as any);
   if (!scan) return NextResponse.json({ error: "Scan not found." }, { status: 404 });
   // Admins can read any scan; a salesperson reads their own.
   if (scan.ownerId !== identity.userId && !canAccessAllScans(identity)) {
     return NextResponse.json({ error: "Scan not found." }, { status: 404 });
   }
 
-  const result = await getScanResult(id);
+  const result = await getScanResult(id, prisma as any);
   return NextResponse.json(result);
 }

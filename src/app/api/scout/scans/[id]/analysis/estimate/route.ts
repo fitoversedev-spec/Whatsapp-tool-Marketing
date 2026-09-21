@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { canAccessAllScans, getScoutIdentity } from "@/lib/scout/identity";
+import { prisma } from "@/lib/prisma";
 import { getScan } from "@/lib/scout/places/scanRepository";
 import { getAnalysisPlaces } from "@/lib/scout/analysis/repository";
 import { estimateAnalysisCost } from "@/lib/scout/analysis/estimate";
@@ -16,7 +17,7 @@ export async function GET(_request: Request, context: { params: { id: string } }
   if (!identity.canRunScans) {
     return NextResponse.json({ error: "Not permitted." }, { status: 403 });
   }
-  const scan = await getScan(id);
+  const scan = await getScan(id, prisma as any);
   if (!scan || (scan.ownerId !== identity.userId && !canAccessAllScans(identity))) {
     return NextResponse.json({ error: "Scan not found." }, { status: 404 });
   }

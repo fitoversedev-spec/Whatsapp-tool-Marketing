@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Prisma, prisma } from "@/lib/scout/db";
+import { prisma as simplePrisma } from "@/lib/prisma";
 import { canAccessAllScans, type ScoutIdentity } from "@/lib/scout/identity";
 import { getScanResult } from "@/lib/scout/places/scanResult";
 import { resolveCategories } from "@/lib/scout/places/taxonomy";
@@ -191,7 +192,7 @@ export async function getCompareSubjects(
   const subjects: CompareSubject[] = [];
 
   for (const id of ordered) {
-    const result = await getScanResult(id);
+    const result = await getScanResult(id, simplePrisma as any);
     const m = metaById.get(id);
     if (!result || !m) continue;
 

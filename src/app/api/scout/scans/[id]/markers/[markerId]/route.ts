@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/scout/db";
 import { canAccessAllScans, getScoutProfile } from "@/lib/scout/identity";
 import { getScan } from "@/lib/scout/places/scanRepository";
+import { prisma as simplePrisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export async function DELETE(
   if (!profile) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!profile.canRunScans) return NextResponse.json({ error: "Not permitted." }, { status: 403 });
 
-  const scan = await getScan(id);
+  const scan = await getScan(id, simplePrisma as any);
   // Someone else's scan is a 404, never a 403 — a 403 confirms the id exists.
   if (!scan || (scan.ownerId !== profile.userId && !canAccessAllScans(profile))) {
     return NextResponse.json({ error: "Scan not found." }, { status: 404 });

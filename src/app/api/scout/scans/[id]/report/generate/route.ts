@@ -21,6 +21,7 @@ import {
   startReportGeneration,
   type ReportGenerationRow,
 } from "@/lib/scout/reports/generate";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -43,7 +44,7 @@ async function authorise(id: string) {
   if (!author.canRunScans) {
     return { error: NextResponse.json({ error: "Not permitted." }, { status: 403 }) };
   }
-  const scan = await getScan(id);
+  const scan = await getScan(id, prisma as any);
   // Someone else's scan is a 404, never a 403 — a 403 confirms the id exists.
   if (!scan || (scan.ownerId !== author.userId && !canAccessAllScans(author))) {
     return { error: NextResponse.json({ error: "Scan not found." }, { status: 404 }) };

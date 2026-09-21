@@ -48,7 +48,7 @@ export function AnalysisStep({ scanId, onNext, onBack }: AnalysisStepProps) {
 
         if (!cancelled && estRes.ok) {
           const data = await estRes.json();
-          setEstimate(data as CostEstimateData);
+          setEstimate((data.estimate ?? data) as CostEstimateData);
         }
 
         if (!cancelled && analysisRes.ok) {

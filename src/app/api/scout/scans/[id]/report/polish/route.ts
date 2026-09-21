@@ -4,6 +4,7 @@ import { getScoutProfile, canAccessAllScans } from "@/lib/scout/identity";
 import { getScan } from "@/lib/scout/places/scanRepository";
 import { canGenerateAiSummary, polishSuggestions } from "@/lib/scout/reports/ai-summary";
 import { AiError, aiErrorStatus } from "@/lib/ai/errors";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -20,7 +21,7 @@ export async function POST(request: Request, context: { params: { id: string } }
     return NextResponse.json({ error: "Not permitted." }, { status: 403 });
   }
 
-  const scan = await getScan(id);
+  const scan = await getScan(id, prisma as any);
   if (!scan || (scan.ownerId !== author.userId && !canAccessAllScans(author))) {
     return NextResponse.json({ error: "Scan not found." }, { status: 404 });
   }

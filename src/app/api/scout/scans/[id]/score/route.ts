@@ -37,6 +37,7 @@ import {
   ScoreModelVersionNotFoundError,
   scoreScan,
 } from "@/lib/scout/siteScore";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 /** Scoring itself is fast; the `after()` extraction is what needs the room. */
@@ -50,7 +51,7 @@ async function authorise(id: string) {
   if (!identity.canRunScans) {
     return { error: NextResponse.json({ error: "Not permitted." }, { status: 403 }) };
   }
-  const scan = await getScan(id);
+  const scan = await getScan(id, prisma as any);
   // A scan belonging to someone else returns 404, not 403: a 403 would confirm
   // the id exists.
   if (!scan || (scan.ownerId !== identity.userId && !canAccessAllScans(identity))) {

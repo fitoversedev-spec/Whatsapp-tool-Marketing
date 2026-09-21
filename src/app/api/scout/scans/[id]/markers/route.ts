@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { prisma } from "@/lib/scout/db";
+import { prisma as simplePrisma } from "@/lib/prisma";
 import { canAccessAllScans, getScoutProfile, type ScoutProfile } from "@/lib/scout/identity";
 import { getScan } from "@/lib/scout/places/scanRepository";
 
@@ -37,7 +38,7 @@ async function authorise(
   if (!profile.canRunScans) {
     return { error: NextResponse.json({ error: "Not permitted." }, { status: 403 }) };
   }
-  const scan = await getScan(scanId);
+  const scan = await getScan(scanId, simplePrisma as any);
   // Someone else's scan is a 404, never a 403 — a 403 confirms the id exists.
   if (!scan || (scan.ownerId !== profile.userId && !canAccessAllScans(profile))) {
     return { error: NextResponse.json({ error: "Scan not found." }, { status: 404 }) };

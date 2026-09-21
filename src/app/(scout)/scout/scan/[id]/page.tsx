@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import { getScoutIdentity, getScoutProfile } from "@/lib/scout/identity";
 import { env } from "@/lib/scout/env";
-import { prisma } from "@/lib/scout/db";
+import { prisma } from "@/lib/prisma";
 import { publicTaxonomy, type CustomCategoryRow } from "@/lib/scout/places/taxonomy";
 import { defaultBlockState } from "@/lib/scout/reports/blocks";
 import { latestGeneratedReport, reportLink } from "@/lib/scout/reports/generate";

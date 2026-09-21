@@ -2,7 +2,8 @@ import "server-only";
 
 import type { Report } from "@prisma/client";
 
-import { Prisma, prisma } from "@/lib/scout/db";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/scout/env";
 
 import { defaultBlockState, sanitiseBlockState, type ReportBlockState } from "./blocks";

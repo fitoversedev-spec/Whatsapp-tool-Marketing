@@ -1,6 +1,6 @@
 import "server-only";
 
-import { prisma } from "@/lib/scout/db";
+import { prisma } from "@/lib/prisma";
 import { canAccessAllScans, type ScoutIdentity } from "@/lib/scout/identity";
 import { getExclusionsForOwner } from "@/lib/scout/places/exclusionRepository";
 import { getScan } from "@/lib/scout/places/scanRepository";
@@ -30,12 +30,12 @@ export async function getScanScreenData(
   identity: ScoutIdentity,
   scanId: string,
 ): Promise<ScanScreenData | null> {
-  const scan = await getScan(scanId);
+  const scan = await getScan(scanId, prisma as any);
   if (!scan) return null;
   if (scan.ownerId !== identity.userId && !canAccessAllScans(identity)) return null;
 
   const [result, row, exclusions, customFlooringRows] = await Promise.all([
-    getScanResult(scanId),
+    getScanResult(scanId, prisma as any),
     prisma.scan.findUnique({
       where: { id: scanId },
       select: {
@@ -47,7 +47,7 @@ export async function getScanScreenData(
         fieldNotes: true,
       },
     }),
-    getExclusionsForOwner(scan.ownerId),
+    getExclusionsForOwner(scan.ownerId, prisma as any),
     prisma.placeTag.findMany({
       where: { key: "flooring", value: { not: null } },
       distinct: ["value"],

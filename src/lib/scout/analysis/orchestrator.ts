@@ -23,10 +23,14 @@ const BATCH_SIZE = 2;
 const CONCURRENCY = 2;
 const MAX_RETRIES = 3;
 
-export async function startAnalysis(scanId: string, userId: string) {
+export async function startAnalysis(scanId: string, userId: string, placeIds?: string[]) {
   await assertWithinAnalysisCap(userId);
 
-  const places = await getAnalysisPlaces(scanId);
+  let places = await getAnalysisPlaces(scanId);
+  if (placeIds && placeIds.length > 0) {
+    const idSet = new Set(placeIds);
+    places = places.filter((p) => idSet.has(p.googlePlaceId));
+  }
   if (places.length === 0) {
     throw new AiError("No places to analyse — all competition places may be excluded.", "failed");
   }

@@ -64,6 +64,8 @@ export default async function ScanDetailPage({ params }: { params: { id: string 
         googleKeyMissing={!env.hasGoogleServerKey}
         preparedBy={author?.displayName ?? ""}
         initialBlocks={draft?.includedBlocks ?? defaultBlockState()}
+        initialBlockOrder={draft?.blockOrder ?? null}
+        initialSectionText={draft?.sectionText ?? null}
         initialNotes={draft?.fieldNotes ?? data.fieldNotes ?? ""}
         initialSuggestions={draft?.suggestionsText ?? ""}
         initialPolished={draft?.polishedSuggestions ?? ""}

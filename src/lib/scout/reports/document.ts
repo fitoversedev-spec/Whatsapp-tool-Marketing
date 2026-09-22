@@ -159,6 +159,7 @@ export interface ReportInput {
   readonly suggestionsText?: string | null;
   readonly polishedSuggestions?: string | null;
   readonly customTitle?: string | null;
+  readonly sectionText?: Record<string, string> | null;
 }
 
 /* ------------------------------------------------------------- formatting */

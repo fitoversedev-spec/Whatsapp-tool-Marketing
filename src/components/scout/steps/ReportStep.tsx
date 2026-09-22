@@ -1,9 +1,26 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/scout/ui";
 import { SectionLabel, StateBlock } from "@/components/scout/patterns";
-import type { ReportBlockState } from "@/lib/scout/reports/blocks";
+import type { ReportBlockState, ReportBlockDef } from "@/lib/scout/reports/blocks";
 import { REPORT_BLOCKS } from "@/lib/scout/reports/blocks";
 import { deliveryNote, reportDelivery } from "@/lib/scout/reports/delivery";
 
@@ -37,6 +54,8 @@ export interface ReportStepProps {
   scanId: string;
   analysisId: string | null;
   initialBlocks: ReportBlockState;
+  initialBlockOrder: string[] | null;
+  initialSectionText: Record<string, string> | null;
   initialNotes: string;
   suggestionsText: string;
   polishedSuggestions: string;
@@ -49,6 +68,122 @@ const DELIVERY_NOTE = deliveryNote(reportDelivery().mode);
 const GENERATE_POLL_MS = 2_000;
 const GENERATE_POLL_LIMIT = 60;
 
+function DragHandle() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-slate-300 flex-none cursor-grab active:cursor-grabbing">
+      <circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/>
+      <circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/>
+      <circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>
+    </svg>
+  );
+}
+
+const SECTION_PLACEHOLDERS: Record<string, string> = {
+  "header": "Area name, radius, date collected, prepared by…",
+  "stat-cards": "Facilities count, reviews total, average rating, demand places…",
+  "score": "Site score verdict and component breakdown…",
+  "saturation": "Facilities per weighted demand anchor, benchmark comparison…",
+  "count-table": "Per-category counts, review totals, nearest example…",
+  "sports-areas": "List of sports and fitness venues in the area…",
+  "ai-summary": "AI-generated summary and sport recommendations…",
+  "suggestions": "Your recommendations to the customer…",
+  "map": "Map section notes…",
+  "sweep": "Vacant plots and terraces notes…",
+  "field-notes": "What the surveyor saw that the data cannot show…",
+  "analysis-overview": "Market saturation, opportunity score, risks, recommendation…",
+  "place-insights": "Per-place establishment dates, popular times, sentiment…",
+  "limitations": "What this assessment does not cover…",
+};
+
+function EditIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={expanded ? "text-court-600" : "text-slate-400"}>
+      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function SortableSection({
+  block,
+  isOn,
+  onToggle,
+  sectionText,
+  onTextChange,
+  loading,
+}: {
+  block: ReportBlockDef;
+  isOn: boolean;
+  onToggle: () => void;
+  sectionText: string;
+  onTextChange: (text: string) => void;
+  loading?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-lg border px-3 py-2.5 transition-colors ${
+        isDragging ? "border-court-400 bg-court-50 shadow-md" : isOn ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50 opacity-60"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        {!block.alwaysOn && (
+          <span {...attributes} {...listeners} className="flex-none touch-none">
+            <DragHandle />
+          </span>
+        )}
+        <label className="flex-1 flex items-center gap-2.5 cursor-pointer min-w-0">
+          <input
+            type="checkbox"
+            checked={isOn}
+            onChange={onToggle}
+            disabled={block.alwaysOn}
+            className="w-3.5 h-3.5 accent-court-500 flex-none"
+          />
+          <span className="min-w-0">
+            <span className="block text-[13px] font-semibold text-slate-800">{block.label}</span>
+            <span className="block text-[11px] text-slate-400 leading-snug">{block.help}</span>
+          </span>
+        </label>
+        {block.alwaysOn ? (
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex-none">Always</span>
+        ) : null}
+        {isOn && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setExpanded((p) => !p); }}
+            className={`p-1.5 rounded-md flex-none transition-colors ${expanded ? "bg-court-50 text-court-600" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"}`}
+            title="Edit section content"
+          >
+            <EditIcon expanded={expanded} />
+          </button>
+        )}
+      </div>
+      {expanded && isOn && (
+        <div className="mt-2 ml-6">
+          {loading ? (
+            <div className="text-[11px] text-slate-400 py-3">Loading section content…</div>
+          ) : (
+            <textarea
+              className="w-full box-border min-h-[120px] resize-y font-mono text-[11.5px] leading-[1.65] text-slate-700 border border-slate-200 rounded-md p-2.5 outline-none focus:border-court-500 focus:ring-1 focus:ring-court-200 bg-white"
+              value={sectionText}
+              onChange={(e) => onTextChange(e.target.value)}
+              placeholder={SECTION_PLACEHOLDERS[block.id] ?? "Add or edit text for this section…"}
+              onClick={(e) => e.stopPropagation()}
+              rows={Math.max(4, sectionText.split("\n").length + 1)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const REPORT_TYPE_OPTIONS: { value: ReportKind; label: string; description: string }[] = [
   { value: "scan", label: "Scan Report", description: "Area analysis with competition and demand data" },
   { value: "analysis", label: "AI Analysis Report", description: "AI-powered insights for each competitor" },
@@ -59,6 +194,8 @@ export function ReportStep({
   scanId,
   analysisId,
   initialBlocks,
+  initialBlockOrder,
+  initialSectionText,
   initialNotes,
   suggestionsText,
   polishedSuggestions,
@@ -68,17 +205,79 @@ export function ReportStep({
 }: ReportStepProps) {
   const [reportKind, setReportKind] = useState<ReportKind>(analysisId ? "combined" : "scan");
   const [blocks, setBlocks] = useState<ReportBlockState>(initialBlocks);
+  const [blockOrder, setBlockOrder] = useState<string[]>(() => {
+    if (initialBlockOrder && initialBlockOrder.length > 0) {
+      const known = new Set(REPORT_BLOCKS.map((b) => b.id));
+      const valid = initialBlockOrder.filter((id) => known.has(id));
+      const missing = REPORT_BLOCKS.filter((b) => !valid.includes(b.id)).map((b) => b.id);
+      return [...valid, ...missing];
+    }
+    return REPORT_BLOCKS.map((b) => b.id);
+  });
   const [notes, setNotes] = useState(initialNotes);
+  const [sectionText, setSectionText] = useState<Record<string, string>>(() => {
+    if (initialSectionText && Object.keys(initialSectionText).length > 0) {
+      return { ...initialSectionText };
+    }
+    const init: Record<string, string> = {};
+    if (polishedSuggestions) init["suggestions"] = polishedSuggestions;
+    else if (suggestionsText) init["suggestions"] = suggestionsText;
+    if (initialNotes) init["field-notes"] = initialNotes;
+    return init;
+  });
+  const [defaultSectionText, setDefaultSectionText] = useState<Record<string, string>>({});
+  const [loadingPreview, setLoadingPreview] = useState(true);
   const [reportName, setReportName] = useState(initialReport?.title ?? "");
   const [report, setReport] = useState<GeneratedReport | null>(initialReport);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [share, setShare] = useState<ShareResponse | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [showPreview, setShowPreview] = useState(
+    !!(initialReport && (initialReport.status === "generated" || initialReport.status === "delivered")),
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/scout/scans/${scanId}/report/section-text`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { sectionText?: Record<string, string> } | null) => {
+        if (cancelled || !json?.sectionText) return;
+        setDefaultSectionText(json.sectionText);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingPreview(false); });
+    return () => { cancelled = true; };
+  }, [scanId]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const toggleBlock = (blockId: string) => {
     setBlocks((prev) => ({ ...prev, [blockId]: !prev[blockId] }));
   };
+
+  const updateSectionText = (blockId: string, text: string) => {
+    setSectionText((prev) => ({ ...prev, [blockId]: text }));
+    if (blockId === "field-notes") setNotes(text);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setBlockOrder((prev) => {
+        const oldIdx = prev.indexOf(active.id as string);
+        const newIdx = prev.indexOf(over.id as string);
+        return arrayMove(prev, oldIdx, newIdx);
+      });
+    }
+  };
+
+  const orderedBlocks = blockOrder
+    .map((id) => REPORT_BLOCKS.find((b) => b.id === id))
+    .filter((b): b is ReportBlockDef => b != null);
 
   const generate = useCallback(async () => {
     setGenerating(true);
@@ -90,9 +289,11 @@ export function ReportStep({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           includedBlocks: blocks,
-          fieldNotes: notes,
-          suggestionsText,
-          polishedSuggestions,
+          blockOrder,
+          sectionText,
+          fieldNotes: sectionText["field-notes"] ?? notes,
+          suggestionsText: sectionText["suggestions"] ?? suggestionsText,
+          polishedSuggestions: sectionText["suggestions"] ?? polishedSuggestions,
           title: reportName.trim() || undefined,
         }),
       });
@@ -120,6 +321,7 @@ export function ReportStep({
         setReport(state.report);
         if (state.report.status !== "generating") {
           if (state.report.status === "failed") setError(state.report.error);
+          else setShowPreview(true);
           break;
         }
       }
@@ -128,7 +330,7 @@ export function ReportStep({
     } finally {
       setGenerating(false);
     }
-  }, [scanId, analysisId, reportKind, blocks, notes, suggestionsText, polishedSuggestions, reportName]);
+  }, [scanId, analysisId, reportKind, blocks, blockOrder, sectionText, notes, suggestionsText, polishedSuggestions, reportName]);
 
   const shareOnWhatsApp = useCallback(async () => {
     if (!report) return;
@@ -155,7 +357,6 @@ export function ReportStep({
     }
   }, [report]);
 
-  const toggleableBlocks = REPORT_BLOCKS.filter((b) => !b.alwaysOn);
   const showAnalysisTypes = !!analysisId;
 
   return (
@@ -202,31 +403,27 @@ export function ReportStep({
       ) : null}
 
       <div className="flex flex-col gap-2">
-        <SectionLabel weight={700}>Sections</SectionLabel>
-        <div className="flex flex-col gap-1.5">
-          {toggleableBlocks.map((block) => (
-            <label key={block.id} className="flex items-center gap-2.5 py-1 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={!!blocks[block.id]}
-                onChange={() => toggleBlock(block.id)}
-                className="accent-court-500"
-              />
-              <span className="text-[12.5px] text-slate-700">{block.label}</span>
-            </label>
-          ))}
+        <div className="flex items-center justify-between">
+          <SectionLabel weight={700}>Sections</SectionLabel>
+          <span className="text-[11px] text-slate-400">Drag to reorder</span>
         </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <SectionLabel weight={700}>Field notes</SectionLabel>
-        <textarea
-          className="w-full box-border min-h-[80px] resize-y font-sans text-[13px] leading-[1.6] text-slate-900 border border-slate-300 rounded-lg p-3 outline-none focus:border-court-500 focus:ring-2 focus:ring-court-500/20"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Optional notes visible only to you"
-          aria-label="Field notes"
-        />
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={blockOrder} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-1.5">
+              {orderedBlocks.map((block) => (
+                <SortableSection
+                  key={block.id}
+                  block={block}
+                  isOn={!!blocks[block.id]}
+                  onToggle={() => toggleBlock(block.id)}
+                  sectionText={sectionText[block.id] ?? defaultSectionText[block.id] ?? ""}
+                  onTextChange={(text) => updateSectionText(block.id, text)}
+                  loading={loadingPreview && !sectionText[block.id] && !defaultSectionText[block.id]}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -275,9 +472,24 @@ export function ReportStep({
             {sharing ? "Recording the share…" : "Share on WhatsApp"}
           </button>
 
-          <Button variant="secondary" block onClick={() => window.open(`/api/scout/reports/${report.id}/pdf`, "_blank", "noopener,noreferrer")}>
-            Open the PDF
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => window.open(`/api/scout/reports/${report.id}/pdf`, "_blank", "noopener,noreferrer")}>
+              Open the PDF
+            </Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setShowPreview((p) => !p)}>
+              {showPreview ? "Hide preview" : "Preview PDF"}
+            </Button>
+          </div>
+
+          {showPreview ? (
+            <div className="rounded-lg border border-slate-200 overflow-hidden bg-slate-100" style={{ height: 480 }}>
+              <iframe
+                src={`/api/scout/reports/${report.id}/pdf`}
+                className="w-full h-full border-0"
+                title="Report preview"
+              />
+            </div>
+          ) : null}
 
           <div className="text-[13px] leading-[1.55] text-slate-700 bg-slate-50 rounded-md px-3 py-[10px] break-all [&_a]:text-court-600">
             <a href={report.link.url} target="_blank" rel="noreferrer">

@@ -171,6 +171,7 @@ export async function assembleReportInput(
     suggestionsText: draft?.suggestionsText || null,
     polishedSuggestions: draft?.polishedSuggestions || null,
     customTitle: draft?.title || null,
+    sectionText: draft?.sectionText ?? null,
   };
 }
 

@@ -56,16 +56,24 @@ export async function PUT(request: Request, context: { params: { id: string } })
 
   const payload = (body ?? {}) as {
     includedBlocks?: unknown;
+    blockOrder?: unknown;
+    sectionText?: unknown;
     fieldNotes?: unknown;
     suggestionsText?: unknown;
     polishedSuggestions?: unknown;
     title?: unknown;
   };
 
+  const sectionText = payload.sectionText && typeof payload.sectionText === "object" && !Array.isArray(payload.sectionText)
+    ? payload.sectionText as Record<string, string>
+    : undefined;
+
   const draft = await saveReportDraft({
     scanId: id,
     userId: auth.identity.userId,
     includedBlocks: payload.includedBlocks,
+    blockOrder: Array.isArray(payload.blockOrder) ? payload.blockOrder as string[] : undefined,
+    sectionText,
     fieldNotes: typeof payload.fieldNotes === "string" ? payload.fieldNotes : "",
     suggestionsText: typeof payload.suggestionsText === "string" ? payload.suggestionsText : undefined,
     polishedSuggestions: typeof payload.polishedSuggestions === "string" ? payload.polishedSuggestions : undefined,

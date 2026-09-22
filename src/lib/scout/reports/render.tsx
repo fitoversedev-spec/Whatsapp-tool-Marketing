@@ -25,6 +25,29 @@ import { AnalysisOverview, PlaceInsights } from "./render-analysis";
 import { renderStaticMarkup } from "./staticMarkup";
 import { REPORT_SECTION_TITLES, type CategoryMapSection, type ReportDocument, type ReportSectionId } from "./types";
 
+/* ------------------------------------------------ section text override */
+
+function TextOverrideBlock({ text }: { text: string }) {
+  const paragraphs = text.split(/\n{2,}/);
+  return (
+    <>
+      {paragraphs.map((para, i) => {
+        const lines = para.split("\n");
+        const isList = lines.every((l) => l.trim().startsWith("•") || l.trim().startsWith("-") || !l.trim());
+        if (isList) {
+          const items = lines.map((l) => l.trim().replace(/^[•\-]\s*/, "")).filter(Boolean);
+          return items.length > 0 ? (
+            <ul key={i} className="small">
+              {items.map((item, j) => <li key={j}>{item}</li>)}
+            </ul>
+          ) : null;
+        }
+        return <p key={i} className="small" style={{ whiteSpace: "pre-line" }}>{para}</p>;
+      })}
+    </>
+  );
+}
+
 /* ----------------------------------------------------------- small parts */
 
 function SectionHeading({ n, id }: { n: number; id: ReportSectionId }) {
@@ -859,28 +882,32 @@ export function ReportBody({ doc }: { doc: ReportDocument }) {
       ) : null}
 
       {/* Suggestions */}
-      {doc.suggestions?.text ? (
+      {(doc.sectionTextOverrides?.["suggestions"] || doc.suggestions?.text) ? (
         <div style={{ breakBefore: "page", pageBreakBefore: "always" }}>
           <div className="eyebrow">Our suggestions</div>
           <div className="suggestionsBlock" style={{ marginTop: "8pt" }}>
-            {doc.suggestions.text}
+            {doc.sectionTextOverrides?.["suggestions"] ?? doc.suggestions?.text}
           </div>
         </div>
       ) : null}
 
       {/* AI Analysis Overview */}
-      {doc.analysisOverview ? (
+      {(doc.sectionTextOverrides?.["analysis-overview"] || doc.analysisOverview) ? (
         <div style={{ breakBefore: "page", pageBreakBefore: "always" }}>
           <div className="eyebrow">AI Area Analysis</div>
-          <AnalysisOverview section={doc.analysisOverview} />
+          {doc.sectionTextOverrides?.["analysis-overview"]
+            ? <TextOverrideBlock text={doc.sectionTextOverrides["analysis-overview"]} />
+            : doc.analysisOverview ? <AnalysisOverview section={doc.analysisOverview} /> : null}
         </div>
       ) : null}
 
       {/* Per-place AI Insights */}
-      {doc.placeInsights ? (
+      {(doc.sectionTextOverrides?.["place-insights"] || doc.placeInsights) ? (
         <div style={{ breakBefore: "page", pageBreakBefore: "always" }}>
           <div className="eyebrow">Per-place AI Insights</div>
-          <PlaceInsights section={doc.placeInsights} />
+          {doc.sectionTextOverrides?.["place-insights"]
+            ? <TextOverrideBlock text={doc.sectionTextOverrides["place-insights"]} />
+            : doc.placeInsights ? <PlaceInsights section={doc.placeInsights} /> : null}
         </div>
       ) : null}
 

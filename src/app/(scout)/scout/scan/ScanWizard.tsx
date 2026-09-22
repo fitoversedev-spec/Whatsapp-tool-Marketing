@@ -13,6 +13,8 @@ export interface ScanWizardProps {
   scanId: string;
   preparedBy: string;
   initialBlocks: ReportBlockState;
+  initialBlockOrder: string[] | null;
+  initialSectionText: Record<string, string> | null;
   initialNotes: string;
   initialSuggestions: string;
   initialPolished: string;
@@ -24,6 +26,8 @@ export function ScanWizard({
   scanId,
   preparedBy,
   initialBlocks,
+  initialBlockOrder,
+  initialSectionText,
   initialNotes,
   initialSuggestions,
   initialPolished,
@@ -97,6 +101,8 @@ export function ScanWizard({
               scanId={scanId}
               analysisId={analysisId}
               initialBlocks={initialBlocks}
+              initialBlockOrder={initialBlockOrder}
+              initialSectionText={initialSectionText}
               initialNotes={initialNotes}
               suggestionsText={suggestionsText}
               polishedSuggestions={polishedSuggestions}

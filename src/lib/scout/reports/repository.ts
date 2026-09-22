@@ -14,6 +14,8 @@ export interface ReportDraft {
   readonly scanId: string;
   readonly title: string | null;
   readonly includedBlocks: ReportBlockState;
+  readonly blockOrder: string[] | null;
+  readonly sectionText: Record<string, string> | null;
   readonly fieldNotes: string;
   readonly suggestionsText: string;
   readonly polishedSuggestions: string;
@@ -40,11 +42,17 @@ export async function getReportDraft(scanId: string): Promise<ReportDraft | null
   const rawBlocks = row.includedBlocks as Record<string, unknown> | null;
   const suggestionsText = typeof rawBlocks?._suggestionsText === "string" ? rawBlocks._suggestionsText : "";
   const polishedSuggestions = typeof rawBlocks?._polishedSuggestions === "string" ? rawBlocks._polishedSuggestions : "";
+  const blockOrder = Array.isArray(rawBlocks?._blockOrder) ? rawBlocks._blockOrder as string[] : null;
+  const sectionText = rawBlocks?._sectionText && typeof rawBlocks._sectionText === "object" && !Array.isArray(rawBlocks._sectionText)
+    ? rawBlocks._sectionText as Record<string, string>
+    : null;
   return {
     id: row.id,
     scanId: row.scanId,
     title: row.title,
     includedBlocks: sanitiseBlockState(row.includedBlocks),
+    blockOrder,
+    sectionText,
     fieldNotes: row.fieldNotes ?? "",
     suggestionsText,
     polishedSuggestions,
@@ -58,6 +66,8 @@ export interface SaveReportDraftInput {
   readonly scanId: string;
   readonly userId: string;
   readonly includedBlocks: unknown;
+  readonly blockOrder?: string[];
+  readonly sectionText?: Record<string, string>;
   readonly fieldNotes: string;
   readonly suggestionsText?: string;
   readonly polishedSuggestions?: string;
@@ -82,6 +92,12 @@ export async function saveReportDraft(input: SaveReportDraftInput): Promise<Repo
   }
   if (input.polishedSuggestions !== undefined) {
     blocksWithMeta._polishedSuggestions = input.polishedSuggestions.slice(0, 4000);
+  }
+  if (input.blockOrder !== undefined) {
+    blocksWithMeta._blockOrder = input.blockOrder;
+  }
+  if (input.sectionText !== undefined) {
+    blocksWithMeta._sectionText = input.sectionText;
   }
   const notes = input.fieldNotes.slice(0, 4000);
 
@@ -138,6 +154,8 @@ export async function saveReportDraft(input: SaveReportDraftInput): Promise<Repo
     scanId: input.scanId,
     title: input.title ?? null,
     includedBlocks: defaultBlockState(),
+    blockOrder: input.blockOrder ?? null,
+    sectionText: input.sectionText ?? null,
     fieldNotes: notes,
     suggestionsText: input.suggestionsText ?? "",
     polishedSuggestions: input.polishedSuggestions ?? "",

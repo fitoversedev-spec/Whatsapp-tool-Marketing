@@ -90,7 +90,7 @@ export async function GET(_request: Request, context: { params: { id: string } }
   );
 }
 
-export async function POST(_request: Request, context: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: { id: string } }) {
   const { id } = context.params;
   const auth = await authorise(id);
   if ("error" in auth) return auth.error;
@@ -107,8 +107,16 @@ export async function POST(_request: Request, context: { params: { id: string } 
     );
   }
 
+  let placeIds: string[] | undefined;
   try {
-    const { analysisId, places, estimate } = await startAnalysis(id, auth.author.userId);
+    const body = await request.json().catch(() => ({}));
+    if (Array.isArray(body.placeIds) && body.placeIds.every((id: unknown) => typeof id === "string")) {
+      placeIds = body.placeIds;
+    }
+  } catch { /* no body is fine */ }
+
+  try {
+    const { analysisId, places, estimate } = await startAnalysis(id, auth.author.userId, placeIds);
     const userId = auth.author.userId;
 
     after(async () => {

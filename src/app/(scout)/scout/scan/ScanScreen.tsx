@@ -1476,6 +1476,75 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                                   )}
                                 </span>
                               )}
+                              {group.side === "demand" && (
+                                <span className="flex flex-wrap items-center gap-1.5 mt-1.5 relative">
+                                  {noteSaving === place.placeId ? (
+                                    <span className="text-xs text-slate-400 italic">saving…</span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${
+                                        place.note
+                                          ? "bg-blue-50 text-blue-800 border border-blue-300 hover:bg-blue-100"
+                                          : "bg-slate-50 text-slate-500 border border-dashed border-slate-300 hover:bg-slate-100 hover:text-slate-700"
+                                      }`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setNoteOpen(noteOpen === place.placeId ? null : place.placeId);
+                                      }}
+                                      title={place.note ? "Edit note" : "Add note"}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                                      </svg>
+                                      {place.note ? "Note" : "Add note"}
+                                    </button>
+                                  )}
+                                  {noteOpen !== place.placeId && place.note && (
+                                    <span className="text-xs text-slate-500 truncate max-w-[200px]">{place.note}</span>
+                                  )}
+                                  {noteOpen === place.placeId && (
+                                    <span className="w-full flex items-start gap-1.5 mt-1">
+                                      <textarea
+                                        key={`${place.placeId}:note:${place.note ?? ""}`}
+                                        className="flex-1 text-xs px-2 py-1.5 rounded border border-slate-200 bg-white text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-court-400 focus:ring-1 focus:ring-court-200 resize-none overflow-hidden"
+                                        placeholder="Add a note about this place…"
+                                        defaultValue={place.note ?? ""}
+                                        rows={2}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onInput={(e) => {
+                                          const t = e.currentTarget;
+                                          t.style.height = "auto";
+                                          t.style.height = t.scrollHeight + "px";
+                                        }}
+                                        onBlur={(e) => {
+                                          const v = e.currentTarget.value.trim();
+                                          if (v !== (place.note ?? "")) saveNote(place.placeId, v);
+                                        }}
+                                        onKeyDown={(e) => {
+                                          e.stopPropagation();
+                                          if (e.key === "Escape") setNoteOpen(null);
+                                        }}
+                                        autoFocus
+                                        maxLength={500}
+                                      />
+                                      <button
+                                        type="button"
+                                        className="text-xs px-2 py-1 rounded bg-court-500 text-white hover:bg-court-600 active:bg-court-700 transition-colors shrink-0"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const textarea = e.currentTarget.previousElementSibling as HTMLTextAreaElement;
+                                          const v = textarea.value.trim();
+                                          if (v !== (place.note ?? "")) saveNote(place.placeId, v);
+                                          setNoteOpen(null);
+                                        }}
+                                      >
+                                        Save
+                                      </button>
+                                    </span>
+                                  )}
+                                </span>
+                              )}
                             </span>
                             <span className="text-xs text-slate-500 flex-none">
                               {formatDistance(place.distanceM)}
@@ -1516,68 +1585,6 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                               </svg>
                             </button>
                           </div>
-                          {group.side === "demand" && (
-                            <div className="flex items-start gap-1.5 ml-1">
-                              <button
-                                type="button"
-                                className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded transition-colors ${
-                                  place.note
-                                    ? "text-blue-700 bg-blue-50 hover:bg-blue-100"
-                                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setNoteOpen((prev) => prev === place.placeId ? null : place.placeId);
-                                }}
-                                title={place.note ? "Edit note" : "Add note"}
-                              >
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                                </svg>
-                                {place.note ? "Note" : "Add note"}
-                              </button>
-                              {noteOpen === place.placeId && (
-                                <span className="flex-1 flex items-center gap-1.5">
-                                  <input
-                                    key={`${place.placeId}:note:${place.note ?? ""}`}
-                                    type="text"
-                                    className="flex-1 text-xs px-2 py-1 rounded border border-slate-200 bg-white text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-court-400 focus:ring-1 focus:ring-court-200"
-                                    placeholder="Add a note about this place…"
-                                    defaultValue={place.note ?? ""}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onBlur={(e) => {
-                                      const v = e.currentTarget.value.trim();
-                                      if (v !== (place.note ?? "")) saveNote(place.placeId, v);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      e.stopPropagation();
-                                      if (e.key === "Enter") e.currentTarget.blur();
-                                      if (e.key === "Escape") setNoteOpen(null);
-                                    }}
-                                    autoFocus
-                                    maxLength={500}
-                                  />
-                                  <button
-                                    type="button"
-                                    className="text-[10px] px-1.5 py-0.5 rounded bg-court-500 text-white hover:bg-court-600 active:bg-court-700 transition-colors shrink-0"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                                      const v = input.value.trim();
-                                      if (v !== (place.note ?? "")) saveNote(place.placeId, v);
-                                      setNoteOpen(null);
-                                    }}
-                                  >
-                                    Save
-                                  </button>
-                                </span>
-                              )}
-                              {!noteOpen || noteOpen !== place.placeId ? (
-                                place.note && <span className="text-[11px] text-slate-500 truncate max-w-[180px]">{place.note}</span>
-                              ) : null}
-                              {noteSaving === place.placeId && <span className="text-[10px] text-slate-400 italic">saving…</span>}
-                            </div>
-                          )}
                           </div>
                         );
                       })}

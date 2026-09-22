@@ -14,6 +14,14 @@ export interface AnalysisStepProps {
   onBack: () => void;
 }
 
+interface AnalysisPlace {
+  googlePlaceId: string;
+  name: string;
+  rating: number | null;
+  reviewCount: number | null;
+  primaryType: string | null;
+}
+
 interface AnalysisState {
   id: string;
   status: string;
@@ -36,6 +44,8 @@ export function AnalysisStep({ scanId, onNext, onBack }: AnalysisStepProps) {
   const [error, setError] = useState<string | null>(null);
   const [cloneAvailable, setCloneAvailable] = useState(false);
   const pollingRef = useRef(false);
+  const [places, setPlaces] = useState<AnalysisPlace[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +59,11 @@ export function AnalysisStep({ scanId, onNext, onBack }: AnalysisStepProps) {
         if (!cancelled && estRes.ok) {
           const data = await estRes.json();
           setEstimate((data.estimate ?? data) as CostEstimateData);
+          if (Array.isArray(data.places)) {
+            const pls = data.places as AnalysisPlace[];
+            setPlaces(pls);
+            setSelectedIds(new Set(pls.map((p) => p.googlePlaceId)));
+          }
         }
 
         if (!cancelled && analysisRes.ok) {
@@ -108,8 +123,12 @@ export function AnalysisStep({ scanId, onNext, onBack }: AnalysisStepProps) {
     setStarting(true);
     setError(null);
     try {
+      const body = selectedIds.size < places.length && selectedIds.size > 0
+        ? JSON.stringify({ placeIds: [...selectedIds] })
+        : undefined;
       const res = await fetch(`/api/scout/scans/${scanId}/analysis`, {
         method: "POST",
+        ...(body ? { headers: { "Content-Type": "application/json" }, body } : {}),
       });
       const data = (await res.json()) as { analysisId?: string; estimate?: CostEstimateData; error?: string };
       if (!res.ok || !data.analysisId) {
@@ -132,7 +151,7 @@ export function AnalysisStep({ scanId, onNext, onBack }: AnalysisStepProps) {
     } finally {
       setStarting(false);
     }
-  }, [scanId, startPolling]);
+  }, [scanId, startPolling, selectedIds, places.length]);
 
   const cloneAnalysis = useCallback(async () => {
     setStarting(true);
@@ -177,8 +196,72 @@ export function AnalysisStep({ scanId, onNext, onBack }: AnalysisStepProps) {
       {!analysis && !cloneAvailable && estimate && !estimateLoading ? (
         <>
           <CostEstimate estimate={estimate} />
-          <Button block onClick={() => void startAnalysis()} disabled={starting}>
-            {starting ? "Starting analysis…" : `Analyse ${estimate.placeCount} places`}
+
+          {places.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+                <span className="text-xs font-semibold text-slate-700">
+                  Select places to analyse ({selectedIds.size}/{places.length})
+                </span>
+                <button
+                  type="button"
+                  className="text-xs text-court-500 hover:text-court-700 transition-colors"
+                  onClick={() =>
+                    setSelectedIds((prev) =>
+                      prev.size === places.length ? new Set() : new Set(places.map((p) => p.googlePlaceId)),
+                    )
+                  }
+                >
+                  {selectedIds.size === places.length ? "Deselect all" : "Select all"}
+                </button>
+              </div>
+              <div className="max-h-[240px] overflow-y-auto divide-y divide-slate-50">
+                {places.map((p) => (
+                  <label
+                    key={p.googlePlaceId}
+                    className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-court-500 focus:ring-court-300 accent-court-500 flex-none"
+                      checked={selectedIds.has(p.googlePlaceId)}
+                      onChange={() =>
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(p.googlePlaceId)) next.delete(p.googlePlaceId);
+                          else next.add(p.googlePlaceId);
+                          return next;
+                        })
+                      }
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[13px] text-slate-800 truncate">{p.name}</span>
+                      <span className="block text-[11px] text-slate-400">
+                        {[
+                          p.primaryType,
+                          p.rating !== null ? `${p.rating.toFixed(1)} ★` : null,
+                          p.reviewCount !== null ? `${p.reviewCount} reviews` : null,
+                        ].filter(Boolean).join(" · ") || "No details"}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <Button
+            block
+            onClick={() => void startAnalysis()}
+            disabled={starting || selectedIds.size === 0}
+          >
+            {starting
+              ? "Starting analysis…"
+              : selectedIds.size === 0
+                ? "Select at least one place"
+                : selectedIds.size === places.length
+                  ? `Analyse all ${places.length} places`
+                  : `Analyse ${selectedIds.size} of ${places.length} places`}
           </Button>
         </>
       ) : null}

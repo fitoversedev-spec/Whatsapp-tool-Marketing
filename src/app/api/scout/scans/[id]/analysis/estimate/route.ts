@@ -26,7 +26,17 @@ export async function GET(_request: Request, context: { params: { id: string } }
   const estimate = estimateAnalysisCost(places.length);
 
   return NextResponse.json(
-    { scanId: id, estimate },
+    {
+      scanId: id,
+      estimate,
+      places: places.map((p) => ({
+        googlePlaceId: p.googlePlaceId,
+        name: p.name,
+        rating: p.rating,
+        reviewCount: p.reviewCount,
+        primaryType: p.primaryTypeDisplayName ?? p.primaryType ?? null,
+      })),
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

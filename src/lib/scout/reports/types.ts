@@ -424,4 +424,6 @@ export interface ReportDocument {
   readonly analysisOverview: AnalysisOverviewSection | null;
   readonly placeInsights: PlaceInsightSection | null;
   readonly footer: ReportFooter;
+  /** User-edited text per block ID, applied over the structured data. */
+  readonly sectionTextOverrides?: Readonly<Record<string, string>>;
 }

@@ -18,6 +18,7 @@ import { buildReportDocument } from "./document";
 import type { ReportDocument } from "./types";
 import { renderPdf, PdfEngineUnavailableError, headerTemplate, footerTemplate } from "./pdf";
 import { renderReportHtml } from "./render";
+import { applySectionTextOverrides } from "./section-text";
 import { expiryFromNow, linkTtlDays, signReportLink } from "./signing";
 import { normaliseRecipient } from "./share";
 import type {
@@ -183,10 +184,13 @@ export async function runReportGeneration(
       }
     }
 
-    const document = buildReportDocument({
+    let document = buildReportDocument({
       ...input,
       suggestionsText: polishedSuggestions ?? input.suggestionsText ?? null,
     });
+    if (input.sectionText && Object.keys(input.sectionText).length > 0) {
+      document = applySectionTextOverrides(document, input.sectionText);
+    }
     const brand = reportBrand();
 
     const html = await renderReportHtml(document);
@@ -440,10 +444,13 @@ export async function runAnalysisReportGeneration(
         generatedAt,
       });
       if (!scanInput) throw new Error("The scan could not be read.");
-      const scanDoc = buildReportDocument({
+      let scanDoc = buildReportDocument({
         ...scanInput,
         suggestionsText: scanInput.suggestionsText ?? null,
       });
+      if (scanInput.sectionText && Object.keys(scanInput.sectionText).length > 0) {
+        scanDoc = applySectionTextOverrides(scanDoc, scanInput.sectionText);
+      }
       doc = buildCombinedDocument(scanDoc, analysisDoc);
     } else {
       doc = analysisDoc;

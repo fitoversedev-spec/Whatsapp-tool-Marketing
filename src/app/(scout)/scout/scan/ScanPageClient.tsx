@@ -13,6 +13,8 @@ export interface ScanPageClientProps {
   googleKeyMissing: boolean;
   preparedBy: string;
   initialBlocks: ReportBlockState;
+  initialBlockOrder: string[] | null;
+  initialSectionText: Record<string, string> | null;
   initialNotes: string;
   initialSuggestions: string;
   initialPolished: string;
@@ -25,6 +27,8 @@ export function ScanPageClient({
   googleKeyMissing,
   preparedBy,
   initialBlocks,
+  initialBlockOrder,
+  initialSectionText,
   initialNotes,
   initialSuggestions,
   initialPolished,
@@ -41,6 +45,8 @@ export function ScanPageClient({
         scanId={initial.scanId}
         preparedBy={preparedBy}
         initialBlocks={initialBlocks}
+        initialBlockOrder={initialBlockOrder}
+        initialSectionText={initialSectionText}
         initialNotes={initialNotes}
         initialSuggestions={initialSuggestions}
         initialPolished={initialPolished}

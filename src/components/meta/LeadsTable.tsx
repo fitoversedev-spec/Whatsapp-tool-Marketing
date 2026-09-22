@@ -185,7 +185,7 @@ export default function LeadsTable({
 
   // Filter persistence via sessionStorage
   const storageKey = FILTER_STORAGE_PREFIX + exportFilename;
-  function readSavedFilters(): { city: string; sport: string; area: string; stage: string } {
+  function readSavedFilters(): { city: string; sport: string; area: string; stage: string; assigned?: string } {
     try {
       const raw = sessionStorage.getItem(storageKey);
       if (raw) return JSON.parse(raw);
@@ -198,13 +198,14 @@ export default function LeadsTable({
   const [sportQuery, setSportQuery] = useState(saved.sport);
   const [areaQuery, setAreaQuery] = useState(saved.area);
   const [stageFilter, setStageFilter] = useState(saved.stage);
+  const [assignedQuery, setAssignedQuery] = useState(saved.assigned ?? "");
 
   // Persist filters to sessionStorage on change
   useEffect(() => {
     try {
-      sessionStorage.setItem(storageKey, JSON.stringify({ city: cityQuery, sport: sportQuery, area: areaQuery, stage: stageFilter }));
+      sessionStorage.setItem(storageKey, JSON.stringify({ city: cityQuery, sport: sportQuery, area: areaQuery, stage: stageFilter, assigned: assignedQuery }));
     } catch { /* ignore */ }
-  }, [cityQuery, sportQuery, areaQuery, stageFilter, storageKey]);
+  }, [cityQuery, sportQuery, areaQuery, stageFilter, assignedQuery, storageKey]);
 
   // Fetch sidebar detail when a lead is selected
   const fetchSidebarDetail = useCallback(async (leadId: string) => {
@@ -265,6 +266,7 @@ export default function LeadsTable({
   const cq = cityQuery.trim().toLowerCase();
   const sq = sportQuery.trim().toLowerCase();
   const aq = areaQuery.trim().toLowerCase();
+  const asq = assignedQuery.trim().toLowerCase();
 
   const filtered = useMemo(
     () =>
@@ -273,19 +275,23 @@ export default function LeadsTable({
         const sportOk = !sq || (l.sport ?? "").toLowerCase().includes(sq);
         const areaOk = !aq || (l.area ?? "").toLowerCase().includes(aq);
         const stageOk = !stageFilter || l.stage === stageFilter;
-        return cityOk && sportOk && areaOk && stageOk;
+        const assignedName = l.assignedToName ?? "Unassigned";
+        const assignedOk = !asq || assignedName.toLowerCase().includes(asq);
+        return cityOk && sportOk && areaOk && stageOk && assignedOk;
       }),
-    [localLeads, cq, sq, aq, stageFilter],
+    [localLeads, cq, sq, aq, stageFilter, asq],
   );
 
   const allCities = useMemo(() => tally(localLeads, (l) => l.city), [localLeads]);
   const allSports = useMemo(() => tally(localLeads, (l) => l.sport), [localLeads]);
   const allAreas = useMemo(() => tally(localLeads, (l) => l.area), [localLeads]);
+  const allAssigned = useMemo(() => tally(localLeads, (l) => l.assignedToName ?? "Unassigned"), [localLeads]);
   const cityBreakdown = useMemo(() => tally(filtered, (l) => l.city), [filtered]);
   const sportBreakdown = useMemo(() => tally(filtered, (l) => l.sport), [filtered]);
   const areaBreakdown = useMemo(() => tally(filtered, (l) => l.area), [filtered]);
+  const assignedBreakdown = useMemo(() => tally(filtered, (l) => l.assignedToName ?? "Unassigned"), [filtered]);
 
-  const hasFilter = !!(cityQuery || sportQuery || areaQuery || stageFilter);
+  const hasFilter = !!(cityQuery || sportQuery || areaQuery || stageFilter || assignedQuery);
 
   const headers = [
     "Name", "Phone", "Email", "City", "Sport", "Area", "Form",
@@ -341,6 +347,7 @@ export default function LeadsTable({
               ))}
             </select>
           </div>
+          <DropdownFilter label="Assigned To" value={assignedQuery} onChange={setAssignedQuery} options={allAssigned} />
           <div className="text-xs text-slate-500 pb-1.5">
             Showing <b className="text-slate-800 font-mono">{filtered.length}</b> of <span className="font-mono">{localLeads.length}</span>
             {hasFilter && <span className="text-slate-400"> (filtered)</span>}
@@ -353,6 +360,7 @@ export default function LeadsTable({
                 setSportQuery("");
                 setAreaQuery("");
                 setStageFilter("");
+                setAssignedQuery("");
               }}
               className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
             >
@@ -365,7 +373,7 @@ export default function LeadsTable({
         </div>
 
         {/* Breakdown — click a value to filter by it */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <BreakdownList
             title="Leads by city"
             items={cityBreakdown}
@@ -383,6 +391,12 @@ export default function LeadsTable({
             items={areaBreakdown}
             activeKey={aq}
             onPick={(label) => setAreaQuery((v) => (v.trim().toLowerCase() === label.toLowerCase() ? "" : label))}
+          />
+          <BreakdownList
+            title="Leads by assigned to"
+            items={assignedBreakdown}
+            activeKey={asq}
+            onPick={(label) => setAssignedQuery((v) => (v.trim().toLowerCase() === label.toLowerCase() ? "" : label))}
           />
         </div>
 

@@ -41,10 +41,11 @@ export async function POST(
     const { renderInsightPdf } = await import("@/lib/insights/pdf");
     const pdfBytes = await renderInsightPdf(doc.title, doc.body);
 
+    const pdfData = new Uint8Array(pdfBytes);
     await prisma.insightPdf.upsert({
       where: { documentId: doc.id },
-      create: { documentId: doc.id, data: pdfBytes, byteSize: pdfBytes.length },
-      update: { data: pdfBytes, byteSize: pdfBytes.length },
+      create: { documentId: doc.id, data: pdfData, byteSize: pdfData.length },
+      update: { data: pdfData, byteSize: pdfData.length },
     });
 
     return new Response(pdfBytes, {
@@ -68,10 +69,11 @@ export async function POST(
     const { renderInsightPdf } = await import("@/lib/insights/pdf");
     const pdfBytes = await renderInsightPdf(doc.title, doc.body);
 
+    const waPdfData = new Uint8Array(pdfBytes);
     await prisma.insightPdf.upsert({
       where: { documentId: doc.id },
-      create: { documentId: doc.id, data: pdfBytes, byteSize: pdfBytes.length },
-      update: { data: pdfBytes, byteSize: pdfBytes.length },
+      create: { documentId: doc.id, data: waPdfData, byteSize: waPdfData.length },
+      update: { data: waPdfData, byteSize: waPdfData.length },
     });
 
     const pdfUrl = signInsightPdfLink(doc.id);

@@ -524,7 +524,7 @@ export function ReportStep({
       {hasPreview && report ? (
         <div className="rounded-lg border border-slate-200 overflow-hidden bg-slate-100 lg:sticky lg:top-4 h-[480px] lg:h-[calc(100vh-8rem)]">
           <iframe
-            src={`/api/scout/reports/${report.id}/pdf`}
+            src={`/api/scout/reports/${report.id}/pdf#navpanes=0&view=FitH`}
             className="w-full h-full border-0"
             title="Report preview"
           />

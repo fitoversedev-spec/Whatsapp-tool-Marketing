@@ -248,7 +248,7 @@ export function SuggestionsStep({
           {hasPreview && report ? (
             <iframe
               key={`${report.id}-${report.version}`}
-              src={`/api/scout/reports/${report.id}/pdf`}
+              src={`/api/scout/reports/${report.id}/pdf#navpanes=0&view=FitH`}
               className="w-full h-full border-0"
               title="Report preview"
             />

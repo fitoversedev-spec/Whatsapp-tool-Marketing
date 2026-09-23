@@ -15,6 +15,9 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       account: {
         select: { id: true, name: true, city: true, ownerUserId: true, customerProfileId: true, businessType: true },
       },
+      leadSource: {
+        select: { id: true, name: true, colorHex: true },
+      },
     },
   });
   if (!contact || contact.deletedAt) notFound();
@@ -23,6 +26,12 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
   // Wave A: everything that depends only on contact.id (already known). These
   // were previously 4 separate serial round-trips (timeline, the 7-query batch,
   // contactNotes, attachments); folded into one parallel batch.
+  const leadSources = await prisma.leadSource.findMany({
+    where: { isActive: true, deletedAt: null },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, name: true, colorHex: true },
+  });
+
   const [
     timeline,
     deals,
@@ -125,6 +134,9 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
         fields: parseFields(contact.fields),
         isPrimary: contact.isPrimary,
         pipelineStage: contact.pipelineStage,
+        leadSourceId: contact.leadSourceId,
+        leadSourceName: contact.leadSource?.name ?? null,
+        leadSourceColor: contact.leadSource?.colorHex ?? null,
         accountId: contact.account.id,
         accountName: contact.account.name,
         accountCity: contact.account.city,
@@ -132,6 +144,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
         accountBusinessType: contact.account.businessType,
         createdAt: contact.createdAt.toISOString(),
       }}
+      leadSources={leadSources}
       deals={deals.map((d) => ({
         id: d.id, code: d.code, title: d.title,
         quotedValue: d.quotedValue ? Number(d.quotedValue) : null,

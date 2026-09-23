@@ -26,6 +26,7 @@ const CRM_PRIMARY_NAV = [
   { href: "/crm/quotations", label: "Quotations", icon: "\u{1F4C4}" },
   { href: "/crm/court-images", label: "Court Designer", icon: "\u{1F3A8}" },
   { href: "/crm/activities", label: "Activities", icon: "\u{1F5D2}️" },
+  { href: "/crm/insights", label: "Insights", icon: "\u{1F4DD}" },
 ];
 
 const CRM_ALL_TOOLS_GROUPS: AllToolsGroup[] = [

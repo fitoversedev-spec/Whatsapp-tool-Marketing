@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
         notes: data.notes ?? null,
         fields: JSON.stringify(data.fields ?? {}),
         isPrimary: data.isPrimary ?? false,
+        leadSourceId: data.leadSourceId ?? null,
         // Stamp as a promoted lead when asked, so it lands in the Leads list.
         ...(data.asLead ? { pipelineStage: "LEAD", promotedToLeadAt: new Date() } : {}),
       },

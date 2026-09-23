@@ -97,7 +97,7 @@ const SECTION_PLACEHOLDERS: Record<string, string> = {
 
 function EditIcon({ expanded }: { expanded: boolean }) {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={expanded ? "text-court-600" : "text-slate-400"}>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={expanded ? "text-court-600" : "text-slate-400"}>
       <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
       <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
@@ -127,7 +127,7 @@ function SortableSection({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border px-3 py-2.5 transition-colors ${
+      className={`rounded-lg border px-3.5 py-3 transition-colors ${
         isDragging ? "border-court-400 bg-court-50 shadow-md" : isOn ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50 opacity-60"
       }`}
     >
@@ -143,15 +143,15 @@ function SortableSection({
             checked={isOn}
             onChange={onToggle}
             disabled={block.alwaysOn}
-            className="w-3.5 h-3.5 accent-court-500 flex-none"
+            className="w-4 h-4 accent-court-500 flex-none"
           />
           <span className="min-w-0">
-            <span className="block text-[13px] font-semibold text-slate-800">{block.label}</span>
-            <span className="block text-[11px] text-slate-400 leading-snug">{block.help}</span>
+            <span className="block text-sm font-semibold text-slate-800">{block.label}</span>
+            <span className="block text-xs text-slate-400 leading-snug">{block.help}</span>
           </span>
         </label>
         {block.alwaysOn ? (
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex-none">Always</span>
+          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex-none">Always</span>
         ) : null}
         {isOn && (
           <button
@@ -167,7 +167,7 @@ function SortableSection({
       {expanded && isOn && (
         <div className="mt-2 ml-6">
           {loading ? (
-            <div className="text-[11px] text-slate-400 py-3">Loading section content…</div>
+            <div className="text-xs text-slate-400 py-3">Loading section content…</div>
           ) : (
             <textarea
               className="w-full box-border min-h-[120px] resize-y font-mono text-[11.5px] leading-[1.65] text-slate-700 border border-slate-200 rounded-md p-2.5 outline-none focus:border-court-500 focus:ring-1 focus:ring-court-200 bg-white"
@@ -358,12 +358,17 @@ export function ReportStep({
   }, [report]);
 
   const showAnalysisTypes = !!analysisId;
+  const hasPreview = showPreview && report && (report.status === "generated" || report.status === "delivered");
+  const outerClass = hasPreview
+    ? "flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start"
+    : "flex flex-col gap-5";
 
   return (
-    <div className="flex flex-col gap-5">
-      <div>
+    <div className={outerClass}>
+      <div className="flex flex-col gap-5">
+        <div>
         <h2 className="m-0 text-base font-semibold">Generate Report</h2>
-        <p className="m-0 mt-1 text-[12.5px] leading-[1.6] text-slate-500">
+        <p className="m-0 mt-1 text-sm leading-[1.6] text-slate-500">
           Choose a report type, toggle sections, and generate a downloadable PDF.
         </p>
       </div>
@@ -393,8 +398,8 @@ export function ReportStep({
                   className="mt-0.5 accent-court-500"
                 />
                 <div>
-                  <div className="text-[13px] font-semibold text-slate-800">{opt.label}</div>
-                  <div className="text-[11.5px] text-slate-500 mt-0.5">{opt.description}</div>
+                  <div className="text-sm font-semibold text-slate-800">{opt.label}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{opt.description}</div>
                 </div>
               </label>
             ))}
@@ -405,11 +410,11 @@ export function ReportStep({
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <SectionLabel weight={700}>Sections</SectionLabel>
-          <span className="text-[11px] text-slate-400">Drag to reorder</span>
+          <span className="text-xs text-slate-400">Drag to reorder</span>
         </div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={blockOrder} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               {orderedBlocks.map((block) => (
                 <SortableSection
                   key={block.id}
@@ -481,15 +486,6 @@ export function ReportStep({
             </Button>
           </div>
 
-          {showPreview ? (
-            <div className="rounded-lg border border-slate-200 overflow-hidden bg-slate-100" style={{ height: 480 }}>
-              <iframe
-                src={`/api/scout/reports/${report.id}/pdf`}
-                className="w-full h-full border-0"
-                title="Report preview"
-              />
-            </div>
-          ) : null}
 
           <div className="text-[13px] leading-[1.55] text-slate-700 bg-slate-50 rounded-md px-3 py-[10px] break-all [&_a]:text-court-600">
             <a href={report.link.url} target="_blank" rel="noreferrer">
@@ -523,6 +519,17 @@ export function ReportStep({
       <div className="flex gap-3 mt-2">
         <Button variant="secondary" onClick={onBack}>Back</Button>
       </div>
+      </div>
+
+      {hasPreview && report ? (
+        <div className="rounded-lg border border-slate-200 overflow-hidden bg-slate-100 lg:sticky lg:top-4 h-[480px] lg:h-[calc(100vh-8rem)]">
+          <iframe
+            src={`/api/scout/reports/${report.id}/pdf`}
+            className="w-full h-full border-0"
+            title="Report preview"
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

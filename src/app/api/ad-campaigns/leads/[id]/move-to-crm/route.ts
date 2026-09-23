@@ -95,12 +95,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         // pipeline stage, leave it — never demote a further-along contact.
         const existing = await tx.accountContact.findUnique({
           where: { id: dup.id },
-          select: { pipelineStage: true },
+          select: { pipelineStage: true, leadSourceId: true },
         });
         if (existing && !existing.pipelineStage) {
           await tx.accountContact.update({
             where: { id: dup.id },
-            data: { pipelineStage: "LEAD", promotedToLeadAt: new Date() },
+            data: {
+              pipelineStage: "LEAD",
+              promotedToLeadAt: new Date(),
+              ...(leadSourceId && !existing.leadSourceId ? { leadSourceId } : {}),
+            },
           });
         }
       } else {
@@ -118,9 +122,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             phone,
             email: metaLead.email ?? null,
             isPrimary: true,
-            // Stamp as a promoted lead so it lands in the CRM Leads list immediately.
             pipelineStage: "LEAD",
             promotedToLeadAt: new Date(),
+            ...(leadSourceId ? { leadSourceId } : {}),
           },
         });
         targetId = contact.id;

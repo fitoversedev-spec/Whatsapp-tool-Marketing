@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StepBar } from "@/components/scout/steps/StepBar";
 import { SuggestionsStep } from "@/components/scout/steps/SuggestionsStep";
-import { AnalysisStep } from "@/components/scout/steps/AnalysisStep";
 import { ReportStep, type GeneratedReport } from "@/components/scout/steps/ReportStep";
 import type { ReportBlockState } from "@/lib/scout/reports/blocks";
 
-const STEP_LABELS = ["Results", "Suggestions", "AI Analysis", "Report"] as const;
+const STEP_LABELS = ["Results", "Suggestions", "Report"] as const;
+const POLL_MS = 1_000;
+const POLL_LIMIT = 60;
 
 export interface ScanWizardProps {
   scanId: string;
@@ -39,8 +40,56 @@ export function ScanWizard({
   const [polishedSuggestions, setPolishedSuggestions] = useState(initialPolished);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
 
+  const [report, setReport] = useState<GeneratedReport | null>(initialReport);
+  const [generating, setGenerating] = useState(false);
+  const autoGenTriggered = useRef(false);
+
+  const generateReport = useCallback(async (opts: {
+    suggestionsText?: string;
+    polishedSuggestions?: string;
+  } = {}) => {
+    setGenerating(true);
+    try {
+      await fetch(`/api/scout/scans/${scanId}/report`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          includedBlocks: initialBlocks,
+          suggestionsText: opts.suggestionsText ?? "",
+          polishedSuggestions: opts.polishedSuggestions ?? "",
+        }),
+      });
+
+      const res = await fetch(`/api/scout/scans/${scanId}/report/generate`, { method: "POST" });
+      const json = (await res.json()) as { report?: GeneratedReport; error?: string };
+      if (!res.ok || !json.report) {
+        setGenerating(false);
+        return;
+      }
+      setReport(json.report);
+
+      for (let attempt = 0; attempt < POLL_LIMIT; attempt++) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        const poll = await fetch(`/api/scout/scans/${scanId}/report/generate`);
+        if (!poll.ok) continue;
+        const state = (await poll.json()) as { report?: GeneratedReport | null };
+        if (!state.report) continue;
+        setReport(state.report);
+        if (state.report.status !== "generating") break;
+      }
+    } catch { /* swallow */ }
+    setGenerating(false);
+  }, [scanId, initialBlocks]);
+
+  useEffect(() => {
+    if (!report && !generating && !autoGenTriggered.current) {
+      autoGenTriggered.current = true;
+      void generateReport();
+    }
+  }, [report, generating, generateReport]);
+
   const goToStep = (index: number) => {
-    if (index >= 0 && index <= 3) setStep(index);
+    if (index >= 0 && index <= 2) setStep(index);
   };
 
   return (
@@ -50,18 +99,18 @@ export function ScanWizard({
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pt-5 pb-8 bg-white ss-scroll">
-        <div className="max-w-lg mx-auto">
+        <div className={step >= 1 ? "max-w-5xl mx-auto" : "max-w-lg mx-auto"}>
           {step === 0 ? (
             <div className="flex flex-col gap-4">
               <h2 className="m-0 text-base font-semibold">Scan results reviewed</h2>
-              <p className="m-0 text-[13px] text-slate-600 leading-[1.6]">
+              <p className="m-0 text-sm text-slate-600 leading-[1.6]">
                 You&apos;ve finished reviewing and removing places from your scan results.
-                Continue to add your suggestions and optionally run AI analysis.
+                Continue to add your suggestions.
               </p>
               <div className="flex gap-3 mt-2">
                 <button
                   type="button"
-                  className="text-[13px] text-court-600 font-semibold hover:text-court-700"
+                  className="text-sm text-court-600 font-semibold hover:text-court-700"
                   onClick={onBack}
                 >
                   Back to results
@@ -80,21 +129,15 @@ export function ScanWizard({
               scanId={scanId}
               initialSuggestions={suggestionsText}
               initialPolished={polishedSuggestions}
+              report={report}
+              generating={generating}
+              onRegenerateWithSuggestions={(sug, pol) => void generateReport({ suggestionsText: sug, polishedSuggestions: pol })}
               onNext={(sug, pol) => {
                 setSuggestionsText(sug);
                 setPolishedSuggestions(pol);
                 setStep(2);
               }}
               onBack={() => setStep(0)}
-            />
-          ) : step === 2 ? (
-            <AnalysisStep
-              scanId={scanId}
-              onNext={(aid) => {
-                setAnalysisId(aid);
-                setStep(3);
-              }}
-              onBack={() => setStep(1)}
             />
           ) : (
             <ReportStep
@@ -107,8 +150,8 @@ export function ScanWizard({
               suggestionsText={suggestionsText}
               polishedSuggestions={polishedSuggestions}
               preparedBy={preparedBy}
-              initialReport={initialReport}
-              onBack={() => setStep(2)}
+              initialReport={report}
+              onBack={() => setStep(1)}
             />
           )}
         </div>

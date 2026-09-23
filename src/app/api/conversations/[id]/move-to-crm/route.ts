@@ -37,16 +37,40 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const displayName = convo.contactName?.trim() || "Unknown customer";
   const dup = await findAccountContactDuplicate({ phone: convo.contactPhone, name: displayName });
 
+  const whatsappSource = await prisma.leadSource.findFirst({
+    where: { slug: "whatsapp_inbound", deletedAt: null },
+    select: { id: true },
+  });
+  const whatsappSourceId = whatsappSource?.id ?? null;
+
   const accountContactId = await prisma.$transaction(async (tx) => {
     let targetId: string;
     if (dup) {
       targetId = dup.id;
+      if (whatsappSourceId) {
+        const existing = await tx.accountContact.findUnique({
+          where: { id: dup.id },
+          select: { leadSourceId: true },
+        });
+        if (existing && !existing.leadSourceId) {
+          await tx.accountContact.update({
+            where: { id: dup.id },
+            data: { leadSourceId: whatsappSourceId },
+          });
+        }
+      }
     } else {
       const account = await tx.account.create({
         data: { name: displayName, ownerUserId: convo.assignedToUserId ?? user.id },
       });
       const contact = await tx.accountContact.create({
-        data: { accountId: account.id, name: displayName, phone: convo.contactPhone, isPrimary: true },
+        data: {
+          accountId: account.id,
+          name: displayName,
+          phone: convo.contactPhone,
+          isPrimary: true,
+          ...(whatsappSourceId ? { leadSourceId: whatsappSourceId } : {}),
+        },
       });
       targetId = contact.id;
     }

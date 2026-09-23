@@ -14,10 +14,12 @@ type Contact = {
   id: string; name: string; phone: string | null; email: string | null;
   designation: string | null; notes: string | null; fields: Record<string, string>; isPrimary: boolean;
   pipelineStage: string | null;
+  leadSourceId: string | null; leadSourceName: string | null; leadSourceColor: string | null;
   accountId: string; accountName: string; accountCity: string | null;
   accountCustomerProfileId: string | null; accountBusinessType: string | null;
   createdAt: string;
 };
+type LeadSourceOption = { id: string; name: string; colorHex: string | null };
 type CustomerProfileOption = { id: string; name: string };
 type Deal = {
   id: string; code: string; title: string; quotedValue: number | null; wonValue: number | null;
@@ -98,12 +100,13 @@ const SECTIONS = [
 ];
 
 export default function ContactDetailClient({
-  contact, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons, customerProfiles, contactNotes, reminders, attachments,
+  contact, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons, customerProfiles, contactNotes, reminders, attachments, leadSources,
 }: {
   contact: Contact; deals: Deal[]; activities: ActivityRow[]; quotations: QuotationRow[]; courtImages: CourtImageRow[];
   productInterests: ProductInterestRow[]; timeline: TimelineEntry[]; products: ProductOption[];
   activityTypes: ActivityTypeOption[]; funnelStages: StageOption[]; lossReasons: LossReasonOption[];
   customerProfiles: CustomerProfileOption[]; contactNotes: ContactNoteRow[]; reminders: ReminderRow[]; attachments: AttachmentRow[];
+  leadSources: LeadSourceOption[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -180,6 +183,7 @@ export default function ContactDetailClient({
   const isBusinessTypeOther = businessType === "Other";
   const [notes, setNotes] = useState(contact.notes ?? "");
   const [isPrimary, setIsPrimary] = useState(contact.isPrimary);
+  const [leadSourceId, setLeadSourceId] = useState(contact.leadSourceId ?? "");
   const [fields, setFields] = useState<Record<string, string>>(contact.fields);
   const [newFieldKey, setNewFieldKey] = useState("");
 
@@ -206,6 +210,7 @@ export default function ContactDetailClient({
     setBusinessTypeOther("");
     setNotes(contact.notes ?? "");
     setIsPrimary(contact.isPrimary);
+    setLeadSourceId(contact.leadSourceId ?? "");
     setFields(contact.fields);
     setNewFieldKey("");
     setEditing(true);
@@ -250,6 +255,7 @@ export default function ContactDetailClient({
         siteCity: siteCity.trim() || null,
         customerProfileId: customerProfileId || null,
         businessType: resolvedBusinessType,
+        leadSourceId: leadSourceId || null,
         notes: composedNotes,
         fields,
         isPrimary,
@@ -664,6 +670,14 @@ export default function ContactDetailClient({
               {contact.pipelineStage === "LEAD" && <span className="ml-1.5 badge bg-indigo-100 text-indigo-700">LEAD</span>}
               {/* "Converted" is derived, never stored — a lead with a deal has moved on. */}
               {contact.pipelineStage === "LEAD" && deals.length > 0 && <span className="ml-1.5 badge bg-emerald-100 text-emerald-700">CONVERTED</span>}
+              {contact.leadSourceName && (
+                <span
+                  className="ml-1.5 badge"
+                  style={contact.leadSourceColor ? { backgroundColor: `${contact.leadSourceColor}18`, color: contact.leadSourceColor } : { backgroundColor: "#f1f5f9", color: "#475569" }}
+                >
+                  {contact.leadSourceName}
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -935,6 +949,24 @@ export default function ContactDetailClient({
                   )}
                 </div>
                 <div><div className="text-xs text-slate-600">Contact created</div><div className="font-medium text-slate-900 font-mono">{fmtDate(contact.createdAt)}</div></div>
+                <div>
+                  <div className="text-xs text-slate-600">Lead source</div>
+                  {editing ? (
+                    <select value={leadSourceId} onChange={(e) => setLeadSourceId(e.target.value)} className="mt-1 w-full input">
+                      <option value="">Unspecified</option>
+                      {leadSources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  ) : contact.leadSourceName ? (
+                    <div className="font-medium text-slate-900 flex items-center gap-1.5">
+                      {contact.leadSourceColor && (
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: contact.leadSourceColor }} />
+                      )}
+                      {contact.leadSourceName}
+                    </div>
+                  ) : (
+                    <div className="font-medium text-slate-900">—</div>
+                  )}
+                </div>
               </div>
 
               <div className="mt-4">

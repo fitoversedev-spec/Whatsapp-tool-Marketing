@@ -103,6 +103,7 @@ model User {
   scanMarkers       ScanMarker[]      @relation("ScanMarkerAuthor")
   excludedPlaces    ExcludedPlace[]   @relation("ExcludedPlaceOwner")
   scoutAnalyses     ScoutAnalysis[]   @relation("ScoutAnalysisOwner")
+  insightDocuments  InsightDocument[] @relation("InsightDocumentAuthor")
 
   @@map("users")
 }
@@ -1190,6 +1191,7 @@ model LeadSource {
   leads    Lead[]
   deals    Deal[]
   adSpend  AdSpend[]
+  accountContacts AccountContact[]
 
   @@index([isActive, sortOrder])
   @@map("lead_sources")
@@ -1401,6 +1403,7 @@ model AccountContact {
   // Records when a contact was promoted to pipelineStage=LEAD; null = never promoted; used by analytics to window the Leads metric.
   promotedToLeadAt DateTime? @map("promoted_to_lead_at")
   importBatchId String? @map("import_batch_id")
+  leadSourceId String? @map("lead_source_id")
   createdAt DateTime @default(now()) @map("created_at")
   // Soft delete, matching Account/Deal's own convention — a hard delete
   // would hit a bare FK RESTRICT the moment any Deal still points at this
@@ -1414,6 +1417,7 @@ model AccountContact {
   reminders Reminder[]
   activities Activity[]
   importBatch ImportBatch? @relation("AccountContactImports", fields: [importBatchId], references: [id], onDelete: SetNull)
+  leadSource LeadSource? @relation(fields: [leadSourceId], references: [id], onDelete: SetNull)
   generalNotes AccountContactNote[]
   attachments AccountContactAttachment[]
   // The WhatsApp marketing Contact this was linked from, if any — the
@@ -1426,6 +1430,7 @@ model AccountContact {
 
   @@index([accountId])
   @@index([importBatchId])
+  @@index([leadSourceId])
   // Contacts list: WHERE deletedAt IS NULL ORDER BY createdAt DESC (take 200/300).
   // Without this it seq-scans all contacts then in-memory sorts at scale.
   @@index([deletedAt, createdAt])
@@ -1477,6 +1482,21 @@ model AccountContactAttachment {
 
   @@index([accountContactId, createdAt])
   @@map("account_contact_attachments")
+}
+
+model InsightDocument {
+  id        String    @id @default(uuid())
+  authorId  String    @map("author_id")
+  title     String    @default("Untitled")
+  body      String    @default("")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  author User @relation("InsightDocumentAuthor", fields: [authorId], references: [id])
+
+  @@index([authorId, deletedAt, updatedAt])
+  @@map("insight_documents")
 }
 
 // A raw enquiry before it's qualified into a Deal. Kept thin — fast capture

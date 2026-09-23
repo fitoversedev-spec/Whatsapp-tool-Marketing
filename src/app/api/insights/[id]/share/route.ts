@@ -48,11 +48,11 @@ export async function POST(
       update: { data: pdfData, byteSize: pdfData.length },
     });
 
-    return new Response(pdfBytes, {
+    return new Response(pdfData, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${sanitizeFilename(doc.title)}.pdf"`,
-        "Content-Length": String(pdfBytes.length),
+        "Content-Length": String(pdfData.length),
       },
     });
   }

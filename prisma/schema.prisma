@@ -1494,9 +1494,22 @@ model InsightDocument {
   deletedAt DateTime? @map("deleted_at")
 
   author User @relation("InsightDocumentAuthor", fields: [authorId], references: [id])
+  pdf    InsightPdf?
 
   @@index([authorId, deletedAt, updatedAt])
   @@map("insight_documents")
+}
+
+model InsightPdf {
+  id         String   @id @default(uuid())
+  documentId String   @unique @map("document_id")
+  data       Bytes
+  byteSize   Int      @map("byte_size")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  document InsightDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("insight_pdfs")
 }
 
 // A raw enquiry before it's qualified into a Deal. Kept thin — fast capture

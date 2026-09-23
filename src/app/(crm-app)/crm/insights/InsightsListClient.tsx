@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast } from "@/components/Toast";
+import ShareInsightModal from "./ShareInsightModal";
 
 type DocRow = { id: string; title: string; createdAt: string; updatedAt: string };
 
@@ -19,6 +20,7 @@ export default function InsightsListClient({ documents }: { documents: DocRow[] 
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<DocRow | null>(null);
 
   async function createDocument() {
     setCreating(true);
@@ -100,6 +102,12 @@ export default function InsightsListClient({ documents }: { documents: DocRow[] 
                   </div>
                 </Link>
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setSharing(doc)}
+                    className="text-xs text-slate-600 font-medium hover:text-slate-800"
+                  >
+                    Share
+                  </button>
                   <Link
                     href={`/crm/insights/${doc.id}`}
                     className="text-xs text-court-600 font-medium hover:text-court-700"
@@ -118,6 +126,14 @@ export default function InsightsListClient({ documents }: { documents: DocRow[] 
             </div>
           ))}
         </div>
+      )}
+
+      {sharing && (
+        <ShareInsightModal
+          docId={sharing.id}
+          docTitle={sharing.title}
+          onClose={() => setSharing(null)}
+        />
       )}
     </div>
   );

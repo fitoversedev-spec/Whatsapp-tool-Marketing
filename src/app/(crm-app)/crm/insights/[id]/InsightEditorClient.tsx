@@ -16,6 +16,7 @@ import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
 import Image from "@tiptap/extension-image";
 import { useToast } from "@/components/Toast";
+import ShareInsightModal from "../ShareInsightModal";
 
 type Doc = { id: string; title: string; body: string; updatedAt: string };
 
@@ -26,6 +27,7 @@ export default function InsightEditorClient({ document: doc }: { document: Doc }
   const toast = useToast();
   const [title, setTitle] = useState(doc.title);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [showShare, setShowShare] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   const abortRef = useRef<AbortController>();
 
@@ -109,8 +111,16 @@ export default function InsightEditorClient({ document: doc }: { document: Doc }
             placeholder="Document title"
           />
         </div>
-        <div className="text-xs text-slate-400 shrink-0" aria-live="polite">
-          {saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed" : ""}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-xs text-slate-400" aria-live="polite">
+            {saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed" : ""}
+          </div>
+          <button
+            onClick={() => setShowShare(true)}
+            className="text-xs font-medium text-slate-600 hover:text-slate-800 border border-slate-300 rounded px-3 py-1.5 hover:bg-slate-50"
+          >
+            Share
+          </button>
         </div>
       </div>
 
@@ -211,6 +221,14 @@ export default function InsightEditorClient({ document: doc }: { document: Doc }
       <div className="flex-1 overflow-y-auto bg-white">
         <EditorContent editor={editor} />
       </div>
+
+      {showShare && (
+        <ShareInsightModal
+          docId={doc.id}
+          docTitle={title}
+          onClose={() => setShowShare(false)}
+        />
+      )}
 
       <style jsx global>{`
         .insight-editor-content h1 {

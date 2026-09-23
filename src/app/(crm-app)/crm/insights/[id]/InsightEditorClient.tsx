@@ -251,12 +251,12 @@ export default function InsightEditorClient({ document: doc }: { document: Doc }
         }
         .insight-editor-content th,
         .insight-editor-content td {
-          border: 1px solid #e2e8f0;
+          border: 1px solid #94a3b8;
           padding: 8px 12px;
           text-align: left;
         }
         .insight-editor-content th {
-          background: #f8fafc;
+          background: #f1f5f9;
           font-weight: 600;
         }
         .insight-editor-content p.is-editor-empty:first-child::before {

@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
-import TiptapLink from "@tiptap/extension-link";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
 import Color from "@tiptap/extension-color";
@@ -35,9 +33,8 @@ export default function InsightEditorClient({ document: doc }: { document: Doc }
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
+        link: { openOnClick: false },
       }),
-      Underline,
-      TiptapLink.configure({ openOnClick: false }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Placeholder.configure({ placeholder: "Start writing your insights..." }),
       TextStyle,
@@ -177,6 +174,25 @@ export default function InsightEditorClient({ document: doc }: { document: Doc }
         >
           ⊞
         </ToolbarBtn>
+        {editor.isActive("table") && (
+          <>
+            <ToolbarBtn active={false} onClick={() => editor.chain().focus().addRowAfter().run()} title="Add row">
+              +↓
+            </ToolbarBtn>
+            <ToolbarBtn active={false} onClick={() => editor.chain().focus().addColumnAfter().run()} title="Add column">
+              +→
+            </ToolbarBtn>
+            <ToolbarBtn active={false} onClick={() => editor.chain().focus().deleteRow().run()} title="Delete row">
+              −↓
+            </ToolbarBtn>
+            <ToolbarBtn active={false} onClick={() => editor.chain().focus().deleteColumn().run()} title="Delete column">
+              −→
+            </ToolbarBtn>
+            <ToolbarBtn active={false} onClick={() => editor.chain().focus().deleteTable().run()} title="Delete table">
+              ✕
+            </ToolbarBtn>
+          </>
+        )}
         <ToolbarBtn active={false} onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal rule">
           —
         </ToolbarBtn>
@@ -197,6 +213,37 @@ export default function InsightEditorClient({ document: doc }: { document: Doc }
       </div>
 
       <style jsx global>{`
+        .insight-editor-content h1 {
+          font-size: 1.75em;
+          font-weight: 700;
+          margin: 0.75em 0 0.4em;
+        }
+        .insight-editor-content h2 {
+          font-size: 1.4em;
+          font-weight: 600;
+          margin: 0.6em 0 0.3em;
+        }
+        .insight-editor-content h3 {
+          font-size: 1.15em;
+          font-weight: 600;
+          margin: 0.5em 0 0.25em;
+        }
+        .insight-editor-content ul {
+          list-style-type: disc;
+          padding-left: 1.5em;
+          margin: 0.5em 0;
+        }
+        .insight-editor-content ol {
+          list-style-type: decimal;
+          padding-left: 1.5em;
+          margin: 0.5em 0;
+        }
+        .insight-editor-content li {
+          margin: 0.25em 0;
+        }
+        .insight-editor-content li p {
+          margin: 0;
+        }
         .insight-editor-content table {
           border-collapse: collapse;
           width: 100%;

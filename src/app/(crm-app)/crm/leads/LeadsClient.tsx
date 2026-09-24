@@ -142,6 +142,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by name or company..."
           className="input w-full max-w-xs text-sm"
+          data-guide="crm-leads-search"
         />
       </div>
 

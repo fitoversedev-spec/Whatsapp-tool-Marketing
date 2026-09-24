@@ -170,7 +170,7 @@ export default function TemplatesClient({
       />
 
       <div className="p-4 sm:p-6 lg:p-8">
-        <div className="flex gap-2 mb-4 sm:mb-6 overflow-x-auto pb-1 -mx-1 px-1 items-center">
+        <div className="flex gap-2 mb-4 sm:mb-6 overflow-x-auto pb-1 -mx-1 px-1 items-center" data-guide="wa-templates-tabs">
           {["all", "draft", "pending_admin", "submitted", "approved", "rejected"].map((s) => (
             <button
               key={s}

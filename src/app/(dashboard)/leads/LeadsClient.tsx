@@ -176,6 +176,7 @@ export default function LeadsClient({
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Name, phone, location…"
               className="input"
+              data-guide="wa-leads-search"
             />
           </div>
           <div>
@@ -186,6 +187,7 @@ export default function LeadsClient({
               value={pathFilter}
               onChange={(e) => setPathFilter(e.target.value)}
               className="input"
+              data-guide="wa-leads-path"
             >
               <option value="all">All</option>
               <option value="turnkey_new">Turnkey — New</option>
@@ -202,6 +204,7 @@ export default function LeadsClient({
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="input"
+              data-guide="wa-leads-status"
             >
               <option value="open">Open (new + in progress + contacted)</option>
               <option value="new">New only</option>
@@ -220,6 +223,7 @@ export default function LeadsClient({
               value={assignedFilter}
               onChange={(e) => setAssignedFilter(e.target.value)}
               className="input"
+              data-guide="wa-leads-assigned"
             >
               <option value="all">All</option>
               <option value="mine">Mine</option>

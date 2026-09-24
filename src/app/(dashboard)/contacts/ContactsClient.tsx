@@ -181,6 +181,7 @@ export default function ContactsClient({
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search phone or name…"
             className="input flex-1"
+            data-guide="wa-contacts-search"
           />
           <select
             value={tagFilter ?? ""}
@@ -193,6 +194,7 @@ export default function ContactsClient({
               router.push(`/contacts${params.toString() ? `?${params}` : ""}`);
             }}
             className="input sm:w-auto"
+            data-guide="wa-contacts-tags"
           >
             <option value="">All tags</option>
             {allTags.map((t) => (
@@ -208,8 +210,9 @@ export default function ContactsClient({
               setFilterValue("");
             }}
             className="input sm:w-auto"
+            data-guide="wa-contacts-field-filter"
           >
-            <option value="">Filter by field…</option>
+            <option value="">Filter by field...</option>
             {keys.map((k) => (
               <option key={k} value={k}>
                 {k}

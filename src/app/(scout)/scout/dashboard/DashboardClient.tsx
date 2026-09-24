@@ -94,6 +94,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                   className="font-sans text-sm py-2 px-3 rounded-md border border-slate-300 bg-white text-slate-900 cursor-pointer"
                   value={sort}
                   onChange={(e) => setSort(e.target.value as SortKey)}
+                  data-guide="scout-dashboard-sort"
                 >
                   {SORTS.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -123,6 +124,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                   aria-label="Search area, customer or owner"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  data-guide="scout-dashboard-search"
                 />
               </div>
             </div>

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { resolveEngine } from "@/lib/scout/reports/pdf";
+import { resolveEngine } from "@/lib/chromium-engine";
 
 function wrapHtml(title: string, body: string): string {
   return `<!DOCTYPE html>

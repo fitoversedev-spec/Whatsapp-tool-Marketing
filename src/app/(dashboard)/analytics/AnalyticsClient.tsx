@@ -481,7 +481,7 @@ function RangeSelector({
     { id: "all", label: "All time" },
   ];
   return (
-    <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
+    <div className="inline-flex bg-slate-100 rounded-lg p-0.5" data-guide="wa-analytics-range">
       {options.map((o) => (
         <button
           key={o.id}

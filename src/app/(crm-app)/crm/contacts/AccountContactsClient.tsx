@@ -245,6 +245,7 @@ export default function AccountContactsClient({
           <button
             onClick={() => setShowNew(true)}
             className="btn btn-primary"
+            data-guide="crm-contact-create"
           >
             + New Contact
           </button>
@@ -258,6 +259,7 @@ export default function AccountContactsClient({
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search by name or company..."
             className="input w-full max-w-xs text-sm"
+            data-guide="crm-contacts-search"
           />
           <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
           {dateRange && (
@@ -270,6 +272,7 @@ export default function AccountContactsClient({
               value={repFilter}
               onChange={(e) => applyRepFilter(e.target.value)}
               className="input w-auto text-sm"
+              data-guide="crm-contacts-rep"
             >
               <option value="">All reps</option>
               {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}

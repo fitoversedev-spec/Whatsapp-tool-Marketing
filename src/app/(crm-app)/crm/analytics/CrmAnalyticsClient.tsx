@@ -487,7 +487,7 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
       />
 
       {visibleGroups.length > 1 && (
-        <div className="flex gap-1.5 mt-4">
+        <div className="flex gap-1.5 mt-4" data-guide="crm-analytics-groups">
           {visibleGroups.map((g) => (
             <button
               key={g}

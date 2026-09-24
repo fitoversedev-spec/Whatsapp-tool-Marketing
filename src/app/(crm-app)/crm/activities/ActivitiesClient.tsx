@@ -192,7 +192,7 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
 
       <div className="flex flex-col lg:flex-row gap-6 mt-4">
         {/* Left filter sidebar — type (call/meeting/other) + when (today). */}
-        <aside className="lg:w-48 shrink-0 lg:sticky lg:top-4 self-start">
+        <aside className="lg:w-48 shrink-0 lg:sticky lg:top-4 self-start" data-guide="crm-activities-type">
           <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-2.5 mb-1">Type</div>
           <div className="space-y-0.5 mb-4">
             {typeItem("all", "All", counts.all)}
@@ -214,6 +214,7 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search by subject, customer, phone, or deal code..."
               className="input w-full max-w-sm text-sm"
+              data-guide="crm-activities-search"
             />
             <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
             {dateRange && (

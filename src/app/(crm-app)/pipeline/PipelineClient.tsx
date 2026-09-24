@@ -244,6 +244,7 @@ export default function PipelineClient({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="input flex-1 min-w-[200px] max-w-md text-sm"
+          data-guide="crm-pipeline-search"
         />
         <OwnerSelect
           value={owner}
@@ -323,7 +324,7 @@ function ViewToggle({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
+    <div className="inline-flex bg-slate-100 rounded-lg p-0.5" data-guide="crm-pipeline-view">
       <button
         onClick={() => onChange("kanban")}
         className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
@@ -360,6 +361,7 @@ function OwnerSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="input w-auto text-sm"
+      data-guide="crm-pipeline-owner"
     >
       {currentUser.role === "admin" && <option value="all">All owners</option>}
       <option value="me">Mine</option>

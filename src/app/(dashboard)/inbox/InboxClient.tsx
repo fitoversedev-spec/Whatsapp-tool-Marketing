@@ -370,8 +370,9 @@ export default function InboxClient({
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search phone, name, or message…"
             className="input text-sm"
+            data-guide="wa-inbox-search"
           />
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5" data-guide="wa-inbox-status-tabs">
             {(["open", "closed", "all"] as const).map((s) => (
               <button
                 key={s}

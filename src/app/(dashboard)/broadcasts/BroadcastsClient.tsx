@@ -108,6 +108,7 @@ export default function BroadcastsClient({
               className="btn btn-primary w-full sm:w-auto"
               disabled={approvedTemplates.length === 0}
               title={approvedTemplates.length === 0 ? "No approved templates yet" : ""}
+              data-guide="wa-broadcast-create"
             >
               + New broadcast
             </button>
@@ -971,7 +972,7 @@ function BroadcastComposer({
 
           {/* Filter Rules — saved contacts (field-based) */}
           {source === "contacts" && contactMode === "filter" && (
-            <div>
+            <div data-guide="wa-broadcast-filter-rules">
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-medium text-slate-700">
                   Filter by field <span className="text-slate-400 font-normal">(optional)</span>

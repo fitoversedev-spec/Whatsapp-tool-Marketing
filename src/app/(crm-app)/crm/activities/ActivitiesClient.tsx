@@ -71,9 +71,63 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [todayOnly, setTodayOnly] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   function applyDateRange(range: DateRange) {
     router.push(`/crm/activities?from=${range.from}&to=${range.to}`);
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll(rows: ActivityRow[]) {
+    const allSelected = rows.every((r) => selected.has(r.id));
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(rows.map((r) => r.id)));
+  }
+
+  async function deleteSelected() {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} activit${ids.length === 1 ? "y" : "ies"}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/crm/activities/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) {
+        setSelected(new Set());
+        router.refresh();
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function deleteOne(id: string) {
+    if (!confirm("Delete this activity? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/crm/activities/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [id] }),
+      });
+      if (res.ok) {
+        setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
+        router.refresh();
+      }
+    } finally {
+      setDeleting(false);
+    }
   }
 
   const isCall = (t: string | null) => !!t && CALL_TYPE_NAMES.has(t);
@@ -169,6 +223,25 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
             )}
           </div>
 
+          {selected.size > 0 && (
+            <div className="mb-2 flex items-center gap-3 rounded-lg bg-red-50 border border-red-200 px-4 py-2">
+              <span className="text-sm text-red-800 font-medium">{selected.size} selected</span>
+              <button
+                onClick={deleteSelected}
+                disabled={deleting}
+                className="text-sm text-red-700 hover:text-red-900 font-medium underline disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete selected"}
+              </button>
+              <button
+                onClick={() => setSelected(new Set())}
+                className="text-sm text-slate-500 hover:text-slate-700 ml-auto"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
           <div className="card">
             {/* Mobile cards */}
             <div className="md:hidden divide-y divide-slate-100">
@@ -178,6 +251,12 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
                   <div key={a.id} className="p-4">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(a.id)}
+                          onChange={() => toggleOne(a.id)}
+                          className="rounded mt-1 shrink-0"
+                        />
                         <div className="pt-0.5 shrink-0">
                           <TypeIcon typeName={a.typeName} />
                         </div>
@@ -197,7 +276,12 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
                           </div>
                         </div>
                       </div>
-                      <span className={`shrink-0 badge ${tag.cls}`}>{tag.label}</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`badge ${tag.cls}`}>{tag.label}</span>
+                        <button onClick={() => deleteOne(a.id)} disabled={deleting} aria-label="Delete" className="text-slate-400 hover:text-red-600 p-1">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      </div>
                     </div>
                     {a.detail && (
                       <div className="text-xs text-slate-500 mt-2 truncate" title={a.detail}>{a.detail}</div>
@@ -235,6 +319,14 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th className="w-8">
+                      <input
+                        type="checkbox"
+                        checked={visible.length > 0 && visible.every((r) => selected.has(r.id))}
+                        onChange={() => toggleAll(visible)}
+                        className="rounded"
+                      />
+                    </th>
                     <th>Type</th>
                     <th>Activity</th>
                     <th>Customer</th>
@@ -243,6 +335,7 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
                     <th>Owner</th>
                     <th>Deal</th>
                     <th>Status</th>
+                    <th className="w-8"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -250,6 +343,14 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
                     const tag = KIND_TAG[a.kind];
                     return (
                       <tr key={a.id} className="align-top">
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(a.id)}
+                            onChange={() => toggleOne(a.id)}
+                            className="rounded"
+                          />
+                        </td>
                         <td>
                           <div className="flex items-center gap-1.5">
                             <TypeIcon typeName={a.typeName} />
@@ -286,12 +387,22 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
                         <td>
                           <span className={`badge ${tag.cls}`}>{tag.label}</span>
                         </td>
+                        <td>
+                          <button
+                            onClick={() => deleteOne(a.id)}
+                            disabled={deleting}
+                            aria-label={`Delete ${a.title}`}
+                            className="text-slate-400 hover:text-red-600 p-1 disabled:opacity-50"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
                   {visible.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-slate-400">No activities found.</td>
+                      <td colSpan={10} className="py-8 text-center text-slate-400">No activities found.</td>
                     </tr>
                   )}
                 </tbody>

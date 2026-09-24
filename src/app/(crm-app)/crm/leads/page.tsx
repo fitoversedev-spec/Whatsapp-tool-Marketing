@@ -17,7 +17,8 @@ export default async function LeadsPage() {
     orderBy: { createdAt: "desc" },
     take: 300,
     include: {
-      account: { select: { id: true, name: true, ownerUserId: true } },
+      account: { select: { id: true, name: true, city: true, ownerUserId: true } },
+      leadSource: { select: { name: true } },
       // "Converted" is derived, never stored — a lead is converted once it
       // already backs a Deal as the primary contact.
       dealsAsPrimary: { where: { deletedAt: null }, select: { id: true }, take: 1 },
@@ -32,6 +33,8 @@ export default async function LeadsPage() {
         phone: l.phone,
         accountId: l.account.id,
         accountName: l.account.name,
+        location: l.account.city ?? null,
+        leadSource: l.leadSource?.name ?? null,
         converted: l.dealsAsPrimary.length > 0,
       }))}
     />

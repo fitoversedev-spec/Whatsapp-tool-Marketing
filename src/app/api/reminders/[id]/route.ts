@@ -12,6 +12,11 @@ const patchSchema = z.object({
   // completed: true, but accepted independently too (editable after the
   // fact without re-toggling completion).
   completionNote: z.string().max(1000).nullable().optional(),
+  activityTypeId: z.string().uuid().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  priority: z.enum(["HIGH", "MEDIUM", "LOW"]).nullable().optional(),
+  meetingUrl: z.string().max(500).nullable().optional(),
+  location: z.string().max(500).nullable().optional(),
 });
 
 // A reminder can be updated/deleted by its own owner OR by an admin — the
@@ -53,6 +58,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     data.status = parsed.data.completed ? "DONE" : res.reminder.notifiedAt ? "SENT" : "PENDING";
   }
   if (parsed.data.completionNote !== undefined) data.completionNote = parsed.data.completionNote;
+  if (parsed.data.activityTypeId !== undefined) data.activityTypeId = parsed.data.activityTypeId;
+  if (parsed.data.notes !== undefined) data.notes = parsed.data.notes;
+  if (parsed.data.priority !== undefined) data.priority = parsed.data.priority;
+  if (parsed.data.meetingUrl !== undefined) data.meetingUrl = parsed.data.meetingUrl;
+  if (parsed.data.location !== undefined) data.location = parsed.data.location;
 
   const updated = await prisma.reminder.update({
     where: { id: params.id },

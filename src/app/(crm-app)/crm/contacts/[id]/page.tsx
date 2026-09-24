@@ -118,7 +118,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     prisma.reminder.findMany({
       where: { OR: [{ dealId: { in: dealIds } }, { accountContactId: contact.id }] },
       orderBy: [{ completedAt: { sort: "asc", nulls: "first" } }, { dueAt: "asc" }],
-      include: { activityType: { select: { name: true } } },
+      include: { activityType: { select: { id: true, name: true } } },
     }),
   ]);
 
@@ -181,7 +181,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       reminders={reminders.map((r) => ({
         id: r.id, message: r.message, dueAt: r.dueAt.toISOString(), completedAt: r.completedAt?.toISOString() ?? null,
         completionNote: r.completionNote, location: r.location, meetingUrl: r.meetingUrl,
-        priority: r.priority, activityTypeName: r.activityType?.name ?? null, notes: r.notes,
+        priority: r.priority, activityTypeId: r.activityType?.id ?? null, activityTypeName: r.activityType?.name ?? null, notes: r.notes,
       }))}
       attachments={attachments.map((a) => ({
         id: a.id, fileName: a.fileName, fileUrl: a.fileUrl, fileSize: a.fileSize, mimeType: a.mimeType,

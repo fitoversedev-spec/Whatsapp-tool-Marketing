@@ -250,6 +250,33 @@ function Row({
         className="rounded"
       />
       <div className="flex-1 min-w-0">
+        {reminder.sectionEntityName && (
+          <div className="text-xs mb-0.5">
+            {reminder.sectionLink ? (
+              <Link
+                href={reminder.sectionLink}
+                className="font-semibold text-court-600 hover:underline"
+              >
+                {reminder.sectionEntityName}
+              </Link>
+            ) : (
+              <span className="font-semibold text-slate-600">
+                {reminder.sectionEntityName}
+              </span>
+            )}
+          </div>
+        )}
+        {!reminder.sectionEntityName && reminder.conversationId && (
+          <div className="text-xs mb-0.5">
+            <Link
+              href={`/inbox?conversation=${reminder.conversationId}`}
+              className="font-semibold text-court-600 hover:underline"
+            >
+              {reminder.contactName ??
+                "+" + (reminder.contactPhone ?? "")}
+            </Link>
+          </div>
+        )}
         <div
           className={`text-sm ${isCompleted ? "text-slate-400" : "text-slate-900 font-medium"}`}
         >
@@ -273,35 +300,6 @@ function Row({
               minute: "2-digit",
             })}
           </span>
-          {reminder.sectionEntityName && (
-            <>
-              <span className="text-slate-300">·</span>
-              {reminder.sectionLink ? (
-                <Link
-                  href={reminder.sectionLink}
-                  className="text-court-600 hover:underline truncate max-w-[200px]"
-                >
-                  {reminder.sectionEntityName}
-                </Link>
-              ) : (
-                <span className="truncate max-w-[200px]">
-                  {reminder.sectionEntityName}
-                </span>
-              )}
-            </>
-          )}
-          {!reminder.sectionEntityName && reminder.conversationId && (
-            <>
-              <span className="text-slate-300">·</span>
-              <Link
-                href={`/inbox?conversation=${reminder.conversationId}`}
-                className="text-court-600 hover:underline"
-              >
-                {reminder.contactName ??
-                  "+" + (reminder.contactPhone ?? "")}
-              </Link>
-            </>
-          )}
         </div>
       </div>
       {!isCompleted && (

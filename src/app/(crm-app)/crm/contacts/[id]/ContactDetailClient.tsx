@@ -37,7 +37,8 @@ type LossReasonOption = { id: string; name: string };
 type ContactNoteRow = { id: string; title: string | null; body: string; createdAt: string; authorName: string };
 type ReminderRow = {
   id: string; message: string; dueAt: string; completedAt: string | null; completionNote: string | null;
-  location: string | null; meetingUrl: string | null; priority: string | null; activityTypeName: string | null;
+  location: string | null; meetingUrl: string | null; priority: string | null;
+  activityTypeId: string | null; activityTypeName: string | null;
   notes: string | null;
 };
 type AttachmentRow = { id: string; fileName: string; fileUrl: string; fileSize: number; mimeType: string; createdAt: string; uploadedByName: string };
@@ -142,6 +143,7 @@ export default function ContactDetailClient({
   const [syncing, setSyncing] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [resending, setResending] = useState<string | null>(null);
+  const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
   const [showLogActivity, setShowLogActivity] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
@@ -400,6 +402,13 @@ export default function ContactDetailClient({
     }
   }
 
+  async function deleteReminder(id: string) {
+    if (!confirm("Delete this activity? This cannot be undone.")) return;
+    const res = await fetch(`/api/reminders/${id}`, { method: "DELETE" });
+    if (res.ok) { toast.success("Activity deleted"); router.refresh(); }
+    else toast.error("Could not delete activity");
+  }
+
   // The seeded "Task" ActivityType — tags a task-kind Reminder so it reads as
   // a Task everywhere the type name is shown (Open activities here, My Day).
   const taskTypeId = activityTypes.find((t) => t.name === "Task")?.id ?? null;
@@ -536,6 +545,7 @@ export default function ContactDetailClient({
   // the linked ActivityType so it reads correctly for every kind.
   function renderOpenReminder(r: ReminderRow) {
     const isOverdue = new Date(r.dueAt).getTime() < Date.now();
+    const isEditing = editingReminderId === r.id;
     return (
       <div key={r.id} className="rounded-lg border border-slate-100 px-3 py-2">
         <div className="flex items-start justify-between gap-3">
@@ -554,17 +564,39 @@ export default function ContactDetailClient({
             <div className={`text-xs mt-0.5 ${isOverdue ? "text-red-600 font-medium" : "text-slate-500"}`}>
               {isOverdue ? "Overdue · " : "Due "}<span className="font-mono">{fmtDateTime(r.dueAt)}</span>
             </div>
-            {r.notes && <div className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">{r.notes}</div>}
+            {!isEditing && r.notes && <div className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">{r.notes}</div>}
           </div>
-          {completingReminderId !== r.id && (
-            <button
-              onClick={() => { setCompletingReminderId(r.id); setCompletionNoteDraft(""); }}
-              className="text-xs font-medium text-court-700 hover:underline shrink-0"
-            >
-              Mark complete
-            </button>
+          {completingReminderId !== r.id && !isEditing && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setEditingReminderId(r.id)}
+                className="text-xs font-medium text-slate-500 hover:text-slate-700"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => deleteReminder(r.id)}
+                className="text-xs font-medium text-red-500 hover:text-red-700"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => { setCompletingReminderId(r.id); setCompletionNoteDraft(""); }}
+                className="text-xs font-medium text-court-700 hover:underline"
+              >
+                Mark complete
+              </button>
+            </div>
           )}
         </div>
+        {isEditing && (
+          <InlineEditForm
+            reminder={r}
+            activityTypes={activityTypes}
+            onCancel={() => setEditingReminderId(null)}
+            onSaved={() => { setEditingReminderId(null); router.refresh(); }}
+          />
+        )}
         {completingReminderId === r.id && (
           <div className="mt-2 pt-2 border-t border-slate-100">
             <textarea
@@ -587,20 +619,31 @@ export default function ContactDetailClient({
     );
   }
 
-  async function uploadAttachment(file: File) {
+  async function uploadAttachments(files: File[]) {
+    if (!files.length) return;
     setUploadingFile(true);
-    const form = new FormData();
-    form.append("file", file);
-    const res = await fetch(`/api/account-contacts/${contact.id}/attachments`, { method: "POST", body: form });
+    const results = await Promise.allSettled(
+      files.map(async (file) => {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch(`/api/account-contacts/${contact.id}/attachments`, { method: "POST", body: form });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? `Upload failed: ${file.name}`);
+        }
+      }),
+    );
     setUploadingFile(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    if (res.ok) {
-      toast.success("File uploaded");
-      router.refresh();
+    const failed = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+    if (failed.length === 0) {
+      toast.success(files.length === 1 ? "File uploaded" : `${files.length} files uploaded`);
+    } else if (failed.length < files.length) {
+      toast.success(`${files.length - failed.length} uploaded, ${failed.length} failed`);
     } else {
-      const err = await res.json().catch(() => ({}));
-      toast.error(err.error ?? "Upload failed");
+      toast.error("Upload failed");
     }
+    router.refresh();
   }
 
   async function deleteAttachment(id: string) {
@@ -1268,14 +1311,46 @@ export default function ContactDetailClient({
                       <div className="space-y-2">
                         {items.map((item) => (
                           <div key={`${item.kind}-${item.id}`} className="rounded-lg border border-slate-100 px-3 py-2">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`badge ${item.kind === "reminder" ? "bg-slate-100 text-slate-600" : "bg-court-100 text-court-700"}`}>
-                                {item.typeLabel}
-                              </span>
-                              <span className="text-sm font-medium text-slate-900">{item.subject}</span>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={`badge ${item.kind === "reminder" ? "bg-slate-100 text-slate-600" : "bg-court-100 text-court-700"}`}>
+                                    {item.typeLabel}
+                                  </span>
+                                  <span className="text-sm font-medium text-slate-900">{item.subject}</span>
+                                </div>
+                                {item.detail && editingReminderId !== item.id && <div className="text-sm text-slate-600 mt-0.5">{item.detail}</div>}
+                                <div className="text-xs text-slate-500 mt-0.5 font-mono">{fmtDateTime(item.timestamp)}</div>
+                              </div>
+                              {item.kind === "reminder" && editingReminderId !== item.id && (
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    onClick={() => setEditingReminderId(item.id)}
+                                    className="text-xs font-medium text-slate-500 hover:text-slate-700"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => deleteReminder(item.id)}
+                                    className="text-xs font-medium text-red-500 hover:text-red-700"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            {item.detail && <div className="text-sm text-slate-600 mt-0.5">{item.detail}</div>}
-                            <div className="text-xs text-slate-500 mt-0.5 font-mono">{fmtDateTime(item.timestamp)}</div>
+                            {item.kind === "reminder" && editingReminderId === item.id && (() => {
+                              const r = reminders.find((rem) => rem.id === item.id);
+                              if (!r) return null;
+                              return (
+                                <InlineEditForm
+                                  reminder={r}
+                                  activityTypes={activityTypes}
+                                  onCancel={() => setEditingReminderId(null)}
+                                  onSaved={() => { setEditingReminderId(null); router.refresh(); }}
+                                />
+                              );
+                            })()}
                           </div>
                         ))}
                       </div>
@@ -1358,8 +1433,9 @@ export default function ContactDetailClient({
                 <input
                   ref={fileInputRef}
                   type="file"
+                  multiple
                   className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAttachment(f); }}
+                  onChange={(e) => { const fl = e.target.files; if (fl?.length) uploadAttachments(Array.from(fl)); }}
                 />
               </div>
               {uploadingFile && <p className="text-sm text-slate-400 mb-2">Uploading...</p>}
@@ -1615,10 +1691,101 @@ function ScheduleReminderModal({
   );
 }
 
-// Doubles as the standalone "+ New Deal" quick action and the "attach a
-// quote/design but this contact has no deal yet" prompt — same minimal
-// one-field creation either way, just different copy/next-step handling
-// in the caller's onCreated.
+function InlineEditForm({
+  reminder, activityTypes, onCancel, onSaved,
+}: {
+  reminder: ReminderRow; activityTypes: ActivityTypeOption[];
+  onCancel: () => void; onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [message, setMessage] = useState(reminder.message);
+  const [activityTypeId, setActivityTypeId] = useState(reminder.activityTypeId ?? "");
+  const [date, setDate] = useState(() => new Date(reminder.dueAt).toISOString().slice(0, 10));
+  const [time, setTime] = useState(() => new Date(reminder.dueAt).toTimeString().slice(0, 5));
+  const [priority, setPriority] = useState(reminder.priority ?? "");
+  const [notes, setNotes] = useState(reminder.notes ?? "");
+  const [meetingUrl, setMeetingUrl] = useState(reminder.meetingUrl ?? "");
+  const [location, setLocation] = useState(reminder.location ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    if (!message.trim()) return;
+    setSaving(true);
+    const dueAt = new Date(`${date}T${time}:00`);
+    const res = await fetch(`/api/reminders/${reminder.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: message.trim(),
+        dueAt: dueAt.toISOString(),
+        activityTypeId: activityTypeId || null,
+        priority: priority || null,
+        notes: notes.trim() || null,
+        meetingUrl: meetingUrl.trim() || null,
+        location: location.trim() || null,
+      }),
+    });
+    setSaving(false);
+    if (res.ok) { toast.success("Activity updated"); onSaved(); }
+    else toast.error("Could not update activity");
+  }
+
+  return (
+    <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
+      <div>
+        <label className="text-xs font-medium text-slate-500">Title</label>
+        <input value={message} onChange={(e) => setMessage(e.target.value)} autoFocus className="mt-0.5 w-full input !text-sm" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <label className="text-xs font-medium text-slate-500">Type</label>
+          <select value={activityTypeId} onChange={(e) => setActivityTypeId(e.target.value)} className="mt-0.5 w-full input !text-sm">
+            <option value="">None</option>
+            {activityTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-slate-500">Date</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-0.5 w-full input !text-sm" />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-slate-500">Time</label>
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-0.5 w-full input !text-sm" />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <label className="text-xs font-medium text-slate-500">Priority</label>
+          <select value={priority} onChange={(e) => setPriority(e.target.value)} className="mt-0.5 w-full input !text-sm">
+            <option value="">None</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-slate-500">Meeting URL</label>
+          <input value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} placeholder="Optional" className="mt-0.5 w-full input !text-sm" />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-slate-500">Location</label>
+          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Optional" className="mt-0.5 w-full input !text-sm" />
+        </div>
+      </div>
+      <div>
+        <label className="text-xs font-medium text-slate-500">Notes</label>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Optional" className="mt-0.5 w-full input !text-sm" />
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancel} className="btn btn-ghost !px-3 !py-1 !text-xs">Cancel</button>
+        <button onClick={submit} disabled={saving || !message.trim()} className="btn btn-primary !px-3 !py-1 !text-xs disabled:opacity-50">
+          {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CreateDealFirstModal({
   contactId, accountId, contactName, onClose, onCreated,
 }: { contactId: string; accountId: string; contactName: string; onClose: () => void; onCreated: (dealId: string) => void }) {

@@ -84,6 +84,9 @@ export default async function RemindersPage({
       timeBucket = "week";
     }
 
+    const contactName = r.accountContact?.name ?? r.conversation?.contactName ?? r.metaLead?.fullName ?? null;
+    const contactLink = r.accountContactId ? `/crm/contacts/${r.accountContactId}` : sectionLink;
+
     return {
       id: r.id,
       conversationId: r.conversationId,
@@ -94,13 +97,8 @@ export default async function RemindersPage({
       completedAt: r.completedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
       section,
-      sectionLink,
-      sectionEntityName:
-        r.metaLead?.fullName ??
-        r.deal?.title ??
-        r.accountContact?.name ??
-        r.conversation?.contactName ??
-        null,
+      sectionLink: contactLink,
+      sectionEntityName: contactName ?? r.deal?.title ?? null,
       timeBucket,
     };
   }

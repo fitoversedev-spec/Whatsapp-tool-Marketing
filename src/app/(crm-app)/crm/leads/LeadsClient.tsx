@@ -12,6 +12,8 @@ type Lead = {
   phone: string | null;
   accountId: string;
   accountName: string;
+  location: string | null;
+  leadSource: string | null;
   converted: boolean;
 };
 
@@ -82,11 +84,14 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
     }
   }
 
+  const qt = q.trim().toLowerCase();
   const visible = leads.filter(
     (l) =>
-      !q.trim() ||
-      l.name.toLowerCase().includes(q.trim().toLowerCase()) ||
-      l.accountName.toLowerCase().includes(q.trim().toLowerCase()),
+      !qt ||
+      l.name.toLowerCase().includes(qt) ||
+      l.accountName.toLowerCase().includes(qt) ||
+      (l.location?.toLowerCase().includes(qt) ?? false) ||
+      (l.leadSource?.toLowerCase().includes(qt) ?? false),
   );
 
   // Reuses POST /api/deals exactly like the contact page's CreateDealFirstModal
@@ -154,6 +159,13 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                     <Link href={`/crm/companies/${l.accountId}`} className="hover:underline">{l.accountName}</Link>
                     <span className="font-mono"> · {l.phone ?? "—"}</span>
                   </div>
+                  {(l.location || l.leadSource) && (
+                    <div className="text-xs text-slate-400 truncate mt-0.5">
+                      {l.location && <span>{l.location}</span>}
+                      {l.location && l.leadSource && <span> · </span>}
+                      {l.leadSource && <span>{l.leadSource}</span>}
+                    </div>
+                  )}
                 </div>
                 {l.converted ? (
                   <span className="shrink-0 badge bg-green-100 text-green-700">Converted</span>
@@ -189,6 +201,8 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                 <th>Name</th>
                 <th>Company</th>
                 <th>Phone</th>
+                <th>Location</th>
+                <th>Lead Source</th>
                 <th>Status</th>
                 <th className="!text-right"><span className="sr-only">Actions</span></th>
               </tr>
@@ -205,6 +219,8 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                     <Link href={`/crm/companies/${l.accountId}`} className="text-slate-600 hover:underline">{l.accountName}</Link>
                   </td>
                   <td className="text-slate-600 font-mono">{l.phone ?? "—"}</td>
+                  <td className="text-slate-600">{l.location ?? "—"}</td>
+                  <td className="text-slate-600">{l.leadSource ?? "—"}</td>
                   <td>
                     {l.converted ? (
                       <span className="badge bg-green-100 text-green-700">Converted</span>
@@ -227,7 +243,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
               ))}
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400">
+                  <td colSpan={7} className="py-8 text-center text-slate-400">
                     No leads yet — promote a contact from the Contacts list.
                   </td>
                 </tr>

@@ -104,6 +104,7 @@ model User {
   excludedPlaces    ExcludedPlace[]   @relation("ExcludedPlaceOwner")
   scoutAnalyses     ScoutAnalysis[]   @relation("ScoutAnalysisOwner")
   insightDocuments  InsightDocument[] @relation("InsightDocumentAuthor")
+  createdContacts   AccountContact[] @relation("AccountContactCreatedBy")
 
   @@map("users")
 }
@@ -1404,6 +1405,7 @@ model AccountContact {
   promotedToLeadAt DateTime? @map("promoted_to_lead_at")
   importBatchId String? @map("import_batch_id")
   leadSourceId String? @map("lead_source_id")
+  createdByUserId String? @map("created_by_user_id")
   createdAt DateTime @default(now()) @map("created_at")
   // Soft delete, matching Account/Deal's own convention — a hard delete
   // would hit a bare FK RESTRICT the moment any Deal still points at this
@@ -1418,6 +1420,7 @@ model AccountContact {
   activities Activity[]
   importBatch ImportBatch? @relation("AccountContactImports", fields: [importBatchId], references: [id], onDelete: SetNull)
   leadSource LeadSource? @relation(fields: [leadSourceId], references: [id], onDelete: SetNull)
+  createdByUser User? @relation("AccountContactCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   generalNotes AccountContactNote[]
   attachments AccountContactAttachment[]
   // The WhatsApp marketing Contact this was linked from, if any — the
@@ -1485,18 +1488,20 @@ model AccountContactAttachment {
 }
 
 model InsightDocument {
-  id        String    @id @default(uuid())
-  authorId  String    @map("author_id")
-  title     String    @default("Untitled")
-  body      String    @default("")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id             String    @id @default(uuid())
+  authorId       String    @map("author_id")
+  campaignMetaId String?   @map("campaign_meta_id")
+  title          String    @default("Untitled")
+  body           String    @default("")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
 
   author User @relation("InsightDocumentAuthor", fields: [authorId], references: [id])
   pdf    InsightPdf?
 
   @@index([authorId, deletedAt, updatedAt])
+  @@index([campaignMetaId, deletedAt, updatedAt])
   @@map("insight_documents")
 }
 
@@ -2125,6 +2130,20 @@ model MetaLeadNote {
 // Colour-coded labels reps attach to Meta leads (dedicated catalogue, kept
 // separate from marketing Tags / ConversationLabels so the lead label set stays
 // its own thing). Reusable across leads via the join table below.
+model MetaLeadStage {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  slug      String    @unique
+  sortOrder Int       @default(0) @map("sort_order")
+  isActive  Boolean   @default(true) @map("is_active")
+  colorHex  String?   @map("color_hex")
+  isDefault Boolean   @default(false) @map("is_default")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("meta_lead_stages")
+}
+
 model MetaLeadLabel {
   id        String   @id @default(uuid())
   name      String   @unique

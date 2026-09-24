@@ -31,6 +31,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { type: stri
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
+  // Default meta-lead stages (New, Contacted, etc.) cannot be renamed or deleted.
+  if (params.type === "meta-lead-stages") {
+    const { prisma } = await import("@/lib/prisma");
+    const stage = await prisma.metaLeadStage.findUnique({ where: { id: params.id }, select: { isDefault: true } });
+    if (stage?.isDefault) {
+      if (parsed.data.deleted || parsed.data.name) {
+        return NextResponse.json(
+          { error: "Default stages cannot be renamed or deleted." },
+          { status: 422 },
+        );
+      }
+    }
+  }
+
   // Spec §5.2: at least one WON and one LOST FunnelStage must always exist —
   // block deactivating the last one of either type.
   if (params.type === "funnel-stages" && (parsed.data.deleted || parsed.data.isActive === false)) {

@@ -5,6 +5,7 @@ import {
   getCampaignList,
   getAssignableReps,
   getMetaLeadLabels,
+  getMetaLeadStages,
 } from "@/lib/meta-ads/queries";
 import AdCampaignsClient from "./AdCampaignsClient";
 
@@ -39,12 +40,13 @@ export default async function AdCampaignsPage({
   })();
 
   const hasDateFilter = !!searchParams.from || !!searchParams.to;
-  const [overview, leads, campaigns, reps, labelCatalog] = await Promise.all([
+  const [overview, leads, campaigns, reps, labelCatalog, stageCatalog] = await Promise.all([
     getAdCampaignOverview({ from, to }),
     getMetaLeads({ from, to }),
     getCampaignList(hasDateFilter ? { from, to } : undefined),
     getAssignableReps(),
     getMetaLeadLabels(),
+    getMetaLeadStages(),
   ]);
 
   return (
@@ -54,6 +56,7 @@ export default async function AdCampaignsPage({
       campaigns={campaigns}
       reps={reps}
       labelCatalog={labelCatalog}
+      stageCatalog={stageCatalog}
       currentUserId={user.id}
       isAdmin={user.role === "admin"}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}

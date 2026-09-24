@@ -124,6 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             isPrimary: true,
             pipelineStage: "LEAD",
             promotedToLeadAt: new Date(),
+            createdByUserId: user.id,
             ...(leadSourceId ? { leadSourceId } : {}),
           },
         });

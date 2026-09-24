@@ -3,9 +3,11 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-async function loadOwned(id: string, userId: string) {
+async function loadAccessible(id: string, userId: string) {
   const doc = await prisma.insightDocument.findUnique({ where: { id } });
-  if (!doc || doc.deletedAt || doc.authorId !== userId) return null;
+  if (!doc || doc.deletedAt) return null;
+  if (doc.campaignMetaId) return doc;
+  if (doc.authorId !== userId) return null;
   return doc;
 }
 
@@ -13,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const doc = await loadOwned(params.id, user.id);
+  const doc = await loadAccessible(params.id, user.id);
   if (!doc) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   return NextResponse.json({ document: doc });
@@ -28,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const doc = await loadOwned(params.id, user.id);
+  const doc = await loadAccessible(params.id, user.id);
   if (!doc) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
@@ -50,7 +52,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const doc = await loadOwned(params.id, user.id);
+  const doc = await loadAccessible(params.id, user.id);
   if (!doc) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   await prisma.insightDocument.update({

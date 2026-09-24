@@ -368,6 +368,14 @@ export async function getMetaLeadLabels(): Promise<MetaLeadLabelChip[]> {
   });
 }
 
+export async function getMetaLeadStages() {
+  return prisma.metaLeadStage.findMany({
+    where: { deletedAt: null, isActive: true },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, slug: true, name: true, colorHex: true, isDefault: true },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Campaign-centric reads (the "Campaigns" drill-down list + detail).
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getCampaignById, getLeadsForCampaign, getAssignableReps, getAdLeadBreakdown, getMetaLeadLabels } from "@/lib/meta-ads/queries";
+import { getCampaignById, getLeadsForCampaign, getAssignableReps, getAdLeadBreakdown, getMetaLeadLabels, getMetaLeadStages } from "@/lib/meta-ads/queries";
 import CampaignDetailClient from "./CampaignDetailClient";
 
 // Detail view for one Meta ad campaign, addressed by its RAW Meta campaign id:
@@ -39,12 +39,13 @@ export default async function CampaignDetailPage({
 
   const range = { from: parseFrom(searchParams.from), to: parseTo(searchParams.to) };
 
-  const [detail, leads, reps, adBreakdown, labelCatalog] = await Promise.all([
+  const [detail, leads, reps, adBreakdown, labelCatalog, stageCatalog] = await Promise.all([
     getCampaignById(params.campaignId, range),
     getLeadsForCampaign(params.campaignId, range),
     getAssignableReps(),
     getAdLeadBreakdown(params.campaignId, range),
     getMetaLeadLabels(),
+    getMetaLeadStages(),
   ]);
 
   if (!detail) notFound();
@@ -56,6 +57,7 @@ export default async function CampaignDetailPage({
       reps={reps}
       adBreakdown={adBreakdown}
       labelCatalog={labelCatalog}
+      stageCatalog={stageCatalog}
       currentUserId={user.id}
       isAdmin={user.role === "admin"}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}

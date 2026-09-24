@@ -93,6 +93,28 @@ const GROUPS: { key: "overdue" | "today" | "tomorrow" | "week"; label: string }[
   { key: "week", label: "This week" },
 ];
 
+type ActivityCategory = "Calls" | "Meetings" | "Tasks";
+
+function categorize(typeName: string | null): ActivityCategory {
+  if (typeName && CALL_TYPE_NAMES.has(typeName)) return "Calls";
+  if (typeName && MEETING_TYPE_NAMES.has(typeName)) return "Meetings";
+  return "Tasks";
+}
+
+const CATEGORY_ORDER: ActivityCategory[] = ["Calls", "Meetings", "Tasks"];
+const CATEGORY_ICONS: Record<ActivityCategory, string> = { Calls: "📞", Meetings: "📅", Tasks: "📋" };
+
+function groupByCategory(rows: UpcomingReminder[]): { category: ActivityCategory; items: UpcomingReminder[] }[] {
+  const map = new Map<ActivityCategory, UpcomingReminder[]>();
+  for (const r of rows) {
+    const cat = categorize(r.typeName);
+    const list = map.get(cat) ?? [];
+    list.push(r);
+    map.set(cat, list);
+  }
+  return CATEGORY_ORDER.filter((c) => map.has(c)).map((c) => ({ category: c, items: map.get(c)! }));
+}
+
 export default function UpcomingSchedule({
   data,
   showOwner = false,
@@ -115,14 +137,24 @@ export default function UpcomingSchedule({
             const rows = data[key];
             if (rows.length === 0) return null;
             const isOverdue = key === "overdue";
+            const categories = groupByCategory(rows);
             return (
               <div key={key}>
-                <div className={`text-xs font-bold uppercase tracking-wide mb-1.5 ${isOverdue ? "text-red-600" : "text-slate-400"}`}>
+                <div className={`text-xs font-bold uppercase tracking-wide mb-2 ${isOverdue ? "text-red-600" : "text-slate-400"}`}>
                   {label} <span className="font-mono font-normal">{rows.length}</span>
                 </div>
-                <div className="space-y-2">
-                  {rows.map((r) => (
-                    <ScheduleRow key={r.id} r={r} showOwner={showOwner} overdue={isOverdue} />
+                <div className="space-y-3">
+                  {categories.map(({ category, items }) => (
+                    <div key={category}>
+                      <div className="text-[11px] font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                        <span>{CATEGORY_ICONS[category]}</span> {category} <span className="font-mono font-normal text-slate-400">{items.length}</span>
+                      </div>
+                      <div className="space-y-2 ml-1">
+                        {items.map((r) => (
+                          <ScheduleRow key={r.id} r={r} showOwner={showOwner} overdue={isOverdue} />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>

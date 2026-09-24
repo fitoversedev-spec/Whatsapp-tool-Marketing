@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
           name: data.contactName ?? data.account.name,
           phone: data.contactPhone ?? null,
           isPrimary: true,
+          createdByUserId: user.id,
         },
       });
     }

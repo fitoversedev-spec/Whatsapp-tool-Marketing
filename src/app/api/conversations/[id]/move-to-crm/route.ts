@@ -69,6 +69,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
           name: displayName,
           phone: convo.contactPhone,
           isPrimary: true,
+          createdByUserId: user.id,
           ...(whatsappSourceId ? { leadSourceId: whatsappSourceId } : {}),
         },
       });

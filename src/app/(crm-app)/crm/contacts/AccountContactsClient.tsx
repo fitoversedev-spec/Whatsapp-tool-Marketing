@@ -21,6 +21,7 @@ type Contact = {
   accountId: string;
   accountName: string;
   accountOwnerUserId: string | null;
+  addedBy: string | null;
 };
 type Option = { id: string; name: string };
 type StageOption = { id: string; name: string; colorHex: string | null };
@@ -357,6 +358,7 @@ export default function AccountContactsClient({
               <th>Designation</th>
               <th>Phone</th>
               <th>Email</th>
+              <th>Added by</th>
               {isAdmin && <th>Owner</th>}
               <th className="w-8 !text-right"><span className="sr-only">Actions</span></th>
             </tr>
@@ -379,6 +381,7 @@ export default function AccountContactsClient({
                 <td className="text-slate-600">{c.designation ?? "—"}</td>
                 <td className="text-slate-600 font-mono">{c.phone ?? "—"}</td>
                 <td className="text-slate-600">{c.email ?? "—"}</td>
+                <td className="text-slate-500 text-xs">{c.addedBy ?? "—"}</td>
                 {isAdmin && (
                   <td className="text-slate-600">
                     {users.find((u) => u.id === c.accountOwnerUserId)?.name ?? "—"}

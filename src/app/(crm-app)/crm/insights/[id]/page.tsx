@@ -9,7 +9,7 @@ export default async function InsightEditorPage({ params }: { params: { id: stri
   const doc = await prisma.insightDocument.findUnique({
     where: { id: params.id },
   });
-  if (!doc || doc.deletedAt || doc.authorId !== user.id) notFound();
+  if (!doc || doc.deletedAt || (!doc.campaignMetaId && doc.authorId !== user.id)) notFound();
 
   return (
     <InsightEditorClient

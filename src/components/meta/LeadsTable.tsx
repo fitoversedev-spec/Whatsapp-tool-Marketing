@@ -8,7 +8,7 @@ import { useToast } from "@/components/Toast";
 import MoveToCrmDialog, { type Rep } from "@/components/meta/MoveToCrmDialog";
 import LeadManagementPanel from "@/components/meta/LeadManagementPanel";
 import type { MetaLeadRow, MetaLeadDetail, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
-import { LEAD_STAGES, LEAD_STAGE_LABELS, LEAD_STAGE_CHIP, stageLabel, labelChip, labelDot } from "@/lib/meta-ads/lead-fields";
+import { labelChip, labelDot, stageLabelFromRow, stageChipFromRow, type MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
 
 type Tally = { key: string; label: string; count: number };
 
@@ -135,6 +135,7 @@ export default function LeadsTable({
   showCampaignColumn,
   exportFilename,
   labelCatalog = [],
+  stageCatalog = [],
   currentUserId = "",
   isAdmin = false,
 }: {
@@ -143,6 +144,7 @@ export default function LeadsTable({
   showCampaignColumn: boolean;
   exportFilename: string;
   labelCatalog?: MetaLeadLabelChip[];
+  stageCatalog?: MetaLeadStageRow[];
   currentUserId?: string;
   isAdmin?: boolean;
 }) {
@@ -185,7 +187,7 @@ export default function LeadsTable({
 
   // Filter persistence via sessionStorage
   const storageKey = FILTER_STORAGE_PREFIX + exportFilename;
-  function readSavedFilters(): { city: string; sport: string; area: string; stage: string; assigned?: string } {
+  function readSavedFilters(): { city: string; sport: string; area: string; stage: string; assigned?: string; label?: string } {
     try {
       const raw = sessionStorage.getItem(storageKey);
       if (raw) return JSON.parse(raw);
@@ -199,13 +201,14 @@ export default function LeadsTable({
   const [areaQuery, setAreaQuery] = useState(saved.area);
   const [stageFilter, setStageFilter] = useState(saved.stage);
   const [assignedQuery, setAssignedQuery] = useState(saved.assigned ?? "");
+  const [labelFilter, setLabelFilter] = useState(saved.label ?? "");
 
   // Persist filters to sessionStorage on change
   useEffect(() => {
     try {
-      sessionStorage.setItem(storageKey, JSON.stringify({ city: cityQuery, sport: sportQuery, area: areaQuery, stage: stageFilter, assigned: assignedQuery }));
+      sessionStorage.setItem(storageKey, JSON.stringify({ city: cityQuery, sport: sportQuery, area: areaQuery, stage: stageFilter, assigned: assignedQuery, label: labelFilter }));
     } catch { /* ignore */ }
-  }, [cityQuery, sportQuery, areaQuery, stageFilter, assignedQuery, storageKey]);
+  }, [cityQuery, sportQuery, areaQuery, stageFilter, assignedQuery, labelFilter, storageKey]);
 
   // Fetch sidebar detail when a lead is selected
   const fetchSidebarDetail = useCallback(async (leadId: string) => {
@@ -277,21 +280,33 @@ export default function LeadsTable({
         const stageOk = !stageFilter || l.stage === stageFilter;
         const assignedName = l.assignedToName ?? "Unassigned";
         const assignedOk = !asq || assignedName.toLowerCase().includes(asq);
-        return cityOk && sportOk && areaOk && stageOk && assignedOk;
+        const labelOk = !labelFilter || l.labels.some((lb) => lb.name === labelFilter);
+        return cityOk && sportOk && areaOk && stageOk && assignedOk && labelOk;
       }),
-    [localLeads, cq, sq, aq, stageFilter, asq],
+    [localLeads, cq, sq, aq, stageFilter, asq, labelFilter],
   );
 
   const allCities = useMemo(() => tally(localLeads, (l) => l.city), [localLeads]);
   const allSports = useMemo(() => tally(localLeads, (l) => l.sport), [localLeads]);
   const allAreas = useMemo(() => tally(localLeads, (l) => l.area), [localLeads]);
   const allAssigned = useMemo(() => tally(localLeads, (l) => l.assignedToName ?? "Unassigned"), [localLeads]);
+  const allLabels: DropdownOption[] = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of localLeads) {
+      for (const lb of l.labels) {
+        m.set(lb.name, (m.get(lb.name) ?? 0) + 1);
+      }
+    }
+    return [...m.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [localLeads]);
   const cityBreakdown = useMemo(() => tally(filtered, (l) => l.city), [filtered]);
   const sportBreakdown = useMemo(() => tally(filtered, (l) => l.sport), [filtered]);
   const areaBreakdown = useMemo(() => tally(filtered, (l) => l.area), [filtered]);
   const assignedBreakdown = useMemo(() => tally(filtered, (l) => l.assignedToName ?? "Unassigned"), [filtered]);
 
-  const hasFilter = !!(cityQuery || sportQuery || areaQuery || stageFilter || assignedQuery);
+  const hasFilter = !!(cityQuery || sportQuery || areaQuery || stageFilter || assignedQuery || labelFilter);
 
   const headers = [
     "Name", "Phone", "Email", "City", "Sport", "Area", "Form",
@@ -312,7 +327,7 @@ export default function LeadsTable({
     l.area ?? "—",
     l.formName ?? "—",
     ...(showCampaignColumn ? [l.campaignName ?? "—"] : []),
-    stageLabel(l.stage),
+    stageLabelFromRow(l.stage, stageCatalog),
     new Date(l.capturedAt).toLocaleDateString("en-IN"),
     l.inCrm ? "In CRM" : "—",
   ]);
@@ -340,14 +355,17 @@ export default function LeadsTable({
               className="input w-40 text-sm"
             >
               <option value="">All stages</option>
-              {LEAD_STAGES.map((s) => (
-                <option key={s} value={s}>
-                  {LEAD_STAGE_LABELS[s]}
+              {stageCatalog.map((s) => (
+                <option key={s.slug} value={s.slug}>
+                  {s.name}
                 </option>
               ))}
             </select>
           </div>
           <DropdownFilter label="Assigned To" value={assignedQuery} onChange={setAssignedQuery} options={allAssigned} />
+          {allLabels.length > 0 && (
+            <DropdownFilter label="Label" value={labelFilter} onChange={setLabelFilter} options={allLabels} />
+          )}
           <div className="text-xs text-slate-500 pb-1.5">
             Showing <b className="text-slate-800 font-mono">{filtered.length}</b> of <span className="font-mono">{localLeads.length}</span>
             {hasFilter && <span className="text-slate-400"> (filtered)</span>}
@@ -361,6 +379,7 @@ export default function LeadsTable({
                 setAreaQuery("");
                 setStageFilter("");
                 setAssignedQuery("");
+                setLabelFilter("");
               }}
               className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
             >
@@ -436,8 +455,8 @@ export default function LeadsTable({
                       {l.phone ?? "—"} · {l.formName ?? "—"}
                     </div>
                   </div>
-                  <span className={`shrink-0 badge ${LEAD_STAGE_CHIP[l.stage as keyof typeof LEAD_STAGE_CHIP] ?? "bg-slate-100 text-slate-700"}`}>
-                    {stageLabel(l.stage)}
+                  <span className={`shrink-0 badge ${stageChipFromRow(l.stage, stageCatalog)}`}>
+                    {stageLabelFromRow(l.stage, stageCatalog)}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
@@ -500,8 +519,8 @@ export default function LeadsTable({
                       <td className="whitespace-nowrap text-slate-700">{l.campaignName ?? "—"}</td>
                     )}
                     <td className="whitespace-nowrap">
-                      <span className={`badge ${LEAD_STAGE_CHIP[l.stage as keyof typeof LEAD_STAGE_CHIP] ?? "bg-slate-100 text-slate-700"}`}>
-                        {stageLabel(l.stage)}
+                      <span className={`badge ${stageChipFromRow(l.stage, stageCatalog)}`}>
+                        {stageLabelFromRow(l.stage, stageCatalog)}
                       </span>
                     </td>
                     <td>
@@ -601,6 +620,7 @@ export default function LeadsTable({
                   lead={sidebarDetail}
                   reps={reps}
                   labelCatalog={labelCatalog}
+                  stageCatalog={stageCatalog}
                   currentUserId={currentUserId}
                   isAdmin={isAdmin}
                   onStageUpdated={handleStageUpdated}

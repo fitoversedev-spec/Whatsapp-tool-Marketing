@@ -34,7 +34,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         data: { name: displayName, ownerUserId: user.id },
       });
       const ac = await tx.accountContact.create({
-        data: { accountId: account.id, name: displayName, phone: contact.phone, isPrimary: true },
+        data: { accountId: account.id, name: displayName, phone: contact.phone, isPrimary: true, createdByUserId: user.id },
       });
       targetId = ac.id;
     }

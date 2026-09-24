@@ -6,7 +6,10 @@
 // The lead pipeline, mirroring the Meta Leads Centre stages plus a "Contacted"
 // step and a terminal "Lost". Stored on MetaLead.stage as the UPPERCASE key;
 // NEW is the default for every already-captured lead.
-export const LEAD_STAGES = ["NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "LOST"] as const;
+// Fallback defaults when the database hasn't been queried yet. The canonical
+// source is now the meta_lead_stages table; this array is a safe default for
+// server-side validation before the DB call and for type narrowing.
+export const LEAD_STAGES = ["NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "NOT_ANSWERED", "LOST"] as const;
 export type LeadStage = (typeof LEAD_STAGES)[number];
 
 export const LEAD_STAGE_LABELS: Record<LeadStage, string> = {
@@ -14,17 +17,16 @@ export const LEAD_STAGE_LABELS: Record<LeadStage, string> = {
   CONTACTED: "Contacted",
   QUALIFIED: "Qualified",
   CONVERTED: "Converted",
+  NOT_ANSWERED: "Not Answered",
   LOST: "Lost",
 };
 
-// Tailwind class pairs for the stage chip (kept as literal strings so Tailwind's
-// JIT sees them). Neutral for New, warming through the funnel, green = won,
-// rose = lost.
 export const LEAD_STAGE_CHIP: Record<LeadStage, string> = {
   NEW: "bg-slate-100 text-slate-700",
   CONTACTED: "bg-blue-100 text-blue-700",
   QUALIFIED: "bg-amber-100 text-amber-700",
   CONVERTED: "bg-green-100 text-green-700",
+  NOT_ANSWERED: "bg-violet-100 text-violet-700",
   LOST: "bg-rose-100 text-rose-700",
 };
 
@@ -34,6 +36,26 @@ export function isLeadStage(v: unknown): v is LeadStage {
 
 export function stageLabel(stage: string): string {
   return isLeadStage(stage) ? LEAD_STAGE_LABELS[stage] : stage;
+}
+
+export type MetaLeadStageRow = {
+  id?: string;
+  slug: string;
+  name: string;
+  colorHex: string | null;
+  isDefault: boolean;
+};
+
+export function stageChipFromRow(stage: string, stages: MetaLeadStageRow[]): string {
+  if (isLeadStage(stage)) return LEAD_STAGE_CHIP[stage];
+  const row = stages.find((s) => s.slug === stage);
+  if (!row?.colorHex) return "bg-slate-100 text-slate-700";
+  return `border border-current`;
+}
+
+export function stageLabelFromRow(stage: string, stages: MetaLeadStageRow[]): string {
+  if (isLeadStage(stage)) return LEAD_STAGE_LABELS[stage];
+  return stages.find((s) => s.slug === stage)?.name ?? stage;
 }
 
 // Label colour palette — the small named set a rep can pick from when creating a

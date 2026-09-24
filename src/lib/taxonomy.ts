@@ -18,6 +18,7 @@ export const TAXONOMY_TYPES = [
   "city-tiers",
   "loss-reasons",
   "activity-types",
+  "meta-lead-stages",
 ] as const;
 export type TaxonomyType = (typeof TAXONOMY_TYPES)[number];
 
@@ -35,6 +36,8 @@ function delegateFor(type: TaxonomyType) {
       return prisma.lossReason;
     case "activity-types":
       return prisma.activityType;
+    case "meta-lead-stages":
+      return prisma.metaLeadStage;
   }
 }
 

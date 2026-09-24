@@ -22,7 +22,15 @@ type Doc = { id: string; title: string; body: string; updatedAt: string };
 
 const SAVE_DEBOUNCE = 1500;
 
-export default function InsightEditorClient({ document: doc }: { document: Doc }) {
+export default function InsightEditorClient({
+  document: doc,
+  backHref = "/crm/insights",
+  backLabel = "← Back to Insights",
+}: {
+  document: Doc;
+  backHref?: string;
+  backLabel?: string;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [title, setTitle] = useState(doc.title);
@@ -101,8 +109,8 @@ export default function InsightEditorClient({ document: doc }: { document: Doc }
       {/* Header */}
       <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
-          <Link href="/crm/insights" className="text-sm text-slate-500 hover:text-slate-700 shrink-0">
-            ← Back
+          <Link href={backHref} className="text-sm text-slate-500 hover:text-slate-700 shrink-0">
+            {backLabel}
           </Link>
           <input
             value={title}

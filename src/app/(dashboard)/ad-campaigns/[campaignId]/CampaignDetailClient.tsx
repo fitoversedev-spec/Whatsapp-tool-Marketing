@@ -8,8 +8,10 @@ import { AnalyticsCard } from "@/components/analytics/AnalyticsCard";
 import { StackedBarChart, fmtInr, fmtPct } from "@/components/analytics/charts";
 import { StatusBadge } from "@/components/meta/StatusBadge";
 import LeadsTable from "@/components/meta/LeadsTable";
+import CampaignDocuments from "@/components/meta/CampaignDocuments";
 import type { Rep } from "@/components/meta/MoveToCrmDialog";
 import type { CampaignDetail, MetaLeadRow, AdLeadBreakdownRow, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
+import type { MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
 
 const SPORT_PRESETS = ["Basketball", "Tennis", "Pickleball", "Badminton", "Volleyball"];
 
@@ -92,6 +94,7 @@ export default function CampaignDetailClient({
   reps,
   adBreakdown,
   labelCatalog,
+  stageCatalog,
   currentUserId,
   isAdmin,
   range,
@@ -101,6 +104,7 @@ export default function CampaignDetailClient({
   reps: Rep[];
   adBreakdown: AdLeadBreakdownRow[];
   labelCatalog: MetaLeadLabelChip[];
+  stageCatalog: MetaLeadStageRow[];
   currentUserId: string;
   isAdmin: boolean;
   range: DateRange;
@@ -265,6 +269,14 @@ export default function CampaignDetailClient({
           <AdBreakdown rows={adBreakdown} />
         </AnalyticsCard>
 
+        {/* Campaign documents — Tiptap editor, create/share/PDF/WhatsApp */}
+        <AnalyticsCard
+          title="Documents"
+          description="Create, share, and manage documents for this campaign."
+        >
+          <CampaignDocuments campaignMetaId={detail.metaId} />
+        </AnalyticsCard>
+
         {/* This campaign's captured leads — filterable by city / sport */}
         <AnalyticsCard
           title="Captured leads"
@@ -276,6 +288,7 @@ export default function CampaignDetailClient({
             showCampaignColumn={false}
             exportFilename={`campaign-${detail.metaId}-leads`}
             labelCatalog={labelCatalog}
+            stageCatalog={stageCatalog}
             currentUserId={currentUserId}
             isAdmin={isAdmin}
           />

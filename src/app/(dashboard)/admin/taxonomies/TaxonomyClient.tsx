@@ -11,6 +11,7 @@ const TABS: { type: string; label: string }[] = [
   { type: "city-tiers", label: "City Tiers" },
   { type: "loss-reasons", label: "Loss Reasons" },
   { type: "activity-types", label: "Activity Types" },
+  { type: "meta-lead-stages", label: "Meta Lead Stages" },
 ];
 
 type Row = {

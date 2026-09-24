@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getMetaLeadDetail, getAssignableReps, getMetaLeadLabels } from "@/lib/meta-ads/queries";
+import { getMetaLeadDetail, getAssignableReps, getMetaLeadLabels, getMetaLeadStages } from "@/lib/meta-ads/queries";
 import LeadDetailClient from "./LeadDetailClient";
 
 // Detail view for one captured Meta Instant-Form lead, addressed by its INTERNAL
@@ -15,10 +15,11 @@ import LeadDetailClient from "./LeadDetailClient";
 export default async function LeadDetailPage({ params }: { params: { id: string } }) {
   const user = await requireUser();
 
-  const [lead, reps, labelCatalog] = await Promise.all([
+  const [lead, reps, labelCatalog, stageCatalog] = await Promise.all([
     getMetaLeadDetail(params.id),
     getAssignableReps(),
     getMetaLeadLabels(),
+    getMetaLeadStages(),
   ]);
 
   if (!lead) notFound();
@@ -28,6 +29,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       lead={lead}
       reps={reps}
       labelCatalog={labelCatalog}
+      stageCatalog={stageCatalog}
       currentUserId={user.id}
       isAdmin={user.role === "admin"}
     />

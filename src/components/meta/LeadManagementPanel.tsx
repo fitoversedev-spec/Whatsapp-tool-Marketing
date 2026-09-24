@@ -6,13 +6,12 @@ import type { Rep } from "./MoveToCrmDialog";
 import type { MetaLeadDetail, MetaLeadLabelChip, MetaLeadNoteRow } from "@/lib/meta-ads/queries";
 import { parseFieldData } from "@/lib/meta-ads/field-data";
 import {
-  LEAD_STAGES,
-  LEAD_STAGE_LABELS,
-  LEAD_STAGE_CHIP,
-  stageLabel,
   LABEL_COLORS,
   labelChip,
   labelDot,
+  stageChipFromRow,
+  stageLabelFromRow,
+  type MetaLeadStageRow,
 } from "@/lib/meta-ads/lead-fields";
 
 const inputCls =
@@ -63,6 +62,7 @@ export default function LeadManagementPanel({
   lead,
   reps,
   labelCatalog,
+  stageCatalog = [],
   currentUserId,
   isAdmin,
   onStageUpdated,
@@ -72,6 +72,7 @@ export default function LeadManagementPanel({
   lead: MetaLeadDetail;
   reps: Rep[];
   labelCatalog: MetaLeadLabelChip[];
+  stageCatalog?: MetaLeadStageRow[];
   currentUserId: string;
   isAdmin: boolean;
   onStageUpdated?: (leadId: string, newStage: string) => void;
@@ -83,6 +84,12 @@ export default function LeadManagementPanel({
   // --- Stage -------------------------------------------------------------
   const [stage, setStage] = useState(lead.stage);
   const [savingStage, setSavingStage] = useState(false);
+  const [stages, setStages] = useState<MetaLeadStageRow[]>(stageCatalog);
+  const [addingStage, setAddingStage] = useState(false);
+  const [newStageName, setNewStageName] = useState("");
+  const [creatingStage, setCreatingStage] = useState(false);
+  const [stageDropdownOpen, setStageDropdownOpen] = useState(false);
+  const stageDropdownRef = useRef<HTMLDivElement>(null);
 
   // --- Assigned-to -------------------------------------------------------
   const [assignedToUserId, setAssignedToUserId] = useState<string | null>(lead.assignedToUserId);
@@ -108,6 +115,17 @@ export default function LeadManagementPanel({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [addingReminder]);
+
+  useEffect(() => {
+    if (!stageDropdownOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (stageDropdownRef.current && !stageDropdownRef.current.contains(e.target as Node)) {
+        setStageDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [stageDropdownOpen]);
 
   // --- Labels ------------------------------------------------------------
   const [catalog, setCatalog] = useState<MetaLeadLabelChip[]>(labelCatalog);
@@ -179,6 +197,54 @@ export default function LeadManagementPanel({
       toast.error("Could not update the stage");
     } else {
       onStageUpdated?.(lead.id, next);
+    }
+  }
+
+  async function onCreateStage() {
+    const name = newStageName.trim();
+    if (!name) return;
+    setCreatingStage(true);
+    try {
+      const res = await fetch("/api/admin/taxonomy/meta-lead-stages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const msg = res.status === 403 ? "Only admins can create stages" : "Could not create stage";
+        toast.error(msg);
+        return;
+      }
+      const { row } = await res.json();
+      const newRow: MetaLeadStageRow = { id: row.id, slug: row.slug, name: row.name, colorHex: row.colorHex ?? null, isDefault: false };
+      setStages((prev) => [...prev, newRow]);
+      setNewStageName("");
+      setAddingStage(false);
+      onStageChange(row.slug);
+    } catch {
+      toast.error("Could not create stage");
+    } finally {
+      setCreatingStage(false);
+    }
+  }
+
+  async function onDeleteStage(s: MetaLeadStageRow) {
+    if (s.isDefault || !s.id) return;
+    try {
+      const res = await fetch(`/api/admin/taxonomy/meta-lead-stages/${s.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deleted: true }),
+      });
+      if (!res.ok) {
+        const msg = res.status === 403 ? "Only admins can remove stages" : "Could not remove stage";
+        toast.error(msg);
+        return;
+      }
+      setStages((prev) => prev.filter((x) => x.slug !== s.slug));
+      if (stage === s.slug) onStageChange("NEW");
+    } catch {
+      toast.error("Could not remove stage");
     }
   }
 
@@ -401,29 +467,79 @@ export default function LeadManagementPanel({
     <aside className="card p-4 space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-heading font-bold text-slate-900">Lead management</h2>
-        <span className={`badge ${LEAD_STAGE_CHIP[stage as keyof typeof LEAD_STAGE_CHIP] ?? "bg-slate-100 text-slate-700"}`}>
-          {stageLabel(stage)}
+        <span className={`badge ${stageChipFromRow(stage, stages)}`}>
+          {stageLabelFromRow(stage, stages)}
         </span>
       </div>
 
       {/* Stage */}
       <div className="space-y-1.5">
-        <label htmlFor="lead-stage" className={sectionLabelCls}>
-          Stage
-        </label>
-        <select
-          id="lead-stage"
-          className={inputCls}
-          value={stage}
-          disabled={savingStage}
-          onChange={(e) => onStageChange(e.target.value)}
-        >
-          {LEAD_STAGES.map((s) => (
-            <option key={s} value={s}>
-              {LEAD_STAGE_LABELS[s]}
-            </option>
-          ))}
-        </select>
+        <label className={sectionLabelCls}>Stage</label>
+        {addingStage ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              autoFocus
+              type="text"
+              placeholder="Stage name"
+              value={newStageName}
+              onChange={(e) => setNewStageName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") onCreateStage(); if (e.key === "Escape") { setAddingStage(false); setNewStageName(""); } }}
+              disabled={creatingStage}
+              className={inputCls}
+            />
+            <button onClick={onCreateStage} disabled={creatingStage || !newStageName.trim()} className="text-xs font-semibold text-white bg-court-600 hover:bg-court-700 disabled:opacity-50 px-2.5 py-1.5 rounded-lg shrink-0">
+              {creatingStage ? "…" : "Add"}
+            </button>
+            <button onClick={() => { setAddingStage(false); setNewStageName(""); }} disabled={creatingStage} className="text-xs text-slate-500 hover:text-slate-800 px-1.5 py-1.5 rounded-lg shrink-0">
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="relative" ref={stageDropdownRef}>
+            <button
+              type="button"
+              disabled={savingStage}
+              onClick={() => setStageDropdownOpen((o) => !o)}
+              className={`${inputCls} text-left flex items-center justify-between`}
+            >
+              <span>{stageLabelFromRow(stage, stages)}</span>
+              <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+            </button>
+            {stageDropdownOpen && (
+              <div className="absolute z-50 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg py-1 max-h-64 overflow-y-auto">
+                {stages.map((s) => (
+                  <div
+                    key={s.slug}
+                    className={`flex items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-slate-50 ${s.slug === stage ? "bg-court-50 text-court-700 font-medium" : "text-slate-700"}`}
+                  >
+                    <span
+                      className="flex-1 min-w-0 truncate"
+                      onClick={() => { onStageChange(s.slug); setStageDropdownOpen(false); }}
+                    >
+                      {s.name}
+                    </span>
+                    {!s.isDefault && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onDeleteStage(s); }}
+                        className="ml-2 p-0.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"
+                        title="Remove stage"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <div
+                  className="px-3 py-1.5 text-sm text-court-600 font-medium cursor-pointer hover:bg-slate-50 border-t border-slate-100 mt-1"
+                  onClick={() => { setStageDropdownOpen(false); setAddingStage(true); }}
+                >
+                  + Add stage
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Assigned to */}

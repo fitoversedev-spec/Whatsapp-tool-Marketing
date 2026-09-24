@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 
-type TimeBucket = "overdue" | "today" | "week" | "later" | "completed";
+type TimeBucket = "overdue" | "today" | "tomorrow" | "week" | "later" | "completed";
 
 type Reminder = {
   id: string;
@@ -36,6 +36,7 @@ const BUCKET_STYLE: Record<
 > = {
   overdue: { label: "Overdue", dot: "bg-red-500", text: "text-red-600" },
   today: { label: "Today", dot: "bg-amber-500", text: "text-amber-600" },
+  tomorrow: { label: "Tomorrow", dot: "bg-orange-400", text: "text-orange-600" },
   week: { label: "This week", dot: "bg-blue-500", text: "text-blue-600" },
   later: { label: "Later", dot: "bg-slate-400", text: "text-slate-500" },
   completed: {
@@ -68,16 +69,34 @@ export default function RemindersClient({
     return () => { window.removeEventListener("offline", goOffline); window.removeEventListener("online", goOnline); };
   }, [router]);
 
-  const sections = useMemo(() => {
-    const map = new Map<string, Reminder[]>();
+  const BUCKET_ORDER: TimeBucket[] = ["overdue", "today", "tomorrow", "week", "later", "completed"];
+  const BUCKET_LABELS: Record<TimeBucket, string> = {
+    overdue: "Overdue",
+    today: "Today",
+    tomorrow: "Tomorrow",
+    week: "This Week",
+    later: "Later",
+    completed: "Completed",
+  };
+
+  const buckets = useMemo(() => {
+    const map = new Map<TimeBucket, Map<string, Reminder[]>>();
     for (const r of reminders) {
-      const list = map.get(r.section) ?? [];
+      if (!map.has(r.timeBucket)) map.set(r.timeBucket, new Map());
+      const sectionMap = map.get(r.timeBucket)!;
+      const list = sectionMap.get(r.section) ?? [];
       list.push(r);
-      map.set(r.section, list);
+      sectionMap.set(r.section, list);
     }
-    return Array.from(map.entries())
-      .sort((a, b) => b[1].length - a[1].length)
-      .map(([name, items]) => ({ name, items }));
+    return BUCKET_ORDER
+      .filter((b) => map.has(b))
+      .map((bucket) => {
+        const sectionMap = map.get(bucket)!;
+        const sections = Array.from(sectionMap.entries())
+          .sort((a, b) => b[1].length - a[1].length)
+          .map(([name, items]) => ({ name, items }));
+        return { bucket, label: BUCKET_LABELS[bucket], sections };
+      });
   }, [reminders]);
 
   const totalActive = reminders.filter((r) => !r.completedAt).length;
@@ -174,50 +193,37 @@ export default function RemindersClient({
           </div>
         )}
 
-        {sections.map(({ name, items }) => {
-          const activeItems = items.filter((r) => !r.completedAt);
-          const completedItems = items.filter((r) => r.completedAt);
-          return (
-            <section key={name} className="card overflow-hidden">
-              <div className="px-5 py-3 border-b bg-slate-50 border-slate-200 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                  <span>{SECTION_ICONS[name] ?? "📋"}</span>
-                  {name}
-                </h2>
-                <span className="text-xs font-medium font-mono text-slate-500">
-                  {items.length}
-                </span>
+        {buckets.map(({ bucket, label, sections }) => (
+          <section key={bucket} className="space-y-3">
+            <h2 className={`text-xs font-bold uppercase tracking-wide ${bucket === "overdue" ? "text-red-600" : "text-slate-400"}`}>
+              {label} <span className="font-mono font-normal">{sections.reduce((s, sec) => s + sec.items.length, 0)}</span>
+            </h2>
+            {sections.map(({ name, items }) => (
+              <div key={name} className="card overflow-hidden">
+                <div className="px-5 py-2.5 border-b bg-slate-50 border-slate-200 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                    <span>{SECTION_ICONS[name] ?? "📋"}</span>
+                    {name}
+                  </h3>
+                  <span className="text-xs font-medium font-mono text-slate-500">
+                    {items.length}
+                  </span>
+                </div>
+                <ul className="divide-y divide-slate-100">
+                  {items.map((r) => (
+                    <Row
+                      key={r.id}
+                      reminder={r}
+                      busy={busy === r.id}
+                      action={action}
+                      remove={remove}
+                    />
+                  ))}
+                </ul>
               </div>
-              <ul className="divide-y divide-slate-100">
-                {activeItems.map((r) => (
-                  <Row
-                    key={r.id}
-                    reminder={r}
-                    busy={busy === r.id}
-                    action={action}
-                    remove={remove}
-                  />
-                ))}
-                {completedItems.length > 0 && activeItems.length > 0 && (
-                  <li className="px-5 py-1.5 bg-slate-50">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                      Completed
-                    </span>
-                  </li>
-                )}
-                {completedItems.map((r) => (
-                  <Row
-                    key={r.id}
-                    reminder={r}
-                    busy={busy === r.id}
-                    action={action}
-                    remove={remove}
-                  />
-                ))}
-              </ul>
-            </section>
-          );
-        })}
+            ))}
+          </section>
+        ))}
       </div>
     </>
   );

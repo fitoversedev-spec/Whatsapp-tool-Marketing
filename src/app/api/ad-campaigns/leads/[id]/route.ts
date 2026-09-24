@@ -10,7 +10,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { LEAD_STAGES } from "@/lib/meta-ads/lead-fields";
 import { getMetaLeadDetail } from "@/lib/meta-ads/queries";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -22,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 const patchSchema = z.object({
-  stage: z.enum(LEAD_STAGES).optional(),
+  stage: z.string().min(1).optional(),
   assignedToUserId: z.string().uuid().nullable().optional(),
   // datetime-local sends "YYYY-MM-DDTHH:mm" (no zone/seconds), so accept any
   // parseable string; null clears the reminder ("No reminder").
@@ -48,6 +47,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     select: { id: true, fullName: true, phone: true, reminderAt: true, assignedToUserId: true },
   });
   if (!lead) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  if (stage) {
+    const validStage = await prisma.metaLeadStage.findFirst({
+      where: { slug: stage, deletedAt: null, isActive: true },
+      select: { slug: true },
+    });
+    if (!validStage) return NextResponse.json({ error: "invalid_stage" }, { status: 400 });
+  }
 
   // Validate the assigned rep still exists (avoids an FK violation on a stale id).
   if (assignedToUserId) {

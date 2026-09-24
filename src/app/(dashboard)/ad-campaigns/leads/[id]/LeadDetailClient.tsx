@@ -8,6 +8,7 @@ import MoveToCrmDialog, { type Rep } from "@/components/meta/MoveToCrmDialog";
 import LeadManagementPanel from "@/components/meta/LeadManagementPanel";
 import { parseFieldData } from "@/lib/meta-ads/field-data";
 import type { MetaLeadDetail, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
+import type { MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
 
 // Dedicated detail page for one captured lead — replaces the old inline
 // row-expand in LeadsTable. Two columns: the captured fields (structured + EVERY
@@ -19,12 +20,14 @@ export default function LeadDetailClient({
   lead,
   reps,
   labelCatalog,
+  stageCatalog,
   currentUserId,
   isAdmin,
 }: {
   lead: MetaLeadDetail;
   reps: Rep[];
   labelCatalog: MetaLeadLabelChip[];
+  stageCatalog: MetaLeadStageRow[];
   currentUserId: string;
   isAdmin: boolean;
 }) {
@@ -136,6 +139,7 @@ export default function LeadDetailClient({
           lead={lead}
           reps={reps}
           labelCatalog={labelCatalog}
+          stageCatalog={stageCatalog}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
           showFormAnswers={false}

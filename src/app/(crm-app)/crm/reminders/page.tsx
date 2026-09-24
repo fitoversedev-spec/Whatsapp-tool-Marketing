@@ -63,6 +63,7 @@ export default async function CrmRemindersPage({
   });
 
   const endOfToday = endOfDayIST(now);
+  const endOfTomorrow = endOfDayIST(new Date(now.getTime() + 86_400_000));
   const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   function shape(r: (typeof reminders)[number]) {
@@ -82,13 +83,15 @@ export default async function CrmRemindersPage({
       sectionLink = `/inbox?conversation=${r.conversationId}`;
     }
 
-    let timeBucket: "overdue" | "today" | "week" | "later" | "completed" = "later";
+    let timeBucket: "overdue" | "today" | "tomorrow" | "week" | "later" | "completed" = "later";
     if (r.completedAt) {
       timeBucket = "completed";
     } else if (r.dueAt < now) {
       timeBucket = "overdue";
     } else if (r.dueAt <= endOfToday) {
       timeBucket = "today";
+    } else if (r.dueAt <= endOfTomorrow) {
+      timeBucket = "tomorrow";
     } else if (r.dueAt <= weekFromNow) {
       timeBucket = "week";
     }

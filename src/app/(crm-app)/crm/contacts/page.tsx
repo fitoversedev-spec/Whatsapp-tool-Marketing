@@ -23,7 +23,10 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
       where,
       orderBy: { createdAt: "desc" },
       take: 300,
-      include: { account: { select: { id: true, name: true, city: true, ownerUserId: true } } },
+      include: {
+        account: { select: { id: true, name: true, city: true, ownerUserId: true } },
+        createdByUser: { select: { name: true } },
+      },
     }),
     prisma.account.findMany({
       where: isAdmin(user.role) ? { deletedAt: null } : { deletedAt: null, ownerUserId: user.id },
@@ -58,6 +61,7 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
         accountId: c.account.id,
         accountName: c.account.name,
         accountOwnerUserId: c.account.ownerUserId,
+        addedBy: c.createdByUser?.name ?? null,
       }))}
       accounts={accounts}
       leadSources={leadSources}

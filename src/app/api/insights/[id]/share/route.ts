@@ -16,7 +16,7 @@ export async function POST(
   const doc = await prisma.insightDocument.findUnique({
     where: { id: params.id },
   });
-  if (!doc || doc.deletedAt || doc.authorId !== user.id) {
+  if (!doc || doc.deletedAt || (!doc.campaignMetaId && doc.authorId !== user.id)) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 

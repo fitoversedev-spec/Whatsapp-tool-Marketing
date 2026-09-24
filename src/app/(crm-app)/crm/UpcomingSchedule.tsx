@@ -5,6 +5,7 @@
 // reminders and for admins team-wide (showOwner). Data comes from
 // getUpcomingSchedule() in @/lib/crm/myDay. In-app only — this always-visible
 // list plus the existing due-today badge are the notification.
+import Link from "next/link";
 import { CALL_TYPE_NAMES, MEETING_TYPE_NAMES } from "@/lib/crm/timelineShared";
 import type { UpcomingReminder, UpcomingScheduleData } from "@/lib/crm/myDay";
 
@@ -59,6 +60,17 @@ function ScheduleRow({ r, showOwner, overdue }: { r: UpcomingReminder; showOwner
     <div className="flex items-start gap-2 text-sm">
       <TypeIcon typeName={r.typeName} />
       <div className="min-w-0 flex-1">
+        {r.contactName && (
+          <div className="text-xs mb-0.5">
+            {r.contactLink ? (
+              <Link href={r.contactLink} className="font-semibold text-court-600 hover:underline">
+                {r.contactName}
+              </Link>
+            ) : (
+              <span className="font-semibold text-slate-600">{r.contactName}</span>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-1.5 flex-wrap">
           {r.priority && (
             <span className={`badge ${PRIORITY_COLORS[r.priority] ?? "bg-slate-100 text-slate-600"}`}>{r.priority}</span>

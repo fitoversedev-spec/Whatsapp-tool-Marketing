@@ -87,14 +87,11 @@ export type UpcomingReminder = {
   id: string;
   message: string;
   dueAt: string;
-  // ActivityType.name — "Google Meet" | "In-Person Meeting" | "Outbound Call" |
-  // "Inbound Call" | "Task". Never null here (rows without an activityType are
-  // filtered out) but typed nullable to stay compatible with the shared UI.
   typeName: string | null;
-  // Set only on Task-kind reminders; null for scheduled meetings/calls.
   priority: string | null;
-  // The assigned rep — surfaced only in the team-wide (admin) variant.
   ownerName: string;
+  contactName: string | null;
+  contactLink: string | null;
 };
 
 export type UpcomingScheduleData = {
@@ -131,8 +128,16 @@ export async function getUpcomingSchedule(opts: { ownerUserId?: string } = {}): 
       message: true,
       dueAt: true,
       priority: true,
+      accountContactId: true,
+      dealId: true,
+      metaLeadId: true,
+      conversationId: true,
       activityType: { select: { name: true } },
       owner: { select: { name: true } },
+      accountContact: { select: { id: true, name: true } },
+      conversation: { select: { id: true, contactName: true } },
+      metaLead: { select: { id: true, fullName: true } },
+      deal: { select: { id: true, title: true } },
     },
   });
 
@@ -142,6 +147,13 @@ export async function getUpcomingSchedule(opts: { ownerUserId?: string } = {}): 
   const week: UpcomingReminder[] = [];
 
   for (const r of reminders) {
+    const contactName = r.accountContact?.name ?? r.conversation?.contactName ?? r.metaLead?.fullName ?? null;
+    let contactLink: string | null = null;
+    if (r.accountContactId) contactLink = `/crm/contacts/${r.accountContactId}`;
+    else if (r.dealId) contactLink = `/crm/deals/${r.dealId}`;
+    else if (r.metaLeadId) contactLink = `/ad-campaigns/leads/${r.metaLeadId}`;
+    else if (r.conversationId) contactLink = `/inbox?conversation=${r.conversationId}`;
+
     const row: UpcomingReminder = {
       id: r.id,
       message: r.message,
@@ -149,6 +161,8 @@ export async function getUpcomingSchedule(opts: { ownerUserId?: string } = {}): 
       typeName: r.activityType?.name ?? null,
       priority: r.priority,
       ownerName: r.owner.name,
+      contactName: contactName ?? r.deal?.title ?? null,
+      contactLink,
     };
     if (r.dueAt < startToday) overdue.push(row);
     else if (r.dueAt <= endToday) today.push(row);

@@ -118,6 +118,7 @@ export function ReportListEntry({ report }: ReportListEntryProps) {
   return (
     <Link
       href={`/scout/report/${report.scanId}`}
+      data-guide="scout-reports-row"
       className="flex items-center gap-4 py-[15px] px-5 border-t border-slate-200 no-underline text-slate-900 font-sans first:border-t-0 hover:bg-slate-100 transition-colors"
     >
       <span className="flex-none w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
@@ -159,6 +160,7 @@ export function ReportListEntry({ report }: ReportListEntryProps) {
           <button
             type="button"
             onClick={handleSend}
+            data-guide="scout-reports-send"
             className="inline-flex items-center rounded-md bg-wa-green/10 px-2.5 py-1 text-xs font-semibold text-wa-green hover:bg-wa-green/20 transition-colors"
           >
             {send}

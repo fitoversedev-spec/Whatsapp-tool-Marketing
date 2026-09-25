@@ -37,7 +37,7 @@ export default async function Page() {
         lede="Every area you have scanned, newest first."
         actions={
           <Link href="/scout/scan">
-            <Button>New site check</Button>
+            <Button data-guide="scout-sites-new">New site check</Button>
           </Link>
         }
       >

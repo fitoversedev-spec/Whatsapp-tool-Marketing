@@ -21,6 +21,10 @@ export type GuideEntry = {
     path: string;
     file: string;
     alt: string;
+    /** Actions run after the page loads and before annotating, to reach the state the guide describes (open a dialog, open the first record...). */
+    setup?: ScreenshotSetupAction[];
+    /** Override the 1440x900 capture size (phone-sized for mobile guides, taller when a control sits below the fold). Widths under 600 emulate a phone. */
+    viewport?: { width: number; height: number };
   };
 };
 
@@ -33,6 +37,11 @@ export type RecordingAction =
   | { type: "wait"; duration: number }
   | { type: "highlight"; selector: string; label?: string }
   | { type: "caption"; text: string; duration?: number };
+
+export type ScreenshotSetupAction = Extract<
+  RecordingAction,
+  { type: "navigate" | "click" | "hover" | "scroll" | "type" | "wait" }
+>;
 
 export type SectionRecording = {
   slug: string;

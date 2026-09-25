@@ -276,6 +276,7 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
               className="flex-1 flex items-center justify-center gap-[9px] min-h-12 px-3.5 py-3 border border-black rounded-[var(--radius-12)] bg-black text-[var(--on-dark)] font-sans text-[length:var(--text-13-5)] font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-progress"
               onClick={geo.request}
               disabled={geo.status === "locating"}
+              data-guide="scout-m-location"
             >
               <svg
                 width="17"
@@ -385,7 +386,7 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
         {/* ---------------------------------------------------- radius */}
         <div className="flex flex-col gap-[11px]">
           <SectionLabel as="h2">Scan radius</SectionLabel>
-          <div className="grid grid-cols-4 gap-2" role="group" aria-label="Scan radius">
+          <div className="grid grid-cols-4 gap-2" role="group" aria-label="Scan radius" data-guide="scout-m-radius">
             {RADII_KM.map((km) => (
               <button
                 key={km}
@@ -460,7 +461,7 @@ export function ScanScreen({ taxonomy }: { taxonomy: PublicTaxonomy }) {
       </div>
 
       <StickyFooter note={<EstimateNote estimate={estimate} online={online} error={error} />}>
-        <Button block size="lg" onClick={() => void runScan()} disabled={starting || !online}>
+        <Button block size="lg" onClick={() => void runScan()} disabled={starting || !online} data-guide="scout-m-run-scan">
           {starting ? "Starting scan…" : "Run scan"}
         </Button>
       </StickyFooter>

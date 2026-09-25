@@ -852,7 +852,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
         {/* ---------------------------------------------------- customer plot */}
         <div className="flex flex-col gap-2">
           <SectionLabel weight={700}>Customer plot</SectionLabel>
-          <div className="flex items-center gap-2 border border-slate-300 rounded-lg py-3 px-3 focus-within:border-court-500 focus-within:ring-1 focus-within:ring-court-500/20">
+          <div className="flex items-center gap-2 border border-slate-300 rounded-lg py-3 px-3 focus-within:border-court-500 focus-within:ring-1 focus-within:ring-court-500/20" data-guide="scout-scan-address">
             <svg
               width="15"
               height="15"
@@ -916,7 +916,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
               : `Drag the pin to fine-tune. Centre ${centre.lat.toFixed(5)}, ${centre.lng.toFixed(5)}.`}
           </p>
 
-          <div className="mt-1">
+          <div className="mt-1" data-guide="scout-scan-radius">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-slate-500">Radius</span>
               <span className="text-sm font-semibold text-slate-900">
@@ -952,7 +952,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
         {/* ------------------------------------------------- category picker */}
         {!isSaved ? (
           <>
-            <div className="flex flex-col gap-[10px]">
+            <div className="flex flex-col gap-[10px]" data-guide="scout-scan-sports">
               <SectionLabel weight={700}>Sports</SectionLabel>
               <div className="flex flex-wrap gap-2">
                 {competition.map((c) => (
@@ -1060,6 +1060,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
               block
               onClick={() => void runScan()}
               disabled={running || selectedCategories.length === 0 || googleKeyMissing}
+              data-guide="scout-start-scan"
             >
               {running ? "Starting the scan…" : "Run scan"}
             </Button>
@@ -1200,7 +1201,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                 title="Score this scan"
                 body="Scoring is a server-side computation over the places above, the city benchmark and — if one has been recorded — the site survey. Without a survey the score is desk-only and is labelled as such wherever it appears."
                 action={
-                  <Button onClick={() => void computeScore()} disabled={scoring}>
+                  <Button onClick={() => void computeScore()} disabled={scoring} data-guide="scout-compute-score">
                     {scoring ? "Scoring…" : "Compute the site score"}
                   </Button>
                 }
@@ -1664,7 +1665,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                   <Button block onClick={onContinue}>Continue to report</Button>
                 ) : (
                   <Link href={`/scout/report/${scanId}`}>
-                    <Button block>Create report</Button>
+                    <Button block data-guide="scout-create-report">Create report</Button>
                   </Link>
                 )}
                 <Link href="/scout/sites">

@@ -52,13 +52,13 @@ export default function OfflineScreen() {
 
         <ul className="m-0 p-0 list-none flex flex-col gap-2 text-left">
           <li>
-            <Link className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-3 px-[13px] text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--ink)] no-underline block min-h-[var(--m-touch)]" href="/scout/m/sites">
+            <Link className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-3 px-[13px] text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--ink)] no-underline block min-h-[var(--m-touch)]" href="/scout/m/sites" data-guide="scout-offline-sites">
               <strong>My sites</strong> — any scan you have opened before is readable, clearly
               marked with when it was last updated.
             </Link>
           </li>
           <li>
-            <span className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-3 px-[13px] text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--ink)] no-underline block min-h-[var(--m-touch)]">
+            <span className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-12)] py-3 px-[13px] text-[length:var(--text-12-5)] leading-[1.55] text-[color:var(--ink)] no-underline block min-h-[var(--m-touch)]" data-guide="scout-offline-queue">
               <strong>Nothing is queued.</strong> Site Scout never holds a saved observation to send
               later — anything you record while offline will tell you it did not save, so you know
               to enter it again rather than assume it landed.

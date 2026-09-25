@@ -111,6 +111,7 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
                 type="button"
                 onClick={() => toggle(option.id)}
                 disabled={pending}
+                data-guide="scout-compare-card"
                 className={`text-left rounded-xl border-2 p-3 transition cursor-pointer ${
                   selected
                     ? "border-court-500 bg-court-50 ring-1 ring-court-500/30"
@@ -192,7 +193,7 @@ export function CompareClient({ comparison, options, selectedIds }: CompareClien
             </div>
           ) : null}
 
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden" data-guide="scout-compare-table">
             <div className="overflow-x-auto">
               <div className="grid min-w-[720px]" style={{ gridTemplateColumns: gridTemplate }}>
                 <div className="bg-slate-900 text-white/50 px-5 py-4 text-xs font-semibold uppercase">

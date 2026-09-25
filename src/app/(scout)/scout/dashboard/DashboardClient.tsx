@@ -82,7 +82,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
           <div className="flex items-baseline justify-between gap-5 flex-wrap">
             <div>
               <h1 className="m-0 text-xl font-semibold">Saved scans</h1>
-              <div className="text-sm text-slate-600 mt-2 tracking-normal normal-case font-sans">
+              <div className="text-sm text-slate-600 mt-2 tracking-normal normal-case font-sans" data-guide="scout-dashboard-summary">
                 {summary.scansThisMonth} area{summary.scansThisMonth === 1 ? "" : "s"} scanned this
                 month across {summary.owners} salesp{summary.owners === 1 ? "erson" : "eople"}
               </div>
@@ -167,7 +167,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filtered.map((scan) => (
-                <Link key={scan.id} href={`/scout/scan/${scan.id}`} className="card text-left p-4 cursor-pointer font-sans flex flex-col gap-3 no-underline text-slate-900 transition-colors hover:border-slate-300">
+                <Link key={scan.id} href={`/scout/scan/${scan.id}`} data-guide="scout-dashboard-card" className="card text-left p-4 cursor-pointer font-sans flex flex-col gap-3 no-underline text-slate-900 transition-colors hover:border-slate-300">
                   <span className="flex items-center justify-between gap-2.5">
                     <span className="text-sm font-semibold text-slate-900">{scan.areaLabel}</span>
                     <span className="text-xs text-slate-500 whitespace-nowrap">{formatRadius(scan.radiusM)}</span>
@@ -241,7 +241,7 @@ export function DashboardClient({ scans, reports, summary }: DashboardClientProp
                   : "/scout/compare"
               }
             >
-              <Button block>Open comparison</Button>
+              <Button block data-guide="scout-dashboard-compare">Open comparison</Button>
             </Link>
           </div>
 

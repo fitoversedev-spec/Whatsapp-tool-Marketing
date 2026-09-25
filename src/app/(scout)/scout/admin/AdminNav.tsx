@@ -21,6 +21,7 @@ export function AdminNav() {
             <Link
               key={link.href}
               href={link.href}
+              data-guide={`scout-admin-tab-${link.label.toLowerCase()}`}
               className={`relative px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
                 active
                   ? "text-slate-900 bg-slate-50"

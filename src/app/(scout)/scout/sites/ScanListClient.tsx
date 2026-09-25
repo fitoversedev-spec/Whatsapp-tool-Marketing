@@ -55,6 +55,7 @@ export function ScanListClient({ scans }: { scans: DashboardScan[] }) {
           <Link
             key={scan.id}
             href={`/scout/scan/${scan.id}`}
+            data-guide="scout-sites-row"
             className="group flex items-center gap-[18px] py-[15px] px-5 border-t border-slate-200 no-underline text-slate-900 font-sans first:border-t-0 hover:bg-slate-100"
           >
             {/* Checkbox */}

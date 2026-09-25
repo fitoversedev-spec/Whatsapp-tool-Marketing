@@ -160,7 +160,7 @@ export function FindSpacesScreen() {
 
         {/* Search bar overlay */}
         <div className="absolute top-4 left-4 z-[1000] w-[360px] max-w-[calc(100%-2rem)]">
-          <div className="relative flex items-center bg-white rounded-xl shadow-lg">
+          <div className="relative flex items-center bg-white rounded-xl shadow-lg" data-guide="scout-sweep-search">
             {/* Search icon / spinner */}
             <div className="absolute left-3.5 flex items-center pointer-events-none text-slate-400">
               {searching ? (
@@ -379,7 +379,7 @@ export function FindSpacesScreen() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center" data-guide="scout-sweep-hint">
             <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />

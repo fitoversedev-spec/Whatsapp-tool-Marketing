@@ -10,9 +10,9 @@ export const PLATFORM_ENTRIES: GuideEntry[] = [
     category: "Account",
     keywords: ["sign up", "register", "account", "create", "new"],
     steps: [
-      { text: "Open the app and click **Sign up** on the login page" },
-      { text: "Enter your full name, email address, and a password", target: "signup-name" },
-      { text: "Click **Create Account** to submit your registration", target: "signup-submit" },
+      { text: "Open the app and click **Request access** on the login page" },
+      { text: "Enter your full name, email address, and a password, then choose the role you are requesting", target: "signup-name" },
+      { text: "Click **Request access** to submit your registration", target: "signup-submit" },
       { text: "Wait for an admin to approve your account — you'll be notified when approved" },
     ],
     screenshot: {
@@ -48,7 +48,7 @@ export const PLATFORM_ENTRIES: GuideEntry[] = [
     category: "Account",
     keywords: ["reset", "password", "forgot", "recover", "email"],
     steps: [
-      { text: "On the login page, click **Forgot password?**", target: "login-forgot" },
+      { text: "On the login page, click **Forgot password?**" },
       { text: "Enter your registered email address", target: "forgot-email" },
       { text: "Click **Send reset link** — check your email inbox", target: "forgot-submit" },
       { text: "Click the link in the email and set a new password" },
@@ -78,6 +78,7 @@ export const PLATFORM_ENTRIES: GuideEntry[] = [
       path: "/profile",
       file: "platform-profile.png",
       alt: "Profile page with name, phone, unit, and password sections",
+      viewport: { width: 1440, height: 1300 },
     },
   },
 
@@ -99,7 +100,8 @@ export const PLATFORM_ENTRIES: GuideEntry[] = [
     screenshot: {
       path: "/login",
       file: "platform-install-pwa.png",
-      alt: "Browser showing Add to Home Screen option",
+      alt: "The login page as it looks in a phone browser",
+      viewport: { width: 390, height: 844 },
     },
   },
   {

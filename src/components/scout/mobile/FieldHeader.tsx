@@ -84,7 +84,7 @@ export function FieldHeader({
   return (
     <>
       <header className="flex-none z-[12] bg-[var(--black)] text-[color:var(--on-dark)] pt-[calc(12px+var(--m-safe-top))] px-[var(--m-pad-x)] pb-[15px]">
-        <div className="flex justify-between items-center gap-2 text-[length:var(--text-11)] text-[color:var(--on-dark-muted-soft)] tracking-[0.04em] mb-3.5 min-w-0">
+        <div className="flex justify-between items-center gap-2 text-[length:var(--text-11)] text-[color:var(--on-dark-muted-soft)] tracking-[0.04em] mb-3.5 min-w-0" data-guide="scout-m-status">
           <span className="truncate">{statusLeft}</span>
           <span className="truncate">{statusRight}</span>
         </div>
@@ -127,6 +127,7 @@ export function FieldHeader({
             aria-haspopup="menu"
             aria-controls={menuId}
             onClick={() => setMenuOpen((v) => !v)}
+            data-guide="scout-m-menu"
           >
             <svg
               width="13"

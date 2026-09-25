@@ -222,6 +222,7 @@ export function WeightsEditor({ weights, currentVersion, versions }: WeightsEdit
           <button
             type="button"
             onClick={() => setEditing(true)}
+            data-guide="scout-scoring-edit"
             className="rounded-lg bg-court-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-court-600 transition-colors"
           >
             Edit Weights

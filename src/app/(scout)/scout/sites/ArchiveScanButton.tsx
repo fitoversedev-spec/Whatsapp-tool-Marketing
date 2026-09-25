@@ -43,6 +43,7 @@ export function ArchiveScanButton({ scanId }: { scanId: string }) {
     <button
       type="button"
       title="Archive scan"
+      data-guide="scout-sites-archive"
       onClick={(e) => { e.preventDefault(); setConfirming(true); }}
       className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition opacity-0 group-hover:opacity-100"
     >

@@ -143,7 +143,7 @@ export default async function AdminUsagePage() {
           Per team member ({reps.length})
         </SectionLabel>
 
-        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white" data-guide="scout-usage-table">
           <div className="hidden md:grid md:grid-cols-[1.4fr_0.6fr_0.8fr_0.8fr_0.8fr] bg-slate-100 text-slate-600 px-4 py-3 text-xs font-semibold uppercase tracking-wider">
             <span>Name</span>
             <span className="text-right">Scans</span>

@@ -434,7 +434,9 @@ export default function LeadAnalyticsClient({
         )}
 
         {/* Ask AI — freeform questions + recommendations, answered only from the real lead data */}
-        <MetaAiSummary />
+        <div data-guide="wa-lead-ai">
+          <MetaAiSummary />
+        </div>
 
         {/* Data source toggle — always visible so the feature is discoverable */}
         <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
@@ -458,6 +460,7 @@ export default function LeadAnalyticsClient({
         {dataSource === "customer" && (<>
 
         {/* Leads by city */}
+        <div data-guide="wa-lead-city">
         <AnalyticsCard
           title={cityView === "overall" ? "Total leads (overall)" : "Leads by city"}
           description={`${cityView === "overall" ? "Overall lead volume across all cities." : "Every lead's city, ranked by volume — where the demand is coming from."}${totalCityLeads > 0 ? ` Overall: ${fmtInt(totalCityLeads)} leads across ${byCity.length} cities.` : ""}`}
@@ -563,8 +566,10 @@ export default function LeadAnalyticsClient({
             </div>
           )}
         </AnalyticsCard>
+        </div>
 
         {/* Sport demand */}
+        <div data-guide="wa-lead-sport">
         <AnalyticsCard
           title={sportView === "overall" ? "Most-requested sport (overall)" : "Most-requested sport per city"}
           description={`${sportView === "overall" ? "Overall sport demand across all cities." : "What each city is asking for — leads by sport."}${sportRankingAll.length > 0 ? ` Overall: ${fmtInt(sportByCity.reduce((a, c) => a + c.count, 0))} leads across ${sportRankingAll.length} sports.` : ""}`}
@@ -642,6 +647,7 @@ export default function LeadAnalyticsClient({
             </div>
           )}
         </AnalyticsCard>
+        </div>
 
         {/* Area demand */}
         <AnalyticsCard

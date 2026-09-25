@@ -1686,7 +1686,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
         ) : null}
       </aside>
 
-      <div className="flex-1 min-w-0 relative min-h-[320px] md:min-h-0">
+      <div className="flex-1 min-w-0 relative min-h-[320px] md:min-h-0" data-guide="scout-scan-map">
         <SiteMap
           className="absolute inset-0 block"
           lat={centre.lat}

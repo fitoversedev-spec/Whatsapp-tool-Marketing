@@ -161,6 +161,7 @@ export default function RatesEditorClient({
             onClick={save}
             disabled={saving || loading}
             className="btn btn-primary"
+            data-guide="wa-rates-save"
           >
             {saving ? "Saving…" : "Save changes"}
           </button>
@@ -176,7 +177,7 @@ export default function RatesEditorClient({
           ))}
         </datalist>
         {/* Sport tabs */}
-        <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
+        <div className="inline-flex bg-slate-100 rounded-lg p-0.5" data-guide="wa-rates-sport">
           {SPORTS.map((s) => (
             <button
               key={s.id}

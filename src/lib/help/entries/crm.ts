@@ -483,6 +483,177 @@ export const CRM_ENTRIES: GuideEntry[] = [
       alt: "CRM leads page with search bar",
     },
   },
+
+  // ── Additional Contacts Guides ────────────────────────
+  {
+    slug: "crm-contact-detail",
+    title: "How to view and edit CRM contact details",
+    summary: "Open a contact's full profile to see deals, activities, notes, and edit their information.",
+    section: "crm",
+    category: "Contacts",
+    keywords: ["contact", "detail", "view", "edit", "profile", "deals", "activities"],
+    steps: [
+      { text: "Go to **Contacts** in the CRM sidebar", target: "crm-sidebar-contacts" },
+      { text: "Click on a contact's name to open their detail page" },
+      { text: "View their company, designation, lead source, and contact info" },
+      { text: "Scroll to see linked **Deals**, **Activities**, and **Notes**" },
+      { text: "Click **Edit** to update any field, or **+ Add Deal** to create a new deal" },
+    ],
+    screenshot: {
+      path: "/crm/contacts",
+      file: "crm-contact-detail.png",
+      alt: "CRM contact detail page with deals and activity timeline",
+    },
+  },
+  {
+    slug: "crm-company-detail",
+    title: "How to view company details",
+    summary: "Open a customer segment or company to see all contacts, deals, and revenue linked to it.",
+    section: "crm",
+    category: "Contacts",
+    keywords: ["company", "segment", "detail", "view", "contacts", "revenue"],
+    steps: [
+      { text: "Open **Customer Segments** from the CRM All Tools menu" },
+      { text: "Click on a company or segment name to open its detail page" },
+      { text: "View all contacts associated with this company" },
+      { text: "Check the total deal value and revenue generated" },
+      { text: "Click a contact to jump to their individual detail page" },
+    ],
+    screenshot: {
+      path: "/crm/companies",
+      file: "crm-company-detail.png",
+      alt: "Company detail page with linked contacts and revenue",
+    },
+  },
+
+  // ── Additional Deals Guides ───────────────────────────
+  {
+    slug: "crm-deal-detail",
+    title: "How to view deal details",
+    summary: "Open a deal to see its value, stage history, linked contact, notes, and activity log.",
+    section: "crm",
+    category: "Deals",
+    keywords: ["deal", "detail", "view", "stage", "history", "notes", "value"],
+    steps: [
+      { text: "Click **Deals** in the CRM sidebar or open a deal from the Pipeline board", target: "crm-sidebar-deals" },
+      { text: "Click on a deal row to open its detail page" },
+      { text: "View the deal value, current stage, expected close date, and owner" },
+      { text: "Check the **Activity log** for all calls, meetings, and notes linked to this deal" },
+      { text: "Update the stage by clicking the **stage badge** and selecting a new stage" },
+    ],
+    screenshot: {
+      path: "/deals",
+      file: "crm-deal-detail.png",
+      alt: "Deal detail page with stage, value, and activity log",
+    },
+  },
+
+  // ── Additional Analytics Guides ───────────────────────
+  {
+    slug: "crm-rep-analytics",
+    title: "How to view individual rep performance",
+    summary: "Drill into a specific sales rep's deals won, revenue, activities, and conversion rates.",
+    section: "crm",
+    category: "Analytics",
+    keywords: ["rep", "individual", "performance", "sales", "analytics", "deals", "revenue"],
+    steps: [
+      { text: "Open **CRM Analytics** from the CRM All Tools menu" },
+      { text: "Click on a **team member's name** in the overview to open their individual report" },
+      { text: "View their deals won, revenue generated, and conversion rate" },
+      { text: "Check their activity count (calls, meetings, emails)" },
+      { text: "Compare their performance against team targets" },
+    ],
+    screenshot: {
+      path: "/crm/analytics",
+      file: "crm-rep-analytics.png",
+      alt: "Individual rep analytics page with deals and revenue metrics",
+    },
+  },
+  {
+    slug: "crm-deal-analytics",
+    title: "How to view deal analytics",
+    summary: "Analyze deal flow, win rates, average deal size, and pipeline health.",
+    section: "crm",
+    category: "Analytics",
+    keywords: ["deal", "analytics", "win rate", "pipeline", "health", "flow", "size"],
+    steps: [
+      { text: "Open **CRM Analytics** from the CRM All Tools menu" },
+      { text: "Switch to the **Deals** tab to see deal-specific analytics" },
+      { text: "View win rates, average deal size, and total pipeline value" },
+      { text: "Check the deal flow funnel to see how deals progress through stages" },
+      { text: "Use date range filters to compare different periods" },
+    ],
+    screenshot: {
+      path: "/crm/analytics/deals",
+      file: "crm-deal-analytics.png",
+      alt: "Deal analytics page with win rates and pipeline funnel",
+    },
+  },
+
+  // ── Additional Admin Guides ───────────────────────────
+  {
+    slug: "crm-settings",
+    title: "How to manage CRM settings",
+    summary: "Access taxonomies, user management, and audit log from the CRM settings hub.",
+    section: "crm",
+    category: "Admin",
+    roles: ["admin"],
+    keywords: ["settings", "admin", "configure", "CRM", "hub"],
+    steps: [
+      { text: "Open **CRM Settings** from the CRM All Tools menu (admin only)" },
+      { text: "Navigate to **Taxonomies** to edit funnel stages, lead sources, and profiles", target: "crm-settings-taxonomies" },
+      { text: "Go to **Users** to manage team members and role assignments", target: "crm-settings-users" },
+      { text: "Check the **Audit log** for a history of all changes" },
+      { text: "Use **Targets** to set revenue goals for the team" },
+    ],
+    screenshot: {
+      path: "/crm/settings",
+      file: "crm-settings.png",
+      alt: "CRM settings hub with taxonomies, users, and audit links",
+    },
+  },
+  {
+    slug: "crm-audit-log",
+    title: "How to view the CRM audit log",
+    summary: "Review a chronological record of all stage changes, role changes, and taxonomy edits in CRM.",
+    section: "crm",
+    category: "Admin",
+    roles: ["admin"],
+    keywords: ["audit", "log", "history", "changes", "track", "CRM"],
+    steps: [
+      { text: "Open **Audit log** from the CRM Admin section in All Tools" },
+      { text: "View a chronological list of all changes made in the CRM", target: "wa-audit-list" },
+      { text: "Each entry shows who made the change, what changed, and when" },
+      { text: "Filter by date range to narrow down to a specific period" },
+      { text: "Use the audit log to track stage changes, role updates, and taxonomy edits" },
+    ],
+    screenshot: {
+      path: "/crm/admin/audit-log",
+      file: "crm-audit-log.png",
+      alt: "CRM audit log showing change history",
+    },
+  },
+  {
+    slug: "crm-ai-usage",
+    title: "How to track AI usage in CRM",
+    summary: "Monitor who is using AI features, request counts, and estimated spend in the CRM.",
+    section: "crm",
+    category: "Admin",
+    roles: ["admin"],
+    keywords: ["AI", "usage", "cost", "requests", "spend", "monitor", "CRM"],
+    steps: [
+      { text: "Open **AI usage** from the CRM Admin section in All Tools" },
+      { text: "View the total AI requests and estimated spend for the current period", target: "crm-ai-chart" },
+      { text: "See a breakdown by team member to identify who uses AI the most" },
+      { text: "Monitor usage trends over time to manage costs" },
+      { text: "Use this data to set usage guidelines for your team" },
+    ],
+    screenshot: {
+      path: "/crm/admin/ai-usage",
+      file: "crm-ai-usage.png",
+      alt: "CRM AI usage page with request counts and spend",
+    },
+  },
 ];
 
 export const CRM_RECORDING: SectionRecording = {

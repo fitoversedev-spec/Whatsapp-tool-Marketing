@@ -80,6 +80,7 @@ export default function DuplicatesClient({ groups }: { groups: Group[] }) {
                 <button
                   onClick={() => merge(g)}
                   disabled={busy === g.canonicalPhone}
+                  data-guide="wa-duplicates-merge"
                   className="text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded disabled:opacity-50"
                 >
                   {busy === g.canonicalPhone ? "Merging…" : "Merge"}

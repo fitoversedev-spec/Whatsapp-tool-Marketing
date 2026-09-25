@@ -772,7 +772,7 @@ export default function ContactDetailClient({
                   {convertingLead ? "Converting..." : "Convert to Lead"}
                 </button>
               )}
-              <button onClick={startEdit} className="btn btn-secondary !px-3 !py-1.5 !text-sm">
+              <button onClick={startEdit} className="btn btn-secondary !px-3 !py-1.5 !text-sm" data-guide="crm-contact-edit">
                 Edit
               </button>
             </>
@@ -1074,7 +1074,7 @@ export default function ContactDetailClient({
               </div>
             </div>
 
-            <div id="deals" className="card p-4 scroll-mt-4">
+            <div id="deals" className="card p-4 scroll-mt-4" data-guide="crm-contact-deals">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-slate-900">Deals <span className="text-slate-400 font-normal font-mono">{deals.length}</span></h3>
                 <button
@@ -1082,6 +1082,7 @@ export default function ContactDetailClient({
                   aria-label="New deal"
                   title="New deal"
                   className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
+                  data-guide="crm-contact-add-deal"
                 >
                   +
                 </button>

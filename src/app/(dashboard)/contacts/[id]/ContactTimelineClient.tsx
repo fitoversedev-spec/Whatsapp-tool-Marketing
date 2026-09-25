@@ -173,7 +173,7 @@ export default function ContactTimelineClient({
             />
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4" data-guide="wa-contact-tags">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
               Tags
             </h3>

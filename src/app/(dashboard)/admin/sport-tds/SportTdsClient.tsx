@@ -146,6 +146,7 @@ function SportSection({
           type="submit"
           disabled={busy || !name.trim() || !file}
           className="bg-wa-green hover:bg-wa-green/90 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
+          data-guide="wa-tds-upload"
         >
           Upload
         </button>

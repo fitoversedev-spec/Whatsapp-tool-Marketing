@@ -78,7 +78,7 @@ export default async function CrmAiUsagePage() {
         description="Who's using AI and how much — every template draft and analytics report is logged here."
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5" data-guide="crm-ai-chart">
         <Card label="Total requests" value={total.toLocaleString("en-IN")} />
         <Card label="This month" value={monthCount.toLocaleString("en-IN")} />
         <Card label="People using AI" value={String(rows.length)} />

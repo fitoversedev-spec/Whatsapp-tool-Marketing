@@ -247,7 +247,7 @@ export function WeightsEditor({ weights, currentVersion, versions }: WeightsEdit
       </div>
 
       {/* ── Weight sliders ──────────────────────────────────── */}
-      <div className="space-y-3">
+      <div className="space-y-3" data-guide="scout-scoring-sliders">
         {COMPONENT_META.map((meta) => (
           <SliderRow
             key={meta.key}

@@ -127,7 +127,7 @@ export default async function AdminUsagePage() {
         lede="Scan counts and estimated Google API costs per team member (last 30 days)."
       >
         {/* Summary cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4" data-guide="scout-usage-chart">
           <SummaryCard label="Total scans" value={String(totals.scans)} />
           <SummaryCard label="API calls" value={totals.apiCalls.toLocaleString()} />
           <SummaryCard label="Est. cost" value={currency(totals.costUsd)} />

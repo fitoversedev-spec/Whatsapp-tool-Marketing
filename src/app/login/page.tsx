@@ -101,6 +101,7 @@ function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                data-guide="login-email"
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none transition text-base"
                 placeholder="you@fitoverse.in"
                 autoComplete="email"
@@ -118,7 +119,7 @@ function LoginForm() {
             </div>
 
             <div className="text-right -mt-2">
-              <Link href="/forgot-password" className="text-sm text-wa-dark hover:underline">Forgot password?</Link>
+              <Link href="/forgot-password" data-guide="login-forgot" className="text-sm text-wa-dark hover:underline">Forgot password?</Link>
             </div>
 
             {error && (
@@ -131,6 +132,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
+              data-guide="login-submit"
               className="w-full bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition shadow-md shadow-wa-green/30"
             >
               {loading ? "Signing in…" : "Sign in →"}
@@ -152,7 +154,7 @@ function LoginForm() {
 
           <p className="text-center text-sm text-slate-500 mt-7">
             New to the team?{" "}
-            <Link href="/signup" className="text-wa-dark hover:underline font-semibold">Request access</Link>
+            <Link href="/signup" data-guide="login-signup" className="text-wa-dark hover:underline font-semibold">Request access</Link>
           </p>
         </div>
       </section>

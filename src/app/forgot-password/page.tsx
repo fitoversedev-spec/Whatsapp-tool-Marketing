@@ -152,6 +152,7 @@ export default function ForgotPasswordPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    data-guide="forgot-email"
                     className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none transition text-base"
                     placeholder="you@fitoverse.in"
                     autoComplete="email"
@@ -167,6 +168,7 @@ export default function ForgotPasswordPage() {
                 <button
                   type="submit"
                   disabled={loading}
+                  data-guide="forgot-submit"
                   className="w-full bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition shadow-md shadow-wa-green/30"
                 >
                   {loading ? "Sending..." : "Send reset link"}

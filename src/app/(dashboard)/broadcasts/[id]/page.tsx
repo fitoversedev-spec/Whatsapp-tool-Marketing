@@ -73,7 +73,7 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Status + counters */}
-        <div className="card p-5">
+        <div className="card p-5" data-guide="wa-broadcast-summary">
           <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap">
               <span
@@ -130,7 +130,7 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
         </div>
 
         {/* Recipients */}
-        <div className="card overflow-hidden">
+        <div className="card overflow-hidden" data-guide="wa-broadcast-contacts">
           <div className="p-5 border-b border-slate-200">
             <div className="heading text-sm text-slate-900">Recipients</div>
             <p className="text-xs text-slate-500 mt-0.5">

@@ -57,7 +57,7 @@ export default function RepDealsClient({
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-4">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-4" data-guide="crm-rep-summary">
       <PageHeader
         large
         title={repName}

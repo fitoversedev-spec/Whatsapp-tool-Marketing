@@ -98,12 +98,14 @@ export default function SignupPage() {
             <div>
               <label className="block text-sm font-semibold text-slate-800 mb-1.5">Full name</label>
               <input type="text" required value={name} onChange={(e) => setName(e.target.value)}
+                data-guide="signup-name"
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none transition text-base"
                 placeholder="Jane Doe" autoComplete="name" />
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-800 mb-1.5">Email</label>
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                data-guide="signup-email"
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none transition text-base"
                 placeholder="you@fitoverse.in" autoComplete="email" />
             </div>
@@ -126,6 +128,7 @@ export default function SignupPage() {
             {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">{error}</div>}
 
             <button type="submit" disabled={loading}
+              data-guide="signup-submit"
               className="w-full bg-wa-green hover:bg-wa-green/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition shadow-md shadow-wa-green/30">
               {loading ? "Submitting…" : "Request access →"}
             </button>

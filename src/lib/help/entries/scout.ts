@@ -201,6 +201,162 @@ export const SCOUT_ENTRIES: GuideEntry[] = [
       alt: "Scout dashboard with search bar and sort dropdown",
     },
   },
+
+  // ── Scanning Detail ───────────────────────────────────
+  {
+    slug: "scout-scan-results",
+    title: "How to view scan results",
+    summary: "Review the detailed results of a completed area scan, including discovered sites and scores.",
+    section: "scout",
+    category: "Scanning",
+    roles: ["admin"],
+    keywords: ["scan", "results", "detail", "sites", "discovered", "score"],
+    steps: [
+      { text: "After running a scan, click on the scan notification or go to **Saved Scans**", target: "scout-sidebar-sites" },
+      { text: "Click a scan to open its results page" },
+      { text: "View discovered sites plotted on the map with score indicators", target: "scout-scan-map" },
+      { text: "Click individual site pins to see their score breakdown" },
+      { text: "Save promising sites to your collection or run AI analysis on them" },
+    ],
+    screenshot: {
+      path: "/scout/scan",
+      file: "scout-scan-results.png",
+      alt: "Scan results page with discovered sites on map",
+    },
+  },
+
+  // ── Report Detail ─────────────────────────────────────
+  {
+    slug: "scout-report-detail",
+    title: "How to view a report in detail",
+    summary: "Read the full AI-generated analysis report with charts, recommendations, and scoring.",
+    section: "scout",
+    category: "Reports",
+    roles: ["admin"],
+    keywords: ["report", "detail", "analysis", "charts", "recommendations", "full"],
+    steps: [
+      { text: "Go to **Reports** in the Scout sidebar", target: "scout-sidebar-reports" },
+      { text: "Click on a report row to open its full detail page" },
+      { text: "Read the executive summary and key findings" },
+      { text: "Review charts showing demographics, competition, and demand" },
+      { text: "Scroll to the **Recommendations** section for actionable next steps" },
+      { text: "Click **Download PDF** to save the report for sharing" },
+    ],
+    screenshot: {
+      path: "/scout/reports",
+      file: "scout-report-detail.png",
+      alt: "Full report detail page with charts and recommendations",
+    },
+  },
+
+  // ── Mobile ────────────────────────────────────────────
+  {
+    slug: "scout-mobile",
+    title: "How to use Scout on mobile",
+    summary: "Use the Scout field app on your phone to scan areas, view sites, and run analyses on the go.",
+    section: "scout",
+    category: "Mobile",
+    roles: ["admin"],
+    keywords: ["mobile", "field", "app", "phone", "scan", "on the go"],
+    steps: [
+      { text: "Open **/scout/m** on your phone's browser to access the field app" },
+      { text: "Install it to your home screen for quick access (see the install guide)" },
+      { text: "Use **Scan** to scan a new area from the field" },
+      { text: "View **My Sites** to see all your saved locations" },
+      { text: "Tap a site to view details, run AI analysis, or check reports" },
+    ],
+    screenshot: {
+      path: "/scout/m/scan",
+      file: "scout-mobile.png",
+      alt: "Scout mobile app showing scan interface on phone",
+    },
+  },
+  {
+    slug: "scout-offline",
+    title: "How to use Scout offline",
+    summary: "Access previously loaded scan data and site details even without internet connectivity.",
+    section: "scout",
+    category: "Mobile",
+    roles: ["admin"],
+    keywords: ["offline", "no internet", "cached", "field", "connectivity"],
+    steps: [
+      { text: "Open the Scout mobile app and load the sites you need while online" },
+      { text: "When you lose connectivity, the app switches to **offline mode** automatically" },
+      { text: "Previously viewed sites and scan results remain accessible" },
+      { text: "New scans and analyses are queued and will sync when you reconnect" },
+      { text: "An **offline banner** appears at the top to indicate limited connectivity" },
+    ],
+    screenshot: {
+      path: "/scout/m/offline",
+      file: "scout-offline.png",
+      alt: "Scout mobile app in offline mode with cached data",
+    },
+  },
+
+  // ── Additional Admin Guides ───────────────────────────
+  {
+    slug: "scout-manage-users",
+    title: "How to manage Scout users",
+    summary: "Add, remove, or update team members who have access to the Site Scout tool.",
+    section: "scout",
+    category: "Admin",
+    roles: ["admin"],
+    keywords: ["users", "team", "access", "manage", "scout", "admin"],
+    steps: [
+      { text: "Click **Settings** in the Scout sidebar (admin only)", target: "scout-sidebar-admin" },
+      { text: "Navigate to the **Users** tab" },
+      { text: "View all team members with their access level and last active date", target: "scout-users-list" },
+      { text: "Click **+ Add User** to grant a team member access to Scout" },
+      { text: "Click the **remove icon** next to a user to revoke their Scout access" },
+    ],
+    screenshot: {
+      path: "/scout/admin/users",
+      file: "scout-manage-users.png",
+      alt: "Scout users management page",
+    },
+  },
+  {
+    slug: "scout-scoring",
+    title: "How to configure scoring weights",
+    summary: "Adjust how different factors (demographics, competition, accessibility) contribute to site scores.",
+    section: "scout",
+    category: "Admin",
+    roles: ["admin"],
+    keywords: ["scoring", "weights", "configure", "factors", "demographics", "competition"],
+    steps: [
+      { text: "Click **Settings** in the Scout sidebar (admin only)", target: "scout-sidebar-admin" },
+      { text: "Navigate to the **Scoring** tab" },
+      { text: "View the current weight for each scoring factor" },
+      { text: "Drag the sliders to adjust weights (e.g., increase demographics, decrease competition)", target: "scout-scoring-sliders" },
+      { text: "Click **Save** — all existing and future site scores will recalculate" },
+    ],
+    screenshot: {
+      path: "/scout/admin/scoring",
+      file: "scout-scoring.png",
+      alt: "Scoring weights configuration with factor sliders",
+    },
+  },
+  {
+    slug: "scout-usage",
+    title: "How to view Scout usage stats",
+    summary: "Monitor scan counts, API requests, and usage trends across your team.",
+    section: "scout",
+    category: "Admin",
+    roles: ["admin"],
+    keywords: ["usage", "stats", "scans", "API", "requests", "monitor"],
+    steps: [
+      { text: "Click **Settings** in the Scout sidebar (admin only)", target: "scout-sidebar-admin" },
+      { text: "Navigate to the **Usage** tab" },
+      { text: "View total scans, API requests, and AI analyses this month", target: "scout-usage-chart" },
+      { text: "Check usage trends over time with the monthly chart" },
+      { text: "Monitor per-user usage to ensure fair distribution of resources" },
+    ],
+    screenshot: {
+      path: "/scout/admin/usage",
+      file: "scout-usage.png",
+      alt: "Scout usage stats page with scan counts and trends",
+    },
+  },
 ];
 
 export const SCOUT_RECORDING: SectionRecording = {

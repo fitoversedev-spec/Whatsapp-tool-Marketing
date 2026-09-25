@@ -20,7 +20,7 @@ export default async function CrmSettingsPage() {
       <PageHeader large title="CRM settings" description="Admin-only. The full settings surface stays where it already lives — this just gathers the links relevant to the CRM section." />
       <div className="space-y-2 mt-4">
         {LINKS.map((l) => (
-          <Link key={l.href} href={l.href} className="block bg-white rounded-xl border border-slate-200 p-4 hover:border-slate-300 hover:bg-slate-50">
+          <Link key={l.href} href={l.href} className="block bg-white rounded-xl border border-slate-200 p-4 hover:border-slate-300 hover:bg-slate-50" data-guide={l.href === "/crm/admin/taxonomies" ? "crm-settings-taxonomies" : l.href === "/crm/users" ? "crm-settings-users" : undefined}>
             <div className="text-base font-medium text-slate-900">{l.label}</div>
             <div className="text-sm text-slate-600 mt-0.5">{l.description}</div>
           </Link>

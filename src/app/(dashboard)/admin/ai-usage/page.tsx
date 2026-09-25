@@ -92,7 +92,7 @@ export default async function AiUsagePage() {
         description="Who's using AI and how much — every template draft and analytics report is logged here."
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5" data-guide="wa-ai-chart">
         <Card label="Total requests" value={total.toLocaleString("en-IN")} />
         <Card label="This month" value={monthCount.toLocaleString("en-IN")} />
         <Card label="People using AI" value={String(rows.length)} />
@@ -114,7 +114,7 @@ export default async function AiUsagePage() {
         </div>
       )}
 
-      <div className="mt-6 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="mt-6 bg-white rounded-2xl border border-slate-200 overflow-hidden" data-guide="wa-ai-breakdown">
         <div className="px-5 py-3 border-b border-slate-200">
           <h2 className="font-bold text-slate-900">Requests by person</h2>
           <p className="text-xs text-slate-500">Ranked most to least.</p>

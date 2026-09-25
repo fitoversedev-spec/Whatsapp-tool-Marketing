@@ -270,7 +270,7 @@ export default function DealDetailClient({
             )}
           </div>
 
-          <div className="card p-4">
+          <div className="card p-4" data-guide="crm-deal-activity">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold text-slate-900">Timeline</h3>
               <div className="flex items-center gap-3">
@@ -314,7 +314,7 @@ export default function DealDetailClient({
 
         <div className="space-y-4">
           <div className="card p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
+            <div className="flex justify-between" data-guide="crm-deal-stage">
               <span className="text-slate-600">Stage</span>
               <span className="font-medium" style={{ color: deal.stageColorHex ?? undefined }}>{deal.stageName}</span>
             </div>

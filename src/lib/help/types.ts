@@ -1,6 +1,6 @@
 import type { Role } from "@/lib/rbac";
 
-export type GuideSectionId = "whatsapp" | "crm" | "scout";
+export type GuideSectionId = "whatsapp" | "crm" | "scout" | "platform";
 
 export type GuideStep = {
   text: string;

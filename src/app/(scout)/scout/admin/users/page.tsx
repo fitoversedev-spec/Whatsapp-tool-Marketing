@@ -68,7 +68,7 @@ export default async function AdminUsersPage() {
           Everyone else ({existing.length})
         </SectionLabel>
 
-        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white" data-guide="scout-users-list">
           <div className="hidden md:grid md:grid-cols-[1.6fr_1.4fr_1fr_1.4fr] bg-slate-100 text-slate-600 px-4 py-3 text-xs font-semibold uppercase tracking-wider">
             <span>Name</span>
             <span>Email</span>

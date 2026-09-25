@@ -320,6 +320,7 @@ export default function Sidebar({
             type="button"
             onClick={() => window.open("/crm", "fitoverse-crm")}
             title={collapsed ? "CRM" : undefined}
+            data-guide="sidebar-crm"
             className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition px-3 py-2.5 md:justify-center md:px-2 md:py-2.5 ${
               collapsed ? "" : "lg:justify-start lg:px-3 lg:py-2.5"
             } text-[rgb(var(--sub))] hover:bg-[rgb(var(--p2))] hover:text-[rgb(var(--tx))] active:bg-[rgb(var(--line))]`}
@@ -341,6 +342,7 @@ export default function Sidebar({
               type="button"
               onClick={() => window.open("/scout/dashboard", "fitoverse-scout")}
               title={collapsed ? "Site Scout" : undefined}
+              data-guide="sidebar-scout"
               className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition px-3 py-2.5 md:justify-center md:px-2 md:py-2.5 ${
                 collapsed ? "" : "lg:justify-start lg:px-3 lg:py-2.5"
               } text-[rgb(var(--sub))] hover:bg-[rgb(var(--p2))] hover:text-[rgb(var(--tx))] active:bg-[rgb(var(--line))]`}
@@ -489,7 +491,7 @@ export default function Sidebar({
             <span className={`font-heading uppercase tracking-wide md:hidden ${collapsed ? "" : "lg:inline"}`}>Sign out</span>
           </button>
           {/* Theme toggle — hide on rail to save vertical space */}
-          <div className={`px-1 pt-2 md:hidden ${collapsed ? "" : "lg:block"}`}>
+          <div className={`px-1 pt-2 md:hidden ${collapsed ? "" : "lg:block"}`} data-guide="sidebar-theme">
             <ThemeToggle />
           </div>
         </div>

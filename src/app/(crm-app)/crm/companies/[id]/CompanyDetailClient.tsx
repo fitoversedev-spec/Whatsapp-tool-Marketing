@@ -157,7 +157,7 @@ export default function CompanyDetailClient({
             </div>
 
             {/* Contacts */}
-            <div id="contacts" className="card p-4 scroll-mt-4">
+            <div id="contacts" className="card p-4 scroll-mt-4" data-guide="crm-company-contacts">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-slate-900">Contacts <span className="text-slate-400 font-normal font-mono">{contacts.length}</span></h3>
                 <button onClick={() => setShowNewContact(true)} className="text-xs font-medium text-court-700 hover:underline">+ New contact</button>

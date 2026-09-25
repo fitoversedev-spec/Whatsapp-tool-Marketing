@@ -398,7 +398,7 @@ export function ReportStudio({
               {sharing ? "Recording the share…" : "Share on WhatsApp"}
             </button>
 
-            <Button variant="secondary" block onClick={() => window.open(`/api/scout/reports/${report.id}/pdf`, "_blank", "noopener,noreferrer")}>
+            <Button variant="secondary" block onClick={() => window.open(`/api/scout/reports/${report.id}/pdf`, "_blank", "noopener,noreferrer")} data-guide="scout-report-download">
               Open the PDF
             </Button>
 
@@ -442,7 +442,7 @@ export function ReportStudio({
       </aside>
 
       <div className="flex-1 min-w-0 overflow-y-auto px-5 lg:px-10 pt-8 pb-12 bg-[#dedede] flex justify-center ss-scroll">
-        <article className="w-full lg:w-[720px] bg-white shadow-[0_12px_34px_rgba(0,0,0,0.14)] px-[46px] py-[44px] flex flex-col gap-[26px] h-max" aria-label="Report preview">
+        <article className="w-full lg:w-[720px] bg-white shadow-[0_12px_34px_rgba(0,0,0,0.14)] px-[46px] py-[44px] flex flex-col gap-[26px] h-max" aria-label="Report preview" data-guide="scout-report-summary">
           <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
             <div className="flex items-center gap-[11px]">
               <svg className="w-7 h-7 flex-none" viewBox="0 0 28 28" aria-hidden="true">

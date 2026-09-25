@@ -199,6 +199,7 @@ export default function ProfileClient({
         {/* Name */}
         <form
           onSubmit={saveName}
+          data-guide="profile-name"
           className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4"
         >
           <div>
@@ -263,6 +264,7 @@ export default function ProfileClient({
               type="button"
               onClick={togglePush}
               disabled={togglingPush || !("serviceWorker" in navigator)}
+              data-guide="profile-push"
               className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-wa-green/20 disabled:opacity-50 ${
                 pushEnabled ? "bg-wa-green" : "bg-slate-200"
               }`}
@@ -294,7 +296,7 @@ export default function ProfileClient({
               customer regardless of your choice.
             </p>
           </div>
-          <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
+          <div className="inline-flex bg-slate-100 rounded-lg p-0.5" data-guide="profile-unit">
             <button
               type="button"
               onClick={() => saveUnit("ft")}
@@ -325,6 +327,7 @@ export default function ProfileClient({
         {/* Change password */}
         <form
           onSubmit={changePassword}
+          data-guide="profile-password"
           className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4"
         >
           <div>

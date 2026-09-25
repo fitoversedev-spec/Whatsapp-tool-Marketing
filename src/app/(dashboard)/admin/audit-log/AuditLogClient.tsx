@@ -76,7 +76,7 @@ export default function AuditLogClient() {
           <span className="text-xs text-slate-400">{total} events</span>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden" data-guide="wa-audit-list">
           {loading ? (
             <div className="p-10 text-center text-sm text-slate-500">Loading…</div>
           ) : rows.length === 0 ? (

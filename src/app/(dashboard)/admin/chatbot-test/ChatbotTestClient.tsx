@@ -122,6 +122,7 @@ export default function ChatbotTestClient() {
               onChange={(e) => setText(e.target.value)}
               placeholder="hi"
               className="input flex-1"
+              data-guide="wa-chatbot-input"
             />
             <button
               type="button"
@@ -139,12 +140,14 @@ export default function ChatbotTestClient() {
           </div>
         </section>
 
-        <ButtonPanel
-          title="Menu picks (Phase 0)"
-          options={MENU_IDS}
-          onFire={(id) => fire({ replyId: id })}
-          busy={busy}
-        />
+        <div data-guide="wa-chatbot-path">
+          <ButtonPanel
+            title="Menu picks (Phase 0)"
+            options={MENU_IDS}
+            onFire={(id) => fire({ replyId: id })}
+            busy={busy}
+          />
+        </div>
 
         <ButtonPanel
           title="Sport picks (Turnkey New Building)"

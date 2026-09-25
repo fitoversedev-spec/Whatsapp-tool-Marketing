@@ -861,17 +861,37 @@ export const WHATSAPP_RECORDING: SectionRecording = {
   section: "whatsapp",
   startUrl: "/inbox",
   actions: [
-    { type: "wait", duration: 2000 },
+    { type: "caption", text: "WhatsApp Marketing — send messages, manage contacts, and capture leads via WhatsApp", duration: 3000 },
+
+    { type: "caption", text: "The Inbox shows all customer conversations — open, closed, and unread messages in one place" },
     { type: "highlight", selector: "[data-guide='wa-inbox']", label: "Inbox" },
+    { type: "caption", text: "Click any conversation to read messages, send replies, share media, and use quick replies" },
+    { type: "wait", duration: 2000 },
+
+    { type: "caption", text: "Broadcasts let you send bulk WhatsApp messages to filtered contact lists" },
     { type: "click", selector: "[data-guide='wa-sidebar-broadcasts']" },
-    { type: "wait", duration: 1500 },
-    { type: "highlight", selector: "[data-guide='wa-broadcast-create']", label: "Create broadcast" },
+    { type: "wait", duration: 2000 },
+    { type: "caption", text: "Create a new broadcast — pick a template, select recipients, and schedule or send immediately" },
+    { type: "highlight", selector: "[data-guide='wa-broadcast-create']", label: "Create Broadcast" },
+
+    { type: "caption", text: "Contacts — your full WhatsApp address book with tags, notes, and conversation history" },
     { type: "click", selector: "[data-guide='wa-sidebar-contacts']" },
-    { type: "wait", duration: 1500 },
+    { type: "wait", duration: 2000 },
+    { type: "caption", text: "Search, filter, and export contacts — detect duplicates and merge them automatically" },
     { type: "scroll", direction: "down", amount: 400 },
-    { type: "wait", duration: 1000 },
-    { type: "click", selector: "[data-guide='wa-sidebar-reminders']" },
     { type: "wait", duration: 1500 },
+
+    { type: "caption", text: "Reminders — schedule follow-ups so you never miss a callback or meeting" },
+    { type: "click", selector: "[data-guide='wa-sidebar-reminders']" },
+    { type: "wait", duration: 2000 },
+    { type: "caption", text: "You'll get push notifications when a reminder is due — even on your phone" },
+    { type: "wait", duration: 1500 },
+
+    { type: "caption", text: "Bot Leads — every lead captured by the WhatsApp chatbot appears here with their details" },
     { type: "highlight", selector: "[data-guide='wa-sidebar-leads']", label: "Bot Leads" },
+    { type: "caption", text: "View lead source, ad campaign, and conversation — then move them into the CRM pipeline" },
+    { type: "wait", duration: 2000 },
+
+    { type: "caption", text: "Also available: Templates, Quotations, Portfolio sharing, and Admin settings — explore each guide below", duration: 3000 },
   ],
 };

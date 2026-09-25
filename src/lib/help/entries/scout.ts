@@ -365,14 +365,33 @@ export const SCOUT_RECORDING: SectionRecording = {
   section: "scout",
   startUrl: "/scout/dashboard",
   actions: [
+    { type: "caption", text: "Site Scout — find the best locations for sports facilities using maps, data, and AI", duration: 3000 },
+
+    { type: "caption", text: "Dashboard — all your saved sites with scores, recent scans, and comparison tools" },
+    { type: "wait", duration: 2500 },
+    { type: "caption", text: "Each site card shows the area name, facility count, demand score, and AI rating" },
     { type: "wait", duration: 2000 },
+
+    { type: "caption", text: "Scan Area — draw a rectangle on the map to discover sports facilities, parks, and open spaces nearby" },
     { type: "highlight", selector: "[data-guide='scout-sidebar-scan']", label: "Scan Area" },
     { type: "click", selector: "[data-guide='scout-sidebar-scan']" },
+    { type: "wait", duration: 2500 },
+    { type: "caption", text: "Results appear as pins on the map — click any pin to see its details and score breakdown" },
     { type: "wait", duration: 2000 },
+
+    { type: "caption", text: "Saved Scans — all your bookmarked sites organized by date, score, and area" },
     { type: "click", selector: "[data-guide='scout-sidebar-sites']" },
-    { type: "wait", duration: 1500 },
+    { type: "wait", duration: 2000 },
+    { type: "caption", text: "Compare 2 or more sites side-by-side to decide which location has the best potential" },
+    { type: "wait", duration: 2000 },
+
+    { type: "caption", text: "Reports — AI-generated feasibility reports with demographics, competition, and recommendations" },
     { type: "highlight", selector: "[data-guide='scout-sidebar-reports']", label: "Reports" },
     { type: "click", selector: "[data-guide='scout-sidebar-reports']" },
-    { type: "wait", duration: 1500 },
+    { type: "wait", duration: 2000 },
+    { type: "caption", text: "Download reports as PDF to share with stakeholders and investors" },
+    { type: "wait", duration: 2000 },
+
+    { type: "caption", text: "Admin can configure scoring weights, manage users, and monitor usage — see detailed guides below", duration: 3000 },
   ],
 };

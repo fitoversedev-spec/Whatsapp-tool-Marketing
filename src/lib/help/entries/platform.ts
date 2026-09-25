@@ -1,4 +1,4 @@
-import type { GuideEntry } from "../types";
+import type { GuideEntry, SectionRecording } from "../types";
 
 export const PLATFORM_ENTRIES: GuideEntry[] = [
   // ── Account ───────────────────────────────────────────
@@ -164,3 +164,48 @@ export const PLATFORM_ENTRIES: GuideEntry[] = [
     },
   },
 ];
+
+export const PLATFORM_RECORDING: SectionRecording = {
+  slug: "platform-overview",
+  title: "Getting Started Overview",
+  section: "platform",
+  startUrl: "/inbox",
+  actions: [
+    { type: "caption", text: "Welcome to Fitoverse — your all-in-one sports business platform", duration: 3000 },
+    { type: "caption", text: "After logging in, you land on the WhatsApp Marketing Inbox — all your customer conversations appear here", duration: 3000 },
+    { type: "highlight", selector: "[data-guide='wa-inbox']", label: "Inbox" },
+
+    { type: "caption", text: "The sidebar lets you navigate between features — Contacts, Broadcasts, Reminders, and more" },
+    { type: "highlight", selector: "[data-guide='wa-sidebar-contacts']", label: "Contacts" },
+    { type: "highlight", selector: "[data-guide='wa-sidebar-broadcasts']", label: "Broadcasts" },
+
+    { type: "caption", text: "Fitoverse has 3 apps — switch between them using these sidebar links" },
+    { type: "highlight", selector: "[data-guide='sidebar-crm']", label: "CRM" },
+    { type: "caption", text: "Open CRM to manage leads, deals, and your sales pipeline" },
+    { type: "wait", duration: 1500 },
+    { type: "highlight", selector: "[data-guide='sidebar-scout']", label: "Site Scout" },
+    { type: "caption", text: "Open Site Scout to discover and analyze sports facility locations" },
+    { type: "wait", duration: 1500 },
+
+    { type: "caption", text: "Click your name at the bottom of the sidebar to open your Profile" },
+    { type: "navigate", url: "/profile" },
+    { type: "wait", duration: 2000 },
+    { type: "caption", text: "Profile — update your display name, phone number, and preferred measurement unit" },
+    { type: "highlight", selector: "[data-guide='profile-name']", label: "Display Name" },
+    { type: "caption", text: "Choose feet or meters — this controls how court dimensions are shown across the platform" },
+    { type: "highlight", selector: "[data-guide='profile-unit']", label: "Preferred Unit" },
+    { type: "caption", text: "Enable Push Notifications so you get alerts for new messages, reminders, and leads" },
+    { type: "highlight", selector: "[data-guide='profile-push']", label: "Push Notifications" },
+    { type: "caption", text: "You can also change your password from this page anytime" },
+    { type: "highlight", selector: "[data-guide='profile-password']", label: "Change Password" },
+
+    { type: "caption", text: "The theme toggle at the bottom of the sidebar lets you switch between Light and Dark mode" },
+    { type: "navigate", url: "/inbox" },
+    { type: "wait", duration: 2000 },
+    { type: "highlight", selector: "[data-guide='sidebar-theme']", label: "Theme Toggle" },
+    { type: "caption", text: "Your theme preference is saved and applies across all 3 apps automatically" },
+    { type: "wait", duration: 2000 },
+
+    { type: "caption", text: "That's the basics! Explore each section tab above for detailed feature guides", duration: 3000 },
+  ],
+};

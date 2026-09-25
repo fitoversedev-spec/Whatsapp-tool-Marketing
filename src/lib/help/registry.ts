@@ -4,7 +4,7 @@ import { VIDEO_URLS } from "./video-manifest";
 import { WHATSAPP_ENTRIES, WHATSAPP_RECORDING } from "./entries/whatsapp";
 import { CRM_ENTRIES, CRM_RECORDING } from "./entries/crm";
 import { SCOUT_ENTRIES, SCOUT_RECORDING } from "./entries/scout";
-import { PLATFORM_ENTRIES } from "./entries/platform";
+import { PLATFORM_ENTRIES, PLATFORM_RECORDING } from "./entries/platform";
 
 export const GUIDE_SECTIONS: {
   id: GuideSectionId;
@@ -26,6 +26,7 @@ export const ALL_GUIDE_ENTRIES: GuideEntry[] = [
 ];
 
 const SECTION_RECORDINGS: SectionRecording[] = [
+  PLATFORM_RECORDING,
   WHATSAPP_RECORDING,
   CRM_RECORDING,
   SCOUT_RECORDING,

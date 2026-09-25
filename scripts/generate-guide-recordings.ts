@@ -1,16 +1,18 @@
 /**
  * Auto-record section overview videos using Puppeteer screencast.
- * Usage: npx tsx scripts/generate-guide-recordings.ts [--only=whatsapp|crm|scout]
+ * Usage: npx tsx scripts/generate-guide-recordings.ts [--only=platform|whatsapp|crm|scout]
  *
  * Requires dev server running at http://localhost:3000
  * Uploads to Vercel Blob and updates video-manifest.ts
  */
 import { join } from "node:path";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { launchBrowser, setupPage, sleep, BASE_URL } from "./guide-shared";
 import { GUIDE_SECTIONS } from "../src/lib/help/registry";
 import { getRecordingForSection } from "../src/lib/help/registry";
 import type { GuideSectionId, RecordingAction } from "../src/lib/help/types";
+import { path as ffmpegPath } from "@ffmpeg-installer/ffmpeg";
 
 const TEMP_DIR = join(process.cwd(), ".next", "guide-recordings");
 const MANIFEST_PATH = join(process.cwd(), "src", "lib", "help", "video-manifest.ts");
@@ -18,7 +20,7 @@ const MANIFEST_PATH = join(process.cwd(), "src", "lib", "help", "video-manifest.
 async function executeAction(page: import("puppeteer-core").Page, action: RecordingAction) {
   switch (action.type) {
     case "navigate":
-      await page.goto(`${BASE_URL}${action.url}`, { waitUntil: "networkidle2" });
+      await page.goto(`${BASE_URL}${action.url}`, { waitUntil: "domcontentloaded", timeout: 30000 });
       break;
     case "click":
       try { await page.click(action.selector); } catch { console.warn(`  Click target not found: ${action.selector}`); }
@@ -83,6 +85,28 @@ async function executeAction(page: import("puppeteer-core").Page, action: Record
       await page.evaluate(() => document.getElementById("guide-highlight")?.remove());
       break;
     }
+    case "caption": {
+      await page.evaluate(() => document.getElementById("guide-caption")?.remove());
+      await page.evaluate((text: string) => {
+        const bar = document.createElement("div");
+        bar.id = "guide-caption";
+        bar.style.cssText = `
+          position: fixed; z-index: 99998; pointer-events: none;
+          bottom: 80px; left: 0; right: 0;
+          padding: 18px 40px;
+          background: rgba(15,23,42,0.92); color: #fff;
+          font-size: 28px; font-weight: 600; line-height: 1.35;
+          font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+          letter-spacing: -0.01em;
+          text-align: center;
+          box-shadow: 0 -2px 20px rgba(0,0,0,0.3);
+        `;
+        bar.textContent = text;
+        document.body.appendChild(bar);
+      }, action.text);
+      await sleep(action.duration ?? 2000);
+      break;
+    }
   }
 }
 
@@ -116,18 +140,31 @@ async function main() {
       console.log(`\nRecording: ${recording.title} (${recording.slug})`);
 
       const tempFile = join(TEMP_DIR, `${recording.slug}.webm`);
-      await page.goto(`${BASE_URL}${recording.startUrl}`, { waitUntil: "networkidle2" });
-      await sleep(1000);
+      await page.goto(`${BASE_URL}${recording.startUrl}`, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await sleep(2500);
 
       // Start screencast
-      const recorder = await page.screencast({ path: tempFile });
+      const recorder = await page.screencast({ path: tempFile, ffmpegPath });
 
       for (const action of recording.actions) {
         console.log(`  Action: ${action.type}${("selector" in action && action.selector) ? ` → ${action.selector}` : ""}`);
         await executeAction(page, action);
       }
 
+      await page.evaluate(() => {
+        document.getElementById("guide-caption")?.remove();
+        document.getElementById("guide-highlight")?.remove();
+      });
+      await sleep(500);
       await recorder.stop();
+
+      // Remux to fix missing duration metadata in webm container
+      const fixedFile = tempFile.replace(".webm", "-fixed.webm");
+      try {
+        execFileSync(ffmpegPath, ["-i", tempFile, "-c", "copy", "-y", fixedFile], { stdio: "ignore" });
+        unlinkSync(tempFile);
+        renameSync(fixedFile, tempFile);
+      } catch { console.warn("  Remux failed, using original file"); }
       console.log(`  Saved local: ${tempFile}`);
 
       // Upload to Vercel Blob

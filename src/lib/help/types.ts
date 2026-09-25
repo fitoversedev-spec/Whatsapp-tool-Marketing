@@ -31,7 +31,8 @@ export type RecordingAction =
   | { type: "scroll"; selector?: string; direction: "down" | "up"; amount?: number }
   | { type: "type"; selector: string; text: string }
   | { type: "wait"; duration: number }
-  | { type: "highlight"; selector: string; label?: string };
+  | { type: "highlight"; selector: string; label?: string }
+  | { type: "caption"; text: string; duration?: number };
 
 export type SectionRecording = {
   slug: string;

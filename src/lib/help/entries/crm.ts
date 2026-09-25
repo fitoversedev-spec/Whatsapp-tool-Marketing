@@ -662,18 +662,37 @@ export const CRM_RECORDING: SectionRecording = {
   section: "crm",
   startUrl: "/crm",
   actions: [
-    { type: "wait", duration: 2000 },
+    { type: "caption", text: "CRM — track your entire sales process from first contact to closed deal", duration: 3000 },
+
+    { type: "caption", text: "The Dashboard shows team performance — quotations sent, deal values, and top movers this month" },
+    { type: "wait", duration: 2500 },
+
+    { type: "caption", text: "Contacts — your complete customer database with companies, phone, email, and deal history" },
     { type: "highlight", selector: "[data-guide='crm-sidebar-contacts']", label: "Contacts" },
     { type: "click", selector: "[data-guide='crm-sidebar-contacts']" },
-    { type: "wait", duration: 1500 },
-    { type: "highlight", selector: "[data-guide='crm-contact-create']", label: "New Contact" },
-    { type: "click", selector: "[data-guide='crm-sidebar-leads']" },
-    { type: "wait", duration: 1500 },
-    { type: "click", selector: "[data-guide='crm-sidebar-deals']" },
-    { type: "wait", duration: 1500 },
-    { type: "click", selector: "[data-guide='crm-sidebar-pipeline']" },
     { type: "wait", duration: 2000 },
+    { type: "caption", text: "Add new contacts manually or import them — each contact links to their WhatsApp conversation" },
+    { type: "highlight", selector: "[data-guide='crm-contact-create']", label: "New Contact" },
+
+    { type: "caption", text: "Leads — incoming prospects from WhatsApp chatbot, ad campaigns, and manual entry" },
+    { type: "click", selector: "[data-guide='crm-sidebar-leads']" },
+    { type: "wait", duration: 2000 },
+    { type: "caption", text: "Qualify leads, assign them to sales reps, and convert them into deals when ready" },
+    { type: "wait", duration: 2000 },
+
+    { type: "caption", text: "Deals — track revenue with amounts, stages, expected close dates, and win probability" },
+    { type: "click", selector: "[data-guide='crm-sidebar-deals']" },
+    { type: "wait", duration: 2000 },
+    { type: "caption", text: "Each deal links to a contact and company — attach quotations and log all activities" },
+    { type: "wait", duration: 1500 },
+
+    { type: "caption", text: "Pipeline — drag-and-drop Kanban board showing deals across custom stages" },
+    { type: "click", selector: "[data-guide='crm-sidebar-pipeline']" },
+    { type: "wait", duration: 2500 },
+    { type: "caption", text: "Move deals between stages by dragging — the pipeline updates totals automatically" },
     { type: "scroll", direction: "down", amount: 300 },
-    { type: "wait", duration: 1000 },
+    { type: "wait", duration: 2000 },
+
+    { type: "caption", text: "Also available: Activities, Reminders, Quotations, Analytics, and Admin settings — see guides below", duration: 3000 },
   ],
 };

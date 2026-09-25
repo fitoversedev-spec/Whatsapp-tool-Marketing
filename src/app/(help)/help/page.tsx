@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { requireUser } from "@/lib/auth";
 import type { Role } from "@/lib/rbac";
 import { entriesForRole } from "@/lib/help/registry";
@@ -14,12 +15,14 @@ export default async function HelpPage({
   const entries = entriesForRole(user.role as Role);
 
   return (
-    <GuideClient
-      entries={entries}
-      initialSection={searchParams.section ?? null}
-      initialQuery={searchParams.q ?? ""}
-      initialEntry={searchParams.entry ?? null}
-      userRole={user.role as Role}
-    />
+    <Suspense>
+      <GuideClient
+        entries={entries}
+        initialSection={searchParams.section ?? null}
+        initialQuery={searchParams.q ?? ""}
+        initialEntry={searchParams.entry ?? null}
+        userRole={user.role as Role}
+      />
+    </Suspense>
   );
 }

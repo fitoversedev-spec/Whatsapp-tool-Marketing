@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { requireUser } from "@/lib/auth";
 import NavigationTracker from "@/components/NavigationTracker";
 import HelpSidebar from "@/components/HelpSidebar";
@@ -11,13 +11,15 @@ export default async function HelpLayout({ children }: { children: ReactNode }) 
 
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-slate-50">
-      <HelpSidebar
-        user={{
-          name: user.name,
-          email: user.email,
-          role: user.role as Role,
-        }}
-      />
+      <Suspense>
+        <HelpSidebar
+          user={{
+            name: user.name,
+            email: user.email,
+            role: user.role as Role,
+          }}
+        />
+      </Suspense>
       <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto pb-14 md:pb-0">
         {children}
       </main>

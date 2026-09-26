@@ -261,7 +261,9 @@ export default function AccountContactsClient({
             className="input w-full max-w-xs text-sm"
             data-guide="crm-contacts-search"
           />
-          <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
+          <div data-guide="crm-contacts-date">
+            <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
+          </div>
           {dateRange && (
             <button onClick={clearDateRange} className="text-xs text-slate-500 hover:underline">
               Clear date filter
@@ -315,6 +317,7 @@ export default function AccountContactsClient({
                   value={reassignTo}
                   onChange={(e) => setReassignTo(e.target.value)}
                   className="input w-auto !py-1 text-xs"
+                  data-guide="crm-bulk-reassign"
                 >
                   <option value="">Reassign owner to...</option>
                   {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -323,6 +326,7 @@ export default function AccountContactsClient({
                   onClick={reassignSelected}
                   disabled={reassigning || !reassignTo}
                   className="btn btn-secondary !px-3 !py-1 !text-xs"
+                  data-guide="crm-bulk-apply"
                 >
                   {reassigning ? "Reassigning..." : "Apply"}
                 </button>
@@ -370,7 +374,7 @@ export default function AccountContactsClient({
             {visible.map((c) => (
               <tr key={c.id}>
                 <td>
-                  <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleOne(c.id)} className="rounded" aria-label={`Select ${c.name}`} />
+                  <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleOne(c.id)} className="rounded" aria-label={`Select ${c.name}`} data-guide="crm-contact-checkbox" />
                 </td>
                 <td>
                   <Link href={`/crm/contacts/${c.id}`} className="font-medium text-court-700 hover:underline">
@@ -551,7 +555,7 @@ function NewContactModal({
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col">
       <div className="shrink-0 border-b border-slate-200 px-4 sm:px-6 py-4 flex items-start justify-between">
-        <div>
+        <div data-guide="crm-contact-new-dialog">
           <h2 className="text-lg font-semibold text-slate-900">New contact</h2>
           <p className="text-sm text-slate-600 mt-0.5">Capture a person and — if you know where they stand — a deal, all at once.</p>
         </div>
@@ -563,7 +567,7 @@ function NewContactModal({
         <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5">
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-6">
-              <div className="space-y-3">
+              <div className="space-y-3" data-guide="crm-contact-form-details">
                 <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide border-b border-slate-100 pb-1.5">Contact details</h3>
                 <div><label className="text-sm font-medium text-slate-600">Name</label>
                   <input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 input text-sm" />
@@ -722,7 +726,7 @@ function NewContactModal({
         <div className="shrink-0 border-t border-slate-200 px-4 sm:px-6 py-3">
           <div className="max-w-6xl mx-auto flex justify-end gap-2">
             <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
-            <button type="submit" disabled={submitting} className="btn btn-primary">
+            <button type="submit" disabled={submitting} className="btn btn-primary" data-guide="crm-contact-form-create">
               {submitting ? "Creating..." : "Create"}
             </button>
           </div>

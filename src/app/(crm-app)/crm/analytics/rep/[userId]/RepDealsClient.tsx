@@ -58,23 +58,25 @@ export default function RepDealsClient({
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-4" data-guide="crm-rep-summary">
-      <PageHeader
-        large
-        title={repName}
-        description={`${deals.length} customer${deals.length === 1 ? "" : "s"} being handled${wonOnly ? " (won only)" : ""}${rangeLabel}`}
-        action={
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <DateRangePicker value={dateRange} onApply={applyDateRange} />
-            <label className="flex items-center gap-1.5 text-sm text-slate-700 border border-slate-300 rounded px-3 py-1.5 cursor-pointer">
-              <input type="checkbox" checked={wonOnly} onChange={(e) => setWonOnly(e.target.checked)} className="rounded border-slate-300 text-court-600 focus:ring-court-500" />
-              Won only
-            </label>
-            <button onClick={exportXlsx} className="btn btn-primary !px-4 !py-2 !text-sm">
-              Export xlsx
-            </button>
-          </div>
-        }
-      />
+      <div data-guide="crm-rep-header">
+        <PageHeader
+          large
+          title={repName}
+          description={`${deals.length} customer${deals.length === 1 ? "" : "s"} being handled${wonOnly ? " (won only)" : ""}${rangeLabel}`}
+          action={
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <DateRangePicker value={dateRange} onApply={applyDateRange} />
+              <label className="flex items-center gap-1.5 text-sm text-slate-700 border border-slate-300 rounded px-3 py-1.5 cursor-pointer">
+                <input type="checkbox" checked={wonOnly} onChange={(e) => setWonOnly(e.target.checked)} className="rounded border-slate-300 text-court-600 focus:ring-court-500" />
+                Won only
+              </label>
+              <button onClick={exportXlsx} className="btn btn-primary !px-4 !py-2 !text-sm">
+                Export xlsx
+              </button>
+            </div>
+          }
+        />
+      </div>
 
       <StageVelocityCard rows={stageVelocity} />
 

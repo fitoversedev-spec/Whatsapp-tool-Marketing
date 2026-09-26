@@ -436,7 +436,7 @@ function KanbanColumn({
             : { borderColor: "#e2e8f0" }
         }
       >
-        <div className="px-3 py-2.5 rounded-t-xl flex items-center justify-between" style={{ background: v.strong }}>
+        <div className="px-3 py-2.5 rounded-t-xl flex items-center justify-between" style={{ background: v.strong }} data-guide="crm-pipeline-stage">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: v.hex }} />
             <span className="text-sm font-semibold" style={{ color: v.hex }}>{stage.label}</span>
@@ -506,6 +506,7 @@ function DraggableCard({
       className={`card p-3 shadow-sm cursor-grab active:cursor-grabbing select-none ${
         isDragging && !dragging ? "opacity-30" : ""
       } ${dragging ? "shadow-lg ring-2 ring-court-500/40" : "hover:border-slate-300 hover:shadow"}`}
+      data-guide={dragId ? undefined : "crm-pipeline-card"}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
@@ -534,7 +535,7 @@ function DraggableCard({
               👤 {card.assignedToName}
             </span>
           )}
-          <span className="text-slate-400 italic">click for details</span>
+          <span className="text-slate-400 italic" data-guide={dragId ? undefined : "crm-pipeline-card-open"}>click for details</span>
         </div>
       </div>
     </div>

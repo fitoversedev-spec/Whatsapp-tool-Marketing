@@ -67,6 +67,7 @@ export default function AuditLogClient() {
               setPage(1);
             }}
             className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
+            data-guide="crm-audit-filter"
           >
             <option value="">All entities</option>
             {entities.map((e) => (
@@ -118,7 +119,7 @@ export default function AuditLogClient() {
             <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-500 border-b border-slate-200 text-xs uppercase tracking-wide">
+                <tr className="text-left text-slate-500 border-b border-slate-200 text-xs uppercase tracking-wide" data-guide="crm-audit-columns">
                   <th className="px-4 py-2.5 font-medium">When</th>
                   <th className="px-4 py-2.5 font-medium">Actor</th>
                   <th className="px-4 py-2.5 font-medium">Action</th>
@@ -126,11 +127,12 @@ export default function AuditLogClient() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {rows.map((r, rowIndex) => {
                   const expanded = expandedId === r.id;
                   return (
                     <Fragment key={r.id}>
                       <tr
+                        data-guide={rowIndex === 0 ? "crm-audit-row" : undefined}
                         className="border-b border-slate-100 last:border-0 hover:bg-slate-50 cursor-pointer"
                         onClick={() => setExpandedId(expanded ? null : r.id)}
                       >

@@ -75,7 +75,7 @@ export default function CompanyDetailClient({
       </div>
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-4">
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0" data-guide="crm-company-name">
           <div className="w-11 h-11 rounded-full bg-court-100 text-court-700 font-semibold flex items-center justify-center shrink-0">
             {initials(account.name)}
           </div>
@@ -171,6 +171,7 @@ export default function CompanyDetailClient({
                       key={c.id}
                       href={`/crm/contacts/${c.id}`}
                       className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50"
+                      data-guide="crm-company-contact-link"
                     >
                       <div>
                         <div className="text-sm font-medium text-slate-900">
@@ -186,7 +187,7 @@ export default function CompanyDetailClient({
             </div>
 
             {/* Deals */}
-            <div id="deals" className="card p-4 scroll-mt-4">
+            <div id="deals" className="card p-4 scroll-mt-4" data-guide="crm-company-deals">
               <h3 className="text-base font-semibold text-slate-900 mb-3">Deals <span className="text-slate-400 font-normal font-mono">{deals.length}</span></h3>
               {deals.length === 0 ? (
                 <p className="text-sm text-slate-400">No deals yet.</p>

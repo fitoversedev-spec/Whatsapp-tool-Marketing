@@ -191,7 +191,7 @@ export default function DealsClient({
         }
       />
 
-      <div className="mb-3 flex items-center gap-2 flex-wrap">
+      <div className="mb-3 flex items-center gap-2 flex-wrap" data-guide="crm-deals-filters">
         <select
           value={channelFilter}
           onChange={(e) => setChannelFilter(e.target.value as typeof channelFilter)}
@@ -295,7 +295,7 @@ export default function DealsClient({
         <div className="hidden md:block overflow-x-auto">
           <table className="data-table">
             <thead>
-              <tr>
+              <tr data-guide="crm-deals-columns">
                 {isAdmin && (
                   <th className="w-8">
                     <SelectAllCheckbox ids={visible.map((d) => d.id)} selected={selected} onChange={setSelected} />
@@ -332,7 +332,7 @@ export default function DealsClient({
                     </td>
                   )}
                   <td>
-                    <Link href={`/deals/${d.id}`} className="text-base font-medium text-slate-900 hover:text-court-700 hover:underline">
+                    <Link href={`/deals/${d.id}`} className="text-base font-medium text-slate-900 hover:text-court-700 hover:underline" data-guide="crm-deals-row-link">
                       {d.title}
                     </Link>
                     <div className="text-xs text-slate-500 font-mono">{d.code}</div>
@@ -349,6 +349,7 @@ export default function DealsClient({
                       value={d.stageId}
                       onChange={(e) => onStagePick(d, e.target.value)}
                       className="input w-auto text-xs !px-1.5 !py-1"
+                      data-guide="crm-deals-stage"
                     >
                       {stages.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>

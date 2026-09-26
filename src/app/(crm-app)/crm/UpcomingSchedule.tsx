@@ -125,7 +125,7 @@ export default function UpcomingSchedule({
   className?: string;
 }) {
   return (
-    <div className={`card p-4 ${className ?? ""}`}>
+    <div className={`card p-4 ${className ?? ""}`} data-guide="crm-dashboard-schedule">
       <h3 className="text-lg font-bold text-slate-900 mb-3">
         Upcoming schedule <span className="text-slate-400 font-normal font-mono">{data.total}</span>
       </h3>

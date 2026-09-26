@@ -692,7 +692,7 @@ export default function ContactDetailClient({
         <BackButton backHref="/crm/contacts" />
       </div>
       <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0" data-guide="crm-contact-name">
           <div className="w-11 h-11 rounded-full bg-blue-100 text-blue-800 font-semibold flex items-center justify-center shrink-0">
             {initials(contact.name)}
           </div>
@@ -919,7 +919,7 @@ export default function ContactDetailClient({
           </nav>
 
           <div className="flex-1 min-w-0 space-y-4">
-            <div id="details" className="card p-4 text-sm scroll-mt-4">
+            <div id="details" className="card p-4 text-sm scroll-mt-4" data-guide="crm-contact-info">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
                   <div className="text-xs text-slate-600">Phone</div>
@@ -1822,12 +1822,12 @@ function CreateDealFirstModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl max-w-sm w-full p-5">
+      <div className="bg-white rounded-xl max-w-sm w-full p-5" data-guide="crm-new-deal-dialog">
         <h2 className="font-semibold text-slate-900 mb-2">New deal</h2>
         <p className="text-base text-slate-600 mb-4">Create a deal for {contactName} to track this opportunity.</p>
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 btn btn-secondary">Cancel</button>
-          <button onClick={create} disabled={creating} className="flex-1 btn btn-primary disabled:opacity-50">
+          <button onClick={create} disabled={creating} className="flex-1 btn btn-primary disabled:opacity-50" data-guide="crm-deal-create-confirm">
             {creating ? "Creating..." : "Create deal"}
           </button>
         </div>
@@ -2013,7 +2013,7 @@ function NextActionCard({ deal, contactId }: { deal: Deal | null; contactId: str
               {deal.nextActionDueAt && (
                 <span className="text-[11px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded uppercase font-mono">{fmtDate(deal.nextActionDueAt)}</span>
               )}
-              <span className="text-sm text-slate-800">{deal.nextActionNote ?? "—"}</span>
+              <span className="text-sm text-slate-800" data-guide="crm-contact-next-action">{deal.nextActionNote ?? "—"}</span>
             </div>
           ) : (
             <div className="mt-1 text-sm text-slate-400">No next action set.</div>

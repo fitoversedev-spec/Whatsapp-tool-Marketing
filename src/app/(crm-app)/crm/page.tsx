@@ -27,7 +27,7 @@ export default async function CrmDashboardPage() {
       <>
         <PageHeader large title="Team overview" description="This month vs last month across the whole team" />
         <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-guide="crm-dashboard-kpis">
             {[
               { label: "Quotations sent", curr: thisMonth.quotationsSent, prev: lastMonth.quotationsSent, fmt: (n: number) => String(n) },
               { label: "Quoted value", curr: thisMonth.quotedValue, prev: lastMonth.quotedValue, fmt: fmtInr },
@@ -49,7 +49,7 @@ export default async function CrmDashboardPage() {
             })}
           </div>
 
-          <div className="card p-4">
+          <div className="card p-4" data-guide="crm-dashboard-movers">
             <h3 className="text-lg font-bold text-slate-900 mb-3">Biggest movers this month</h3>
             {topMovers.length === 0 ? (
               <p className="text-sm text-slate-400">Nothing to compare yet.</p>

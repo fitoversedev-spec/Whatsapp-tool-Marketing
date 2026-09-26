@@ -212,7 +212,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
               {visible.map((l) => (
                 <tr key={l.id}>
                   <td>
-                    <Link href={`/crm/contacts/${l.id}`} className="font-medium text-court-700 hover:underline">
+                    <Link href={`/crm/contacts/${l.id}`} className="font-medium text-court-700 hover:underline" data-guide="crm-leads-row-link">
                       {l.name}
                     </Link>
                   </td>
@@ -235,6 +235,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                         onClick={() => convertToDeal(l)}
                         disabled={convertingId === l.id}
                         className="btn btn-primary !px-3 !py-1 !text-xs"
+                        data-guide="crm-leads-convert"
                       >
                         {convertingId === l.id ? "Converting..." : "Convert to Deal"}
                       </button>

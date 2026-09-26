@@ -189,7 +189,7 @@ export default function TaxonomyClient() {
         description="Every list below is editable here — nothing about stages, sources, or categories is hardcoded in the app."
       />
 
-      <div className="flex flex-wrap gap-1.5 mb-4 mt-4">
+      <div className="flex flex-wrap gap-1.5 mb-4 mt-4" data-guide="crm-taxonomy-tabs">
         {TABS.map((t) => (
           <button
             key={t.type}
@@ -280,10 +280,10 @@ export default function TaxonomyClient() {
                     </td>
                   )}
                   <td className="px-4 py-2.5">
-                    <input type="checkbox" checked={r.isActive} onChange={(e) => patchRow(r.id, { isActive: e.target.checked })} />
+                    <input type="checkbox" checked={r.isActive} onChange={(e) => patchRow(r.id, { isActive: e.target.checked })} data-guide={index === 1 ? "crm-taxonomy-active" : undefined} />
                   </td>
                   <td className="px-4 py-2.5 text-slate-500">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1" data-guide={index === 1 ? "crm-taxonomy-order" : undefined}>
                       <button
                         onClick={() => moveRow(index, -1)}
                         disabled={index === 0}
@@ -308,7 +308,7 @@ export default function TaxonomyClient() {
           </table>
           </div>
         )}
-        <div className="p-3 border-t border-slate-200 flex gap-2">
+        <div className="p-3 border-t border-slate-200 flex gap-2" data-guide="crm-taxonomy-add">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}

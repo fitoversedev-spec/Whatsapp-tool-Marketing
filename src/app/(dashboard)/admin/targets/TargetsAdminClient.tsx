@@ -104,6 +104,7 @@ export default function TargetsAdminClient() {
             value={scopeId}
             onChange={(e) => setScopeId(e.target.value)}
             className="w-full sm:w-auto border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+            data-guide="crm-targets-scope"
           >
             <option value="company">Company-wide</option>
             {users.map((u) => (
@@ -114,7 +115,7 @@ export default function TargetsAdminClient() {
           </select>
         </div>
 
-        <div>
+        <div data-guide="crm-targets-period">
           <label className="block text-xs font-medium text-slate-500 mb-1">Period</label>
           <PeriodPicker value={period} onChange={setPeriod} />
         </div>
@@ -129,6 +130,7 @@ export default function TargetsAdminClient() {
               onChange={(e) => setTargetRevenue(e.target.value)}
               placeholder="e.g. 5000000"
               className="w-48 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+              data-guide="crm-targets-revenue"
             />
           </div>
           <div>
@@ -148,6 +150,7 @@ export default function TargetsAdminClient() {
           onClick={submit}
           disabled={saving}
           className="bg-wa-green hover:bg-wa-green/90 disabled:opacity-40 text-white text-sm font-medium px-4 py-1.5 rounded-lg"
+          data-guide="crm-targets-save"
         >
           {saving ? "Saving…" : "Save target"}
         </button>

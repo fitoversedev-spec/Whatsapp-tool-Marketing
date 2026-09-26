@@ -116,7 +116,7 @@ export default function CompaniesClient({
       {/* Group by — a tab strip (like Overview/Timeline elsewhere), so it
           reads as "pick what to group by", distinct from the filter chips
           below it rather than a second row of the same kind of control. */}
-      <div className="flex gap-1 border-b border-slate-200 mb-3">
+      <div className="flex gap-1 border-b border-slate-200 mb-3" data-guide="crm-segments-tabs">
         {DIMENSIONS.map((d) => (
           <button
             key={d.key}
@@ -131,7 +131,7 @@ export default function CompaniesClient({
       </div>
 
       {/* Filter to one group within the dimension above */}
-      <div className="mb-3 flex flex-wrap gap-1.5">
+      <div className="mb-3 flex flex-wrap gap-1.5" data-guide="crm-segments-chips">
         <button
           onClick={() => setSelectedBucket(null)}
           className={`text-xs px-2.5 py-1 rounded-full border ${

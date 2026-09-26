@@ -169,7 +169,7 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
       className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-sm ${typeFilter === value ? "bg-court-50 text-court-700 font-medium" : "text-slate-600 hover:bg-slate-100"}`}
     >
       <span>{label}</span>
-      <span className="text-xs text-slate-400 font-mono">{count}</span>
+      <span className="text-xs text-slate-400 font-mono" data-guide={value === "calls" ? "crm-activities-count" : undefined}>{count}</span>
     </button>
   );
 
@@ -177,6 +177,7 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
     <button
       onClick={() => setTodayOnly(value)}
       className={`w-full text-left px-2.5 py-1.5 rounded text-sm ${todayOnly === value ? "bg-court-50 text-court-700 font-medium" : "text-slate-600 hover:bg-slate-100"}`}
+      data-guide={value ? "crm-activities-today" : undefined}
     >
       {label}
     </button>
@@ -216,7 +217,9 @@ export default function ActivitiesClient({ isAdmin, activities, dateRange }: { i
               className="input w-full max-w-sm text-sm"
               data-guide="crm-activities-search"
             />
-            <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
+            <div data-guide="crm-activities-date">
+              <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
+            </div>
             {dateRange && (
               <button onClick={() => router.push("/crm/activities")} className="text-xs text-slate-500 hover:underline">
                 Clear date filter

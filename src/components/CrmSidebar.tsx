@@ -310,6 +310,7 @@ export default function CrmSidebar({
           <button
             type="button"
             data-all-tools-trigger
+            data-guide="crm-sidebar-all-tools"
             title={collapsed ? "All Tools" : undefined}
             onClick={() => setAllToolsOpen((v) => !v)}
             className={`w-full relative flex items-center gap-3 rounded-lg text-sm font-medium transition px-3 py-2.5 md:justify-center md:px-2 md:py-2.5 ${

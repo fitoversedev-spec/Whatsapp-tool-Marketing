@@ -483,7 +483,7 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
             ? "Individual and team performance, best sellers, and platform performance — across every channel, not just WhatsApp"
             : "Your own performance and activity."
         }
-        action={<DateRangePicker value={range} onApply={setRange} />}
+        action={<div data-guide="crm-analytics-date-range"><DateRangePicker value={range} onApply={setRange} /></div>}
       />
 
       {visibleGroups.length > 1 && (
@@ -508,7 +508,7 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
       {/* Ask AI (askai) has no sub-tabs — everything lives inside AiReportTab —
           so the tab bar is skipped for it entirely. */}
       {isAdmin && group !== "askai" && (
-        <div className="flex gap-1 border-b border-slate-200 mb-4 mt-4 overflow-x-auto">
+        <div className="flex gap-1 border-b border-slate-200 mb-4 mt-4 overflow-x-auto" data-guide="crm-analytics-tabs">
           {(group === "performance"
             ? PERFORMANCE_TABS
             : group === "patterns"
@@ -526,6 +526,7 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
             <button
               key={t}
               onClick={() => setTab(t)}
+              data-guide={`crm-analytics-tab-${t}`}
               className={`px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap ${
                 tab === t ? "border-court-600 text-court-700 font-semibold" : "border-transparent text-slate-500 font-medium hover:text-slate-800"
               }`}
@@ -959,7 +960,7 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
       action={action}
       drillHref={dealsHref({ outcome: "open", from, to })}
     >
-      <div className="mb-4">
+      <div className="mb-4 w-fit" data-guide="crm-analytics-period">
         <PeriodPicker value={period} onChange={setPeriod} />
       </div>
 
@@ -1101,7 +1102,7 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
           )}
 
           {isAdmin && data.repRankings && (
-            <div>
+            <div data-guide="crm-analytics-rankings">
               <h3 className="text-sm font-semibold text-slate-700 mb-2">Rep rankings (won revenue)</h3>
               <DataTable
                 headers={["Rep", "Won revenue", "Win rate", "Deals won"]}
@@ -1132,14 +1133,14 @@ function IndividualTab({ rows, range, isAdmin }: { rows: SalesActivityRow[]; ran
       <div className="flex items-center justify-end mb-3">
         <ExportButtons filename="individual-performance" headers={headers} rows={dataRows} />
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" data-guide="crm-analytics-per-rep">
         <table className="data-table">
           <thead><tr>{headers.map((h) => <th key={h} className={h === "Rep" ? "whitespace-nowrap" : "!text-right whitespace-nowrap"}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.ownerId}>
                 <td className="font-medium">
-                  <Link href={`/crm/analytics/rep/${r.ownerId}?from=${range.from}&to=${range.to}`} className="text-court-700 hover:underline">
+                  <Link href={`/crm/analytics/rep/${r.ownerId}?from=${range.from}&to=${range.to}`} className="text-court-700 hover:underline" data-guide="crm-analytics-rep-link">
                     {r.ownerName}
                   </Link>
                 </td>
@@ -1241,7 +1242,7 @@ function OverallTab({
         {repsByCreated.length === 0 ? (
           <p className="text-sm text-slate-400">No rep activity in this range yet.</p>
         ) : (
-          <>
+          <div data-guide="crm-analytics-by-rep">
             {createdWithData.length > 0 && (
               <HorizontalBarChart
                 data={createdWithData}
@@ -1255,10 +1256,11 @@ function OverallTab({
             <div className="mt-3">
               <DataTable headers={createdHeaders} rows={createdDataRows} />
             </div>
-          </>
+          </div>
         )}
       </AnalyticsCard>
       <AnalyticsCard
+        guide="crm-analytics-pipeline-stage"
         title="Pipeline by stage (current snapshot)"
         action={busiestStage ? `${busiestStage.count} deal${busiestStage.count === 1 ? "" : "s"} currently sitting in ${busiestStage.stageName} — push them forward` : undefined}
         drillHref={busiestStage ? dealsHref({ stageId: busiestStage.stageId }) : undefined}

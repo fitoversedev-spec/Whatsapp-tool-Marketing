@@ -1,4 +1,63 @@
-import type { GuideEntry, SectionRecording } from "../types";
+import type { GuideEntry, ScreenshotSetupAction, SectionRecording } from "../types";
+
+// A click on server-rendered markup that has not hydrated yet does nothing (happens right after the dev
+// server recompiles a page), so every setup that clicks starts with a short wait.
+const HYDRATE: ScreenshotSetupAction = { type: "wait", duration: 3000 };
+
+// The database behind the dev server holds real customers, so every capture that lists or opens people
+// blurs their names, phone numbers, emails and notes. Labels, buttons, tabs and headings stay sharp.
+const BLUR_CONTACT_TABLE = [
+  ".data-table tbody td:nth-child(2)", // Name
+  ".data-table tbody td:nth-child(3)", // Company (a solo customer's own name)
+  ".data-table tbody td:nth-child(5)", // Phone
+  ".data-table tbody td:nth-child(6)", // Email
+];
+const BLUR_LEADS_TABLE = [".data-table tbody td:nth-child(-n+3)"]; // Name, Company, Phone
+const BLUR_CONTACT_DETAIL = [
+  '[data-guide="crm-contact-name"]',
+  "#details .font-medium",
+  "#details .whitespace-pre-wrap",
+  '[data-guide="crm-contact-next-action"]',
+  "#deals a",
+  ...["quotations", "court-designs", "products", "open-activities", "closed-activities", "notes", "attachments"].map(
+    (id) => `#${id} > :not(:first-child)`,
+  ),
+];
+
+const BLUR_SEGMENT_TABLE = [".data-table tbody td:nth-child(1)"]; // Name (a solo customer's own name)
+const BLUR_DEALS_TABLE = [".data-table tbody td:nth-child(2)", ".data-table tbody td:nth-child(3)"]; // Deal title, Account
+const BLUR_COMPANY_DETAIL = [
+  '[data-guide="crm-company-name"]',
+  "#details .font-medium",
+  "#details .text-slate-700",
+  "#contacts a",
+  "#deals a > div:first-child",
+  "#activities > :not(:first-child)",
+];
+const BLUR_DEAL_DETAIL = [
+  '[data-guide="crm-deal-title"] h1',
+  '[data-guide="crm-deal-account"] > :not(h3)',
+  '[data-guide="crm-deal-main"] span.text-slate-900',
+  '[data-guide="crm-deal-activity"] > :not(:first-child)',
+  '[data-guide="crm-deal-site-address"] span:last-child',
+  '[data-guide="crm-deal-primary-contact"] span:last-child',
+];
+const BLUR_PIPELINE_CARDS = [".cursor-grab .min-w-0.flex-1", ".cursor-grab .line-clamp-2"]; // Card name / phone, last message
+const BLUR_ACTIVITIES_TABLE = [
+  ".data-table tbody td:nth-child(3)", // Activity (titles carry the customer's name)
+  ".data-table tbody td:nth-child(4)", // Customer
+  ".data-table tbody td:nth-child(5)", // Phone
+  ".data-table tbody td:nth-child(8)", // Deal / company
+];
+const BLUR_QUOTATIONS_TABLE = [".data-table tbody td:nth-child(3)"]; // Customer name + phone
+const BLUR_COURT_CARDS = [".card .line-clamp-1", ".card .leading-snug"]; // Customer name, phone
+
+// Opens the first contact in the Contacts list by following its name link (read-only).
+const OPEN_FIRST_CONTACT: ScreenshotSetupAction[] = [
+  HYDRATE,
+  { type: "click", selector: '.data-table tbody a[href^="/crm/contacts/"]' },
+  { type: "wait", duration: 4000 },
+];
 
 export const CRM_ENTRIES: GuideEntry[] = [
   // ── Dashboard ──────────────────────────────────────────
@@ -11,7 +70,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["dashboard", "overview", "KPI", "pipeline", "summary", "crm"],
     steps: [
       { text: "Click **Dashboard** in the CRM sidebar", target: "crm-sidebar-crm" },
-      { text: "Review the KPI cards at the top (contacts, deals, revenue)" },
+      { text: "Review the KPI cards at the top (quotations sent, quoted value, deals won, won value)", target: "crm-dashboard-kpis" },
       { text: "Check the **Recent Activity** section for latest updates" },
       { text: "Use the **quick action buttons** to jump to common tasks" },
     ],
@@ -19,6 +78,10 @@ export const CRM_ENTRIES: GuideEntry[] = [
       path: "/crm",
       file: "crm-dashboard.png",
       alt: "CRM Dashboard with KPI cards and recent activity",
+      blur: [
+        '[data-guide="crm-dashboard-movers"] span.text-slate-800', // Rep names
+        '[data-guide="crm-dashboard-schedule"] .space-y-2.ml-1', // Customer names, reminder text, owners
+      ],
     },
   },
 
@@ -31,15 +94,18 @@ export const CRM_ENTRIES: GuideEntry[] = [
     category: "Contacts",
     keywords: ["contact", "add", "create", "new", "crm"],
     steps: [
-      { text: "Go to **Contacts** in the CRM sidebar", target: "crm-sidebar-contacts" },
-      { text: "Click the **+ New Contact** button at the top-right", target: "crm-contact-create" },
-      { text: "Fill in name, phone, email, company, designation, and lead source" },
-      { text: "Click **Save** — the contact appears in the table immediately" },
+      { text: "Go to **Contacts** in the CRM sidebar" },
+      { text: "Click the **+ New Contact** button at the top-right", target: "crm-contact-new-dialog" },
+      { text: "Fill in name, phone, email, designation, location, and lead source", target: "crm-contact-form-details" },
+      { text: "Click **Create** — you land on the new contact's page", target: "crm-contact-form-create" },
     ],
     screenshot: {
       path: "/crm/contacts",
       file: "crm-add-contact.png",
-      alt: "CRM contacts page with New Contact button highlighted",
+      alt: "New contact form opened from the Contacts page, with the contact details section and the Create button",
+      // Only opens the empty New contact form — nothing is typed or created. The form covers the whole page,
+      // so the sidebar link and the + New Contact button that led here are hidden behind it.
+      setup: [HYDRATE, { type: "click", selector: '[data-guide="crm-contact-create"]' }, { type: "wait", duration: 1000 }],
     },
   },
   {
@@ -51,15 +117,18 @@ export const CRM_ENTRIES: GuideEntry[] = [
     roles: ["admin"],
     keywords: ["assign", "owner", "bulk", "reassign", "sales rep"],
     steps: [
-      { text: "Go to **Contacts** in the CRM sidebar" },
-      { text: "Tick the **checkboxes** next to each contact you want to reassign" },
-      { text: "The teal action bar appears — find the **Reassign owner to...** dropdown", target: "crm-bulk-reassign" },
-      { text: "Pick the target rep and click **Apply**" },
+      { text: "Go to **Contacts** in the CRM sidebar", target: "crm-sidebar-contacts" },
+      { text: "Tick the **checkboxes** next to each contact you want to reassign", target: "crm-contact-checkbox" },
+      { text: "The action bar appears — find the **Reassign owner to...** dropdown", target: "crm-bulk-reassign" },
+      { text: "Pick the target rep and click **Apply**", target: "crm-bulk-apply" },
     ],
     screenshot: {
       path: "/crm/contacts",
       file: "crm-bulk-assign.png",
-      alt: "CRM contacts page with bulk action bar showing reassign dropdown",
+      alt: "CRM contacts page with one contact ticked and the bulk action bar showing the Reassign owner dropdown",
+      // Ticks the first row's checkbox so the bulk bar appears — no bulk action is clicked.
+      setup: [HYDRATE, { type: "click", selector: '.data-table tbody input[type="checkbox"]' }, { type: "wait", duration: 800 }],
+      blur: BLUR_CONTACT_TABLE,
     },
   },
   {
@@ -71,16 +140,16 @@ export const CRM_ENTRIES: GuideEntry[] = [
     roles: ["admin"],
     keywords: ["import", "csv", "excel", "spreadsheet", "bulk", "upload"],
     steps: [
-      { text: "Open **Import** from the CRM All Tools menu" },
-      { text: "Select what you're importing: Contacts, Companies, Leads, or Deals" },
-      { text: "Upload your CSV or Excel file" },
+      { text: "Open **Import** from the CRM All Tools menu", target: "crm-sidebar-all-tools" },
+      { text: "Select what you're importing: Contacts, Companies, or Deals", target: "crm-import-targets" },
+      { text: "Upload your CSV or Excel file", target: "crm-import-file" },
       { text: "Map each column to the matching field (name, phone, email, etc.)" },
       { text: "Review the preview and click **Import** to load the data" },
     ],
     screenshot: {
       path: "/crm/import",
       file: "crm-import.png",
-      alt: "Import page with file upload and column mapping",
+      alt: "Import page showing the first step: choose what to import, then Choose file (the mapping and preview steps appear after a file is uploaded)",
     },
   },
   {
@@ -91,15 +160,16 @@ export const CRM_ENTRIES: GuideEntry[] = [
     category: "Contacts",
     keywords: ["segment", "company", "group", "business", "city", "source"],
     steps: [
-      { text: "Open **Customer Segments** from the CRM All Tools menu" },
-      { text: "Browse segments grouped by business type, lead source, or city" },
-      { text: "Click a segment to see all contacts within it" },
+      { text: "Open **Customer Segments** from the CRM All Tools menu", target: "crm-sidebar-all-tools" },
+      { text: "Browse segments grouped by business type, lead source, or city", target: "crm-segments-tabs" },
+      { text: "Click a segment to see all contacts within it", target: "crm-segments-chips" },
       { text: "Use this view to identify your strongest market segments" },
     ],
     screenshot: {
       path: "/crm/companies",
       file: "crm-customer-segments.png",
-      alt: "Customer segments page showing grouped contacts",
+      alt: "Customer segments page with the group-by tabs, segment chips with counts and the customer table",
+      blur: BLUR_SEGMENT_TABLE,
     },
   },
 
@@ -115,13 +185,14 @@ export const CRM_ENTRIES: GuideEntry[] = [
       { text: "Click **Leads** in the CRM sidebar", target: "crm-sidebar-leads" },
       { text: "View leads organized by stage (New, Contacted, Qualified, etc.)" },
       { text: "Use the **filters** to narrow by source, date, or owner" },
-      { text: "Click a lead to open their detail and update the stage" },
-      { text: "Move a qualified lead to **Converted** to create a contact + deal" },
+      { text: "Click a lead to open their detail and update the stage", target: "crm-leads-row-link" },
+      { text: "Click **Convert to Deal** on a lead to create its deal — its status becomes **Converted**", target: "crm-leads-convert" },
     ],
     screenshot: {
       path: "/crm/leads",
       file: "crm-leads.png",
-      alt: "CRM leads list with stage filters",
+      alt: "CRM leads list with each lead's status and the Convert to Deal button",
+      blur: BLUR_LEADS_TABLE,
     },
   },
 
@@ -134,15 +205,19 @@ export const CRM_ENTRIES: GuideEntry[] = [
     category: "Deals",
     keywords: ["deal", "create", "pipeline", "revenue", "stage"],
     steps: [
-      { text: "Open a **contact's detail page** by clicking their name" },
-      { text: "Scroll to the **Deals** section and click **+ Add Deal**", target: "crm-deal-add" },
+      { text: "Open a **contact's detail page** by clicking their name", target: "crm-contact-name" },
+      { text: "Scroll to the **Deals** section and click the **+** button", target: "crm-contact-add-deal" },
       { text: "Enter deal name, value, expected close date, and funnel stage" },
-      { text: "Click **Save** — the deal appears in both the contact view and the Pipeline board" },
+      { text: "Click **Create deal** — the deal appears in both the contact view and the Pipeline board", target: "crm-deal-create-confirm" },
     ],
     screenshot: {
       path: "/crm/contacts",
       file: "crm-create-deal.png",
-      alt: "Contact detail page with Add Deal section highlighted",
+      alt: "Contact detail page with the New deal dialog open from the Deals section's + button",
+      // Opens the first contact, then the + button's New deal dialog — Create deal is never clicked.
+      setup: [...OPEN_FIRST_CONTACT, { type: "click", selector: '[data-guide="crm-contact-add-deal"]' }, { type: "wait", duration: 800 }],
+      blur: [...BLUR_CONTACT_DETAIL, '[data-guide="crm-new-deal-dialog"] p'],
+      viewport: { width: 1440, height: 1200 },
     },
   },
   {
@@ -154,15 +229,16 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["deals", "list", "filter", "stage", "value", "manage"],
     steps: [
       { text: "Click **Deals** in the CRM sidebar", target: "crm-sidebar-deals" },
-      { text: "View all deals with their stage, value, owner, and close date" },
-      { text: "Use **filters** to narrow by stage, owner, or date range" },
-      { text: "Click a deal row to open its detail page with notes and activity log" },
-      { text: "Update the deal stage by clicking the **stage badge** and selecting the new stage" },
+      { text: "View all deals with their stage, value, owner, and close date", target: "crm-deals-columns" },
+      { text: "Use **filters** to narrow by channel, owner, or date range", target: "crm-deals-filters" },
+      { text: "Click a deal row to open its detail page with notes and activity log", target: "crm-deals-row-link" },
+      { text: "Update the deal stage by picking a new stage from the row's **Stage** dropdown", target: "crm-deals-stage" },
     ],
     screenshot: {
       path: "/deals",
       file: "crm-deals-list.png",
-      alt: "Deals list page with stage and value columns",
+      alt: "Deals list page with the filters, the Stage dropdown and the value column",
+      blur: BLUR_DEALS_TABLE,
     },
   },
 
@@ -176,15 +252,16 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["pipeline", "kanban", "board", "drag", "drop", "stage", "funnel"],
     steps: [
       { text: "Click **Pipeline** in the CRM sidebar", target: "crm-sidebar-pipeline" },
-      { text: "View deals arranged in columns by stage (New → Qualified → Proposal → Won)" },
-      { text: "**Drag a deal card** from one column to another to change its stage" },
-      { text: "Click a deal card to open its detail page" },
-      { text: "Use the **filter bar** to show only specific owners or date ranges" },
+      { text: "View deals arranged in columns by stage (Enquiry Received → Contacted / Qualified → Site Visit Done → … → Won)", target: "crm-pipeline-stage" },
+      { text: "**Drag a deal card** from one column to another to change its stage", target: "crm-pipeline-card" },
+      { text: "Click a deal card to open its detail page", target: "crm-pipeline-card-open" },
+      { text: "Use the **filter bar** to show only specific owners or date ranges", target: "crm-pipeline-owner" },
     ],
     screenshot: {
       path: "/pipeline",
       file: "crm-pipeline.png",
-      alt: "Pipeline Kanban board with deals organized by stage",
+      alt: "Pipeline Kanban board with deals organized by stage (names, phones and messages blurred)",
+      blur: BLUR_PIPELINE_CARDS,
     },
   },
 
@@ -206,7 +283,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
     screenshot: {
       path: "/crm/reminders",
       file: "crm-reminders.png",
-      alt: "CRM reminders page with upcoming tasks",
+      alt: "CRM reminders page showing the empty \"All caught up\" state (the test account has no reminders)",
     },
   },
 
@@ -220,15 +297,16 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["quotation", "quote", "CRM", "price", "rate", "send"],
     steps: [
       { text: "Click **Quotations** in the CRM sidebar", target: "crm-sidebar-quotations" },
-      { text: "Click **+ New Quotation** and link it to a contact" },
+      { text: "Click **+ New quotation** and link it to a contact", target: "wa-quote-new" },
       { text: "Select sport, area, surface type, and additional items" },
-      { text: "Review the calculated total and click **Generate PDF**" },
-      { text: "Send the quotation to the client via WhatsApp or download as PDF" },
+      { text: "Review the calculated total and click **Generate Preview →**" },
+      { text: "Send the quotation to the client via WhatsApp or download as PDF", target: "wa-quote-send" },
     ],
     screenshot: {
       path: "/crm/quotations",
       file: "crm-quotations.png",
-      alt: "CRM quotations page with rate calculator",
+      alt: "CRM quotations list with the + New quotation button and each row's View PDF and Send actions (customer names and phones blurred)",
+      blur: BLUR_QUOTATIONS_TABLE,
     },
   },
   {
@@ -239,16 +317,16 @@ export const CRM_ENTRIES: GuideEntry[] = [
     category: "Invoices",
     keywords: ["invoice", "payment", "billing", "CRM", "track"],
     steps: [
-      { text: "Open **Invoices** from the CRM All Tools menu" },
-      { text: "View all invoices with amount, status, and linked contact" },
+      { text: "Open **Invoices** from the CRM All Tools menu", target: "crm-sidebar-all-tools" },
+      { text: "View all invoices with amount, status, and linked contact", target: "wa-invoices-head" },
       { text: "Click **+ New Invoice** or convert an existing quotation" },
-      { text: "Update payment status as payments come in (Pending → Partial → Paid)" },
+      { text: "Update payment status as payments come in (Issued → Partly paid → Paid)", target: "wa-invoices-status" },
       { text: "Click **Download PDF** to save or print" },
     ],
     screenshot: {
       path: "/crm/invoices",
       file: "crm-invoices.png",
-      alt: "CRM invoices page with payment status tracking",
+      alt: "CRM invoices page with the search box, payment status filters and the invoice table (no invoices yet)",
     },
   },
 
@@ -270,7 +348,8 @@ export const CRM_ENTRIES: GuideEntry[] = [
     screenshot: {
       path: "/crm/activities",
       file: "crm-activities.png",
-      alt: "Activities page with logged calls and meetings",
+      alt: "Activities page with logged calls and meetings (customer names and phones blurred)",
+      blur: BLUR_ACTIVITIES_TABLE,
     },
   },
 
@@ -291,7 +370,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
     screenshot: {
       path: "/crm/insights",
       file: "crm-insights.png",
-      alt: "CRM Insights page with AI recommendations",
+      alt: "CRM Insights page showing the empty documents list with the + New Document button (no insight documents yet)",
     },
   },
 
@@ -313,7 +392,8 @@ export const CRM_ENTRIES: GuideEntry[] = [
     screenshot: {
       path: "/crm/court-images",
       file: "crm-court-designer.png",
-      alt: "Court Designer in CRM context",
+      alt: "Court Designer page listing saved court designs with the + New design button (customer names and phones blurred)",
+      blur: BLUR_COURT_CARDS,
     },
   },
 
@@ -326,16 +406,18 @@ export const CRM_ENTRIES: GuideEntry[] = [
     category: "Analytics",
     keywords: ["analytics", "performance", "sales", "team", "rep", "metrics"],
     steps: [
-      { text: "Open **CRM Analytics** from the CRM All Tools menu" },
-      { text: "View the team-wide dashboard with deals won, revenue, and conversion rates" },
-      { text: "Click a **team member** to see their individual performance" },
-      { text: "Switch between **Deals**, **Activities**, and **Revenue** tabs for different views" },
-      { text: "Use the date range picker to compare different periods" },
+      { text: "Open **CRM Analytics** from the CRM All Tools menu", target: "crm-sidebar-all-tools" },
+      { text: "View the team-wide dashboard with deals won, revenue, and conversion rates", target: "crm-analytics-per-rep" },
+      { text: "Click a **team member** in the **Individual performance** tab to see their individual performance", target: "crm-analytics-rep-link" },
+      { text: "Switch between the **Overview**, **Overall performance**, **Individual performance**, **Geography**, **Best-selling products**, and **Platform performance** tabs for different views", target: "crm-analytics-tabs" },
+      { text: "Use the date range picker to compare different periods", target: "crm-analytics-date-range" },
     ],
     screenshot: {
       path: "/crm/analytics",
       file: "crm-analytics.png",
       alt: "CRM analytics dashboard with team performance",
+      setup: [HYDRATE, { type: "click", selector: "button::-p-text(Individual performance)" }, { type: "wait", duration: 2000 }],
+      blur: ['[data-guide="crm-analytics-per-rep"] tbody td:first-child'], // Rep names
     },
   },
 
@@ -350,15 +432,16 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["taxonomy", "stage", "source", "profile", "configure", "list"],
     steps: [
       { text: "Open **Taxonomies** from the CRM Admin tools" },
-      { text: "Select the list to edit: Funnel Stages, Lead Sources, or Customer Profiles" },
-      { text: "Click **+ Add** to create a new item in the list" },
-      { text: "Drag items to reorder them (this changes the order in dropdowns)" },
-      { text: "Click the **edit icon** to rename or the **delete icon** to remove" },
+      { text: "Select the list to edit: Funnel Stages, Lead Sources, or Customer Profiles", target: "crm-taxonomy-tabs" },
+      { text: "Type a name in the **Add new…** box at the bottom of the list and click **Add**", target: "crm-taxonomy-add" },
+      { text: "Use the **↑** and **↓** arrows in the **Order** column to reorder items (this changes the order in dropdowns)", target: "crm-taxonomy-order" },
+      { text: "Click a name to rename it, or untick **Active** to retire an item you no longer need", target: "crm-taxonomy-active" },
     ],
     screenshot: {
       path: "/crm/admin/taxonomies",
       file: "crm-taxonomies.png",
       alt: "Taxonomies page with editable funnel stages",
+      viewport: { width: 1440, height: 1500 },
     },
   },
   {
@@ -371,10 +454,10 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["target", "revenue", "goal", "monthly", "quarterly", "rep"],
     steps: [
       { text: "Open **Targets** from the CRM Admin tools" },
-      { text: "Select the time period: Monthly, Quarterly, or FY" },
-      { text: "Set the **company-wide target** amount" },
-      { text: "Optionally break it down by **individual rep** targets" },
-      { text: "Click **Save** — progress is tracked on the CRM Dashboard" },
+      { text: "Choose the **Period**: **Month**, **Quarter**, or **Fiscal year**", target: "crm-targets-period" },
+      { text: "Enter the **Target revenue (₹)** — keep **Scope** on **Company-wide** for a company-wide target", target: "crm-targets-revenue" },
+      { text: "Optionally break it down by rep: pick a name in the **Scope** dropdown and save a separate target for each", target: "crm-targets-scope" },
+      { text: "Click **Save target** — progress is tracked on **CRM Analytics → Overview**", target: "crm-targets-save" },
     ],
     screenshot: {
       path: "/crm/admin/targets",
@@ -394,7 +477,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
     steps: [
       { text: "Go to **Contacts** in the CRM sidebar", target: "crm-sidebar-contacts" },
       { text: "Type in the **search bar** to find contacts by name or company", target: "crm-contacts-search" },
-      { text: "Use the **date range picker** (From / To) to filter by when contacts were added" },
+      { text: "Use the **date range picker** (From / To) to filter by when contacts were added", target: "crm-contacts-date" },
       { text: "Admin: use the **Rep dropdown** (\"All reps\") to filter by contact owner", target: "crm-contacts-rep" },
       { text: "Use the **Filter by custom field** dropdown to filter by Location, City, or other fields" },
       { text: "Select a **condition** (contains, equals, is set) and enter a value" },
@@ -402,7 +485,8 @@ export const CRM_ENTRIES: GuideEntry[] = [
     screenshot: {
       path: "/crm/contacts",
       file: "crm-filter-contacts.png",
-      alt: "CRM contacts page with search, date range, rep filter, and custom field filter",
+      alt: "CRM contacts page with the search bar, date range picker and rep filter (the custom field filter only appears once contacts have custom fields)",
+      blur: BLUR_CONTACT_TABLE,
     },
   },
   {
@@ -422,6 +506,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
       path: "/pipeline",
       file: "crm-filter-pipeline.png",
       alt: "Pipeline board with search, owner filter, and Kanban/Funnel view toggle",
+      blur: BLUR_PIPELINE_CARDS,
     },
   },
   {
@@ -434,15 +519,16 @@ export const CRM_ENTRIES: GuideEntry[] = [
     steps: [
       { text: "Click **Activities** in the CRM sidebar", target: "crm-sidebar-activities" },
       { text: "Type in the **search bar** to find activities by subject, customer, phone, or deal code", target: "crm-activities-search" },
-      { text: "Use the **date range picker** (From / To) to narrow to a specific period" },
+      { text: "Use the **date range picker** (From / To) to narrow to a specific period", target: "crm-activities-date" },
       { text: "Click **Calls**, **Meetings**, or **Other** in the left panel to filter by activity type", target: "crm-activities-type" },
-      { text: "Click **Today** to show only today's activities" },
-      { text: "Each type shows a count badge so you know how many activities exist" },
+      { text: "Click **Today** to show only today's activities", target: "crm-activities-today" },
+      { text: "Each type shows a count badge so you know how many activities exist", target: "crm-activities-count" },
     ],
     screenshot: {
       path: "/crm/activities",
       file: "crm-filter-activities.png",
-      alt: "Activities page with search, date range, and type filter sidebar",
+      alt: "Activities page with search, date range, and type filter sidebar (customer names and phones blurred)",
+      blur: BLUR_ACTIVITIES_TABLE,
     },
   },
   {
@@ -453,16 +539,17 @@ export const CRM_ENTRIES: GuideEntry[] = [
     category: "Analytics",
     keywords: ["filter", "analytics", "date", "period", "month", "quarter", "group", "tab"],
     steps: [
-      { text: "Open **CRM Analytics** from the CRM All Tools menu" },
-      { text: "Use the **date range picker** to set a custom from/to period" },
-      { text: "Switch between analysis groups: **Performance**, **Comparisons**, **Quadrants**, **Industry**, **Insights**", target: "crm-analytics-groups" },
-      { text: "Each group has sub-tabs for deeper analysis (e.g., Overview, Individual, Geography)" },
-      { text: "In the Overview tab, use the **Period picker** to compare by Month, Quarter, or Fiscal Year" },
+      { text: "Open **CRM Analytics** from the CRM All Tools menu", target: "crm-sidebar-all-tools" },
+      { text: "Use the **date range picker** to set a custom from/to period", target: "crm-analytics-date-range" },
+      { text: "Switch between analysis groups: **Performance**, **Comparisons & Patterns**, **Quadrants & Territory**, **Industry Insights**, **Insights & Digest**", target: "crm-analytics-groups" },
+      { text: "Each group has sub-tabs for deeper analysis (e.g., Overview, Individual performance, Geography)", target: "crm-analytics-tabs" },
+      { text: "In the Overview tab, use the **Period picker** to compare by Month, Quarter, or Fiscal year", target: "crm-analytics-period" },
     ],
     screenshot: {
       path: "/crm/analytics",
       file: "crm-filter-analytics.png",
       alt: "CRM analytics page with date range, group tabs, and period picker",
+      blur: ['[data-guide="crm-analytics-rankings"] tbody td:first-child'], // Rep names
     },
   },
   {
@@ -481,6 +568,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
       path: "/crm/leads",
       file: "crm-filter-leads.png",
       alt: "CRM leads page with search bar",
+      blur: BLUR_LEADS_TABLE,
     },
   },
 
@@ -494,15 +582,19 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["contact", "detail", "view", "edit", "profile", "deals", "activities"],
     steps: [
       { text: "Go to **Contacts** in the CRM sidebar", target: "crm-sidebar-contacts" },
-      { text: "Click on a contact's name to open their detail page" },
-      { text: "View their company, designation, lead source, and contact info" },
-      { text: "Scroll to see linked **Deals**, **Activities**, and **Notes**" },
-      { text: "Click **Edit** to update any field, or **+ Add Deal** to create a new deal" },
+      { text: "Click on a contact's name to open their detail page", target: "crm-contact-name" },
+      { text: "View their company, designation, lead source, and contact info", target: "crm-contact-info" },
+      { text: "Scroll to see linked **Deals**, **Activities**, and **Notes**", target: "crm-contact-deals" },
+      { text: "Click **Edit** to update any field, or the **+** button in the **Deals** section to create a new deal", target: "crm-contact-edit" },
     ],
     screenshot: {
       path: "/crm/contacts",
       file: "crm-contact-detail.png",
-      alt: "CRM contact detail page with deals and activity timeline",
+      alt: "CRM contact detail page (personal details blurred) with the details card, Deals section and Edit button",
+      // Opens the first contact by following its name link.
+      setup: OPEN_FIRST_CONTACT,
+      blur: BLUR_CONTACT_DETAIL,
+      viewport: { width: 1440, height: 1200 },
     },
   },
   {
@@ -513,16 +605,24 @@ export const CRM_ENTRIES: GuideEntry[] = [
     category: "Contacts",
     keywords: ["company", "segment", "detail", "view", "contacts", "revenue"],
     steps: [
-      { text: "Open **Customer Segments** from the CRM All Tools menu" },
-      { text: "Click on a company or segment name to open its detail page" },
-      { text: "View all contacts associated with this company" },
-      { text: "Check the total deal value and revenue generated" },
-      { text: "Click a contact to jump to their individual detail page" },
+      { text: "Open **Customer Segments** from the CRM All Tools menu", target: "crm-sidebar-all-tools" },
+      { text: "Click on a company or segment name to open its detail page", target: "crm-company-name" },
+      { text: "View all contacts associated with this company", target: "crm-company-contacts" },
+      { text: "Check the total deal value and revenue generated", target: "crm-company-deals" },
+      { text: "Click a contact to jump to their individual detail page", target: "crm-company-contact-link" },
     ],
     screenshot: {
       path: "/crm/companies",
       file: "crm-company-detail.png",
-      alt: "Company detail page with linked contacts and revenue",
+      alt: "Company detail page (personal details blurred) with the Contacts and Deals sections",
+      // Opens the first company that has at least one deal (Deals column not 0) by following its name link.
+      setup: [
+        HYDRATE,
+        { type: "click", selector: '::-p-xpath(//table[contains(@class,"data-table")]//tbody/tr[normalize-space(td[6])!="0"]//a)' },
+        { type: "wait", duration: 4000 },
+      ],
+      blur: BLUR_COMPANY_DETAIL,
+      viewport: { width: 1440, height: 1100 },
     },
   },
 
@@ -536,15 +636,19 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["deal", "detail", "view", "stage", "history", "notes", "value"],
     steps: [
       { text: "Click **Deals** in the CRM sidebar or open a deal from the Pipeline board", target: "crm-sidebar-deals" },
-      { text: "Click on a deal row to open its detail page" },
-      { text: "View the deal value, current stage, expected close date, and owner" },
-      { text: "Check the **Activity log** for all calls, meetings, and notes linked to this deal" },
+      { text: "Click on a deal row to open its detail page", target: "crm-deal-title" },
+      { text: "View the deal value, current stage, expected close date, and owner", target: "crm-deal-summary" },
+      { text: "Check the **Timeline** for all calls, meetings, and notes linked to this deal", target: "crm-deal-activity" },
       { text: "Update the stage by clicking the **stage badge** and selecting a new stage" },
     ],
     screenshot: {
       path: "/deals",
       file: "crm-deal-detail.png",
-      alt: "Deal detail page with stage, value, and activity log",
+      alt: "Deal detail page (personal details blurred) with the summary card and the Timeline",
+      // Opens the first deal in the list by following its title link.
+      setup: [HYDRATE, { type: "click", selector: '.data-table tbody a[href^="/deals/"]' }, { type: "wait", duration: 4000 }],
+      blur: BLUR_DEAL_DETAIL,
+      viewport: { width: 1440, height: 1100 },
     },
   },
 
@@ -557,8 +661,8 @@ export const CRM_ENTRIES: GuideEntry[] = [
     category: "Analytics",
     keywords: ["rep", "individual", "performance", "sales", "analytics", "deals", "revenue"],
     steps: [
-      { text: "Open **CRM Analytics** from the CRM All Tools menu" },
-      { text: "Click on a **team member's name** in the overview to open their individual report" },
+      { text: "Open **CRM Analytics** from the CRM All Tools menu", target: "crm-sidebar-all-tools" },
+      { text: "Click on a **team member's name** in the **Individual performance** tab to open their individual report", target: "crm-rep-header" },
       { text: "View their deals won, revenue generated, and conversion rate" },
       { text: "Check their activity count (calls, meetings, emails)" },
       { text: "Compare their performance against team targets" },
@@ -567,6 +671,18 @@ export const CRM_ENTRIES: GuideEntry[] = [
       path: "/crm/analytics",
       file: "crm-rep-analytics.png",
       alt: "Individual rep analytics page with deals and revenue metrics",
+      setup: [
+        HYDRATE,
+        { type: "click", selector: "button::-p-text(Individual performance)" },
+        { type: "click", selector: 'a[href^="/crm/analytics/rep/"]' },
+        { type: "wait", duration: 4000 },
+      ],
+      blur: [
+        // Rep name: large heading text stays guessable at 7px, so this entry carries its own stronger blur (the trailing selector is a dummy that absorbs the script's suffix).
+        '[data-guide="crm-rep-header"] h1{filter:blur(18px)!important}.guide-blur-dummy',
+        ".data-table tbody td:nth-child(1)", // Customer name + deal code
+        ".data-table tbody td:nth-child(4)", // Latest note / next activity text
+      ],
     },
   },
   {
@@ -577,16 +693,22 @@ export const CRM_ENTRIES: GuideEntry[] = [
     category: "Analytics",
     keywords: ["deal", "analytics", "win rate", "pipeline", "health", "flow", "size"],
     steps: [
-      { text: "Open **CRM Analytics** from the CRM All Tools menu" },
-      { text: "Switch to the **Deals** tab to see deal-specific analytics" },
+      { text: "Open **CRM Analytics** from the CRM All Tools menu", target: "crm-sidebar-all-tools" },
+      { text: "Switch to the **Overall performance** tab to see deal-specific analytics", target: "crm-analytics-tab-overall" },
       { text: "View win rates, average deal size, and total pipeline value" },
-      { text: "Check the deal flow funnel to see how deals progress through stages" },
-      { text: "Use date range filters to compare different periods" },
+      { text: "Check the deal flow funnel to see how deals progress through stages", target: "crm-analytics-pipeline-stage" },
+      { text: "Use date range filters to compare different periods", target: "crm-analytics-date-range" },
     ],
     screenshot: {
-      path: "/crm/analytics/deals",
+      path: "/crm/analytics",
       file: "crm-deal-analytics.png",
       alt: "Deal analytics page with win rates and pipeline funnel",
+      setup: [HYDRATE, { type: "click", selector: "button::-p-text(Overall performance)" }, { type: "wait", duration: 2000 }],
+      blur: [
+        '[data-guide="crm-analytics-by-rep"] tbody td:first-child', // Rep names (table)
+        '[data-guide="crm-analytics-by-rep"] .recharts-wrapper', // Rep names (chart labels are SVG text, so blur the whole chart)
+      ],
+      viewport: { width: 1440, height: 1400 },
     },
   },
 
@@ -602,9 +724,9 @@ export const CRM_ENTRIES: GuideEntry[] = [
     steps: [
       { text: "Open **CRM Settings** from the CRM All Tools menu (admin only)" },
       { text: "Navigate to **Taxonomies** to edit funnel stages, lead sources, and profiles", target: "crm-settings-taxonomies" },
+      { text: "Use **Targets** to set revenue goals for the team", target: "crm-settings-targets" },
       { text: "Go to **Users** to manage team members and role assignments", target: "crm-settings-users" },
-      { text: "Check the **Audit log** for a history of all changes" },
-      { text: "Use **Targets** to set revenue goals for the team" },
+      { text: "Check the **Audit log** for a history of all changes", target: "crm-settings-audit-log" },
     ],
     screenshot: {
       path: "/crm/settings",
@@ -622,9 +744,9 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["audit", "log", "history", "changes", "track", "CRM"],
     steps: [
       { text: "Open **Audit log** from the CRM Admin section in All Tools" },
-      { text: "View a chronological list of all changes made in the CRM", target: "wa-audit-list" },
-      { text: "Each entry shows who made the change, what changed, and when" },
-      { text: "Filter by date range to narrow down to a specific period" },
+      { text: "View a chronological list of all changes made in the CRM", target: "crm-audit-columns" },
+      { text: "Each entry shows who made the change, what changed, and when", target: "crm-audit-row" },
+      { text: "Use the **All entities** filter to show changes to one type of record only, such as deals or users", target: "crm-audit-filter" },
       { text: "Use the audit log to track stage changes, role updates, and taxonomy edits" },
     ],
     screenshot: {
@@ -643,8 +765,8 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["AI", "usage", "cost", "requests", "spend", "monitor", "CRM"],
     steps: [
       { text: "Open **AI usage** from the CRM Admin section in All Tools" },
-      { text: "View the total AI requests and estimated spend for the current period", target: "crm-ai-chart" },
-      { text: "See a breakdown by team member to identify who uses AI the most" },
+      { text: "View **Total requests**, **This month**, and **Est. total spend** in the cards at the top", target: "crm-ai-chart" },
+      { text: "See **Requests by person**, ranked most to least, to identify who uses AI the most", target: "crm-ai-by-person" },
       { text: "Monitor usage trends over time to manage costs" },
       { text: "Use this data to set usage guidelines for your team" },
     ],

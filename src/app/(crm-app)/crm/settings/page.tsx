@@ -5,10 +5,10 @@ import { isAdmin } from "@/lib/rbac";
 import PageHeader from "@/components/PageHeader";
 
 const LINKS = [
-  { href: "/crm/admin/taxonomies", label: "Taxonomies", description: "Funnel stages, lead sources, customer profiles, loss reasons, activity types" },
-  { href: "/crm/admin/targets", label: "Targets", description: "Company-wide or per-rep revenue targets by month, quarter, or fiscal year" },
-  { href: "/crm/users", label: "Users", description: "Team members and approval queue" },
-  { href: "/crm/admin/audit-log", label: "Audit log", description: "Every stage change, role change, and taxonomy edit" },
+  { href: "/crm/admin/taxonomies", label: "Taxonomies", description: "Funnel stages, lead sources, customer profiles, loss reasons, activity types", guide: "crm-settings-taxonomies" },
+  { href: "/crm/admin/targets", label: "Targets", description: "Company-wide or per-rep revenue targets by month, quarter, or fiscal year", guide: "crm-settings-targets" },
+  { href: "/crm/users", label: "Users", description: "Team members and approval queue", guide: "crm-settings-users" },
+  { href: "/crm/admin/audit-log", label: "Audit log", description: "Every stage change, role change, and taxonomy edit", guide: "crm-settings-audit-log" },
 ];
 
 export default async function CrmSettingsPage() {
@@ -20,7 +20,7 @@ export default async function CrmSettingsPage() {
       <PageHeader large title="CRM settings" description="Admin-only. The full settings surface stays where it already lives — this just gathers the links relevant to the CRM section." />
       <div className="space-y-2 mt-4">
         {LINKS.map((l) => (
-          <Link key={l.href} href={l.href} className="block bg-white rounded-xl border border-slate-200 p-4 hover:border-slate-300 hover:bg-slate-50" data-guide={l.href === "/crm/admin/taxonomies" ? "crm-settings-taxonomies" : l.href === "/crm/users" ? "crm-settings-users" : undefined}>
+          <Link key={l.href} href={l.href} className="block bg-white rounded-xl border border-slate-200 p-4 hover:border-slate-300 hover:bg-slate-50" data-guide={l.guide}>
             <div className="text-base font-medium text-slate-900">{l.label}</div>
             <div className="text-sm text-slate-600 mt-0.5">{l.description}</div>
           </Link>

@@ -176,7 +176,9 @@ export default function DealDetailClient({
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex items-start justify-between gap-3">
-        <PageHeader large title={deal.title} description={deal.code} backHref="/deals" />
+        <div data-guide="crm-deal-title">
+          <PageHeader large title={deal.title} description={deal.code} backHref="/deals" />
+        </div>
         <div className="mt-1 shrink-0 flex items-center gap-3">
           <button
             onClick={() => setShowEditDetails(true)}
@@ -197,8 +199,8 @@ export default function DealDetailClient({
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4 mt-4">
-        <div className="sm:col-span-2 space-y-4">
-          <div className="card p-4">
+        <div className="sm:col-span-2 space-y-4" data-guide="crm-deal-main">
+          <div className="card p-4" data-guide="crm-deal-account">
             <h3 className="text-base font-semibold text-slate-900 mb-3">Account</h3>
             <div className="text-base text-slate-700">{deal.accountName}</div>
             {deal.accountCity && <div className="text-xs text-slate-500">{deal.accountCity}</div>}
@@ -313,7 +315,7 @@ export default function DealDetailClient({
         </div>
 
         <div className="space-y-4">
-          <div className="card p-4 space-y-2 text-sm">
+          <div className="card p-4 space-y-2 text-sm" data-guide="crm-deal-summary">
             <div className="flex justify-between" data-guide="crm-deal-stage">
               <span className="text-slate-600">Stage</span>
               <span className="font-medium" style={{ color: deal.stageColorHex ?? undefined }}>{deal.stageName}</span>
@@ -345,7 +347,7 @@ export default function DealDetailClient({
               </div>
             )}
             {deal.siteAddress && (
-              <div className="flex justify-between gap-3">
+              <div className="flex justify-between gap-3" data-guide="crm-deal-site-address">
                 <span className="text-slate-500 shrink-0">Site address</span>
                 <span className="text-slate-800 text-right">{deal.siteAddress}</span>
               </div>
@@ -354,7 +356,7 @@ export default function DealDetailClient({
               <span className="text-slate-600">Office</span>
               <span className="text-slate-800">{deal.officeName ?? "—"}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between" data-guide="crm-deal-primary-contact">
               <span className="text-slate-600">Primary contact</span>
               <span className="text-slate-800">{deal.contacts.find((c) => c.id === deal.primaryContactId)?.name ?? "—"}</span>
             </div>

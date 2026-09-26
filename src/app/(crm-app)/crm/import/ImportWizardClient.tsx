@@ -145,7 +145,7 @@ export default function ImportWizardClient() {
       {step === "target" && (
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h3 className="text-base font-semibold text-slate-900 mb-3">What are you importing?</h3>
-          <div className="grid grid-cols-2 gap-3 mb-5">
+          <div className="grid grid-cols-2 gap-3 mb-5" data-guide="crm-import-targets">
             {TARGETS.map((t) => (
               <button
                 key={t}
@@ -159,7 +159,7 @@ export default function ImportWizardClient() {
             ))}
           </div>
           <div className="flex items-center gap-3">
-            <label className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm cursor-pointer">
+            <label className="bg-wa-green hover:bg-wa-green/90 text-white font-semibold px-4 py-2 rounded-xl text-sm cursor-pointer" data-guide="crm-import-file">
               Choose file
               <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="hidden" />
             </label>

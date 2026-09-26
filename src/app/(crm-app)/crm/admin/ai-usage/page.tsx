@@ -96,7 +96,7 @@ export default async function CrmAiUsagePage() {
       )}
 
       <div className="mt-6 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-200">
+        <div className="px-5 py-3 border-b border-slate-200" data-guide="crm-ai-by-person">
           <h2 className="font-bold text-slate-900">Requests by person</h2>
           <p className="text-xs text-slate-500">Ranked most to least.</p>
         </div>

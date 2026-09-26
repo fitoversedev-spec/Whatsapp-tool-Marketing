@@ -23,6 +23,8 @@ export type GuideEntry = {
     alt: string;
     /** Actions run after the page loads and before annotating, to reach the state the guide describes (open a dialog, open the first record...). */
     setup?: ScreenshotSetupAction[];
+    /** CSS selectors of private content (chat messages, personal details) to blur before capture. */
+    blur?: string[];
     /** Override the 1440x900 capture size (phone-sized for mobile guides, taller when a control sits below the fold). Widths under 600 emulate a phone. */
     viewport?: { width: number; height: number };
   };

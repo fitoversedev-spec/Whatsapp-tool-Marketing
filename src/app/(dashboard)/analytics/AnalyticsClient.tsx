@@ -124,7 +124,7 @@ export default function AnalyticsClient({
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {/* KPI cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" data-guide="wa-analytics-kpis">
           <KpiCard
             label="Total sent"
             value={formatNumber(kpis.totalSent)}
@@ -366,7 +366,7 @@ export default function AnalyticsClient({
         </div>
 
         {/* Per-broadcast table */}
-        <section className="card overflow-hidden">
+        <section className="card overflow-hidden" data-guide="wa-analytics-table">
           <div className="p-5 border-b border-slate-200">
             <h2 className="text-sm font-semibold text-slate-900">Broadcasts in range</h2>
             <p className="text-xs text-slate-500 mt-0.5">

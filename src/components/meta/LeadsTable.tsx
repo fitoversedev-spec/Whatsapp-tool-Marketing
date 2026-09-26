@@ -75,7 +75,7 @@ const FILTER_STORAGE_PREFIX = "leads-filter-";
 
 type DropdownOption = { label: string; count: number };
 
-function DropdownFilter({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: DropdownOption[] }) {
+function DropdownFilter({ label, value, onChange, options, guide }: { label: string; value: string; onChange: (v: string) => void; options: DropdownOption[]; guide?: string }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -91,7 +91,7 @@ function DropdownFilter({ label, value, onChange, options }: { label: string; va
   const filtered = search ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase())) : options;
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative" data-guide={guide}>
       <label className="block text-[11px] font-medium text-slate-600 mb-1">{label}</label>
       <button
         type="button"
@@ -344,10 +344,10 @@ export default function LeadsTable({
       <div className="space-y-3">
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3" data-guide="wa-ad-filters">
-          <DropdownFilter label="City" value={cityQuery} onChange={setCityQuery} options={allCities.filter((c) => c.label !== "—")} />
-          <DropdownFilter label="Sport" value={sportQuery} onChange={setSportQuery} options={allSports.filter((s) => s.label !== "—")} />
+          <DropdownFilter guide="wa-ad-city" label="City" value={cityQuery} onChange={setCityQuery} options={allCities.filter((c) => c.label !== "—")} />
+          <DropdownFilter guide="wa-ad-sport" label="Sport" value={sportQuery} onChange={setSportQuery} options={allSports.filter((s) => s.label !== "—")} />
           <DropdownFilter label="Area" value={areaQuery} onChange={setAreaQuery} options={allAreas.filter((a) => a.label !== "—")} />
-          <div>
+          <div data-guide="wa-ad-stage">
             <label className="block text-[11px] font-medium text-slate-600 mb-1">Stage</label>
             <select
               value={stageFilter}
@@ -362,7 +362,7 @@ export default function LeadsTable({
               ))}
             </select>
           </div>
-          <DropdownFilter label="Assigned To" value={assignedQuery} onChange={setAssignedQuery} options={allAssigned} />
+          <DropdownFilter guide="wa-ad-assigned" label="Assigned To" value={assignedQuery} onChange={setAssignedQuery} options={allAssigned} />
           {allLabels.length > 0 && (
             <DropdownFilter label="Label" value={labelFilter} onChange={setLabelFilter} options={allLabels} />
           )}

@@ -141,6 +141,7 @@ export default function ConnectionClient({
       <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-4xl">
         {/* Overall health */}
         <div
+          data-guide="wa-connection-status"
           className={`rounded-2xl border p-4 sm:p-5 flex items-start gap-3 ${
             !isConfigured
               ? "bg-amber-50 border-amber-200"
@@ -200,7 +201,7 @@ export default function ConnectionClient({
         {/* Phone number */}
         {phone && (
           <Card title="Phone number" subtitle="Live from Meta Cloud API">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-guide="wa-connection-phone">
               <Stat label="Display number" value={phone.displayNumber} mono />
               <Stat label="Verified name" value={phone.verifiedName} />
               <Stat label="Phone Number ID" value={phone.id} mono small />

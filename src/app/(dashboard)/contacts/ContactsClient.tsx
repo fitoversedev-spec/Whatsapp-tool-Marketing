@@ -153,12 +153,14 @@ export default function ContactsClient({
             <a
               href="/contacts/duplicates"
               className="hidden sm:inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 self-center px-2"
+              data-guide="wa-contacts-duplicates"
             >
               🔍 Find duplicates
             </a>
             <button
               onClick={() => setShowAdd(true)}
               className="btn btn-secondary flex-1 sm:flex-none"
+              data-guide="wa-contacts-add"
             >
               + Add
             </button>
@@ -225,6 +227,7 @@ export default function ContactsClient({
               onChange={(e) => setFilterValue(e.target.value)}
               placeholder={`${filterField} equals…`}
               className="input sm:w-auto"
+              data-guide="wa-contacts-field-value"
             />
           )}
         </div>
@@ -404,6 +407,7 @@ export default function ContactsClient({
                             <button
                               onClick={() => setEditing(c)}
                               className="text-sm text-slate-600 hover:text-slate-900 underline"
+                              data-guide="wa-contacts-edit"
                             >
                               Edit
                             </button>

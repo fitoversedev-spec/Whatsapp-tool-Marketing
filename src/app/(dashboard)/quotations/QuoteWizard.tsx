@@ -817,6 +817,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                   onChange={(e) => setCustomerName(e.target.value)}
                   placeholder="e.g. Dr. P. Prabhusankar"
                   className="input text-sm"
+                  data-guide="wa-quote-customer"
                 />
               </div>
 
@@ -905,7 +906,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Sport *
                 </label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2" data-guide="wa-quote-sport">
                   {SPORTS.map((s) => (
                     <label
                       key={s.id}
@@ -966,7 +967,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                     </button>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2" data-guide="wa-quote-dims">
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
@@ -1608,6 +1609,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
                 onClick={() => setStep(2)}
                 disabled={!step1Valid()}
                 className="btn btn-primary"
+                data-guide="wa-quote-next"
               >
                 Next →
               </button>

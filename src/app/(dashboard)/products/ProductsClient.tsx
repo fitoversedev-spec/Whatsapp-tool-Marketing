@@ -102,7 +102,7 @@ export default function ProductsClient({
         {/* Content */}
         <div className="flex-1 min-w-0 space-y-4">
           {/* Sport filter — shared across sections */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5" data-guide="wa-products-sport">
             <span className="heading text-[11px] text-slate-500 tracking-wide mr-1">
               Sport
             </span>
@@ -214,6 +214,7 @@ function ProductSection({
           type="button"
           onClick={() => setAdding((a) => !a)}
           className="btn btn-primary"
+          data-guide="wa-products-add"
         >
           {adding ? "Cancel" : `+ Add ${kindLabel.toLowerCase()}`}
         </button>

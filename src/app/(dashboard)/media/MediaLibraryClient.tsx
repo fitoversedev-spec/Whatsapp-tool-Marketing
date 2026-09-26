@@ -141,7 +141,7 @@ export default function MediaLibraryClient({
         title="Media library"
         description={`${media.length} file${media.length === 1 ? "" : "s"} · ${humanSize(totalBytes)} total`}
         action={
-          <label className="btn btn-primary cursor-pointer">
+          <label className="btn btn-primary cursor-pointer" data-guide="wa-media-upload">
             {uploading ? "Uploading…" : "+ Upload"}
             <input type="file" className="hidden" onChange={handleFile} disabled={uploading} />
           </label>
@@ -223,7 +223,7 @@ export default function MediaLibraryClient({
                     aria-label={`Select ${m.fileName}`}
                   />
                 )}
-                <div className="bg-slate-50 aspect-square flex items-center justify-center p-3">
+                <div className="bg-slate-50 aspect-square flex items-center justify-center p-3" data-guide="wa-media-file">
                   <MediaPreview
                     url={m.url}
                     mimeType={m.mimeType}

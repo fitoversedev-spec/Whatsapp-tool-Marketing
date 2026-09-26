@@ -355,7 +355,7 @@ export default function LeadsClient({
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filtered.map((l) => (
-                    <tr key={l.id} className="hover:bg-slate-50">
+                    <tr key={l.id} className="hover:bg-slate-50" data-guide="wa-leads-row">
                       <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
                         {new Date(l.createdAt).toLocaleString("en-IN", {
                           day: "numeric",
@@ -427,6 +427,7 @@ export default function LeadsClient({
                         <a
                           href={`/inbox?conversation=${l.conversationId}`}
                           className="text-xs font-medium text-wa-green hover:underline"
+                          data-guide="wa-leads-open-chat"
                         >
                           Open chat →
                         </a>

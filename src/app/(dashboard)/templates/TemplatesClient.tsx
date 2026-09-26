@@ -162,6 +162,7 @@ export default function TemplatesClient({
             <button
               onClick={() => setShowDraft(true)}
               className="btn btn-primary"
+              data-guide="wa-templates-new"
             >
               + New template
             </button>
@@ -187,6 +188,7 @@ export default function TemplatesClient({
           {currentUser.role === "admin" && (
             <button
               onClick={toggleShowDeleted}
+              data-guide="wa-templates-show-deleted"
               className={`shrink-0 ml-2 px-3 py-1.5 rounded-lg text-sm font-medium transition border ${
                 showDeleted
                   ? "bg-red-100 border-red-300 text-red-800"
@@ -562,6 +564,7 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
                 value={category}
                 onChange={(e) => setCategory(e.target.value as any)}
                 className="input"
+                data-guide="wa-templates-category"
               >
                 <option value="MARKETING">MARKETING</option>
                 <option value="UTILITY">UTILITY</option>
@@ -659,6 +662,7 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
               className="input min-h-[140px] font-mono text-sm"
               placeholder={"Hi {{1}}, your order {{2}} has shipped."}
               required
+              data-guide="wa-templates-body"
             />
           </Field>
 
@@ -683,6 +687,7 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
             type="submit"
             disabled={saving}
             className="order-1 sm:order-2 btn btn-primary"
+            data-guide="wa-templates-save"
           >
             {saving ? "Saving…" : "Save draft"}
           </button>

@@ -118,7 +118,7 @@ export default function BroadcastsClient({
 
       <div className="p-4 sm:p-6 lg:p-8">
         {broadcasts.length === 0 ? (
-          <div className="card p-8 sm:p-12 text-center text-slate-500">
+          <div className="card p-8 sm:p-12 text-center text-slate-500" data-guide="wa-broadcasts-list">
             No broadcasts yet. Click <strong>New broadcast</strong> to compose one.
           </div>
         ) : (
@@ -168,7 +168,7 @@ export default function BroadcastsClient({
             </div>
 
             {/* Desktop table */}
-            <div className="hidden md:block card overflow-hidden">
+            <div className="hidden md:block card overflow-hidden" data-guide="wa-broadcasts-list">
               <div className="overflow-x-auto">
                 <table className="data-table">
                   <thead>
@@ -574,7 +574,7 @@ function BroadcastComposer({
           {/* Source Toggle */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Contact source</label>
-            <div className="flex flex-wrap rounded-lg border border-slate-300 overflow-hidden w-fit">
+            <div className="flex flex-wrap rounded-lg border border-slate-300 overflow-hidden w-fit" data-guide="wa-broadcast-source">
               <button
                 type="button"
                 onClick={() => { setSource("contacts"); setPreview(null); }}
@@ -705,6 +705,7 @@ function BroadcastComposer({
               onChange={(e) => setTemplateId(e.target.value)}
               className="input"
               required
+              data-guide="wa-broadcast-template"
             >
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -853,6 +854,7 @@ function BroadcastComposer({
                 <button
                   type="button"
                   onClick={() => { setContactMode("filter"); setPreview(null); }}
+                  data-guide="wa-broadcast-mode-filter"
                   className={`px-3 py-1.5 rounded font-medium transition ${
                     contactMode === "filter"
                       ? "bg-white text-slate-900 shadow-sm"
@@ -864,6 +866,7 @@ function BroadcastComposer({
                 <button
                   type="button"
                   onClick={() => { setContactMode("pick"); setPreview(null); }}
+                  data-guide="wa-broadcast-mode-pick"
                   className={`px-3 py-1.5 rounded font-medium transition ${
                     contactMode === "pick"
                       ? "bg-white text-slate-900 shadow-sm"
@@ -981,6 +984,7 @@ function BroadcastComposer({
                   type="button"
                   onClick={addContactFilter}
                   className="text-xs text-wa-green font-semibold hover:underline"
+                  data-guide="wa-broadcast-add-filter"
                 >
                   + Add filter
                 </button>
@@ -1053,6 +1057,7 @@ function BroadcastComposer({
             onClick={doPreview}
             disabled={busy}
             className="text-wa-dark font-medium text-sm underline"
+            data-guide="wa-broadcast-preview"
           >
             {busy ? "Loading…" : "Preview recipients →"}
           </button>
@@ -1154,6 +1159,7 @@ function BroadcastComposer({
             type="submit"
             disabled={busy || !preview || (sendMode === "later" && !scheduledAt)}
             className="order-1 sm:order-2 btn btn-primary"
+            data-guide="wa-broadcast-launch"
           >
             {busy
               ? sendMode === "later"

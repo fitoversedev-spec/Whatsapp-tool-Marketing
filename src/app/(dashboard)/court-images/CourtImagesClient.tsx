@@ -192,6 +192,7 @@ export default function CourtImagesClient({
           <button
             onClick={openNew}
             className="btn btn-primary"
+            data-guide="wa-court-new"
           >
             + New design
           </button>

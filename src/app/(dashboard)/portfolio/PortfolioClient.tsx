@@ -135,6 +135,7 @@ export default function PortfolioClient({
                 setShowModal(true);
               }}
               className="btn btn-primary"
+              data-guide="wa-portfolio-add"
             >
               + Add project
             </button>
@@ -156,6 +157,7 @@ export default function PortfolioClient({
             value={sportFilter}
             onChange={(e) => setSportFilter(e.target.value)}
             className="input w-auto capitalize text-sm"
+            data-guide="wa-portfolio-sport"
           >
             <option value="all">All sports</option>
             {SPORT_OPTIONS.map((s) => (

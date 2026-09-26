@@ -112,6 +112,7 @@ export default function SearchClient({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Type to search…"
               className="w-full px-4 py-3 text-base border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-wa-green/30 focus:border-wa-green pl-11"
+              data-guide="wa-search-input"
             />
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">🔍</span>
             {loading && (

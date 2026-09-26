@@ -377,6 +377,7 @@ export default function InboxClient({
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
+                data-guide={`wa-inbox-tab-${s}`}
                 className={`flex-1 text-xs font-medium px-2 py-1.5 rounded-md transition ${
                   statusFilter === s
                     ? "bg-court-600 text-white"
@@ -402,6 +403,8 @@ export default function InboxClient({
               <button
                 key={c.id}
                 onClick={() => setSelected(c.id)}
+                data-guide={selected === c.id ? "wa-inbox-conversation-open" : "wa-inbox-conversation"}
+                data-unread={c.unreadCount > 0 ? "true" : "false"}
                 className={`w-full text-left px-4 py-3 border-b border-slate-100 hover:bg-slate-50 active:bg-slate-100 transition ${
                   selected === c.id ? "bg-slate-50" : ""
                 }`}
@@ -507,6 +510,7 @@ export default function InboxClient({
                   className={`px-2.5 py-1.5 text-xs rounded-md font-medium ${
                     showNotes ? "bg-amber-100 text-amber-800" : "text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white"
                   }`}
+                  data-guide="wa-inbox-notes"
                   title="Notes"
                 >
                   📝<span className="hidden sm:inline ml-1">Notes</span>
@@ -519,6 +523,7 @@ export default function InboxClient({
                   className={`px-2.5 py-1.5 text-xs rounded-md font-medium ${
                     showReminders ? "bg-orange-100 text-orange-800" : "text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white"
                   }`}
+                  data-guide="wa-inbox-reminders"
                   title="Reminders"
                 >
                   ⏰<span className="hidden sm:inline ml-1">Reminders</span>
@@ -562,6 +567,7 @@ export default function InboxClient({
                     <button
                       onClick={() => setShowReassign((v) => !v)}
                       className="px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white rounded-md font-medium"
+                      data-guide="wa-inbox-reassign"
                       title="Reassign conversation"
                     >
                       Reassign
@@ -604,13 +610,14 @@ export default function InboxClient({
                     )
                   }
                   className="px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 border border-slate-200 bg-white rounded-md font-medium"
+                  data-guide="wa-inbox-close"
                 >
                   {isClosed ? "Reopen" : "Close"}
                 </button>
               </div>
             </div>
 
-            <div ref={threadRef} className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-2">
+            <div ref={threadRef} className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-2" data-guide="wa-inbox-messages">
               {hasMoreOlder && (
                 <div className="flex justify-center pb-1">
                   <button
@@ -626,6 +633,7 @@ export default function InboxClient({
               {messages.map((m) => (
                 <div
                   key={m.id}
+                  data-guide="wa-inbox-message"
                   className={`flex ${m.direction === "outbound" ? "justify-end" : "justify-start"}`}
                 >
                   <div
@@ -677,6 +685,7 @@ export default function InboxClient({
                       : "opacity-40 cursor-not-allowed text-slate-400"
                   }`}
                   title="Attach file"
+                  data-guide="wa-inbox-attach"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" />
@@ -707,11 +716,13 @@ export default function InboxClient({
                       : "24h window closed"
                   }
                   disabled={!withinWindow || sending || isClosed}
+                  data-guide="wa-inbox-composer"
                   className="flex-1 min-w-0 px-3 sm:px-4 py-2.5 rounded-lg border border-slate-300 focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none disabled:bg-slate-50 disabled:text-slate-400 text-base sm:text-sm"
                 />
                 <button
                   type="submit"
                   disabled={!withinWindow || sending || !reply.trim() || isClosed}
+                  data-guide="wa-inbox-send"
                   className="btn btn-primary shrink-0"
                 >
                   {sending ? "…" : "Send"}

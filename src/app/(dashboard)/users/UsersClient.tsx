@@ -115,6 +115,7 @@ export default function UsersClient({
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
+                data-guide={`wa-users-tab-${t.id}`}
                 className={`shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${
                   active
                     ? "bg-slate-900 text-white"

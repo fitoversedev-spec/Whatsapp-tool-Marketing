@@ -3675,7 +3675,7 @@ function Step1(props: {
   }
 
   return (
-    <div className="p-6 sm:p-8 overflow-y-auto h-full max-w-3xl mx-auto space-y-6">
+    <div className="p-6 sm:p-8 overflow-y-auto h-full max-w-3xl mx-auto space-y-6" data-guide="wa-court-step1">
       {/* Design mode — standard preset court, or free-form custom
           shape. Custom is a placeholder for now; the free-form editor
           will land in a later release. */}
@@ -3893,7 +3893,7 @@ function Step1(props: {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3" data-guide="wa-court-dims">
               <label className="block">
                 <span className="text-[11px] text-slate-500 uppercase tracking-wide">
                   Length ({unit})
@@ -3947,7 +3947,7 @@ function Step1(props: {
         <h3 className="text-sm font-semibold text-slate-900 mb-3">
           Sports <span className="text-xs font-normal text-slate-500">(pick one or more)</span>
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-guide="wa-court-sports">
           {SPORTS.map((sport) => {
             const active = selectedSports.includes(sport);
             return (
@@ -4256,7 +4256,7 @@ function Step1(props: {
         </h3>
         {/* P5-02: visual material swatch tiles (PPE grid / sheen acrylic /
             striped turf / speckle PVC) instead of text-only buttons. */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" data-guide="wa-court-surface">
           {surfaceOptionsForSports(selectedSports).map((opt) => (
             <SurfaceSwatchButton
               key={opt.id}

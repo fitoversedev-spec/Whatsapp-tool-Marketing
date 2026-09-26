@@ -77,8 +77,9 @@ export default function InvoicesClient({ basePath = "" }: { basePath?: string } 
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search customer / number / phone…"
           className="input w-64 text-sm"
+          data-guide="wa-invoices-search"
         />
-        <div className="flex gap-1">
+        <div className="flex gap-1" data-guide="wa-invoices-status">
           {STATUSES.map((s) => (
             <button
               key={s || "all"}
@@ -143,7 +144,7 @@ export default function InvoicesClient({ basePath = "" }: { basePath?: string } 
         <div className="hidden md:block overflow-x-auto">
           <table className="data-table">
             <thead>
-              <tr>
+              <tr data-guide="wa-invoices-head">
                 <th className="text-left">Invoice</th>
                 <th className="text-left">Customer</th>
                 <th className="!text-right">Total</th>

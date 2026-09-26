@@ -167,7 +167,8 @@ async function processEntry(page: Page, entry: Entry): Promise<EntryReport> {
         report.problems.push(msg);
       }
 
-      await page.addStyleTag({ content: "nextjs-portal{display:none!important}" });
+      const blurCss = (entry.screenshot.blur ?? []).map((sel) => `${sel}{filter:blur(7px)!important}`).join("\n");
+      await page.addStyleTag({ content: `nextjs-portal{display:none!important}\n${blurCss}` });
       await sleep(150);
       const outputPath = join(OUTPUT_DIR, entry.screenshot.file);
       // Capture to a temp file first so a blank render can never overwrite a good screenshot.

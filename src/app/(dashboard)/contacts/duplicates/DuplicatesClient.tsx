@@ -55,7 +55,7 @@ export default function DuplicatesClient({ groups }: { groups: Group[] }) {
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-4">
         {groups.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+          <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center" data-guide="wa-duplicates-group">
             <div className="text-4xl mb-2">✨</div>
             <h3 className="font-semibold text-slate-900">No duplicates detected</h3>
             <p className="text-sm text-slate-500 mt-1">
@@ -67,6 +67,7 @@ export default function DuplicatesClient({ groups }: { groups: Group[] }) {
             <div
               key={g.canonicalPhone}
               className="bg-white border border-slate-200 rounded-2xl overflow-hidden"
+              data-guide="wa-duplicates-group"
             >
               <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
                 <div>

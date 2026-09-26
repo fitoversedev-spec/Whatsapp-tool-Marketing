@@ -68,9 +68,9 @@ function stackedSeries(rows: { x: string; group: string; value: number }[], topN
   return { data, stackKeys, colorFor };
 }
 
-function KpiTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function KpiTile({ label, value, sub, guide }: { label: string; value: string; sub?: string; guide?: string }) {
   return (
-    <div className="bg-slate-50 rounded-lg p-4">
+    <div className="bg-slate-50 rounded-lg p-4" data-guide={guide}>
       <div className="text-sm text-slate-600">{label}</div>
       <div className="text-xl font-semibold mt-1 font-mono">{value}</div>
       {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
@@ -411,6 +411,7 @@ export default function LeadAnalyticsClient({
           <KpiTile label="Cities" value={fmtInt(byCity.length)} sub={topCity ? `Top: ${topCity.city}` : "No city data"} />
           <KpiTile label="Sports asked for" value={fmtInt(sportRankingAll.length)} sub={topSport ? `Top: ${topSport.sport}` : "No sport data"} />
           <KpiTile
+            guide="wa-lead-repeat-kpi"
             label="Repeat submitters"
             value={fmtInt(repeats.length)}
             sub="Across >1 campaign"
@@ -462,6 +463,7 @@ export default function LeadAnalyticsClient({
         {/* Leads by city */}
         <div data-guide="wa-lead-city">
         <AnalyticsCard
+          guide="wa-lead-city-title"
           title={cityView === "overall" ? "Total leads (overall)" : "Leads by city"}
           description={`${cityView === "overall" ? "Overall lead volume across all cities." : "Every lead's city, ranked by volume — where the demand is coming from."}${totalCityLeads > 0 ? ` Overall: ${fmtInt(totalCityLeads)} leads across ${byCity.length} cities.` : ""}`}
           action={topCity ? `Most leads are coming from ${topCity.city} (${fmtInt(topCity.count)}) — prioritise follow-up and local offers there.` : undefined}
@@ -571,6 +573,7 @@ export default function LeadAnalyticsClient({
         {/* Sport demand */}
         <div data-guide="wa-lead-sport">
         <AnalyticsCard
+          guide="wa-lead-sport-title"
           title={sportView === "overall" ? "Most-requested sport (overall)" : "Most-requested sport per city"}
           description={`${sportView === "overall" ? "Overall sport demand across all cities." : "What each city is asking for — leads by sport."}${sportRankingAll.length > 0 ? ` Overall: ${fmtInt(sportByCity.reduce((a, c) => a + c.count, 0))} leads across ${sportRankingAll.length} sports.` : ""}`}
           action={topSport ? `${topSport.sport} is the most-requested interest (${fmtInt(topSport.count)} lead${topSport.count === 1 ? "" : "s"}) — feature it in your next campaign.` : undefined}
@@ -831,6 +834,7 @@ export default function LeadAnalyticsClient({
 
         {/* Repeat submitters */}
         <AnalyticsCard
+          guide="wa-lead-repeat-title"
           title="Repeat submitters"
           description="People who submitted a lead form across more than one campaign (deduped by phone, else email) — warm contacts who keep coming back."
           action={

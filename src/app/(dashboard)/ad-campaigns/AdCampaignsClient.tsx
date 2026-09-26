@@ -225,7 +225,7 @@ export default function AdCampaignsClient({
               <div className="hidden md:block overflow-x-auto">
                 <table className="data-table">
                   <thead>
-                    <tr>
+                    <tr data-guide="wa-campaigns-head">
                       {["Campaign", "Status", "Spend", "Insight leads", "Captured leads", "Cost / lead"].map((h, i) => (
                         <th key={i} className={`whitespace-nowrap ${i >= 2 ? "!text-right" : ""}`}>
                           {h}
@@ -237,7 +237,7 @@ export default function AdCampaignsClient({
                     {campaigns.map((c) => (
                       <tr key={c.metaId}>
                         <td className="font-medium">
-                          <Link href={`/ad-campaigns/${c.metaId}`} className="text-court-700 hover:underline">
+                          <Link href={`/ad-campaigns/${c.metaId}`} className="text-court-700 hover:underline" data-guide="wa-campaign-link">
                             {c.name}
                           </Link>
                           {c.objective && <div className="text-xs text-slate-400 font-normal">{c.objective}</div>}
@@ -264,6 +264,7 @@ export default function AdCampaignsClient({
         {/* Lead-gen leads — filterable by city / sport, with a live breakdown */}
         <AnalyticsCard
           title="Lead-gen leads"
+          guide="wa-ad-leads-heading"
           description="Every Instant-Form submission captured from your ads. Filter by city or sport, click a breakdown value to drill in, or open a lead for the full form answers."
         >
           <LeadsTable leads={leads} reps={reps} showCampaignColumn exportFilename="ad-leads" labelCatalog={labelCatalog} stageCatalog={stageCatalog} currentUserId={currentUserId} isAdmin={isAdmin} />

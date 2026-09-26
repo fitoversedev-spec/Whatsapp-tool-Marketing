@@ -266,6 +266,7 @@ export default function QuotationsClient({
             <button
               onClick={() => setShowWizard(true)}
               className="btn btn-primary"
+              data-guide="wa-quote-new"
             >
               + New quotation
             </button>
@@ -529,6 +530,7 @@ export default function QuotationsClient({
                               onChange={(e) => setPhoneEdits((curr) => ({ ...curr, [q.id]: e.target.value }))}
                               placeholder="+919876543210"
                               className="input w-36 !px-1.5 !py-0.5 text-sm !border-amber-300 font-mono"
+                              data-guide="wa-quote-phone"
                             />
                             <button
                               onClick={() => savePhone(q)}
@@ -577,6 +579,7 @@ export default function QuotationsClient({
                             target="_blank"
                             rel="noreferrer"
                             className="text-sm text-wa-dark hover:underline"
+                            data-guide={q.status === "draft" && q.contactPhone ? "wa-quote-pdf" : undefined}
                           >
                             View PDF
                           </a>
@@ -584,6 +587,7 @@ export default function QuotationsClient({
                             <button
                               onClick={() => send(q)}
                               className="text-sm text-blue-700 hover:underline"
+                              data-guide="wa-quote-send"
                             >
                               Send
                             </button>

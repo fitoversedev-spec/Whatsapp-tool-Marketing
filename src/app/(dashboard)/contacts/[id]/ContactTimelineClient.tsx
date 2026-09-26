@@ -136,13 +136,13 @@ export default function ContactTimelineClient({
       <div className="p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Timeline (main column) */}
         <section className="lg:col-span-2">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3">Activity</h2>
+          <h2 className="text-sm font-semibold text-slate-900 mb-3" data-guide="wa-contact-activity">Activity</h2>
           {feed.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
               No activity yet for this contact.
             </div>
           ) : (
-            <ol className="relative border-l border-slate-200 ml-3 space-y-4">
+            <ol className="relative border-l border-slate-200 ml-3 space-y-4" data-guide="wa-contact-feed">
               {feed.map((e) => (
                 <li key={`${e.kind}-${e.id}`} className="pl-6 relative">
                   <span className="absolute -left-[7px] top-1 w-3 h-3 rounded-full ring-2 ring-white"
@@ -157,7 +157,7 @@ export default function ContactTimelineClient({
 
         {/* Right rail */}
         <aside className="space-y-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4" data-guide="wa-contact-info">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
               Contact
             </h3>
@@ -226,7 +226,7 @@ function Field({ label, value, mono = false }: { label: string; value: string; m
   return (
     <div className="flex items-baseline gap-2 mb-2 last:mb-0">
       <span className="text-xs text-slate-500 w-20 shrink-0 capitalize">{label}</span>
-      <span className={`text-sm text-slate-900 ${mono ? "font-mono text-xs" : ""}`}>{value}</span>
+      <span className={`text-sm text-slate-900 ${mono ? "font-mono text-xs" : ""}`} data-guide="wa-contact-value">{value}</span>
     </div>
   );
 }

@@ -115,6 +115,7 @@ export default function BulkActionBar({
         <button
           onClick={exportCsv}
           className="text-xs font-medium px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-md"
+          data-guide="wa-contacts-export"
         >
           ⬇ Export CSV
         </button>

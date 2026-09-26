@@ -13,16 +13,19 @@ export function AnalyticsCard({
   children,
   action,
   drillHref,
+  guide,
 }: {
   title: string;
   description?: string;
   children: React.ReactNode;
   action?: string;
   drillHref?: string;
+  // Help-center screenshot hook: sets data-guide on the card heading.
+  guide?: string;
 }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+      <h3 className="text-base font-semibold text-slate-900" data-guide={guide}>{title}</h3>
       {description && <p className="text-sm text-slate-600 mt-1 mb-3">{description}</p>}
       <div className={description ? "" : "mt-3"}>{children}</div>
       {(action || drillHref) && (

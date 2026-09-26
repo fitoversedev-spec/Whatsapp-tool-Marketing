@@ -96,6 +96,7 @@ export default function TagsClient({
             <button
               onClick={() => setCreating(true)}
               className="btn btn-primary"
+              data-guide="wa-tags-new"
             >
               + New tag
             </button>
@@ -120,6 +121,7 @@ export default function TagsClient({
                 placeholder="e.g. VIP, School, Hot lead"
                 autoFocus
                 className="input flex-1"
+                data-guide="wa-tags-name"
               />
               <ColorChooser value={color} onChange={setColor} />
               <div className="flex gap-2">
@@ -137,6 +139,7 @@ export default function TagsClient({
                   onClick={create}
                   disabled={!name.trim() || busy}
                   className="btn btn-primary"
+                  data-guide="wa-tags-create"
                 >
                   {busy ? "Creating…" : "Create"}
                 </button>
@@ -215,6 +218,7 @@ export default function TagsClient({
                                 setEditColor(tag.color);
                               }}
                               className="text-xs text-slate-600 hover:text-slate-900 px-2 py-1 hover:bg-slate-100 rounded"
+                              data-guide="wa-tags-edit"
                             >
                               Edit
                             </button>

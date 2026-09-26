@@ -308,6 +308,7 @@ export default function AllToolsPanel({
                         key={item.href}
                         href={item.href}
                         onClick={onClose}
+                        data-guide={`wa-alltools-${item.href.split("/").filter(Boolean).pop()}`}
                         className={`relative flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl border transition overflow-hidden ${
                           active
                             ? "border-wa-green bg-wa-green/5 text-wa-dark"

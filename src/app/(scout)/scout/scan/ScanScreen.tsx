@@ -202,7 +202,15 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
 
   useEffect(() => {
     if (!flooringOpen) return;
-    const handler = () => { setFlooringOpen(null); setFlooringCustomMode(null); };
+    const handler = (e: MouseEvent) => {
+      // Next mounts React on `document`, so a React stopPropagation() cannot stop this listener. Ignore clicks that
+      // started inside the flooring chip or menu (composedPath is fixed at dispatch, so it survives the clicked
+      // "Other…" button being removed from the DOM by the re-render).
+      const inside = e.composedPath().some((n) => n instanceof Element && n.hasAttribute("data-flooring-ui"));
+      if (inside) return;
+      setFlooringOpen(null);
+      setFlooringCustomMode(null);
+    };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, [flooringOpen]);
@@ -1278,6 +1286,8 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                       </div>
                       {shown.map((place) => {
                         const isPinned = pinnedPlaceIds.includes(place.placeId);
+                        // One menu per card: a venue listed under two categories must not open two menus at once.
+                        const flooringKey = `${group.id}:${place.placeId}`;
                         return (
                           <div key={place.placeId} className="flex flex-col gap-0">
                           <div
@@ -1331,9 +1341,10 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                                       className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setFlooringOpen(flooringOpen === place.placeId ? null : place.placeId);
+                                        setFlooringOpen(flooringOpen === flooringKey ? null : flooringKey);
                                       }}
                                       title="Change flooring type"
+                                      data-flooring-ui
                                     >
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
                                       {place.flooring}
@@ -1344,9 +1355,10 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                                       className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-slate-50 text-slate-500 border border-dashed border-slate-300 hover:bg-slate-100 hover:text-slate-700 hover:border-slate-400 transition-colors"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setFlooringOpen(flooringOpen === place.placeId ? null : place.placeId);
+                                        setFlooringOpen(flooringOpen === flooringKey ? null : flooringKey);
                                       }}
                                       title="Add flooring type"
+                                      data-flooring-ui
                                     >
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
                                       Add flooring
@@ -1387,9 +1399,9 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                                       </button>
                                     </span>
                                   )}
-                                  {flooringOpen === place.placeId && (
-                                    <span className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl py-1.5 min-w-[180px]" onClick={(e) => e.stopPropagation()}>
-                                      {flooringCustomMode === place.placeId ? (
+                                  {flooringOpen === flooringKey && (
+                                    <span data-flooring-ui className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl py-1.5 min-w-[180px]" onClick={(e) => e.stopPropagation()}>
+                                      {flooringCustomMode === flooringKey ? (
                                         <span className="flex flex-col gap-1.5 px-3 py-2">
                                           <span className="text-[11px] font-semibold text-slate-500">Custom flooring type</span>
                                           <input
@@ -1452,7 +1464,7 @@ export function ScanScreen({ taxonomy, initial, googleKeyMissing, prefill, onCon
                                               className={`block w-full text-left text-sm px-4 py-2 hover:bg-court-50 transition-colors ${place.flooring === opt ? "font-semibold text-court-600 bg-court-50" : "text-slate-700"}`}
                                               onClick={() => {
                                                 if (opt === "Other") {
-                                                  setFlooringCustomMode(place.placeId);
+                                                  setFlooringCustomMode(flooringKey);
                                                   setFlooringCustomInput("");
                                                 } else {
                                                   saveFlooring(place.placeId, opt);

@@ -12,9 +12,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { canSeeAllCustomers, customerAccess } from "@/lib/rbac";
 import { findAccountContactDuplicate, findAccountDuplicate } from "@/lib/crm/accounts";
 import { buildDealCode, nextDealSequenceForYear } from "@/lib/crm/deals";
+import { firstLeadStage } from "@/lib/crm/leadStages";
 
 const createSchema = z
   .object({
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
   if (accountId) {
     const account = await prisma.account.findUnique({ where: { id: accountId } });
     if (!account || account.deletedAt) return NextResponse.json({ error: "account_not_found" }, { status: 404 });
-    if (!isAdmin(user.role) && account.ownerUserId && account.ownerUserId !== user.id) {
+    if (!customerAccess(user, account.ownerUserId).canEdit) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
     accountCity = account.city;
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const startStage = data.asLead ? await firstLeadStage() : null;
   const result = await prisma.$transaction(async (tx) => {
     if (data.isPrimary) {
       await tx.accountContact.updateMany({ where: { accountId }, data: { isPrimary: false } });
@@ -111,8 +113,9 @@ export async function POST(req: NextRequest) {
         isPrimary: data.isPrimary ?? false,
         leadSourceId: data.leadSourceId ?? null,
         createdByUserId: user!.id,
-        // Stamp as a promoted lead when asked, so it lands in the Leads list.
-        ...(data.asLead ? { pipelineStage: "LEAD", promotedToLeadAt: new Date() } : {}),
+        // Stamp as a promoted lead when asked, so it lands in the Leads list —
+        // starting at the first sales stage.
+        ...(data.asLead ? { pipelineStage: "LEAD", promotedToLeadAt: new Date(), leadStageId: startStage?.id ?? null } : {}),
       },
     });
 
@@ -155,7 +158,7 @@ export async function GET(req: NextRequest) {
     ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
     ...(accountId ? { accountId } : {}),
   };
-  if (!isAdmin(user.role)) {
+  if (!canSeeAllCustomers(user.role)) {
     where.account = { ownerUserId: user.id };
   }
 

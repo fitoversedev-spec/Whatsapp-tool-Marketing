@@ -6,6 +6,7 @@ import { useToast } from "@/components/Toast";
 
 const TABS: { type: string; label: string }[] = [
   { type: "funnel-stages", label: "Funnel Stages" },
+  { type: "lead-stages", label: "Lead Stages" },
   { type: "lead-sources", label: "Lead Sources" },
   { type: "customer-profiles", label: "Customer Profiles" },
   { type: "city-tiers", label: "City Tiers" },
@@ -32,6 +33,8 @@ type Row = {
   // with no admin UI until now, so every stage left them null forever.
   slaHours?: number | null;
   probabilityPercent?: number | null;
+  // Lead stages only: live contacts currently in this stage.
+  contactCount?: number;
 };
 
 const SWATCHES = ["#64748b", "#3b82f6", "#a855f7", "#f59e0b", "#f97316", "#10b981", "#ef4444"];
@@ -109,6 +112,9 @@ export default function TaxonomyClient() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
+  // Lead stages: the stage being removed, and where its contacts should go.
+  const [removing, setRemoving] = useState<Row | null>(null);
+  const [moveTo, setMoveTo] = useState("");
 
   const load = useCallback(async (type: string) => {
     setLoading(true);
@@ -125,7 +131,35 @@ export default function TaxonomyClient() {
 
   useEffect(() => {
     load(tab);
+    setRemoving(null);
   }, [tab, load]);
+
+  // A stage nobody is in just goes; one in use first asks where to move them.
+  function startRemove(r: Row) {
+    if (!r.contactCount) {
+      if (confirm(`Remove the "${r.name}" stage?`)) removeStage(r, null);
+      return;
+    }
+    setRemoving(r);
+    setMoveTo(rows.find((o) => o.id !== r.id && o.isActive)?.id ?? "");
+  }
+
+  async function removeStage(r: Row, moveToId: string | null) {
+    const res = await fetch(`/api/admin/taxonomy/${tab}/${r.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deleted: true, moveToId }),
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast.success(data.moved ? `Removed — ${data.moved} contact${data.moved === 1 ? "" : "s"} moved` : "Stage removed");
+      setRemoving(null);
+      load(tab);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Could not remove stage");
+    }
+  }
 
   async function addRow() {
     if (!newName.trim()) return;
@@ -203,6 +237,23 @@ export default function TaxonomyClient() {
         ))}
       </div>
 
+      {removing && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm flex flex-wrap items-center gap-2">
+          <span className="text-red-800">
+            Move the <span className="font-mono">{removing.contactCount}</span> contact{removing.contactCount === 1 ? "" : "s"} in &ldquo;{removing.name}&rdquo; to
+          </span>
+          <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className="input w-auto !py-1 text-sm">
+            {rows.filter((o) => o.id !== removing.id && o.isActive).map((o) => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+          <button onClick={() => removeStage(removing, moveTo || null)} disabled={!moveTo} className="btn btn-primary !px-3 !py-1 !text-xs disabled:opacity-50">
+            Move and remove
+          </button>
+          <button onClick={() => setRemoving(null)} className="btn btn-ghost !px-3 !py-1 !text-xs">Cancel</button>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-slate-400 text-sm">Loading…</div>
@@ -217,8 +268,10 @@ export default function TaxonomyClient() {
                 {tab === "funnel-stages" && <th className="px-4 py-2.5 font-medium">Needs reason</th>}
                 {tab === "funnel-stages" && <th className="px-4 py-2.5 font-medium">SLA (hrs)</th>}
                 {tab === "funnel-stages" && <th className="px-4 py-2.5 font-medium">Win prob %</th>}
+                {tab === "lead-stages" && <th className="px-4 py-2.5 font-medium">Contacts</th>}
                 <th className="px-4 py-2.5 font-medium">Active</th>
                 <th className="px-4 py-2.5 font-medium">Order</th>
+                {tab === "lead-stages" && <th className="px-4 py-2.5 font-medium" />}
               </tr>
             </thead>
             <tbody>
@@ -279,6 +332,9 @@ export default function TaxonomyClient() {
                       />
                     </td>
                   )}
+                  {tab === "lead-stages" && (
+                    <td className="px-4 py-2.5 text-slate-600 font-mono">{r.contactCount ?? 0}</td>
+                  )}
                   <td className="px-4 py-2.5">
                     <input type="checkbox" checked={r.isActive} onChange={(e) => patchRow(r.id, { isActive: e.target.checked })} data-guide={index === 1 ? "crm-taxonomy-active" : undefined} />
                   </td>
@@ -302,6 +358,13 @@ export default function TaxonomyClient() {
                       </button>
                     </div>
                   </td>
+                  {tab === "lead-stages" && (
+                    <td className="px-4 py-2.5 text-right">
+                      <button onClick={() => startRemove(r)} className="text-xs font-medium text-red-600 hover:underline">
+                        Remove
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

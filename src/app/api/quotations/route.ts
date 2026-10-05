@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildQuotationNumber, recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
 import { findOrCreateDealForConversation, reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
+import { logDocumentDeleted } from "@/lib/crm/contactLinks";
 
 const createSchema = z.object({
   customerName: z.string().min(1).max(200),
@@ -329,7 +330,7 @@ export async function DELETE(req: NextRequest) {
   // so each can be reconciled afterward — see docs/DECISIONS.md.
   const affected = await prisma.quotation.findMany({
     where: { id: { in: parsed.data.ids } },
-    select: { dealId: true },
+    select: { number: true, dealId: true, contactPhone: true, createdAt: true },
   });
   const dealIds = [...new Set(affected.map((q) => q.dealId).filter((id): id is string => !!id))];
 
@@ -337,6 +338,7 @@ export async function DELETE(req: NextRequest) {
     where: { id: { in: parsed.data.ids } },
   });
   await Promise.all(dealIds.map((id) => reconcileDealAfterQuotationDelete(id)));
+  await Promise.all(affected.map((q) => logDocumentDeleted({ kind: "quotation", ...q }, user.id)));
   return NextResponse.json({ ok: true, count: result.count });
 }
 

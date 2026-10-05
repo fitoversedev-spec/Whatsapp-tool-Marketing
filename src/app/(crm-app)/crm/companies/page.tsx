@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, canSeeAllCustomers } from "@/lib/rbac";
 import CompaniesClient from "./CompaniesClient";
 
 export default async function CompaniesPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
@@ -14,7 +14,7 @@ export default async function CompaniesPage({ searchParams }: { searchParams: { 
   // see everything until they narrow it down themselves.
   const dateRange = searchParams.from && searchParams.to ? { from: searchParams.from, to: searchParams.to } : null;
   const where = {
-    ...(isAdmin(user.role) ? { deletedAt: null } : { deletedAt: null, ownerUserId: user.id }),
+    ...(canSeeAllCustomers(user.role) ? { deletedAt: null } : { deletedAt: null, ownerUserId: user.id }),
     contacts: { some: {} },
     ...(dateRange ? { createdAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
   };

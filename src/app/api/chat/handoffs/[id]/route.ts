@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/rbac";
 import { postThreadNote } from "@/lib/chat/events";
+import { reassignCustomerRep } from "@/lib/crm/assignRep";
 
 export const runtime = "nodejs";
 
@@ -98,8 +99,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (hr.dealId) {
       await prisma.deal.update({ where: { id: hr.dealId }, data: { ownerUserId: hr.toUserId } });
     } else if (hr.accountContact) {
-      // Taking over a customer moves the whole account to the new rep.
-      await prisma.account.update({ where: { id: hr.accountContact.accountId }, data: { ownerUserId: hr.toUserId } });
+      // Taking over a customer moves the whole account to the new rep — the
+      // same reassignment the contact page's "Handled by" does.
+      await reassignCustomerRep({ accountId: hr.accountContact.accountId, toUserId: hr.toUserId, actorUserId: user.id });
     }
     await prisma.handoffRequest.update({ where: { id: hr.id }, data: { status: "COMPLETED", approvedByUserId: user.id } });
     const threadId = await resolveThreadId(anchor, user.id);

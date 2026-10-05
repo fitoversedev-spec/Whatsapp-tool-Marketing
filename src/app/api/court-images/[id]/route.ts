@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logDocumentDeleted } from "@/lib/crm/contactLinks";
 
 const layoutSchema = z
   .object({
@@ -175,5 +176,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   // Admins may delete even a sent design (e.g. a mistaken send / test run).
   await prisma.courtImage.delete({ where: { id: params.id } });
+  await logDocumentDeleted({ kind: "design", number: row.number, dealId: row.dealId, contactPhone: null, createdAt: row.createdAt }, user.id);
   return NextResponse.json({ ok: true });
 }

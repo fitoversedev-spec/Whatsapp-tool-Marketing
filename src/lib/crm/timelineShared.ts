@@ -17,16 +17,22 @@ export const MEETING_TYPE_NAMES = new Set(["Google Meet", "In-Person Meeting"]);
 
 export type TimelineEntry = {
   id: string;
-  kind: "activity" | "reminder" | "created" | "stage";
+  // activity/reminder/created/stage feed every Timeline; the rest only the
+  // contact Timeline (getContactTimeline). "change" is a ContactEvent row.
+  kind:
+    | "activity" | "reminder" | "created" | "stage"
+    | "deal" | "note" | "file" | "quote" | "design" | "product" | "next_action" | "insight" | "change";
   title: string;
   detail: string | null;
-  timestamp: string; // Activity.occurredAt, Reminder.dueAt, DealStageHistory.changedAt, or the record's own createdAt
-  ownerName: string;
+  timestamp: string; // when it happened (a reminder's dueAt, a record's own createdAt, an event's time…)
+  ownerName: string | null; // who did it; null when nobody was recorded
   completed?: boolean; // reminders only
   // The underlying ActivityType name (activity and reminder kinds only) —
   // lets the UI show a CALL/MEETING badge instead of a generic
   // ACTIVITY/REMINDER one when it matches CALL_TYPE_NAMES/MEETING_TYPE_NAMES.
   typeName?: string | null;
+  // "change" entries only: the badge text (STAGE, REP, LEADS, EDITED, DELETED…).
+  label?: string;
 };
 
 export type TimelineFilter = {

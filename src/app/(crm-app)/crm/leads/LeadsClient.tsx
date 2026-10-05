@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import { DropdownFilter, type DropdownOption } from "@/components/DropdownFilter";
 
 type Lead = {
   id: string;
@@ -15,13 +16,100 @@ type Lead = {
   location: string | null;
   leadSource: string | null;
   converted: boolean;
+  leadStageId: string | null;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  // May this viewer change the lead (its stage)?
+  canEdit: boolean;
+  // Soonest pending reminder on this person, and how many are pending.
+  nextReminder: { message: string; dueAt: string; count: number } | null;
 };
+type LeadStageOption = { id: string; name: string; colorHex: string | null; isActive: boolean };
+type RepOption = { id: string; name: string };
 
-export default function LeadsClient({ leads }: { leads: Lead[] }) {
+function fmtDue(iso: string): string {
+  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+}
+
+// Location options grouped ignoring case/spacing ("salem" + "Salem" → one),
+// shown with the first spelling seen — same rule as the Meta leads City filter.
+function cityOptions(leads: Lead[]): DropdownOption[] {
+  const m = new Map<string, DropdownOption>();
+  for (const l of leads) {
+    const raw = (l.location ?? "").trim();
+    if (!raw) continue;
+    const key = raw.toLowerCase();
+    const cur = m.get(key);
+    if (cur) cur.count += 1;
+    else m.set(key, { label: raw, count: 1 });
+  }
+  return [...m.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+function ReminderCell({ r }: { r: Lead["nextReminder"] }) {
+  if (!r) return <span className="text-slate-400">—</span>;
+  const overdue = new Date(r.dueAt).getTime() < Date.now();
+  return (
+    <div className="min-w-0 max-w-[200px]">
+      <div className={`text-xs font-mono ${overdue ? "text-red-600 font-semibold" : "text-slate-700"}`}>
+        {overdue ? "Overdue · " : ""}{fmtDue(r.dueAt)}
+      </div>
+      <div className="text-xs text-slate-500 truncate" title={r.message}>{r.message}</div>
+      {r.count > 1 && <div className="text-[11px] text-slate-400">+{r.count - 1} more</div>}
+    </div>
+  );
+}
+
+export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]; leadStages: LeadStageOption[]; reps: RepOption[] }) {
   const router = useRouter();
   const toast = useToast();
   const [q, setQ] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [repFilter, setRepFilter] = useState("");
+  const [stageFilter, setStageFilter] = useState("");
+  const [savingStageId, setSavingStageId] = useState<string | null>(null);
   const [convertingId, setConvertingId] = useState<string | null>(null);
+  const cities = useMemo(() => cityOptions(leads), [leads]);
+
+  async function changeStage(lead: Lead, stageId: string) {
+    setSavingStageId(lead.id);
+    const res = await fetch(`/api/account-contacts/${lead.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadStageId: stageId || null }),
+    });
+    setSavingStageId(null);
+    if (res.ok) {
+      toast.success(`${lead.name}: ${leadStages.find((s) => s.id === stageId)?.name ?? "stage cleared"}`);
+      router.refresh();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Could not change stage");
+    }
+  }
+
+  function stageSelect(l: Lead, className: string) {
+    const current = leadStages.find((s) => s.id === l.leadStageId) ?? null;
+    return (
+      <select
+        value={l.leadStageId ?? ""}
+        onChange={(e) => changeStage(l, e.target.value)}
+        disabled={!l.canEdit || savingStageId === l.id}
+        aria-label={`Stage for ${l.name}`}
+        className={`text-xs font-semibold rounded-full border-0 px-2.5 py-1 disabled:opacity-70 ${className}`}
+        style={{ background: (current?.colorHex ?? "#64748b") + "20", color: current?.colorHex ?? "#475569" }}
+      >
+        <option value="" style={{ color: "#475569" }}>No stage</option>
+        {leadStages
+          .filter((s) => s.isActive || s.id === l.leadStageId)
+          .map((s) => (
+            // Own color per option — otherwise every option inherits the
+            // current stage's inline color from the <select>.
+            <option key={s.id} value={s.id} disabled={!s.isActive} style={{ color: s.colorHex ?? "#475569" }}>{s.name}</option>
+          ))}
+      </select>
+    );
+  }
 
   // Quick-add lead modal state.
   const [showAdd, setShowAdd] = useState(false);
@@ -85,14 +173,20 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
   }
 
   const qt = q.trim().toLowerCase();
+  const cityQ = cityFilter.trim().toLowerCase();
   const visible = leads.filter(
     (l) =>
-      !qt ||
-      l.name.toLowerCase().includes(qt) ||
-      l.accountName.toLowerCase().includes(qt) ||
-      (l.location?.toLowerCase().includes(qt) ?? false) ||
-      (l.leadSource?.toLowerCase().includes(qt) ?? false),
+      (!qt ||
+        l.name.toLowerCase().includes(qt) ||
+        l.accountName.toLowerCase().includes(qt) ||
+        (l.location?.toLowerCase().includes(qt) ?? false) ||
+        (l.leadSource?.toLowerCase().includes(qt) ?? false)) &&
+      // Substring, like the Meta leads City filter: "Salem" also finds "Salem Bellur".
+      (!cityQ || (l.location ?? "").toLowerCase().includes(cityQ)) &&
+      (!repFilter || (repFilter === "__none__" ? !l.ownerUserId : l.ownerUserId === repFilter)) &&
+      (!stageFilter || (stageFilter === "__none__" ? !l.leadStageId : l.leadStageId === stageFilter)),
   );
+  const filtering = !!(qt || cityQ || repFilter || stageFilter);
 
   // Reuses POST /api/deals exactly like the contact page's CreateDealFirstModal
   // — title + accountId + primaryContactId; the deal's owner is forced to the
@@ -136,7 +230,7 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
         }
       />
 
-      <div className="mb-3 flex items-center gap-3 flex-wrap">
+      <div className="mb-3 flex items-end gap-3 flex-wrap">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -144,6 +238,31 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
           className="input w-full max-w-xs text-sm"
           data-guide="crm-leads-search"
         />
+        <DropdownFilter guide="crm-leads-location" label="Location" value={cityFilter} onChange={setCityFilter} options={cities} />
+        <div>
+          <label className="block text-[11px] font-medium text-slate-600 mb-1">Stage</label>
+          <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className="input w-44 !py-1.5 text-sm" data-guide="crm-leads-stage-filter">
+            <option value="">All stages</option>
+            {leadStages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <option value="__none__">No stage</option>
+          </select>
+        </div>
+        {reps.length > 0 && (
+          <div>
+            <label className="block text-[11px] font-medium text-slate-600 mb-1">Handled by</label>
+            <select value={repFilter} onChange={(e) => setRepFilter(e.target.value)} className="input w-44 !py-1.5 text-sm" data-guide="crm-leads-rep-filter">
+              <option value="">All reps</option>
+              {reps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              <option value="__none__">Unassigned</option>
+            </select>
+          </div>
+        )}
+        {filtering && (
+          <span className="text-xs text-slate-500 pb-2">
+            <span className="font-mono">{visible.length}</span> of <span className="font-mono">{leads.length}</span>
+            <button onClick={() => { setQ(""); setCityFilter(""); setRepFilter(""); setStageFilter(""); }} className="ml-2 text-court-700 hover:underline">Clear</button>
+          </span>
+        )}
       </div>
 
       <div className="card">
@@ -167,12 +286,13 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                       {l.leadSource && <span>{l.leadSource}</span>}
                     </div>
                   )}
+                  <div className="text-xs text-slate-500 mt-0.5">Handled by <span className="font-medium text-slate-700">{l.ownerName ?? "Unassigned"}</span></div>
                 </div>
-                {l.converted ? (
-                  <span className="shrink-0 badge bg-green-100 text-green-700">Converted</span>
-                ) : (
-                  <span className="shrink-0 badge bg-amber-100 text-amber-700">Open</span>
-                )}
+                {l.converted && <span className="shrink-0 badge bg-green-100 text-green-700">Converted</span>}
+              </div>
+              <div className="mt-2 flex items-start justify-between gap-3">
+                {stageSelect(l, "")}
+                <ReminderCell r={l.nextReminder} />
               </div>
               {!l.converted && (
                 <div className="mt-3 pt-3 border-t border-slate-100">
@@ -203,8 +323,10 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                 <th>Company</th>
                 <th>Phone</th>
                 <th>Location</th>
+                <th>Stage</th>
+                <th>Handled by</th>
+                <th>Reminder</th>
                 <th>Lead Source</th>
-                <th>Status</th>
                 <th className="!text-right"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -215,20 +337,17 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
                     <Link href={`/crm/contacts/${l.id}`} className="font-medium text-court-700 hover:underline" data-guide="crm-leads-row-link">
                       {l.name}
                     </Link>
+                    {l.converted && <span className="ml-1.5 badge bg-green-100 text-green-700">Converted</span>}
                   </td>
                   <td>
                     <Link href={`/crm/companies/${l.accountId}`} className="text-slate-600 hover:underline">{l.accountName}</Link>
                   </td>
                   <td className="text-slate-600 font-mono">{l.phone ?? "—"}</td>
                   <td className="text-slate-600">{l.location ?? "—"}</td>
+                  <td>{stageSelect(l, "")}</td>
+                  <td className="text-slate-600 whitespace-nowrap">{l.ownerName ?? <span className="text-slate-400">Unassigned</span>}</td>
+                  <td><ReminderCell r={l.nextReminder} /></td>
                   <td className="text-slate-600">{l.leadSource ?? "—"}</td>
-                  <td>
-                    {l.converted ? (
-                      <span className="badge bg-green-100 text-green-700">Converted</span>
-                    ) : (
-                      <span className="badge bg-amber-100 text-amber-700">Open</span>
-                    )}
-                  </td>
                   <td className="!text-right">
                     {!l.converted && (
                       <button
@@ -245,8 +364,8 @@ export default function LeadsClient({ leads }: { leads: Lead[] }) {
               ))}
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400">
-                    No leads yet — promote a contact from the Contacts list.
+                  <td colSpan={9} className="py-8 text-center text-slate-400">
+                    {filtering ? "No leads match these filters." : "No leads yet — promote a contact from the Contacts list."}
                   </td>
                 </tr>
               )}

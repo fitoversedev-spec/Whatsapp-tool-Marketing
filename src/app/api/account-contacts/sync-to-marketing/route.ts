@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { customerAccess } from "@/lib/rbac";
 import { normalizePhone } from "@/lib/phone";
 
 const schema = z.object({
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   let synced = 0, skippedNoPhone = 0, skippedForbidden = 0;
   for (const contact of contacts) {
-    if (!isAdmin(user.role) && contact.account.ownerUserId && contact.account.ownerUserId !== user.id) {
+    if (!customerAccess(user, contact.account.ownerUserId).canEdit) {
       skippedForbidden++;
       continue;
     }

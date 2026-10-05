@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, canSeeAllCustomers } from "@/lib/rbac";
 import CrmTabs from "@/components/crm/CrmTabs";
 import DealsClient from "./DealsClient";
 
@@ -9,7 +9,7 @@ export default async function DealsPage({ searchParams }: { searchParams: { from
 
   const dateRange = searchParams.from && searchParams.to ? { from: searchParams.from, to: searchParams.to } : null;
   const dealsWhere = {
-    ...(isAdmin(user.role) ? {} : { ownerUserId: user.id }),
+    ...(canSeeAllCustomers(user.role) ? {} : { ownerUserId: user.id }),
     ...(dateRange ? { createdAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
   };
 

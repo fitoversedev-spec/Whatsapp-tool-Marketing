@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { type PipelineStage } from "@/lib/pipeline";
 import { getPipelineStages } from "@/lib/pipeline-server";
 import PipelineClient from "./PipelineClient";
-import type { Role } from "@/lib/rbac";
+import { canSeeAllCustomers, type Role } from "@/lib/rbac";
 
 export default async function PipelinePage({
   searchParams,
@@ -15,18 +15,23 @@ export default async function PipelinePage({
 
   // Owner filter — "me" / "all" / specific userId. Sales defaults to "me".
   // Keyed on Deal.ownerUserId now (was Conversation.assignedToUserId before
-  // this board became Deal-centric — see docs/DECISIONS.md).
+  // this board became Deal-centric — see docs/DECISIONS.md). A specific
+  // userId is only honoured for roles that may see every rep's deals — a rep
+  // putting a colleague's id in the URL used to get that colleague's board.
+  const seesAll = canSeeAllCustomers(user.role);
   const ownerFilter = searchParams.owner ?? (user.role === "sales" ? "me" : "all");
   const ownerWhere =
     ownerFilter === "all"
-      ? user.role === "admin"
+      ? seesAll
         ? {}
         : { OR: [{ ownerUserId: user.id }, { ownerUserId: null }] }
       : ownerFilter === "me"
         ? { ownerUserId: user.id }
         : ownerFilter === "unassigned"
           ? { ownerUserId: null }
-          : { ownerUserId: ownerFilter };
+          : seesAll || ownerFilter === user.id
+            ? { ownerUserId: ownerFilter }
+            : { ownerUserId: user.id };
 
   // Stages, the deal list, and the sales-user list are independent of one
   // another, so run them concurrently instead of as three serial round-trips.

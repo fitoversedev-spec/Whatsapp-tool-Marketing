@@ -105,6 +105,10 @@ model User {
   scoutAnalyses     ScoutAnalysis[]   @relation("ScoutAnalysisOwner")
   insightDocuments  InsightDocument[] @relation("InsightDocumentAuthor")
   createdContacts   AccountContact[] @relation("AccountContactCreatedBy")
+  nextActionsCreated ContactNextAction[] @relation("NextActionCreatedBy")
+  nextActionsDone    ContactNextAction[] @relation("NextActionDoneBy")
+  contactInsights    ContactInsight[]    @relation("ContactInsightAuthor")
+  contactEvents      ContactEvent[]      @relation("ContactEventActor")
 
   @@map("users")
 }
@@ -497,6 +501,8 @@ model Reminder {
   metaLead     MetaLead?          @relation(fields: [metaLeadId], references: [id], onDelete: Cascade)
   activityType ActivityType?      @relation(fields: [activityTypeId], references: [id])
   dispatches   ReminderDispatch[]
+  // Set when this reminder is the alert for a contact's dated next action.
+  nextAction   ContactNextAction?
 
   @@index([ownerUserId, dueAt])
   @@index([dueAt, completedAt])
@@ -1175,6 +1181,27 @@ model FunnelStage {
   @@map("funnel_stages")
 }
 
+// The sales stage a contact/lead is at (Lead Generation → Post-Sales
+// Analysis), admin-editable under Taxonomies. Separate from FunnelStage,
+// which is the Deal's own stage. Always referenced by id, never by slug, so
+// renaming a stage can't break anything — which is also why slug isn't unique
+// here (re-adding a removed stage's name must not collide).
+model LeadStage {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String
+  sortOrder Int       @default(0) @map("sort_order")
+  isActive  Boolean   @default(true) @map("is_active")
+  colorHex  String?   @map("color_hex")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  contacts AccountContact[]
+
+  @@index([isActive, sortOrder])
+  @@map("lead_stages")
+}
+
 model LeadSource {
   id        String    @id @default(uuid())
   name      String
@@ -1403,6 +1430,9 @@ model AccountContact {
   pipelineStage String? @map("pipeline_stage") // null = plain contact, "LEAD" = promoted lead
   // Records when a contact was promoted to pipelineStage=LEAD; null = never promoted; used by analytics to window the Leads metric.
   promotedToLeadAt DateTime? @map("promoted_to_lead_at")
+  // Sales stage (any contact can have one; picking it does NOT make them a
+  // lead — moving into Leads stays a separate, manual step).
+  leadStageId String? @map("lead_stage_id")
   importBatchId String? @map("import_batch_id")
   leadSourceId String? @map("lead_source_id")
   createdByUserId String? @map("created_by_user_id")
@@ -1415,9 +1445,13 @@ model AccountContact {
   deletedAt DateTime? @map("deleted_at")
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  leadStage LeadStage? @relation(fields: [leadStageId], references: [id], onDelete: SetNull)
   dealsAsPrimary Deal[] @relation("DealPrimaryContact")
   reminders Reminder[]
   activities Activity[]
+  nextActions ContactNextAction[]
+  insights ContactInsight[]
+  events ContactEvent[]
   importBatch ImportBatch? @relation("AccountContactImports", fields: [importBatchId], references: [id], onDelete: SetNull)
   leadSource LeadSource? @relation(fields: [leadSourceId], references: [id], onDelete: SetNull)
   createdByUser User? @relation("AccountContactCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
@@ -1441,6 +1475,7 @@ model AccountContact {
   // pipelineStage="LEAD" over a promotedToLeadAt range. Leads are a small
   // subset, so pipelineStage-first makes this a tight seek instead of a scan.
   @@index([pipelineStage, promotedToLeadAt])
+  @@index([leadStageId])
   @@map("account_contacts")
 }
 
@@ -1456,6 +1491,10 @@ model AccountContactNote {
   title            String?
   body             String
   createdAt        DateTime @default(now()) @map("created_at")
+  // Null until the note is edited; deletedAt is a soft delete so the contact
+  // Timeline can still show that the note existed and when it was removed.
+  editedAt         DateTime? @map("edited_at")
+  deletedAt        DateTime? @map("deleted_at")
 
   accountContact AccountContact @relation(fields: [accountContactId], references: [id], onDelete: Cascade)
   author         User           @relation(fields: [authorUserId], references: [id])
@@ -1479,12 +1518,87 @@ model AccountContactAttachment {
   fileSize         Int      @map("file_size")
   mimeType         String   @map("mime_type")
   createdAt        DateTime @default(now()) @map("created_at")
+  // Deleting removes the file from Blob storage but keeps this row, so the
+  // contact Timeline can still show the upload and the deletion.
+  deletedAt        DateTime? @map("deleted_at")
 
   accountContact AccountContact @relation(fields: [accountContactId], references: [id], onDelete: Cascade)
   uploadedBy     User           @relation(fields: [uploadedByUserId], references: [id])
 
   @@index([accountContactId, createdAt])
   @@map("account_contact_attachments")
+}
+
+// A contact's to-do list ("Next actions") — any number per contact, no deal
+// needed. A dated one gets a linked Reminder so the rep is alerted and it
+// shows in Reminders/My Day; the API keeps that Reminder in step with this row
+// (edit/done/delete) so re-saving never piles up duplicate reminders.
+model ContactNextAction {
+  id               String    @id @default(uuid())
+  accountContactId String    @map("account_contact_id")
+  text             String
+  dueAt            DateTime? @map("due_at")
+  doneAt           DateTime? @map("done_at")
+  doneByUserId     String?   @map("done_by_user_id")
+  createdByUserId  String    @map("created_by_user_id")
+  reminderId       String?   @unique @map("reminder_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  accountContact AccountContact @relation(fields: [accountContactId], references: [id], onDelete: Cascade)
+  createdBy      User           @relation("NextActionCreatedBy", fields: [createdByUserId], references: [id])
+  doneBy         User?          @relation("NextActionDoneBy", fields: [doneByUserId], references: [id])
+  reminder       Reminder?      @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+
+  @@index([accountContactId, deletedAt])
+  @@map("contact_next_actions")
+}
+
+// A rep's private insights about one customer — as many saved entries as they
+// like, each editable later (rich text, like the Insights page). Readable by
+// its author plus admins/managers; deletedAt is a soft delete so the contact
+// Timeline can still show it existed.
+model ContactInsight {
+  id               String    @id @default(uuid())
+  accountContactId String    @map("account_contact_id")
+  authorUserId     String    @map("author_user_id")
+  title            String?
+  body             String    @default("")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  accountContact AccountContact @relation(fields: [accountContactId], references: [id], onDelete: Cascade)
+  author         User           @relation("ContactInsightAuthor", fields: [authorUserId], references: [id])
+
+  @@index([accountContactId, authorUserId])
+  @@map("contact_insights")
+}
+
+// Append-only history behind the contact Timeline, for what can't be rebuilt
+// from other tables: edits (old → new), deletions, stage / rep / Leads moves,
+// next-action and insight activity. Anything that still exists in its own
+// table (notes, files, quotations…) is read from there instead — this only
+// records what happened to it afterwards. See src/lib/crm/contactEvents.ts.
+model ContactEvent {
+  id               String   @id @default(uuid())
+  accountContactId String   @map("account_contact_id")
+  actorUserId      String?  @map("actor_user_id")
+  kind             String
+  summary          String
+  detail           String?
+  // null = everyone who can see the contact; "insight:<userId>" = only that
+  // rep plus admins/managers (private insight activity).
+  visibility       String?
+  refId            String?  @map("ref_id")
+  at               DateTime @default(now())
+
+  accountContact AccountContact @relation(fields: [accountContactId], references: [id], onDelete: Cascade)
+  actor          User?          @relation("ContactEventActor", fields: [actorUserId], references: [id])
+
+  @@index([accountContactId, at])
+  @@map("contact_events")
 }
 
 model InsightDocument {

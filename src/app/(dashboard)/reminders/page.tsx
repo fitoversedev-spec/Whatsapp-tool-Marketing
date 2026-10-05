@@ -65,7 +65,7 @@ export default async function RemindersPage({
       sectionLink = `/ad-campaigns/leads/${r.metaLeadId}`;
     } else if (r.dealId) {
       section = "CRM Deals";
-      sectionLink = `/crm/deals/${r.dealId}`;
+      sectionLink = `/deals/${r.dealId}`;
     } else if (r.accountContactId) {
       section = "CRM Contacts";
       sectionLink = `/crm/contacts/${r.accountContactId}`;

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, canManageAllCustomers, customerAccess } from "@/lib/rbac";
+import { reassignCustomerRep } from "@/lib/crm/assignRep";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -23,7 +24,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     },
   });
   if (!deal || deal.deletedAt) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  if (!isAdmin(user.role) && deal.ownerUserId && deal.ownerUserId !== user.id) {
+  if (!customerAccess(user, deal.ownerUserId).canView) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -83,24 +84,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const deal = await prisma.deal.findUnique({ where: { id: params.id } });
   if (!deal || deal.deletedAt) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  if (!isAdmin(user.role) && deal.ownerUserId && deal.ownerUserId !== user.id) {
+  if (!customerAccess(user, deal.ownerUserId).canEdit) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
-  // Reassigning the owner is admin-only — same rule as reassigning a
-  // Conversation (PATCH /api/conversations/[id]/route.ts). A sales rep can
-  // edit everything else about their own deal, but handing it to someone
-  // else isn't theirs to decide unilaterally. Same rule for the Account's
-  // owner and for deleting the deal outright — both are more consequential
-  // than the fields a deal's own owner is trusted to self-edit.
-  if (parsed.data.ownerUserId !== undefined && !isAdmin(user.role)) {
-    return NextResponse.json({ error: "Only admin can reassign a deal's owner" }, { status: 403 });
+  // Reassigning the deal or its customer to another rep is for admins and
+  // managers. A sales rep can edit everything else about their own deal, but
+  // handing it to someone else isn't theirs to decide unilaterally. Deleting
+  // the deal outright stays admin-only.
+  if (parsed.data.ownerUserId !== undefined && !canManageAllCustomers(user.role)) {
+    return NextResponse.json({ error: "Only admins and managers can reassign a deal's owner" }, { status: 403 });
   }
-  if (parsed.data.accountOwnerUserId !== undefined && !isAdmin(user.role)) {
-    return NextResponse.json({ error: "Only admin can reassign an account's owner" }, { status: 403 });
+  if (parsed.data.accountOwnerUserId !== undefined && !canManageAllCustomers(user.role)) {
+    return NextResponse.json({ error: "Only admins and managers can reassign an account's owner" }, { status: 403 });
   }
   if (parsed.data.deleted && !isAdmin(user.role)) {
     return NextResponse.json({ error: "Only admin can delete a deal" }, { status: 403 });
@@ -140,7 +139,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const updated = await prisma.deal.update({ where: { id: params.id }, data: patch });
 
-  if (customerProfileId !== undefined || businessType !== undefined || accountName !== undefined || accountCity !== undefined || accountOwnerUserId !== undefined) {
+  if (customerProfileId !== undefined || businessType !== undefined || accountName !== undefined || accountCity !== undefined) {
     await prisma.account.update({
       where: { id: deal.accountId },
       data: {
@@ -148,9 +147,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         ...(businessType !== undefined ? { businessType } : {}),
         ...(accountName !== undefined ? { name: accountName } : {}),
         ...(accountCity !== undefined ? { city: accountCity } : {}),
-        ...(accountOwnerUserId !== undefined ? { ownerUserId: accountOwnerUserId } : {}),
       },
     });
+  }
+  // The customer's rep — same knock-on effects as assigning from the contact page.
+  if (accountOwnerUserId !== undefined) {
+    await reassignCustomerRep({ accountId: deal.accountId, toUserId: accountOwnerUserId, actorUserId: user.id });
   }
 
   // Bridge to the linked Conversation — best-effort, never blocks this

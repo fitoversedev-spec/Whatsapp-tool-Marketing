@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
-import { TAXONOMY_TYPES, updateTaxonomyRow, wouldRemoveLastStageOfType, type TaxonomyType } from "@/lib/taxonomy";
+import { TAXONOMY_TYPES, updateTaxonomyRow, wouldRemoveLastStageOfType, removeLeadStage, type TaxonomyType } from "@/lib/taxonomy";
 import { writeAudit } from "@/lib/audit";
 
 function isValidType(t: string): t is TaxonomyType {
@@ -20,6 +20,8 @@ const patchSchema = z.object({
   requiresLossReason: z.boolean().optional(),
   parentId: z.string().uuid().nullable().optional(),
   deleted: z.boolean().optional(),
+  // Lead stages only: where the removed stage's contacts move to.
+  moveToId: z.string().uuid().nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: { type: string; id: string } }) {
@@ -58,7 +60,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { type: stri
     }
   }
 
-  const row = await updateTaxonomyRow(params.type, params.id, parsed.data);
+  if (params.type === "lead-stages" && parsed.data.deleted) {
+    try {
+      const { moved } = await removeLeadStage(params.id, parsed.data.moveToId ?? null, user.id);
+      await writeAudit({ actorId: user.id, entity: params.type, entityId: params.id, action: "DELETE", diff: { moveToId: parsed.data.moveToId ?? null, moved } });
+      return NextResponse.json({ ok: true, moved });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : "Could not remove stage" }, { status: 422 });
+    }
+  }
+
+  const { moveToId: _moveToId, ...patch } = parsed.data;
+  const row = await updateTaxonomyRow(params.type, params.id, patch);
   await writeAudit({
     actorId: user.id,
     entity: params.type,

@@ -25,3 +25,28 @@ export function isManagerOrAbove(role: string): boolean {
 export function isManagementOrAbove(role: string): boolean {
   return role === "admin" || role === "management";
 }
+
+// CRM customers (contacts, leads, companies, deals): who sees every rep's
+// customers, and who can edit any of them and reassign the rep handling them.
+// Management gets the company-wide view but stays read-only on customers that
+// aren't theirs; sales only ever sees their own (plus unowned ones).
+export function canSeeAllCustomers(role: string): boolean {
+  return role === "admin" || role === "manager" || role === "management";
+}
+
+export function canManageAllCustomers(role: string): boolean {
+  return role === "admin" || role === "manager";
+}
+
+// Access to one customer record owned by ownerUserId (null = unowned, which
+// every rep may work on).
+export function customerAccess(
+  user: { id: string; role: string },
+  ownerUserId: string | null,
+): { canView: boolean; canEdit: boolean } {
+  const own = !ownerUserId || ownerUserId === user.id;
+  return {
+    canView: own || canSeeAllCustomers(user.role),
+    canEdit: own || canManageAllCustomers(user.role),
+  };
+}

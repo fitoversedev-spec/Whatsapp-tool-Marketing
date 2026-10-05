@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
 import { reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
+import { logDocumentDeleted } from "@/lib/crm/contactLinks";
 
 const patchSchema = z.object({
   customerName: z.string().min(1).max(200).optional(),
@@ -175,6 +176,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     // If this was the deal's primary revision, promote the next-most-recent
     // remaining one and keep Deal.quotedValue in sync — see docs/DECISIONS.md.
     await reconcileDealAfterQuotationDelete(deleted.dealId);
+    await logDocumentDeleted(
+      { kind: "quotation", number: deleted.number, dealId: deleted.dealId, contactPhone: deleted.contactPhone, createdAt: deleted.createdAt },
+      user.id,
+    );
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "not_found" }, { status: 404 });

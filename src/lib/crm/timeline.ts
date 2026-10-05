@@ -5,6 +5,7 @@
 // is never touched.
 import { prisma } from "@/lib/prisma";
 import type { TimelineEntry, TimelineFilter } from "./timelineShared";
+import { canSeeContactEvent, excerpt, htmlToText, insightVisibility } from "./contactEvents";
 
 export type { TimelineEntry, TimelineFilter } from "./timelineShared";
 
@@ -137,6 +138,279 @@ export async function getUnifiedTimeline(filter: TimelineFilter, limit = 50): Pr
       ownerName: h.changedBy?.name ?? "System",
     })),
     ...(createdEntry ? [createdEntry] : []),
+  ];
+
+  entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return entries.slice(0, limit);
+}
+
+const EVENT_LABELS: Record<string, string> = {
+  details_edited: "EDITED",
+  stage_changed: "STAGE",
+  rep_changed: "REP",
+  lead_added: "LEADS",
+  lead_removed: "LEADS",
+  note_edited: "NOTE",
+  note_deleted: "DELETED",
+  next_action_edited: "NEXT ACTION",
+  next_action_done: "NEXT ACTION",
+  next_action_reopened: "NEXT ACTION",
+  next_action_deleted: "DELETED",
+  insight_edited: "INSIGHT",
+  insight_deleted: "DELETED",
+  file_deleted: "DELETED",
+  quotation_deleted: "DELETED",
+  design_deleted: "DELETED",
+};
+
+// Formatted on the server, so pin it to IST rather than the server's UTC.
+function fmtIst(d: Date): string {
+  return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function fmtInr(n: number): string {
+  return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+}
+
+// Everything that's happened with one contact, newest first — the contact
+// page's Timeline tab. Rebuilt from each record's own table, so things that
+// predate the history log still show at their real dates, plus ContactEvent
+// for what those tables can't tell: edits (old → new), deletions, stage / rep /
+// Leads moves, next-action and insight activity. Quotations/designs/product
+// interest are found the same way the contact page lists them (this contact's
+// deals, or a quotation's phone). WhatsApp messages stay out on purpose — far
+// too many to be useful here.
+export async function getContactTimeline(
+  contactId: string,
+  viewer: { id: string; role: string },
+  limit = 300,
+): Promise<TimelineEntry[]> {
+  const contact = await prisma.accountContact.findUnique({
+    where: { id: contactId },
+    select: { name: true, phone: true, createdAt: true, promotedToLeadAt: true, createdByUser: { select: { name: true } } },
+  });
+  if (!contact) return [];
+
+  const deals = await prisma.deal.findMany({
+    where: { primaryContactId: contactId },
+    select: { id: true, code: true, title: true, createdAt: true, deletedAt: true, owner: { select: { name: true } } },
+  });
+  const allDealIds = deals.map((d) => d.id);
+  const liveDealIds = deals.filter((d) => !d.deletedAt).map((d) => d.id);
+  const quoteOr: object[] = [];
+  if (liveDealIds.length) quoteOr.push({ dealId: { in: liveDealIds } });
+  if (contact.phone) quoteOr.push({ contactPhone: contact.phone });
+
+  const [activities, reminders, stageHistory, notes, files, quotes, designs, products, nextActions, insights, events] = await Promise.all([
+    prisma.activity.findMany({
+      where: { accountContactId: contactId },
+      orderBy: { occurredAt: "desc" },
+      take: limit,
+      include: { activityType: { select: { name: true } }, owner: { select: { name: true } } },
+    }),
+    // Anchored to the contact directly or to one of its deals. Next-action
+    // alerts are left out — the next action itself is already on the Timeline.
+    prisma.reminder.findMany({
+      where: {
+        OR: [{ accountContactId: contactId }, ...(liveDealIds.length ? [{ dealId: { in: liveDealIds } }] : [])],
+        nextAction: { is: null },
+      },
+      orderBy: { dueAt: "desc" },
+      take: limit,
+      include: { owner: { select: { name: true } }, activityType: { select: { name: true } } },
+    }),
+    allDealIds.length
+      ? prisma.dealStageHistory.findMany({
+          where: { dealId: { in: allDealIds } },
+          orderBy: { changedAt: "desc" },
+          take: limit,
+          include: { fromStage: { select: { name: true } }, toStage: { select: { name: true } }, changedBy: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
+    prisma.accountContactNote.findMany({
+      where: { accountContactId: contactId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: { author: { select: { name: true } } },
+    }),
+    prisma.accountContactAttachment.findMany({
+      where: { accountContactId: contactId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: { uploadedBy: { select: { name: true } } },
+    }),
+    quoteOr.length
+      ? prisma.quotation.findMany({
+          where: quoteOr.length === 1 ? quoteOr[0] : { OR: quoteOr },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          select: { id: true, number: true, sport: true, grandTotal: true, createdAt: true, sentAt: true, createdBy: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
+    liveDealIds.length
+      ? prisma.courtImage.findMany({
+          where: { dealId: { in: liveDealIds } },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          select: { id: true, number: true, createdAt: true, sentAt: true, createdBy: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
+    liveDealIds.length
+      ? prisma.dealLineItem.findMany({
+          where: { dealId: { in: liveDealIds }, isEnquiryOnly: true },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          select: { id: true, label: true, createdAt: true, product: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
+    prisma.contactNextAction.findMany({
+      where: { accountContactId: contactId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: { createdBy: { select: { name: true } } },
+    }),
+    prisma.contactInsight.findMany({
+      where: { accountContactId: contactId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: { id: true, title: true, body: true, createdAt: true, deletedAt: true, authorUserId: true, author: { select: { name: true } } },
+    }),
+    prisma.contactEvent.findMany({
+      where: { accountContactId: contactId },
+      orderBy: { at: "desc" },
+      take: limit,
+      include: { actor: { select: { name: true } } },
+    }),
+  ]);
+
+  const createdAsLead =
+    !!contact.promotedToLeadAt && Math.abs(contact.promotedToLeadAt.getTime() - contact.createdAt.getTime()) < 2 * 60 * 1000;
+
+  const entries: TimelineEntry[] = [
+    {
+      id: `created-${contactId}`,
+      kind: "created",
+      title: `Contact created${createdAsLead ? " as a lead" : ""} — ${contact.name}`,
+      detail: null,
+      timestamp: contact.createdAt.toISOString(),
+      ownerName: contact.createdByUser?.name ?? null,
+    },
+    ...deals.map((d) => ({
+      id: `deal-${d.id}`,
+      kind: "deal" as const,
+      title: `Deal created — ${d.title}`,
+      detail: d.code,
+      timestamp: d.createdAt.toISOString(),
+      ownerName: d.owner?.name ?? null,
+    })),
+    ...activities.map((a) => ({
+      id: a.id,
+      kind: "activity" as const,
+      title: `${a.activityType.name} — ${a.subject}`,
+      detail: a.notes,
+      timestamp: a.occurredAt.toISOString(),
+      ownerName: a.owner.name,
+      typeName: a.activityType.name,
+    })),
+    ...reminders.map((r) => ({
+      id: r.id,
+      kind: "reminder" as const,
+      title: r.message,
+      detail: r.completedAt && r.completionNote ? r.completionNote : r.notes ?? r.location ?? r.meetingUrl ?? null,
+      timestamp: r.dueAt.toISOString(),
+      ownerName: r.owner.name,
+      completed: !!r.completedAt,
+      typeName: r.activityType?.name ?? null,
+    })),
+    ...stageHistory.map((h) => ({
+      id: h.id,
+      kind: "stage" as const,
+      title: `Deal stage — ${h.fromStage?.name ?? "(start)"} → ${h.toStage.name}`,
+      detail: h.note,
+      timestamp: h.changedAt.toISOString(),
+      ownerName: h.changedBy?.name ?? null,
+    })),
+    ...notes.map((n) => ({
+      id: n.id,
+      kind: "note" as const,
+      title: `Note added — ${n.title?.trim() || excerpt(n.body)}`,
+      // A deleted note keeps its entry (and its own "deleted" entry) but not its text.
+      detail: n.deletedAt ? null : n.body,
+      timestamp: n.createdAt.toISOString(),
+      ownerName: n.author.name,
+    })),
+    ...files.map((f) => ({
+      id: f.id,
+      kind: "file" as const,
+      title: `File uploaded — ${f.fileName}`,
+      detail: null,
+      timestamp: f.createdAt.toISOString(),
+      ownerName: f.uploadedBy.name,
+    })),
+    ...quotes.flatMap((q) => [
+      {
+        id: `quote-${q.id}`,
+        kind: "quote" as const,
+        title: `Quotation created — ${q.number}`,
+        detail: `${q.sport} · ${fmtInr(Number(q.grandTotal))}`,
+        timestamp: q.createdAt.toISOString(),
+        ownerName: q.createdBy.name,
+      },
+      ...(q.sentAt
+        ? [{ id: `quote-sent-${q.id}`, kind: "quote" as const, title: `Quotation sent — ${q.number}`, detail: null, timestamp: q.sentAt.toISOString(), ownerName: null }]
+        : []),
+    ]),
+    ...designs.flatMap((c) => [
+      {
+        id: `design-${c.id}`,
+        kind: "design" as const,
+        title: `Court design created — ${c.number}`,
+        detail: null,
+        timestamp: c.createdAt.toISOString(),
+        ownerName: c.createdBy.name,
+      },
+      ...(c.sentAt
+        ? [{ id: `design-sent-${c.id}`, kind: "design" as const, title: `Court design sent — ${c.number}`, detail: null, timestamp: c.sentAt.toISOString(), ownerName: null }]
+        : []),
+    ]),
+    ...products.map((p) => ({
+      id: p.id,
+      kind: "product" as const,
+      title: `Product interest — ${p.product?.name ?? p.label ?? "Unnamed product"}`,
+      detail: null,
+      timestamp: p.createdAt.toISOString(),
+      ownerName: null,
+    })),
+    ...nextActions.map((a) => ({
+      id: a.id,
+      kind: "next_action" as const,
+      title: `Next action added — ${excerpt(a.text)}`,
+      detail: a.dueAt ? `Due ${fmtIst(a.dueAt)}` : null,
+      timestamp: a.createdAt.toISOString(),
+      ownerName: a.createdBy.name,
+    })),
+    // Private: only the author and admins/managers see a rep's insights here.
+    ...insights
+      .filter((i) => canSeeContactEvent(insightVisibility(i.authorUserId), viewer))
+      .map((i) => ({
+        id: i.id,
+        kind: "insight" as const,
+        title: `Insight added — ${i.title?.trim() || excerpt(htmlToText(i.body)) || "Insight"}`,
+        detail: null,
+        timestamp: i.createdAt.toISOString(),
+        ownerName: i.author.name,
+      })),
+    ...events
+      .filter((e) => canSeeContactEvent(e.visibility, viewer))
+      .map((e) => ({
+        id: e.id,
+        kind: "change" as const,
+        title: e.summary,
+        detail: e.detail,
+        timestamp: e.at.toISOString(),
+        ownerName: e.actor?.name ?? null,
+        label: EVENT_LABELS[e.kind] ?? "UPDATE",
+      })),
   ];
 
   entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

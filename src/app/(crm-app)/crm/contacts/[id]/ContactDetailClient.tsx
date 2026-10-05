@@ -9,22 +9,31 @@ import { postCrossTab } from "@/lib/cross-tab";
 import UnifiedTimeline from "@/components/crm/UnifiedTimeline";
 import { CALL_TYPE_NAMES, MEETING_TYPE_NAMES, type TimelineEntry } from "@/lib/crm/timelineShared";
 import { DESIGNATIONS } from "../AccountContactsClient";
+import NextActionsSection, { NextActionStrip, type NextActionRow } from "./NextActionsSection";
+import ContactInsightSection, { type InsightRow } from "./ContactInsightSection";
 
 type Contact = {
   id: string; name: string; phone: string | null; email: string | null;
   designation: string | null; notes: string | null; fields: Record<string, string>; isPrimary: boolean;
   pipelineStage: string | null;
+  leadStageId: string | null;
   leadSourceId: string | null; leadSourceName: string | null; leadSourceColor: string | null;
   accountId: string; accountName: string; accountCity: string | null;
   accountCustomerProfileId: string | null; accountBusinessType: string | null;
+  // The rep handling this customer (the company's owner).
+  ownerUserId: string | null; ownerName: string | null;
   createdAt: string;
 };
+type LeadStageOption = { id: string; name: string; colorHex: string | null; isActive: boolean };
+type UserOption = { id: string; name: string };
+// canEdit: may change this customer; managesAll: admin/manager — assigns the
+// rep, edits anyone's notes, reads every rep's insight.
+type Viewer = { id: string; canEdit: boolean; managesAll: boolean };
 type LeadSourceOption = { id: string; name: string; colorHex: string | null };
 type CustomerProfileOption = { id: string; name: string };
 type Deal = {
   id: string; code: string; title: string; quotedValue: number | null; wonValue: number | null;
   estimatedValue: number | null; stageId: string; stageName: string; stageColorHex: string | null;
-  nextActionNote: string | null; nextActionDueAt: string | null;
 };
 type ActivityRow = { id: string; subject: string; notes: string | null; occurredAt: string; typeName: string; ownerName: string };
 type QuotationRow = { id: string; number: string; sport: string; grandTotal: number; status: string; contactPhone: string | null; sentAt: string | null; createdAt: string };
@@ -34,7 +43,7 @@ type ProductOption = { id: string; name: string; type: string };
 type ActivityTypeOption = { id: string; name: string };
 type StageOption = { id: string; name: string; stageType: string; colorHex: string | null; requiresLossReason: boolean };
 type LossReasonOption = { id: string; name: string };
-type ContactNoteRow = { id: string; title: string | null; body: string; createdAt: string; authorName: string };
+type ContactNoteRow = { id: string; title: string | null; body: string; createdAt: string; authorName: string; authorUserId: string; editedAt: string | null };
 type ReminderRow = {
   id: string; message: string; dueAt: string; completedAt: string | null; completionNote: string | null;
   location: string | null; meetingUrl: string | null; priority: string | null;
@@ -90,6 +99,7 @@ function initials(name: string): string {
 
 const SECTIONS = [
   { id: "details", label: "Details" },
+  { id: "next-actions", label: "Next actions" },
   { id: "deals", label: "Deals" },
   { id: "quotations", label: "Quotations" },
   { id: "court-designs", label: "Court Designs" },
@@ -97,17 +107,21 @@ const SECTIONS = [
   { id: "open-activities", label: "Open activities" },
   { id: "closed-activities", label: "Closed activities" },
   { id: "notes", label: "Notes" },
+  { id: "insight", label: "Insight" },
   { id: "attachments", label: "Attachments" },
 ];
 
 export default function ContactDetailClient({
-  contact, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons, customerProfiles, contactNotes, reminders, attachments, leadSources,
+  contact, viewer, leadStages, assignableUsers, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons, customerProfiles, contactNotes, reminders, attachments, leadSources, nextActions, insights,
 }: {
-  contact: Contact; deals: Deal[]; activities: ActivityRow[]; quotations: QuotationRow[]; courtImages: CourtImageRow[];
+  contact: Contact; viewer: Viewer; leadStages: LeadStageOption[]; assignableUsers: UserOption[];
+  deals: Deal[]; activities: ActivityRow[]; quotations: QuotationRow[]; courtImages: CourtImageRow[];
   productInterests: ProductInterestRow[]; timeline: TimelineEntry[]; products: ProductOption[];
   activityTypes: ActivityTypeOption[]; funnelStages: StageOption[]; lossReasons: LossReasonOption[];
   customerProfiles: CustomerProfileOption[]; contactNotes: ContactNoteRow[]; reminders: ReminderRow[]; attachments: AttachmentRow[];
   leadSources: LeadSourceOption[];
+  nextActions: NextActionRow[];
+  insights: InsightRow[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -168,6 +182,111 @@ export default function ContactDetailClient({
     } else {
       toast.error("Could not save note");
     }
+  }
+
+  // Notes: the author, or an admin/manager, can edit or delete one.
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editNoteTitle, setEditNoteTitle] = useState("");
+  const [editNoteBody, setEditNoteBody] = useState("");
+  const [savingNoteEdit, setSavingNoteEdit] = useState(false);
+  const canEditNote = (n: ContactNoteRow) => n.authorUserId === viewer.id || viewer.managesAll;
+
+  function startEditNote(n: ContactNoteRow) {
+    setEditingNoteId(n.id);
+    setEditNoteTitle(n.title ?? "");
+    setEditNoteBody(n.body);
+  }
+
+  async function saveNoteEdit() {
+    if (!editingNoteId || !editNoteBody.trim()) return;
+    setSavingNoteEdit(true);
+    const res = await fetch(`/api/account-contacts/${contact.id}/notes/${editingNoteId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: editNoteTitle.trim() || null, body: editNoteBody.trim() }),
+    });
+    setSavingNoteEdit(false);
+    if (res.ok) {
+      setEditingNoteId(null);
+      toast.success("Note updated");
+      router.refresh();
+    } else {
+      toast.error("Could not update note");
+    }
+  }
+
+  async function deleteNote(n: ContactNoteRow) {
+    if (!confirm("Delete this note? The Timeline will still show it was added and deleted.")) return;
+    const res = await fetch(`/api/account-contacts/${contact.id}/notes/${n.id}`, { method: "DELETE" });
+    if (res.ok) { toast.success("Note deleted"); router.refresh(); }
+    else toast.error("Could not delete note");
+  }
+
+  // Bumped by the top "Next action" strip's / left nav's "+" to open that
+  // section's add form (and the Insight section's, likewise).
+  const [nextActionAddSignal, setNextActionAddSignal] = useState(0);
+  const [insightAddSignal, setInsightAddSignal] = useState(0);
+  function openAdd(section: "next-actions" | "insight") {
+    setTab("overview");
+    if (section === "next-actions") setNextActionAddSignal((n) => n + 1);
+    else setInsightAddSignal((n) => n + 1);
+    // After the Overview (and its section) has rendered.
+    setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+  const [savingStage, setSavingStage] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [removingLead, setRemovingLead] = useState(false);
+  const currentLeadStage = leadStages.find((s) => s.id === contact.leadStageId) ?? null;
+
+  async function changeLeadStage(stageId: string) {
+    setSavingStage(true);
+    const res = await fetch(`/api/account-contacts/${contact.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadStageId: stageId || null }),
+    });
+    setSavingStage(false);
+    if (res.ok) {
+      toast.success(stageId ? `Stage set to ${leadStages.find((s) => s.id === stageId)?.name ?? "new stage"}` : "Stage cleared");
+      router.refresh();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Could not change stage");
+    }
+  }
+
+  async function assignRep(userId: string) {
+    const toName = assignableUsers.find((u) => u.id === userId)?.name ?? "nobody";
+    if (!confirm(userId
+      ? `Assign ${contact.name} to ${toName}? Their open deals move to ${toName} too.`
+      : `Remove the rep from ${contact.name}? They'll be unassigned.`)) return;
+    setAssigning(true);
+    const res = await fetch(`/api/account-contacts/${contact.id}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: userId || null }),
+    });
+    setAssigning(false);
+    if (res.ok) {
+      toast.success(userId ? `Now handled by ${toName}` : "Rep removed");
+      router.refresh();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Could not assign rep");
+    }
+  }
+
+  async function removeFromLeads() {
+    if (!confirm(`Remove ${contact.name} from Leads? Their stage and history stay.`)) return;
+    setRemovingLead(true);
+    const res = await fetch(`/api/account-contacts/${contact.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pipelineStage: null }),
+    });
+    setRemovingLead(false);
+    if (res.ok) { toast.success("Removed from Leads"); router.refresh(); }
+    else toast.error("Could not remove from Leads");
   }
   const [closeoutFor, setCloseoutFor] = useState<{ deal: Deal; stage: StageOption } | null>(null);
 
@@ -426,8 +545,8 @@ export default function ContactDetailClient({
       body: JSON.stringify({ pipelineStage: "LEAD" }),
     });
     setConvertingLead(false);
-    if (res.ok) { toast.success("Converted to lead"); router.refresh(); }
-    else toast.error("Could not convert to lead");
+    if (res.ok) { toast.success("Moved to Leads"); router.refresh(); }
+    else toast.error("Could not move to Leads");
   }
 
   function buildTypedRows(typeNames: Set<string>): TypedTimelineRow[] {
@@ -722,6 +841,50 @@ export default function ContactDetailClient({
                 </span>
               )}
             </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2" data-guide="crm-contact-stage-rep">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                Stage
+                <select
+                  value={contact.leadStageId ?? ""}
+                  onChange={(e) => changeLeadStage(e.target.value)}
+                  disabled={!viewer.canEdit || savingStage}
+                  className="text-xs font-semibold rounded-full border-0 px-2.5 py-1 disabled:opacity-70"
+                  style={{
+                    background: (currentLeadStage?.colorHex ?? "#64748b") + "20",
+                    color: currentLeadStage?.colorHex ?? "#475569",
+                  }}
+                >
+                  <option value="" style={{ color: "#475569" }}>No stage</option>
+                  {leadStages
+                    .filter((s) => s.isActive || s.id === contact.leadStageId)
+                    .map((s) => (
+                      // Own color per option — otherwise every option inherits the
+                      // current stage's inline color from the <select>.
+                      <option key={s.id} value={s.id} disabled={!s.isActive} style={{ color: s.colorHex ?? "#475569" }}>
+                        {s.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <span className="flex items-center gap-1.5 text-xs text-slate-600">
+                Handled by
+                {viewer.managesAll ? (
+                  <select
+                    value={contact.ownerUserId ?? ""}
+                    onChange={(e) => assignRep(e.target.value)}
+                    disabled={assigning}
+                    className="text-xs font-semibold text-slate-800 bg-slate-100 rounded-full border-0 px-2.5 py-1 disabled:opacity-70"
+                  >
+                    <option value="">Unassigned</option>
+                    {assignableUsers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+                ) : (
+                  <span className="text-xs font-semibold text-slate-800 bg-slate-100 rounded-full px-2.5 py-1">
+                    {contact.ownerName ?? "Unassigned"}
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -746,41 +909,54 @@ export default function ContactDetailClient({
                   Send message
                 </a>
               )}
-              <button
-                onClick={syncToMarketing}
-                disabled={syncing || !contact.phone}
-                title={!contact.phone ? "Add a phone number first" : "Add this person to the WhatsApp marketing contact list"}
-                className="btn btn-secondary !px-3 !py-1.5 !text-sm disabled:opacity-40"
-              >
-                {syncing ? "Syncing..." : "Sync to WhatsApp Marketing"}
-              </button>
-              <button
-                onClick={unlinkFromCrm}
-                disabled={unlinking}
-                title="Remove this contact from CRM and move it back to its source (WhatsApp Marketing / Meta leads)"
-                className="border border-red-200 text-red-600 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-red-50 disabled:opacity-50"
-              >
-                {unlinking ? "Removing..." : "Remove from CRM"}
-              </button>
-              {contact.pipelineStage !== "LEAD" && (
-                <button
-                  onClick={convertToLead}
-                  disabled={convertingLead}
-                  title="Promote this contact into the Leads funnel"
-                  className="border border-indigo-300 text-indigo-700 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-indigo-50 disabled:opacity-50"
-                >
-                  {convertingLead ? "Converting..." : "Convert to Lead"}
-                </button>
+              {viewer.canEdit && (
+                <>
+                  <button
+                    onClick={syncToMarketing}
+                    disabled={syncing || !contact.phone}
+                    title={!contact.phone ? "Add a phone number first" : "Add this person to the WhatsApp marketing contact list"}
+                    className="btn btn-secondary !px-3 !py-1.5 !text-sm disabled:opacity-40"
+                  >
+                    {syncing ? "Syncing..." : "Sync to WhatsApp Marketing"}
+                  </button>
+                  <button
+                    onClick={unlinkFromCrm}
+                    disabled={unlinking}
+                    title="Remove this contact from CRM and move it back to its source (WhatsApp Marketing / Meta leads)"
+                    className="border border-red-200 text-red-600 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {unlinking ? "Removing..." : "Remove from CRM"}
+                  </button>
+                  {contact.pipelineStage !== "LEAD" ? (
+                    <button
+                      onClick={convertToLead}
+                      disabled={convertingLead}
+                      title="Move this contact into Leads"
+                      className="border border-indigo-300 text-indigo-700 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-indigo-50 disabled:opacity-50"
+                    >
+                      {convertingLead ? "Moving..." : "Move to Leads"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={removeFromLeads}
+                      disabled={removingLead}
+                      title="Take this contact out of Leads — their stage and history stay"
+                      className="border border-slate-300 text-slate-600 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {removingLead ? "Removing..." : "Remove from Leads"}
+                    </button>
+                  )}
+                  <button onClick={startEdit} className="btn btn-secondary !px-3 !py-1.5 !text-sm" data-guide="crm-contact-edit">
+                    Edit
+                  </button>
+                </>
               )}
-              <button onClick={startEdit} className="btn btn-secondary !px-3 !py-1.5 !text-sm" data-guide="crm-contact-edit">
-                Edit
-              </button>
             </>
           )}
         </div>
       </div>
 
-      <NextActionCard deal={deals[0] ?? null} contactId={contact.id} />
+      <NextActionStrip actions={nextActions} canEdit={viewer.canEdit} onAdd={() => openAdd("next-actions")} />
 
       {/* Quick actions — attach a new quotation/court design/product interest against this lead. Deal and Activity each have their own + in their own section below instead. */}
       <div className="flex flex-wrap gap-2 mb-5">
@@ -909,6 +1085,22 @@ export default function ContactDetailClient({
                       </div>
                     </>
                   )}
+                </div>
+              ) : s.id === "insight" || (s.id === "next-actions" && viewer.canEdit) ? (
+                // "+" jumps to the section with its add form open — same
+                // quick-add pattern as Open activities / Attachments above.
+                <div key={s.id} className="relative flex items-center">
+                  <a href={`#${s.id}`} className="flex-1 block px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                    {s.label}
+                  </a>
+                  <button
+                    onClick={() => openAdd(s.id as "insight" | "next-actions")}
+                    aria-label={s.id === "insight" ? "Add insight" : "Add next action"}
+                    title={s.id === "insight" ? "Add an insight" : "Add a next action"}
+                    className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-court-700 text-base leading-none"
+                  >
+                    +
+                  </button>
                 </div>
               ) : (
                 <a key={s.id} href={`#${s.id}`} className="block px-2.5 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900">
@@ -1073,6 +1265,8 @@ export default function ContactDetailClient({
                 )}
               </div>
             </div>
+
+            <NextActionsSection contactId={contact.id} actions={nextActions} canEdit={viewer.canEdit} addSignal={nextActionAddSignal} />
 
             <div id="deals" className="card p-4 scroll-mt-4" data-guide="crm-contact-deals">
               <div className="flex items-center justify-between mb-3">
@@ -1408,16 +1602,53 @@ export default function ContactDetailClient({
                 <p className="text-sm text-slate-400">No notes yet.</p>
               ) : (
                 <div className="space-y-3">
-                  {contactNotes.map((n) => (
-                    <div key={n.id} className="border-l-2 border-slate-200 pl-3 py-0.5">
-                      {n.title && <div className="text-sm font-semibold text-slate-900">{n.title}</div>}
-                      <div className="text-sm text-slate-700 whitespace-pre-wrap">{n.body}</div>
-                      <div className="text-xs text-slate-500 mt-0.5"><span className="font-mono">{fmtDateTime(n.createdAt)}</span> · {n.authorName}</div>
-                    </div>
-                  ))}
+                  {contactNotes.map((n) =>
+                    editingNoteId === n.id ? (
+                      <div key={n.id} className="border border-slate-200 rounded-lg p-3">
+                        <input
+                          value={editNoteTitle}
+                          onChange={(e) => setEditNoteTitle(e.target.value)}
+                          placeholder="Title (optional)"
+                          className="w-full border-0 border-b border-slate-200 px-0 py-1.5 text-sm font-medium focus:outline-none focus:border-court-500 mb-2"
+                        />
+                        <textarea value={editNoteBody} onChange={(e) => setEditNoteBody(e.target.value)} rows={3} autoFocus className="w-full input" />
+                        <div className="flex gap-2 justify-end mt-2">
+                          <button onClick={() => setEditingNoteId(null)} className="btn btn-ghost !px-3 !py-1.5 !text-sm">Cancel</button>
+                          <button onClick={saveNoteEdit} disabled={savingNoteEdit || !editNoteBody.trim()} className="btn btn-primary !px-3 !py-1.5 !text-sm disabled:opacity-50">
+                            {savingNoteEdit ? "Saving..." : "Save"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div key={n.id} className="border-l-2 border-slate-200 pl-3 py-0.5 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          {n.title && <div className="text-sm font-semibold text-slate-900">{n.title}</div>}
+                          <div className="text-sm text-slate-700 whitespace-pre-wrap">{n.body}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            <span className="font-mono">{fmtDateTime(n.createdAt)}</span> · {n.authorName}
+                            {n.editedAt && <span title={`Edited ${fmtDateTime(n.editedAt)}`}> · edited</span>}
+                          </div>
+                        </div>
+                        {canEditNote(n) && (
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button onClick={() => startEditNote(n)} className="text-xs font-medium text-slate-500 hover:text-slate-700">Edit</button>
+                            <button onClick={() => deleteNote(n)} className="text-xs font-medium text-red-500 hover:text-red-700">Delete</button>
+                          </div>
+                        )}
+                      </div>
+                    ),
+                  )}
                 </div>
               )}
             </div>
+
+            <ContactInsightSection
+              contactId={contact.id}
+              insights={insights}
+              viewerId={viewer.id}
+              canModerate={viewer.managesAll}
+              addSignal={insightAddSignal}
+            />
 
             <div id="attachments" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
@@ -1838,8 +2069,8 @@ function CreateDealFirstModal({
 
 // A Task is a one-off Reminder with a priority — owned by the current user
 // (the POST endpoint forces ownerUserId to the caller), no assignee picker,
-// no repeat. "Reminder on" just widens the delivery channels; either way it's
-// an in-app reminder that surfaces in My Day like every other Reminder.
+// no repeat. It's an in-app + push reminder that surfaces in My Day like every
+// other Reminder (WhatsApp delivery is switched off — it reached the customer).
 function TaskModal({
   dealId, accountContactId, contactName, taskTypeId, onClose, onCreated,
 }: { dealId: string | null; accountContactId: string; contactName: string; taskTypeId: string | null; onClose: () => void; onCreated: () => void }) {
@@ -1852,7 +2083,6 @@ function TaskModal({
   });
   const [priority, setPriority] = useState<"HIGH" | "MEDIUM" | "LOW">("MEDIUM");
   const [notes, setNotes] = useState("");
-  const [reminderOn, setReminderOn] = useState(true);
   const [saving, setSaving] = useState(false);
 
   async function submit() {
@@ -1869,7 +2099,7 @@ function TaskModal({
         dueAt: new Date(`${date}T09:00:00`).toISOString(),
         priority,
         notes: notes.trim() || undefined,
-        channels: reminderOn ? ["whatsapp", "in_app"] : ["in_app"],
+        channels: ["in_app"],
         activityTypeId: taskTypeId ?? undefined,
       }),
     });
@@ -1905,10 +2135,6 @@ function TaskModal({
             <label className="text-xs font-medium text-slate-600">Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Optional context / agenda" className="mt-1 w-full input" />
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={reminderOn} onChange={(e) => setReminderOn(e.target.checked)} />
-            Remind me on WhatsApp too (otherwise in-app only)
-          </label>
         </div>
         <div className="flex gap-2 mt-4">
           <button onClick={onClose} className="flex-1 btn btn-secondary">Cancel</button>
@@ -1916,121 +2142,6 @@ function TaskModal({
             {saving ? "Saving..." : "Add task"}
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// The prominent Zoho-style "Next Action" strip — a manually-typed next step
-// + date living on the Deal (the primary/first deal for this contact). It's
-// the deal's own field, so editing here is the single source of truth read
-// by Deal Detail / Pipeline too, not a copy to sync.
-function NextActionCard({ deal, contactId }: { deal: Deal | null; contactId: string }) {
-  const router = useRouter();
-  const toast = useToast();
-  const [editing, setEditing] = useState(false);
-  const [note, setNote] = useState(deal?.nextActionNote ?? "");
-  const [date, setDate] = useState(deal?.nextActionDueAt ? deal.nextActionDueAt.slice(0, 10) : "");
-  const [saving, setSaving] = useState(false);
-
-  if (!deal) {
-    return (
-      <div className="mb-4 text-xs text-slate-400">Create a deal to set a next action for this contact.</div>
-    );
-  }
-
-  function startEdit() {
-    setNote(deal!.nextActionNote ?? "");
-    setDate(deal!.nextActionDueAt ? deal!.nextActionDueAt.slice(0, 10) : "");
-    setEditing(true);
-  }
-
-  async function save() {
-    setSaving(true);
-    const res = await fetch(`/api/deals/${deal!.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nextActionNote: note.trim() || null,
-        nextActionDueAt: date ? new Date(`${date}T00:00:00`).toISOString() : null,
-      }),
-    });
-    if (res.ok && date) {
-      // A next action with a date but no reminder never actually surfaces
-      // anywhere (My Day, WhatsApp reminder cron) — fire a day-before +
-      // day-of Reminder so it does, anchored to the same deal + contact.
-      const dayOf = new Date(`${date}T09:00:00`);
-      const dayBefore = new Date(dayOf);
-      dayBefore.setDate(dayBefore.getDate() - 1);
-      const label = note.trim() || "Follow up";
-      await fetch("/api/reminders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: `[Next Action - Tomorrow] ${label}`,
-          dueAt: dayBefore.toISOString(),
-          dealId: deal!.id,
-          accountContactId: contactId,
-        }),
-      }).catch(() => {});
-      await fetch("/api/reminders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: `[Next Action - Today] ${label}`,
-          dueAt: dayOf.toISOString(),
-          dealId: deal!.id,
-          accountContactId: contactId,
-        }),
-      }).catch(() => {});
-    }
-    setSaving(false);
-    if (res.ok) { setEditing(false); toast.success("Next action updated"); router.refresh(); }
-    else toast.error("Could not save next action");
-  }
-
-  const hasAction = !!(deal.nextActionNote || deal.nextActionDueAt);
-
-  return (
-    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Next action</div>
-          {editing ? (
-            <div className="mt-2 flex flex-col gap-2">
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input w-48" />
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                autoFocus
-                rows={3}
-                placeholder="What's the next step? e.g. Follow up call, Site visit, Send revised quote..."
-                className="w-full input resize-none"
-              />
-            </div>
-          ) : hasAction ? (
-            <div className="mt-1 flex items-center gap-2 flex-wrap">
-              {deal.nextActionDueAt && (
-                <span className="text-[11px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded uppercase font-mono">{fmtDate(deal.nextActionDueAt)}</span>
-              )}
-              <span className="text-sm text-slate-800" data-guide="crm-contact-next-action">{deal.nextActionNote ?? "—"}</span>
-            </div>
-          ) : (
-            <div className="mt-1 text-sm text-slate-400">No next action set.</div>
-          )}
-        </div>
-        {editing ? (
-          <div className="flex gap-2 shrink-0">
-            <button onClick={() => setEditing(false)} disabled={saving} className="btn btn-ghost !px-2 !py-1 !text-xs">Cancel</button>
-            <button onClick={save} disabled={saving} className="btn btn-primary !px-3 !py-1 !text-xs disabled:opacity-50">
-              {saving ? "Saving..." : "Save"}
-            </button>
-          </div>
-        ) : (
-          <button onClick={startEdit} className="text-xs font-medium text-amber-800 hover:underline shrink-0">
-            {hasAction ? "Edit" : "Set"}
-          </button>
-        )}
       </div>
     </div>
   );

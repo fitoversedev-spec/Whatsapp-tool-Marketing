@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
-import { isAdmin } from "@/lib/rbac";
+import { canManageAllCustomers } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
+import { syncNextActionFromReminder } from "@/lib/crm/nextActions";
 
 const patchSchema = z.object({
   message: z.string().min(1).max(500).optional(),
@@ -19,14 +20,14 @@ const patchSchema = z.object({
   location: z.string().max(500).nullable().optional(),
 });
 
-// A reminder can be updated/deleted by its own owner OR by an admin — the
-// contact page surfaces reminders across every owner on the contact's deals,
-// so an admin managing that contact must be able to complete a rep's reminder
-// (mirrors the owner-or-admin gate on deals/account-contacts).
+// A reminder can be updated/deleted by its own owner OR by an admin/manager —
+// the contact page surfaces reminders across every owner on the contact's
+// deals, so whoever manages that contact must be able to complete a rep's
+// reminder (mirrors the access rule on deals/account-contacts).
 async function loadOwn(id: string, user: { id: string; role: string }) {
   const r = await prisma.reminder.findUnique({ where: { id } });
   if (!r) return { error: "not_found" as const, status: 404 };
-  if (r.ownerUserId !== user.id && !isAdmin(user.role)) return { error: "forbidden" as const, status: 403 };
+  if (r.ownerUserId !== user.id && !canManageAllCustomers(user.role)) return { error: "forbidden" as const, status: 403 };
   return { reminder: r };
 }
 
@@ -68,6 +69,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     where: { id: params.id },
     data,
   });
+  // A next action's alert ticked off from Reminders / My Day ticks off the
+  // next action too (and the other way round when it's reopened).
+  if (parsed.data.completed !== undefined) {
+    await syncNextActionFromReminder(updated.id, parsed.data.completed, user.id);
+  }
 
   return NextResponse.json({
     reminder: {

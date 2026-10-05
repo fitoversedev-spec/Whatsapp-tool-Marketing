@@ -1,13 +1,15 @@
 // Bulk "Move to Leads" (or undo) — the multi-select counterpart to
 // PATCH /api/account-contacts/[id]'s pipelineStage write. Same per-item
-// owner-or-admin scoping and granular skip-counting convention as
-// bulk-delete/route.ts. "converted" is never stored — it's derived from a
-// contact having a Deal — so the only values accepted here are "LEAD" / null.
+// access rule and granular skip-counting convention as bulk-delete/route.ts.
+// "converted" is never stored — it's derived from a contact having a Deal —
+// so the only values accepted here are "LEAD" / null.
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { customerAccess } from "@/lib/rbac";
+import { firstLeadStage } from "@/lib/crm/leadStages";
+import { logContactEvents, type ContactEventInput } from "@/lib/crm/contactEvents";
 
 const schema = z.object({
   contactIds: z.array(z.string().uuid()).min(1).max(200),
@@ -23,33 +25,49 @@ export async function POST(req: NextRequest) {
 
   const contacts = await prisma.accountContact.findMany({
     where: { id: { in: parsed.data.contactIds }, deletedAt: null },
-    select: { id: true, account: { select: { ownerUserId: true } } },
+    select: { id: true, pipelineStage: true, leadStageId: true, promotedToLeadAt: true, account: { select: { ownerUserId: true } } },
   });
 
-  const allowedIds: string[] = [];
+  const allowed: typeof contacts = [];
   let skippedForbidden = 0;
   for (const contact of contacts) {
-    if (!isAdmin(user.role) && contact.account.ownerUserId && contact.account.ownerUserId !== user.id) {
+    if (!customerAccess(user, contact.account.ownerUserId).canEdit) {
       skippedForbidden++;
       continue;
     }
-    allowedIds.push(contact.id);
+    allowed.push(contact);
   }
 
-  if (allowedIds.length) {
-    const promoting = parsed.data.pipelineStage === "LEAD";
-    // On promotion, stamp promotedToLeadAt for the analytics Leads window — but
-    // only rows not already promoted (promotedToLeadAt IS NULL), so a repeat
-    // "Move to Leads" never overwrites the original first-promotion timestamp.
-    await prisma.accountContact.updateMany({
-      where: promoting
-        ? { id: { in: allowedIds }, promotedToLeadAt: null }
-        : { id: { in: allowedIds } },
-      data: promoting
-        ? { pipelineStage: "LEAD", promotedToLeadAt: new Date() }
-        : { pipelineStage: parsed.data.pipelineStage },
-    });
-  }
+  const promoting = parsed.data.pipelineStage === "LEAD";
+  // Only rows whose Leads membership actually changes get written and logged.
+  const changing = allowed.filter((c) => (promoting ? c.pipelineStage !== "LEAD" : c.pipelineStage === "LEAD"));
+  const events: ContactEventInput[] = [];
 
-  return NextResponse.json({ updated: allowedIds.length, skippedForbidden });
+  if (changing.length) {
+    const ids = changing.map((c) => c.id);
+    if (promoting) {
+      const stage = await firstLeadStage();
+      const now = new Date();
+      await prisma.$transaction([
+        prisma.accountContact.updateMany({ where: { id: { in: ids } }, data: { pipelineStage: "LEAD" } }),
+        // Stamp promotedToLeadAt for the analytics Leads window only on rows
+        // never promoted before, so a repeat move keeps the original timestamp.
+        prisma.accountContact.updateMany({ where: { id: { in: ids }, promotedToLeadAt: null }, data: { promotedToLeadAt: now } }),
+        // Someone moved in without a stage of their own starts at the first one.
+        ...(stage ? [prisma.accountContact.updateMany({ where: { id: { in: ids }, leadStageId: null }, data: { leadStageId: stage.id } })] : []),
+      ]);
+      for (const c of changing) {
+        events.push({ contactId: c.id, actorUserId: user.id, kind: "lead_added", summary: "Moved to Leads" });
+        if (stage && !c.leadStageId) {
+          events.push({ contactId: c.id, actorUserId: user.id, kind: "stage_changed", summary: `Stage: No stage → ${stage.name}` });
+        }
+      }
+    } else {
+      await prisma.accountContact.updateMany({ where: { id: { in: ids } }, data: { pipelineStage: null } });
+      for (const c of changing) events.push({ contactId: c.id, actorUserId: user.id, kind: "lead_removed", summary: "Removed from Leads" });
+    }
+  }
+  await logContactEvents(events);
+
+  return NextResponse.json({ updated: allowed.length, skippedForbidden });
 }

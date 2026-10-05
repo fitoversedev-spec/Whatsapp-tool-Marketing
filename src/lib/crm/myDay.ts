@@ -150,7 +150,7 @@ export async function getUpcomingSchedule(opts: { ownerUserId?: string } = {}): 
     const contactName = r.accountContact?.name ?? r.conversation?.contactName ?? r.metaLead?.fullName ?? null;
     let contactLink: string | null = null;
     if (r.accountContactId) contactLink = `/crm/contacts/${r.accountContactId}`;
-    else if (r.dealId) contactLink = `/crm/deals/${r.dealId}`;
+    else if (r.dealId) contactLink = `/deals/${r.dealId}`;
     else if (r.metaLeadId) contactLink = `/ad-campaigns/leads/${r.metaLeadId}`;
     else if (r.conversationId) contactLink = `/inbox?conversation=${r.conversationId}`;
 

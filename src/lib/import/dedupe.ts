@@ -267,6 +267,7 @@ export async function commitRow(
         designation: fields.designation || null,
         notes: composedNotes,
         importBatchId,
+        createdByUserId: userId,
       },
     });
     // Register the new row in the shared dedupe index (if the caller passed

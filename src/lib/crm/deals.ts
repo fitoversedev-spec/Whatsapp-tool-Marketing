@@ -109,7 +109,7 @@ async function resolveAccountId(
     },
   });
   if (phone) {
-    await prisma.accountContact.create({ data: { accountId: account.id, name: trimmed, phone, isPrimary: true } });
+    await prisma.accountContact.create({ data: { accountId: account.id, name: trimmed, phone, isPrimary: true, createdByUserId: ownerUserId } });
   }
   return account.id;
 }

@@ -10,9 +10,11 @@
 // precedent — this is what makes "block delete of a referenced row, offer
 // deactivate instead" trivially true: the row never actually goes away.
 import { prisma } from "@/lib/prisma";
+import { logContactEvents } from "@/lib/crm/contactEvents";
 
 export const TAXONOMY_TYPES = [
   "funnel-stages",
+  "lead-stages",
   "lead-sources",
   "customer-profiles",
   "city-tiers",
@@ -26,6 +28,8 @@ function delegateFor(type: TaxonomyType) {
   switch (type) {
     case "funnel-stages":
       return prisma.funnelStage;
+    case "lead-stages":
+      return prisma.leadStage;
     case "lead-sources":
       return prisma.leadSource;
     case "customer-profiles":
@@ -46,8 +50,47 @@ export function slugify(s: string): string {
 }
 
 export async function listTaxonomy(type: TaxonomyType) {
+  if (type === "lead-stages") {
+    // With how many live contacts sit in each stage — the admin screen asks
+    // where to move them before a stage in use can be removed.
+    const rows = await prisma.leadStage.findMany({
+      where: { deletedAt: null },
+      orderBy: { sortOrder: "asc" },
+      include: { _count: { select: { contacts: { where: { deletedAt: null } } } } },
+    });
+    return rows.map(({ _count, ...row }) => ({ ...row, contactCount: _count.contacts }));
+  }
   const delegate = delegateFor(type) as { findMany: (args: unknown) => Promise<unknown[]> };
   return delegate.findMany({ where: { deletedAt: null }, orderBy: { sortOrder: "asc" } });
+}
+
+// Removing a lead stage: its contacts move to another stage first (each move
+// recorded on that contact's Timeline), then the stage is soft-deleted.
+export async function removeLeadStage(id: string, moveToId: string | null, actorUserId: string): Promise<{ moved: number }> {
+  const [stage, target] = await Promise.all([
+    prisma.leadStage.findUnique({ where: { id }, select: { name: true } }),
+    moveToId ? prisma.leadStage.findUnique({ where: { id: moveToId }, select: { id: true, name: true, deletedAt: true } }) : null,
+  ]);
+  const contacts = await prisma.accountContact.findMany({ where: { leadStageId: id, deletedAt: null }, select: { id: true } });
+  if (contacts.length && (!target || target.deletedAt || target.id === id)) {
+    throw new Error("Pick another stage to move this stage's contacts to first.");
+  }
+  await prisma.$transaction([
+    prisma.accountContact.updateMany({ where: { leadStageId: id }, data: { leadStageId: target?.id ?? null } }),
+    prisma.leadStage.update({ where: { id }, data: { isActive: false, deletedAt: new Date() } }),
+  ]);
+  if (contacts.length && target) {
+    await logContactEvents(
+      contacts.map((c) => ({
+        contactId: c.id,
+        actorUserId,
+        kind: "stage_changed" as const,
+        summary: `Stage: ${stage?.name ?? "Removed stage"} → ${target.name}`,
+        detail: `"${stage?.name ?? "That stage"}" was removed from the stage list`,
+      })),
+    );
+  }
+  return { moved: contacts.length };
 }
 
 export type TaxonomyInput = {

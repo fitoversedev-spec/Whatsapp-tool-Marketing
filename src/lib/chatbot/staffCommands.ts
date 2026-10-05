@@ -70,7 +70,8 @@ export async function executeStaffCommand(
     const payload = JSON.parse(pending.payload);
     if (pending.kind === "remind") {
       await prisma.reminder.create({
-        data: { ownerUserId: user.id, message: payload.text, dueAt: new Date(payload.dueAt), channels: ["whatsapp", "in_app"] },
+        // In-app + push only — WhatsApp reminder delivery is switched off.
+        data: { ownerUserId: user.id, message: payload.text, dueAt: new Date(payload.dueAt), channels: ["in_app"] },
       });
       return `✅ Reminder set for ${formatDateTime(new Date(payload.dueAt))} — "${payload.text}"`;
     }
@@ -103,7 +104,7 @@ export async function executeStaffCommand(
       data: { name: parsed.name, city: parsed.city, ownerUserId: user.id },
     });
     const contact = await prisma.accountContact.create({
-      data: { accountId: account.id, name: parsed.name, phone: parsed.phone, isPrimary: true },
+      data: { accountId: account.id, name: parsed.name, phone: parsed.phone, isPrimary: true, createdByUserId: user.id },
     });
     return `✅ Contact created: ${contact.name} (${account.city}, ${contact.phone}).`;
   }

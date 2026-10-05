@@ -17,6 +17,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { normalizePhone } from "@/lib/phone";
 import { findAccountContactDuplicate } from "@/lib/crm/accounts";
+import { firstLeadStage } from "@/lib/crm/leadStages";
 
 const bodySchema = z.object({
   // The rep to own the created Account. Optional — when omitted, the Account is
@@ -80,6 +81,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     select: { id: true },
   });
   const leadSourceId = metaAdsSource?.id ?? null;
+  // A new lead starts at the first sales stage (Lead Generation).
+  const startStage = await firstLeadStage();
 
   // Reuse an existing CRM contact with the same phone rather than duplicating it.
   const dup = await findAccountContactDuplicate({ phone, name: displayName });
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         // pipeline stage, leave it — never demote a further-along contact.
         const existing = await tx.accountContact.findUnique({
           where: { id: dup.id },
-          select: { pipelineStage: true, leadSourceId: true },
+          select: { pipelineStage: true, leadSourceId: true, leadStageId: true },
         });
         if (existing && !existing.pipelineStage) {
           await tx.accountContact.update({
@@ -104,6 +107,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               pipelineStage: "LEAD",
               promotedToLeadAt: new Date(),
               ...(leadSourceId && !existing.leadSourceId ? { leadSourceId } : {}),
+              ...(startStage && !existing.leadStageId ? { leadStageId: startStage.id } : {}),
             },
           });
         }
@@ -126,6 +130,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             promotedToLeadAt: new Date(),
             createdByUserId: user.id,
             ...(leadSourceId ? { leadSourceId } : {}),
+            ...(startStage ? { leadStageId: startStage.id } : {}),
           },
         });
         targetId = contact.id;

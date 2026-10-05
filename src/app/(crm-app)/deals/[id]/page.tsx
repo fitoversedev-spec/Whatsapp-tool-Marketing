@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, canSeeAllCustomers, customerAccess } from "@/lib/rbac";
 import { getUnifiedTimeline } from "@/lib/crm/timeline";
 import DealDetailClient from "./DealDetailClient";
 
@@ -43,7 +43,7 @@ export default async function DealDetailPage({ params }: { params: { id: string 
   ]);
 
   if (!deal || deal.deletedAt) notFound();
-  if (!isAdmin(user.role) && deal.ownerUserId && deal.ownerUserId !== user.id) notFound();
+  if (!customerAccess(user, deal.ownerUserId).canView) notFound();
 
   // Show the primary contact's quotations / court designs / product interest
   // across that contact's deals (same set the contact detail page shows) — a
@@ -58,7 +58,7 @@ export default async function DealDetailPage({ params }: { params: { id: string 
           where: {
             primaryContactId: deal.primaryContactId,
             deletedAt: null,
-            ...(isAdmin(user.role) ? {} : { ownerUserId: user.id }),
+            ...(canSeeAllCustomers(user.role) ? {} : { ownerUserId: user.id }),
           },
           select: { id: true },
         })

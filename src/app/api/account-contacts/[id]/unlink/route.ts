@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { canManageAllCustomers } from "@/lib/rbac";
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -20,7 +20,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   });
   if (!ac || ac.deletedAt) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  if (!isAdmin(user.role) && ac.account.ownerUserId !== user.id) {
+  if (!canManageAllCustomers(user.role) && ac.account.ownerUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

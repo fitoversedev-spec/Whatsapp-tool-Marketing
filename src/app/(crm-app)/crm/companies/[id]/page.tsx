@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, customerAccess } from "@/lib/rbac";
 import { getUnifiedTimeline } from "@/lib/crm/timeline";
 import CompanyDetailClient from "./CompanyDetailClient";
 
@@ -25,7 +25,7 @@ export default async function CompanyDetailPage({ params }: { params: { id: stri
     },
   });
   if (!account || account.deletedAt) notFound();
-  if (!isAdmin(user.role) && account.ownerUserId && account.ownerUserId !== user.id) notFound();
+  if (!customerAccess(user, account.ownerUserId).canView) notFound();
 
   const dealIds = account.deals.map((d) => d.id);
   const activities = await prisma.activity.findMany({

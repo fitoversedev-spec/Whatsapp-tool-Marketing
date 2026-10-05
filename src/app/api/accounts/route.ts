@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { canSeeAllCustomers } from "@/lib/rbac";
 import { findAccountDuplicate } from "@/lib/crm/accounts";
 
 const createSchema = z.object({
@@ -60,9 +60,11 @@ export async function GET(req: NextRequest) {
     deletedAt: null,
     ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
   };
-  if (ownerId) {
+  // A rep may only filter to their own accounts — asking for someone else's
+  // ownerId used to return them.
+  if (ownerId && (canSeeAllCustomers(user.role) || ownerId === user.id)) {
     where.ownerUserId = ownerId;
-  } else if (!isAdmin(user.role)) {
+  } else if (!canSeeAllCustomers(user.role)) {
     where.ownerUserId = user.id;
   }
 

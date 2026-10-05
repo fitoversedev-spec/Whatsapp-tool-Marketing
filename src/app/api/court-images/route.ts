@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildCourtImageNumber } from "@/lib/court-image/schema";
 import { findOrCreateDealForConversation } from "@/lib/crm/deals";
+import { logDocumentDeleted } from "@/lib/crm/contactLinks";
 
 // Permissive layout validator — we accept anything that looks like
 // the right shape and let the canvas reject unknown elements at render
@@ -218,9 +219,14 @@ export async function DELETE(req: NextRequest) {
   const parsed = bulkDeleteSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
+  const affected = await prisma.courtImage.findMany({
+    where: { id: { in: parsed.data.ids } },
+    select: { number: true, dealId: true, createdAt: true },
+  });
   const result = await prisma.courtImage.deleteMany({
     where: { id: { in: parsed.data.ids } },
   });
+  await Promise.all(affected.map((c) => logDocumentDeleted({ kind: "design", ...c, contactPhone: null }, user.id)));
   return NextResponse.json({ ok: true, count: result.count });
 }
 

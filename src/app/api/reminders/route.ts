@@ -13,8 +13,9 @@ const createSchema = z.object({
   accountContactId: z.string().uuid().nullable().optional(),
   message: z.string().min(1).max(500),
   dueAt: z.string().datetime(),
-  // ["whatsapp"] opts into real outbound dispatch via the cron sweep;
-  // omitted/empty = in-app only (today's only behavior).
+  // WhatsApp delivery is switched off (it went to the customer's number, not
+  // the rep's) — "whatsapp" is still accepted from older clients but dropped
+  // below, so every reminder is in-app + push only.
   channels: z.array(z.enum(["whatsapp", "in_app"])).optional(),
   // Columns already existed on Reminder but were never accepted here —
   // see docs/DECISIONS.md (Phase 4).
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
       ownerUserId: user.id,
       message: parsed.data.message,
       dueAt: new Date(parsed.data.dueAt),
-      channels: parsed.data.channels ?? [],
+      channels: (parsed.data.channels ?? []).filter((c) => c !== "whatsapp"),
       location: parsed.data.location ?? null,
       meetingUrl: parsed.data.meetingUrl ?? null,
       activityTypeId: parsed.data.activityTypeId ?? null,

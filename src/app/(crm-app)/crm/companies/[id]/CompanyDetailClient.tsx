@@ -68,6 +68,11 @@ export default function CompanyDetailClient({
   const [showEdit, setShowEdit] = useState(false);
   const [showNewContact, setShowNewContact] = useState(false);
 
+  const quickContact = contacts.find((c) => c.isPrimary) ?? contacts[0] ?? null;
+  const quickParams = quickContact
+    ? new URLSearchParams({ contactId: quickContact.id, customerName: quickContact.name, ...(quickContact.phone ? { phone: quickContact.phone } : {}) }).toString()
+    : "";
+
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="mb-1.5">
@@ -94,17 +99,18 @@ export default function CompanyDetailClient({
         </div>
       </div>
 
-      {/* Quick actions — attach a new quotation/court design to this company's most recent deal */}
-      {deals.length > 0 && (
+      {/* Quick actions — a new quotation/court design for the company's main
+          contact. They attach to that contact; they never create a deal. */}
+      {quickContact && (
         <div className="flex flex-wrap gap-2 mb-5">
           <Link
-            href={`/crm/quotations?dealId=${deals[0].id}&customerName=${encodeURIComponent(account.name)}`}
+            href={`/crm/quotations?${quickParams}`}
             className="btn btn-secondary !px-3 !py-1 !text-xs flex items-center gap-1.5"
           >
             <span>📄</span> New Quotation
           </Link>
           <Link
-            href={`/crm/court-images?dealId=${deals[0].id}&customerName=${encodeURIComponent(account.name)}`}
+            href={`/crm/court-images?${quickParams}`}
             className="btn btn-secondary !px-3 !py-1 !text-xs flex items-center gap-1.5"
           >
             <span>🎨</span> New Court Design

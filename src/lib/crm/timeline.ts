@@ -168,6 +168,10 @@ function fmtIst(d: Date): string {
   return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+function fmtIstDate(d: Date): string {
+  return d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" });
+}
+
 function fmtInr(n: number): string {
   return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
@@ -193,11 +197,14 @@ export async function getContactTimeline(
 
   const deals = await prisma.deal.findMany({
     where: { primaryContactId: contactId },
-    select: { id: true, code: true, title: true, createdAt: true, deletedAt: true, owner: { select: { name: true } } },
+    select: {
+      id: true, code: true, title: true, createdAt: true, deletedAt: true, outcome: true, wonValue: true,
+      expectedStartAt: true, wonNote: true, owner: { select: { name: true } },
+    },
   });
   const allDealIds = deals.map((d) => d.id);
   const liveDealIds = deals.filter((d) => !d.deletedAt).map((d) => d.id);
-  const quoteOr: object[] = [];
+  const quoteOr: object[] = [{ accountContactId: contactId }];
   if (liveDealIds.length) quoteOr.push({ dealId: { in: liveDealIds } });
   if (contact.phone) quoteOr.push({ contactPhone: contact.phone });
 
@@ -239,30 +246,24 @@ export async function getContactTimeline(
       take: limit,
       include: { uploadedBy: { select: { name: true } } },
     }),
-    quoteOr.length
-      ? prisma.quotation.findMany({
-          where: quoteOr.length === 1 ? quoteOr[0] : { OR: quoteOr },
-          orderBy: { createdAt: "desc" },
-          take: limit,
-          select: { id: true, number: true, sport: true, grandTotal: true, createdAt: true, sentAt: true, createdBy: { select: { name: true } } },
-        })
-      : Promise.resolve([]),
-    liveDealIds.length
-      ? prisma.courtImage.findMany({
-          where: { dealId: { in: liveDealIds } },
-          orderBy: { createdAt: "desc" },
-          take: limit,
-          select: { id: true, number: true, createdAt: true, sentAt: true, createdBy: { select: { name: true } } },
-        })
-      : Promise.resolve([]),
-    liveDealIds.length
-      ? prisma.dealLineItem.findMany({
-          where: { dealId: { in: liveDealIds }, isEnquiryOnly: true },
-          orderBy: { createdAt: "desc" },
-          take: limit,
-          select: { id: true, label: true, createdAt: true, product: { select: { name: true } } },
-        })
-      : Promise.resolve([]),
+    prisma.quotation.findMany({
+      where: { OR: quoteOr },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: { id: true, number: true, sport: true, grandTotal: true, createdAt: true, sentAt: true, createdBy: { select: { name: true } } },
+    }),
+    prisma.courtImage.findMany({
+      where: { OR: [{ accountContactId: contactId }, ...(liveDealIds.length ? [{ dealId: { in: liveDealIds } }] : [])] },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: { id: true, number: true, createdAt: true, sentAt: true, createdBy: { select: { name: true } } },
+    }),
+    prisma.contactProductInterest.findMany({
+      where: { accountContactId: contactId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: { id: true, label: true, createdAt: true, product: { select: { name: true } }, createdBy: { select: { name: true } } },
+    }),
     prisma.contactNextAction.findMany({
       where: { accountContactId: contactId },
       orderBy: { createdAt: "desc" },
@@ -298,8 +299,11 @@ export async function getContactTimeline(
     ...deals.map((d) => ({
       id: `deal-${d.id}`,
       kind: "deal" as const,
-      title: `Deal created — ${d.title}`,
-      detail: d.code,
+      // Deals are confirmed projects: a won one reads as the win itself.
+      title: d.outcome === "WON" ? `Won — confirmed project ${d.code}` : `Deal created — ${d.title}`,
+      detail: d.outcome === "WON"
+        ? [d.wonValue != null ? fmtInr(Number(d.wonValue)) : null, d.expectedStartAt ? `starts ${fmtIstDate(d.expectedStartAt)}` : null, d.wonNote].filter(Boolean).join(" · ") || null
+        : d.code,
       timestamp: d.createdAt.toISOString(),
       ownerName: d.owner?.name ?? null,
     })),
@@ -379,7 +383,7 @@ export async function getContactTimeline(
       title: `Product interest — ${p.product?.name ?? p.label ?? "Unnamed product"}`,
       detail: null,
       timestamp: p.createdAt.toISOString(),
-      ownerName: null,
+      ownerName: p.createdBy?.name ?? null,
     })),
     ...nextActions.map((a) => ({
       id: a.id,

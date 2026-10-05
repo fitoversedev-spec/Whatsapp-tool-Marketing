@@ -116,6 +116,8 @@ type Props = {
     contactPhone?: string;
     conversationId?: string;
     dealId?: string;
+    // The CRM contact the design is for (from the contact page).
+    contactId?: string;
   };
   // When set, the wizard loads an existing draft for editing rather than
   // starting fresh. Step 1 is skipped to jump straight into the canvas.
@@ -2143,6 +2145,7 @@ export default function CourtImageWizard({
         contactPhone: contactPhone.trim() || null,
         conversationId: prefill?.conversationId ?? null,
         dealId: prefill?.dealId ?? null,
+        accountContactId: prefill?.contactId ?? null,
       };
 
       if (draftId) {

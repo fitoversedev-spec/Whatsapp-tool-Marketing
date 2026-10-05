@@ -130,7 +130,7 @@ export async function executeStaffCommand(
   }
 
   if (parsed.type === "my_day") {
-    const { dueToday, overdue, stuckDeals, noRecentActivityDeals, closingThisWeek } = await getMyDay(user.id);
+    const { dueToday, overdue, untouchedLeads, nextActionsThisWeek } = await getMyDay(user.id);
 
     const lines: string[] = [`☀️ My Day — ${user.name}`];
     lines.push("");
@@ -141,17 +141,14 @@ export async function executeStaffCommand(
       lines.push(`⏰ Overdue (${overdue.length}):`);
       lines.push(...overdue.slice(0, 5).map((r) => `  • ${formatDateTime(new Date(r.dueAt))} — ${r.message}`));
     }
-    if (stuckDeals.length) {
+    if (untouchedLeads.length) {
       lines.push("");
-      lines.push(`⚠️ Stuck deals (${stuckDeals.length}): ${stuckDeals.slice(0, 5).map((d) => d.code).join(", ")}`);
+      lines.push(`💤 Leads untouched 7+ days (${untouchedLeads.length}): ${untouchedLeads.slice(0, 5).map((l) => l.name).join(", ")}`);
     }
-    if (noRecentActivityDeals.length) {
+    if (nextActionsThisWeek.length) {
       lines.push("");
-      lines.push(`💤 No activity in 7+ days (${noRecentActivityDeals.length}): ${noRecentActivityDeals.slice(0, 5).map((d) => d.code).join(", ")}`);
-    }
-    if (closingThisWeek.length) {
-      lines.push("");
-      lines.push(`🏁 Closing this week (${closingThisWeek.length}): ${closingThisWeek.slice(0, 5).map((d) => d.code).join(", ")}`);
+      lines.push(`🗓️ Next actions this week (${nextActionsThisWeek.length}):`);
+      lines.push(...nextActionsThisWeek.slice(0, 5).map((a) => `  • ${formatDateTime(new Date(a.dueAt))} — ${a.contactName}: ${a.text}`));
     }
     return lines.join("\n");
   }

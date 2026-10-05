@@ -207,6 +207,8 @@ type Props = {
     contactPhone?: string;
     conversationId?: string;
     dealId?: string;
+    // The CRM contact the quote is for (from the contact page).
+    contactId?: string;
     duplicateFrom?: string;
   };
 };
@@ -653,6 +655,7 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
             validityDays,
             conversationId: prefill?.conversationId ?? null,
             dealId: prefill?.dealId ?? null,
+            accountContactId: prefill?.contactId ?? null,
             contactPhone: contactPhone.trim() || null,
             salespersonPhone: salespersonPhone.trim() || null,
             sections: sections ? JSON.stringify(sections) : undefined,

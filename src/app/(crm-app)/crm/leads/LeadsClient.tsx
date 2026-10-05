@@ -6,6 +6,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import { DropdownFilter, type DropdownOption } from "@/components/DropdownFilter";
+import WonDealModal from "@/components/crm/WonDealModal";
 
 type Lead = {
   id: string;
@@ -68,7 +69,8 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
   const [repFilter, setRepFilter] = useState("");
   const [stageFilter, setStageFilter] = useState("");
   const [savingStageId, setSavingStageId] = useState<string | null>(null);
-  const [convertingId, setConvertingId] = useState<string | null>(null);
+  // "Won" — confirm the project: creates the deal and moves the lead to Deals.
+  const [wonFor, setWonFor] = useState<Lead | null>(null);
   const cities = useMemo(() => cityOptions(leads), [leads]);
 
   async function changeStage(lead: Lead, stageId: string) {
@@ -188,29 +190,6 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
   );
   const filtering = !!(qt || cityQ || repFilter || stageFilter);
 
-  // Reuses POST /api/deals exactly like the contact page's CreateDealFirstModal
-  // — title + accountId + primaryContactId; the deal's owner is forced to the
-  // caller server-side, so this can't hand a lead to someone else's pipeline.
-  async function convertToDeal(lead: Lead) {
-    setConvertingId(lead.id);
-    const res = await fetch("/api/deals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: `Deal for ${lead.name}`,
-        accountId: lead.accountId,
-        primaryContactId: lead.id,
-      }),
-    });
-    setConvertingId(null);
-    if (!res.ok) {
-      toast.error("Could not create deal");
-      return;
-    }
-    toast.success(`Deal created for ${lead.name}`);
-    router.refresh();
-  }
-
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <PageHeader
@@ -294,14 +273,10 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
                 {stageSelect(l, "")}
                 <ReminderCell r={l.nextReminder} />
               </div>
-              {!l.converted && (
+              {l.canEdit && (
                 <div className="mt-3 pt-3 border-t border-slate-100">
-                  <button
-                    onClick={() => convertToDeal(l)}
-                    disabled={convertingId === l.id}
-                    className="btn btn-primary !py-1.5 !text-xs w-full"
-                  >
-                    {convertingId === l.id ? "Converting..." : "Convert to Deal"}
+                  <button onClick={() => setWonFor(l)} className="w-full rounded-lg py-1.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700">
+                    Won
                   </button>
                 </div>
               )}
@@ -349,14 +324,14 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
                   <td><ReminderCell r={l.nextReminder} /></td>
                   <td className="text-slate-600">{l.leadSource ?? "—"}</td>
                   <td className="!text-right">
-                    {!l.converted && (
+                    {l.canEdit && (
                       <button
-                        onClick={() => convertToDeal(l)}
-                        disabled={convertingId === l.id}
-                        className="btn btn-primary !px-3 !py-1 !text-xs"
+                        onClick={() => setWonFor(l)}
+                        title="Confirmed project — create the deal and move this lead to Deals"
+                        className="rounded-lg px-3 py-1 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
                         data-guide="crm-leads-convert"
                       >
-                        {convertingId === l.id ? "Converting..." : "Convert to Deal"}
+                        Won
                       </button>
                     )}
                   </td>
@@ -373,6 +348,14 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
           </table>
         </div>
       </div>
+
+      {wonFor && (
+        <WonDealModal
+          contact={{ id: wonFor.id, name: wonFor.name }}
+          onClose={() => setWonFor(null)}
+          onDone={() => { setWonFor(null); router.refresh(); }}
+        />
+      )}
 
       {showAdd && (
         <div

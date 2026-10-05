@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { findOrCreateDealForConversation } from "@/lib/crm/deals";
+import { resolveContactForDocument } from "@/lib/crm/contactLinks";
 
 const createSchema = z.object({
   conversationId: z.string().uuid().nullable().optional(),
@@ -115,31 +115,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // The Inbox reminder panel only ever sends conversationId, never dealId —
-  // resolve one server-side (find-or-create by conversation, same as
-  // quotations/court-images) so a reminder set the normal way still shows up
-  // in Deal-based analytics, with zero change needed on the client. Purely
-  // standalone reminders (no conversationId at all) stay unlinked — there's
-  // nothing to resolve a deal from.
-  let dealId = parsed.data.dealId ?? null;
-  if (!dealId && parsed.data.conversationId) {
-    const resolved = await findOrCreateDealForConversation({
-      conversationId: parsed.data.conversationId,
-      // Falls back to the conversation's own contactName when it has one
-      // (the common case) — this literal only surfaces for a contact with
-      // no name on file at all.
-      accountName: "Unknown customer",
-      dealTitle: parsed.data.message.slice(0, 120),
-      ownerUserId: user.id,
-    });
-    dealId = resolved.id;
-  }
+  // An Inbox reminder (conversationId only) no longer creates a deal — deals
+  // are confirmed projects only. If the chat was moved to CRM it's anchored to
+  // that contact too, so it shows on the contact page and Leads list.
+  const dealId = parsed.data.dealId ?? null;
+  const accountContactId =
+    parsed.data.accountContactId ??
+    (parsed.data.conversationId ? await resolveContactForDocument({ conversationId: parsed.data.conversationId }) : null);
 
   const reminder = await prisma.reminder.create({
     data: {
       conversationId: parsed.data.conversationId ?? null,
       dealId,
-      accountContactId: parsed.data.accountContactId ?? null,
+      accountContactId,
       ownerUserId: user.id,
       message: parsed.data.message,
       dueAt: new Date(parsed.data.dueAt),

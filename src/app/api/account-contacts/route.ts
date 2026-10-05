@@ -6,15 +6,14 @@
 // POST doubles as a full "capture a new lead" flow, not just "add a person
 // to an existing company": it accepts either an existing accountId OR
 // inline account fields (mirroring POST /api/deals's own pattern), and
-// optionally a dealStageId — when given, a Deal is created in the same
-// request with this contact as its primary contact. See docs/DECISIONS.md.
+// optionally a leadStageId (the contact's sales stage). It never creates a
+// deal — deals are confirmed projects, created only when a lead is marked Won.
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canSeeAllCustomers, customerAccess } from "@/lib/rbac";
 import { findAccountContactDuplicate, findAccountDuplicate } from "@/lib/crm/accounts";
-import { buildDealCode, nextDealSequenceForYear } from "@/lib/crm/deals";
 import { firstLeadStage } from "@/lib/crm/leadStages";
 
 const createSchema = z
@@ -33,8 +32,8 @@ const createSchema = z
     fields: z.record(z.string()).optional(),
     isPrimary: z.boolean().optional(),
     confirmDuplicate: z.boolean().optional(),
-    // Presence of this field is what triggers auto-creating a Deal.
-    dealStageId: z.string().uuid().optional(),
+    // The contact's sales stage. Setting it does not move them into Leads.
+    leadStageId: z.string().uuid().optional(),
     // When true, the created contact is stamped as a promoted LEAD so it shows
     // up in the CRM Leads list immediately (used by the Leads-page quick-add).
     asLead: z.boolean().optional(),
@@ -52,14 +51,6 @@ export async function POST(req: NextRequest) {
   const data = parsed.data;
 
   let accountId = data.accountId ?? null;
-  // Falls back to the account's own city when the caller doesn't pass an
-  // explicit siteCity — mirrors POST /api/deals's inline-account fallback,
-  // but that route only ever covered its own inline-create branch, leaving
-  // deals attached to an EXISTING account with no site city at all (every
-  // "+ New Quotation"-style deal from an already-known contact showed up as
-  // "(unspecified)" in Geography analytics, even though the account had a
-  // city on file the whole time).
-  let accountCity: string | null = null;
 
   if (accountId) {
     const account = await prisma.account.findUnique({ where: { id: accountId } });
@@ -67,7 +58,6 @@ export async function POST(req: NextRequest) {
     if (!customerAccess(user, account.ownerUserId).canEdit) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
-    accountCity = account.city;
   } else if (data.accountName) {
     if (!data.confirmDuplicate) {
       const candidate = await findAccountDuplicate({ name: data.accountName, city: data.siteCity });
@@ -85,7 +75,6 @@ export async function POST(req: NextRequest) {
       },
     });
     accountId = account.id;
-    accountCity = account.city;
   }
   if (!accountId) return NextResponse.json({ error: "invalid_account" }, { status: 400 });
 
@@ -96,7 +85,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const startStage = data.asLead ? await firstLeadStage() : null;
+  let pickedStage: { id: string } | null = null;
+  if (data.leadStageId) {
+    pickedStage = await prisma.leadStage.findFirst({ where: { id: data.leadStageId, deletedAt: null, isActive: true }, select: { id: true } });
+    if (!pickedStage) return NextResponse.json({ error: "That stage is no longer available" }, { status: 400 });
+  }
+  const startStage = pickedStage ?? (data.asLead ? await firstLeadStage() : null);
   const result = await prisma.$transaction(async (tx) => {
     if (data.isPrimary) {
       await tx.accountContact.updateMany({ where: { accountId }, data: { isPrimary: false } });
@@ -113,36 +107,15 @@ export async function POST(req: NextRequest) {
         isPrimary: data.isPrimary ?? false,
         leadSourceId: data.leadSourceId ?? null,
         createdByUserId: user!.id,
-        // Stamp as a promoted lead when asked, so it lands in the Leads list —
-        // starting at the first sales stage.
-        ...(data.asLead ? { pipelineStage: "LEAD", promotedToLeadAt: new Date(), leadStageId: startStage?.id ?? null } : {}),
+        // The picked stage; a quick-added lead starts at the first stage.
+        leadStageId: startStage?.id ?? null,
+        ...(data.asLead ? { pipelineStage: "LEAD", promotedToLeadAt: new Date() } : {}),
       },
     });
-
-    let dealId: string | null = null;
-    if (data.dealStageId) {
-      const year = new Date().getFullYear();
-      const seq = await nextDealSequenceForYear(year);
-      const deal = await tx.deal.create({
-        data: {
-          code: buildDealCode(year, seq - 1),
-          title: `${data.name} — ${data.accountName ?? "New deal"}`,
-          accountId: accountId!,
-          primaryContactId: contact.id,
-          ownerUserId: user.id,
-          currentStageId: data.dealStageId,
-          leadSourceId: data.leadSourceId ?? null,
-          siteCity: data.siteCity ?? accountCity,
-          dealChannel: "crm",
-        },
-      });
-      dealId = deal.id;
-    }
-
-    return { contact, dealId };
+    return { contact };
   });
 
-  return NextResponse.json({ contact: result.contact, dealId: result.dealId });
+  return NextResponse.json({ contact: result.contact });
 }
 
 export async function GET(req: NextRequest) {

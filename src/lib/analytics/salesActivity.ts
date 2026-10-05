@@ -83,7 +83,7 @@ export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActiv
       select: { createdByUserId: true, dealId: true, grandTotal: true },
     }),
     prisma.deal.findMany({
-      where: { outcome: { in: ["WON", "LOST"] }, closedAt: { gte: from, lte: to }, deletedAt: null, ownerUserId: { not: null }, ...dealChannelWhere },
+      where: { outcome: { in: ["WON", "LOST"] }, closedAt: { gte: from, lte: to }, ownerUserId: { not: null }, ...dealChannelWhere },
       select: { ownerUserId: true, outcome: true, wonValue: true, enquiryAt: true, closedAt: true },
     }),
   ]);

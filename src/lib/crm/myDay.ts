@@ -1,100 +1,83 @@
-// Shared "My Day" data — backs both the staff WhatsApp bot's `my_day`
-// command (src/lib/chatbot/staffCommands.ts) and the web dashboard.
-// Deals are confirmed projects only, so the follow-up buckets are about
-// LEADS: leads nobody has touched in 7+ days, and next actions coming up
-// this week (today's and overdue ones already show as reminders).
+// Shared "My Day" data — extracted from the WhatsApp bot's `my_day`
+// command (src/lib/chatbot/staffCommands.ts), which now calls this instead
+// of computing it inline, so the same logic backs both the bot reply and
+// the new web dashboard (Phase 4). Adds the one piece the bot command
+// never had: deals closing within 7 days (spec §7.5's fourth bucket).
 import { prisma } from "@/lib/prisma";
 import { startOfDayIST, endOfDayIST } from "@/lib/time";
 
+const DEFAULT_SLA_HOURS = 72;
+
 export type MyDayReminder = { id: string; message: string; dueAt: string };
-export type MyDayLead = { id: string; name: string; company: string | null; lastTouchAt: string };
-export type MyDayNextAction = { id: string; text: string; dueAt: string; contactId: string; contactName: string };
+export type MyDayDeal = { id: string; code: string; title: string };
+export type MyDayClosingDeal = MyDayDeal & { expectedCloseAt: string };
 
 export type MyDayData = {
   dueToday: MyDayReminder[];
   overdue: MyDayReminder[];
-  untouchedLeads: MyDayLead[];
-  nextActionsThisWeek: MyDayNextAction[];
+  stuckDeals: MyDayDeal[];
+  noRecentActivityDeals: MyDayDeal[];
+  closingThisWeek: MyDayClosingDeal[];
 };
 
 export async function getMyDay(userId: string): Promise<MyDayData> {
   const now = new Date();
-  const startOfToday = startOfDayIST(now);
-  const endOfToday = endOfDayIST(now);
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
-  const endOfWeek = endOfDayIST(new Date(now.getTime() + 7 * 86_400_000));
+  const sevenDaysAhead = new Date(now.getTime() + 7 * 86_400_000);
 
-  const [reminders, leads, nextActions] = await Promise.all([
+  const [reminders, openDeals, closing] = await Promise.all([
     prisma.reminder.findMany({
       where: { ownerUserId: userId, completedAt: null, dueAt: { lte: endOfToday } },
       orderBy: { dueAt: "asc" },
       select: { id: true, message: true, dueAt: true },
     }),
-    prisma.accountContact.findMany({
-      where: { deletedAt: null, pipelineStage: "LEAD", account: { ownerUserId: userId } },
-      select: { id: true, name: true, createdAt: true, promotedToLeadAt: true, account: { select: { name: true } } },
+    prisma.deal.findMany({
+      where: { deletedAt: null, outcome: null, ownerUserId: userId },
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        enquiryAt: true,
+        currentStage: { select: { slaHours: true } },
+        stageHistory: { orderBy: { changedAt: "desc" }, take: 1, select: { changedAt: true } },
+        activities: { orderBy: { occurredAt: "desc" }, take: 1, select: { occurredAt: true } },
+      },
     }),
-    // Open, dated next actions after today on the rep's customers (or ones
-    // they set themselves on an unassigned customer).
-    prisma.contactNextAction.findMany({
+    prisma.deal.findMany({
       where: {
         deletedAt: null,
-        doneAt: null,
-        dueAt: { gt: endOfToday, lte: endOfWeek },
-        accountContact: { deletedAt: null },
-        OR: [{ accountContact: { account: { ownerUserId: userId } } }, { createdByUserId: userId }],
+        outcome: null,
+        ownerUserId: userId,
+        expectedCloseAt: { gte: now, lte: sevenDaysAhead },
       },
-      orderBy: { dueAt: "asc" },
-      take: 20,
-      select: { id: true, text: true, dueAt: true, accountContact: { select: { id: true, name: true } } },
+      orderBy: { expectedCloseAt: "asc" },
+      select: { id: true, code: true, title: true, expectedCloseAt: true },
     }),
   ]);
-
-  // A lead's last touch: its newest timeline event, activity or note —
-  // else when it became a lead.
-  const ids = leads.map((l) => l.id);
-  const [events, activities, notes] = ids.length
-    ? await Promise.all([
-        prisma.contactEvent.groupBy({ by: ["accountContactId"], where: { accountContactId: { in: ids } }, _max: { at: true } }),
-        prisma.activity.groupBy({ by: ["accountContactId"], where: { accountContactId: { in: ids } }, _max: { occurredAt: true } }),
-        prisma.accountContactNote.groupBy({ by: ["accountContactId"], where: { accountContactId: { in: ids } }, _max: { createdAt: true } }),
-      ])
-    : [[], [], []];
-  const lastTouch = new Map<string, number>();
-  const bump = (id: string | null, at: Date | null | undefined) => {
-    if (!id || !at) return;
-    if (at.getTime() > (lastTouch.get(id) ?? 0)) lastTouch.set(id, at.getTime());
-  };
-  for (const l of leads) bump(l.id, l.promotedToLeadAt ?? l.createdAt);
-  for (const g of events) bump(g.accountContactId, g._max.at);
-  for (const g of activities) bump(g.accountContactId, g._max.occurredAt);
-  for (const g of notes) bump(g.accountContactId, g._max.createdAt);
-
-  const untouchedLeads = leads
-    .map((l) => ({ l, at: lastTouch.get(l.id) ?? l.createdAt.getTime() }))
-    .filter((x) => x.at < sevenDaysAgo.getTime())
-    .sort((a, b) => a.at - b.at)
-    .map(({ l, at }) => ({
-      id: l.id,
-      name: l.name.trim(),
-      company: l.account.name.trim() !== l.name.trim() ? l.account.name.trim() : null,
-      lastTouchAt: new Date(at).toISOString(),
-    }));
 
   const overdue = reminders.filter((r) => r.dueAt < startOfToday);
   const dueToday = reminders.filter((r) => r.dueAt >= startOfToday);
 
+  const stuckDeals = openDeals.filter((d) => {
+    const lastChange = d.stageHistory[0]?.changedAt ?? d.enquiryAt;
+    const slaHours = d.currentStage.slaHours ?? DEFAULT_SLA_HOURS;
+    return (now.getTime() - lastChange.getTime()) / 3_600_000 > slaHours;
+  });
+  const noRecentActivityDeals = openDeals.filter((d) => {
+    const last = d.activities[0]?.occurredAt;
+    return !last || last < sevenDaysAgo;
+  });
+
   return {
     dueToday: dueToday.map((r) => ({ id: r.id, message: r.message, dueAt: r.dueAt.toISOString() })),
     overdue: overdue.map((r) => ({ id: r.id, message: r.message, dueAt: r.dueAt.toISOString() })),
-    untouchedLeads,
-    nextActionsThisWeek: nextActions.map((a) => ({
-      id: a.id,
-      text: a.text,
-      dueAt: a.dueAt!.toISOString(),
-      contactId: a.accountContact.id,
-      contactName: a.accountContact.name.trim(),
-    })),
+    stuckDeals: stuckDeals.map((d) => ({ id: d.id, code: d.code, title: d.title })),
+    noRecentActivityDeals: noRecentActivityDeals.map((d) => ({ id: d.id, code: d.code, title: d.title })),
+    closingThisWeek: closing.map((d) => ({ id: d.id, code: d.code, title: d.title, expectedCloseAt: d.expectedCloseAt!.toISOString() })),
   };
 }
 

@@ -8,8 +8,8 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildQuotationNumber, recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
-import { reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
-import { logDocumentDeleted, resolveContactForDocument } from "@/lib/crm/contactLinks";
+import { findOrCreateDealForConversation, reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
+import { logDocumentDeleted } from "@/lib/crm/contactLinks";
 
 const createSchema = z.object({
   customerName: z.string().min(1).max(200),
@@ -28,12 +28,10 @@ const createSchema = z.object({
   validityDays: z.number().int().min(1).max(365).default(30),
   conversationId: z.string().uuid().nullable().optional(),
   contactPhone: z.string().min(5).max(30).nullable().optional(),
-  // A quote belongs to the customer's contact (accountContactId, or resolved
-  // from the conversation / phone). dealId only when the caller explicitly
-  // quotes against an already-confirmed project — quotes never create deals,
-  // deals are confirmed projects only.
+  // Phase 2 — attach to an existing Deal. Omitted = the route auto-creates
+  // a one-off Deal so dealId always ends up populated without forcing a
+  // deal-first flow in the wizard (see docs/DECISIONS.md).
   dealId: z.string().uuid().nullable().optional(),
-  accountContactId: z.string().uuid().nullable().optional(),
   // Tier-1 classification — written to Deal.leadSourceId / Account.customerProfileId
   // / Account.businessType, which Team Performance's Sources and Customers
   // views read (previously always empty — see docs/DECISIONS.md).
@@ -151,49 +149,41 @@ export async function POST(req: NextRequest) {
   const totals = recompute(parsed.data.lineItems as QuoteLineItem[]);
   const year = new Date(parsed.data.quoteDate).getFullYear();
 
-  // Quotes attach to the customer's contact and never create a deal (deals
-  // are confirmed projects only — see confirmDeal.ts). An explicit dealId is
-  // kept for a quote against an already-confirmed project.
-  const dealId = parsed.data.dealId ?? null;
-  const accountContactId = await resolveContactForDocument({
-    accountContactId: parsed.data.accountContactId,
-    conversationId: parsed.data.conversationId,
-    contactPhone: parsed.data.contactPhone,
-  });
+  // Resolve the Deal this quote attaches to: an explicit dealId if the
+  // caller already knows it, otherwise find-or-create by conversationId
+  // (reusing an existing Deal so a second/revised quote for the same
+  // customer lands on the SAME deal instead of spawning a duplicate — see
+  // docs/DECISIONS.md, this used to unconditionally create a new Deal every
+  // time). conversationId itself may be null (a genuinely standalone quote),
+  // which the helper handles by always creating fresh.
+  let dealId = parsed.data.dealId ?? null;
+  if (!dealId) {
+    const resolved = await findOrCreateDealForConversation({
+      conversationId: parsed.data.conversationId ?? null,
+      accountName: parsed.data.customerName,
+      dealTitle: `Quote for ${parsed.data.customerName}`,
+      ownerUserId: user.id,
+      leadSourceId: parsed.data.leadSourceId,
+      customerProfileId: parsed.data.customerProfileId,
+      businessType: parsed.data.businessType,
+    });
+    dealId = resolved.id;
+  }
   // Run independent writes in parallel: deal update, isPrimary demotion, sequence number lookup.
   const [dealAfterQuote, , nextSeqResult] = await Promise.all([
-    dealId
-      ? prisma.deal
-          .update({
-            where: { id: dealId },
-            data: {
-              quotedValue: totals.grandTotal,
-              ...(parsed.data.siteCity ? { siteCity: parsed.data.siteCity } : {}),
-              ...(parsed.data.leadSourceId ? { leadSourceId: parsed.data.leadSourceId } : {}),
-            },
-          })
-          .catch(() => null)
-      : Promise.resolve(null),
-    dealId ? prisma.quotation.updateMany({ where: { dealId, isPrimary: true }, data: { isPrimary: false } }) : Promise.resolve(null),
+    prisma.deal
+      .update({
+        where: { id: dealId },
+        data: {
+          quotedValue: totals.grandTotal,
+          ...(parsed.data.siteCity ? { siteCity: parsed.data.siteCity } : {}),
+          ...(parsed.data.leadSourceId ? { leadSourceId: parsed.data.leadSourceId } : {}),
+        },
+      })
+      .catch(() => null),
+    prisma.quotation.updateMany({ where: { dealId, isPrimary: true }, data: { isPrimary: false } }),
     nextSequenceForYear(year),
   ]);
-  // Classification picked in the wizard lands on the customer's company.
-  if (accountContactId && !dealId && (parsed.data.customerProfileId || parsed.data.businessType)) {
-    prisma.accountContact
-      .findUnique({ where: { id: accountContactId }, select: { accountId: true } })
-      .then((c) =>
-        c
-          ? prisma.account.update({
-              where: { id: c.accountId },
-              data: {
-                ...(parsed.data.customerProfileId ? { customerProfileId: parsed.data.customerProfileId } : {}),
-                ...(parsed.data.businessType ? { businessType: parsed.data.businessType } : {}),
-              },
-            })
-          : null,
-      )
-      .catch(() => null);
-  }
 
   // Conversation + Account syncs (depend on dealAfterQuote, but independent of each other).
   const sideEffects: Promise<unknown>[] = [];
@@ -207,7 +197,7 @@ export async function POST(req: NextRequest) {
         .catch(() => null),
     );
   }
-  if (dealId && (parsed.data.customerProfileId || parsed.data.businessType)) {
+  if (parsed.data.dealId && (parsed.data.customerProfileId || parsed.data.businessType)) {
     sideEffects.push(
       prisma.deal
         .findUnique({ where: { id: dealId }, select: { accountId: true } })
@@ -256,7 +246,6 @@ export async function POST(req: NextRequest) {
           createdByUserId: user.id,
           status: "draft",
           dealId,
-          accountContactId,
           isPrimary: true,
         },
       });

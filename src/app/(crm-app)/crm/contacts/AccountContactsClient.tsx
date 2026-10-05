@@ -34,7 +34,7 @@ export default function AccountContactsClient({
   accounts,
   leadSources,
   customerProfiles,
-  leadStages,
+  funnelStages,
   users,
   dateRange,
   repFilter,
@@ -44,7 +44,7 @@ export default function AccountContactsClient({
   accounts: Option[];
   leadSources: Option[];
   customerProfiles: Option[];
-  leadStages: StageOption[];
+  funnelStages: StageOption[];
   users: Option[];
   dateRange: DateRange | null;
   repFilter: string;
@@ -421,11 +421,11 @@ export default function AccountContactsClient({
           accounts={accounts}
           leadSources={leadSources}
           customerProfiles={customerProfiles}
-          leadStages={leadStages}
+          funnelStages={funnelStages}
           onClose={() => setShowNew(false)}
-          onCreated={(id) => {
+          onCreated={(id, dealId) => {
             setShowNew(false);
-            toast.success("Contact created");
+            toast.success(dealId ? "Lead captured — contact and deal created" : "Contact created");
             router.push(`/crm/contacts/${id}`);
           }}
         />
@@ -435,10 +435,10 @@ export default function AccountContactsClient({
 }
 
 function NewContactModal({
-  accounts, leadSources, customerProfiles, leadStages, onClose, onCreated,
+  accounts, leadSources, customerProfiles, funnelStages, onClose, onCreated,
 }: {
-  accounts: Option[]; leadSources: Option[]; customerProfiles: Option[]; leadStages: StageOption[];
-  onClose: () => void; onCreated: (id: string) => void;
+  accounts: Option[]; leadSources: Option[]; customerProfiles: Option[]; funnelStages: StageOption[];
+  onClose: () => void; onCreated: (id: string, dealId: string | null) => void;
 }) {
   const toast = useToast();
   // Most contacts are individuals, not organizations — asking "which company"
@@ -462,7 +462,7 @@ function NewContactModal({
 
   const [leadSourceId, setLeadSourceId] = useState("");
   const [sourceDetail, setSourceDetail] = useState("");
-  const [leadStageId, setLeadStageId] = useState("");
+  const [dealStageId, setDealStageId] = useState("");
   const [notes, setNotes] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
   const [newFieldKey, setNewFieldKey] = useState("");
@@ -533,14 +533,14 @@ function NewContactModal({
           isBusinessTypeOther && businessTypeOther.trim() ? `Business type detail: ${businessTypeOther.trim()}` : "",
           notes.trim(),
         ].filter(Boolean).join("\n\n") || undefined,
-        leadStageId: leadStageId || undefined,
+        dealStageId: dealStageId || undefined,
         confirmDuplicate,
       }),
     });
     setSubmitting(false);
     if (res.ok) {
       const data = await res.json();
-      onCreated(data.contact.id);
+      onCreated(data.contact.id, data.dealId);
       return;
     }
     if (res.status === 409) {
@@ -557,7 +557,7 @@ function NewContactModal({
       <div className="shrink-0 border-b border-slate-200 px-4 sm:px-6 py-4 flex items-start justify-between">
         <div data-guide="crm-contact-new-dialog">
           <h2 className="text-lg font-semibold text-slate-900">New contact</h2>
-          <p className="text-sm text-slate-600 mt-0.5">Capture a person and, if you know it, where they stand.</p>
+          <p className="text-sm text-slate-600 mt-0.5">Capture a person and — if you know where they stand — a deal, all at once.</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600 text-xl leading-none px-1">
           ×
@@ -663,11 +663,11 @@ function NewContactModal({
                   <input value={sourceDetail} onChange={(e) => setSourceDetail(e.target.value)} placeholder="Campaign / referrer name (optional)" className="mt-1.5 input text-sm" />
                 </div>
                 <div><label className="text-sm font-medium text-slate-600">Lead stage</label>
-                  <select value={leadStageId} onChange={(e) => setLeadStageId(e.target.value)} className="mt-1 input text-sm">
-                    <option value="">No stage yet</option>
-                    {leadStages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  <select value={dealStageId} onChange={(e) => setDealStageId(e.target.value)} className="mt-1 input text-sm">
+                    <option value="">Don't create a deal yet</option>
+                    {funnelStages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
-                  <p className="text-xs text-slate-400 mt-1">Move them into Leads from their contact page when ready.</p>
+                  {dealStageId && <p className="text-xs text-slate-400 mt-1">A deal will be created for this contact at this stage.</p>}
                 </div>
               </div>
             </div>

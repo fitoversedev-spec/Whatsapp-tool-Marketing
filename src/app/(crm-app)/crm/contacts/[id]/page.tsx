@@ -45,6 +45,8 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     activities,
     products,
     activityTypes,
+    funnelStages,
+    lossReasons,
     customerProfiles,
     contactNotes,
     attachments,
@@ -59,7 +61,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       orderBy: { updatedAt: "desc" },
       select: {
         id: true, code: true, title: true, quotedValue: true, wonValue: true, estimatedValue: true,
-        outcome: true, expectedStartAt: true, wonNote: true, executionStatus: true, closedAt: true,
+        currentStageId: true,
         currentStage: { select: { name: true, colorHex: true } },
       },
     }),
@@ -71,6 +73,12 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     }),
     prisma.product.findMany({ where: { archived: false }, select: { id: true, name: true, type: true }, orderBy: { name: "asc" } }),
     prisma.activityType.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
+    prisma.funnelStage.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true, stageType: true, colorHex: true, requiresLossReason: true },
+    }),
+    prisma.lossReason.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
     prisma.customerProfile.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
     prisma.accountContactNote.findMany({
       where: { accountContactId: contact.id, deletedAt: null },
@@ -113,24 +121,24 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
   // show in the Next actions section instead of twice.
   const dealIds = deals.map((d) => d.id);
   const [quotations, courtImages, productInterests, reminders] = await Promise.all([
-    // Linked to the contact directly; older ones through a deal or the phone.
     (() => {
-      const or: object[] = [{ accountContactId: contact.id }];
+      const or: object[] = [];
       if (dealIds.length) or.push({ dealId: { in: dealIds } });
       if (contact.phone) or.push({ contactPhone: contact.phone });
+      if (!or.length) return Promise.resolve([]);
       return prisma.quotation.findMany({
-        where: { OR: or },
+        where: or.length === 1 ? or[0] : { OR: or },
         orderBy: { createdAt: "desc" },
         select: { id: true, number: true, sport: true, grandTotal: true, status: true, contactPhone: true, sentAt: true, createdAt: true },
       });
     })(),
     prisma.courtImage.findMany({
-      where: { OR: [{ accountContactId: contact.id }, ...(dealIds.length ? [{ dealId: { in: dealIds } }] : [])] },
+      where: { dealId: { in: dealIds } },
       orderBy: { createdAt: "desc" },
       select: { id: true, number: true, status: true, imageUrl: true, image2dUrl: true, contactPhone: true, sentAt: true, createdAt: true },
     }),
-    prisma.contactProductInterest.findMany({
-      where: { accountContactId: contact.id },
+    prisma.dealLineItem.findMany({
+      where: { dealId: { in: dealIds }, isEnquiryOnly: true },
       orderBy: { createdAt: "desc" },
       select: {
         id: true, label: true, createdAt: true,
@@ -179,9 +187,8 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
         quotedValue: d.quotedValue ? Number(d.quotedValue) : null,
         wonValue: d.wonValue ? Number(d.wonValue) : null,
         estimatedValue: d.estimatedValue ? Number(d.estimatedValue) : null,
+        stageId: d.currentStageId,
         stageName: d.currentStage.name, stageColorHex: d.currentStage.colorHex,
-        outcome: d.outcome, expectedStartAt: d.expectedStartAt?.toISOString() ?? null, wonNote: d.wonNote,
-        executionStatus: d.executionStatus, closedAt: d.closedAt?.toISOString() ?? null,
       }))}
       activities={activities.map((a) => ({
         id: a.id, subject: a.subject, notes: a.notes, occurredAt: a.occurredAt.toISOString(),
@@ -201,6 +208,8 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       timeline={timeline}
       products={products}
       activityTypes={activityTypes}
+      funnelStages={funnelStages}
+      lossReasons={lossReasons}
       customerProfiles={customerProfiles}
       contactNotes={contactNotes.map((n) => ({
         id: n.id, title: n.title, body: n.body, createdAt: n.createdAt.toISOString(), authorName: n.author.name,

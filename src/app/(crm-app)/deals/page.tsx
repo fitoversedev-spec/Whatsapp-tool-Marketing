@@ -4,67 +4,75 @@ import { isAdmin, canSeeAllCustomers } from "@/lib/rbac";
 import CrmTabs from "@/components/crm/CrmTabs";
 import DealsClient from "./DealsClient";
 
-// Confirmed projects only (deals are created when a lead is marked Won).
 export default async function DealsPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const user = await requireUser();
-  const seesAll = canSeeAllCustomers(user.role);
 
   const dateRange = searchParams.from && searchParams.to ? { from: searchParams.from, to: searchParams.to } : null;
   const dealsWhere = {
-    deletedAt: null,
-    outcome: "WON",
-    ...(seesAll ? {} : { ownerUserId: user.id }),
-    // Filters on when the project was won.
-    ...(dateRange ? { closedAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
+    ...(canSeeAllCustomers(user.role) ? {} : { ownerUserId: user.id }),
+    ...(dateRange ? { createdAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
   };
 
-  const [deals, users] = await Promise.all([
+  const [deals, stages, leadSources, customerProfiles, lossReasons, users, products] = await Promise.all([
     prisma.deal.findMany({
-      where: dealsWhere,
-      orderBy: [{ closedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      where: { deletedAt: null, ...dealsWhere },
+      orderBy: { updatedAt: "desc" },
       take: 300,
       include: {
         account: { select: { id: true, name: true, city: true } },
-        primaryContact: { select: { id: true, name: true, deletedAt: true } },
+        currentStage: { select: { id: true, name: true, slug: true, stageType: true, colorHex: true } },
         owner: { select: { id: true, name: true } },
       },
     }),
-    seesAll
-      ? prisma.user.findMany({
-          where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
-          select: { id: true, name: true },
-          orderBy: { name: "asc" },
-        })
-      : Promise.resolve([] as { id: string; name: string }[]),
+    prisma.funnelStage.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.leadSource.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.customerProfile.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.lossReason.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.user.findMany({
+      where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.product.findMany({
+      where: { archived: false },
+      select: { id: true, name: true, type: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return (
     <>
       <CrmTabs isAdmin={isAdmin(user.role)} />
       <DealsClient
-        isAdmin={isAdmin(user.role)}
-        showOwnerFilter={seesAll}
-        users={users}
-        dateRange={dateRange}
-        deals={deals.map((d) => {
-          const contact = d.primaryContact && !d.primaryContact.deletedAt ? d.primaryContact : null;
-          return {
-            id: d.id,
-            code: d.code,
-            customerId: contact?.id ?? null,
-            customerName: (contact?.name ?? d.account.name).trim(),
-            accountId: d.account.id,
-            accountName: d.account.name.trim(),
-            accountCity: d.account.city,
-            ownerId: d.owner?.id ?? null,
-            ownerName: d.owner?.name?.trim() ?? null,
-            value: d.wonValue != null ? Number(d.wonValue) : d.quotedValue != null ? Number(d.quotedValue) : null,
-            wonAt: d.closedAt?.toISOString() ?? null,
-            expectedStartAt: d.expectedStartAt?.toISOString() ?? null,
-            note: d.wonNote,
-            executionStatus: d.executionStatus,
-          };
-        })}
+      currentUserId={user.id}
+      isAdmin={isAdmin(user.role)}
+      deals={deals.map((d) => ({
+        id: d.id,
+        code: d.code,
+        title: d.title,
+        accountName: d.account.name,
+        accountCity: d.account.city,
+        stageId: d.currentStageId,
+        stageName: d.currentStage.name,
+        stageType: d.currentStage.stageType,
+        stageColorHex: d.currentStage.colorHex,
+        ownerName: d.owner?.name ?? null,
+        estimatedValue: d.estimatedValue ? Number(d.estimatedValue) : null,
+        quotedValue: d.quotedValue ? Number(d.quotedValue) : null,
+        wonValue: d.wonValue ? Number(d.wonValue) : null,
+        outcome: d.outcome,
+        dealChannel: d.dealChannel,
+        siteCity: d.siteCity,
+        createdAt: d.createdAt.toISOString(),
+        updatedAt: d.updatedAt.toISOString(),
+      }))}
+      stages={stages.map((s) => ({ id: s.id, name: s.name, slug: s.slug, stageType: s.stageType, colorHex: s.colorHex, requiresLossReason: s.requiresLossReason }))}
+      leadSources={leadSources.map((s) => ({ id: s.id, name: s.name }))}
+      customerProfiles={customerProfiles.map((c) => ({ id: c.id, name: c.name }))}
+      lossReasons={lossReasons.map((l) => ({ id: l.id, name: l.name }))}
+      users={users}
+      products={products}
+      dateRange={dateRange}
       />
     </>
   );

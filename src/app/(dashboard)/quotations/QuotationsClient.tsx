@@ -53,21 +53,19 @@ export default function QuotationsClient({
   const toast = useToast();
   const [quotations, setQuotations] = useState<Quotation[]>(initialQuotations);
   const [showWizard, setShowWizard] = useState(false);
-  const [wizardPrefill, setWizardPrefill] = useState<{ customerName?: string; contactPhone?: string; dealId?: string; contactId?: string; duplicateFrom?: string } | undefined>(undefined);
+  const [wizardPrefill, setWizardPrefill] = useState<{ customerName?: string; contactPhone?: string; dealId?: string; duplicateFrom?: string } | undefined>(undefined);
 
   // Opened from a CRM Contact/Company page's "+ New Quotation" or
-  // "Duplicate" — auto-opens the wizard. contactId attaches the quote to that
-  // customer; quotes never create a deal (deals are confirmed projects only).
+  // "Duplicate" — auto-opens the wizard. dealId is optional: the POST API
+  // auto-creates a deal when none is provided.
   const searchParams = useSearchParams();
   useEffect(() => {
     const dealId = searchParams.get("dealId");
-    const contactId = searchParams.get("contactId");
     const customerName = searchParams.get("customerName");
     const duplicateFrom = searchParams.get("duplicateFrom");
-    if (!dealId && !contactId && !customerName && !duplicateFrom) return;
+    if (!dealId && !customerName && !duplicateFrom) return;
     setWizardPrefill({
       dealId: dealId ?? undefined,
-      contactId: contactId ?? undefined,
       customerName: customerName ?? undefined,
       contactPhone: searchParams.get("phone") ?? undefined,
       duplicateFrom: duplicateFrom ?? undefined,

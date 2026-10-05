@@ -107,8 +107,6 @@ export default async function DealDetailPage({ params }: { params: { id: string 
         officeName: deal.office?.name ?? null,
         primaryContactId: deal.primaryContactId,
         expectedCloseAt: deal.expectedCloseAt?.toISOString() ?? null,
-        expectedStartAt: deal.expectedStartAt?.toISOString() ?? null,
-        wonNote: deal.wonNote,
         enquiryAt: deal.enquiryAt.toISOString(),
         siteVisitAt: deal.siteVisitAt?.toISOString() ?? null,
         firstQuotedAt: deal.firstQuotedAt?.toISOString() ?? null,

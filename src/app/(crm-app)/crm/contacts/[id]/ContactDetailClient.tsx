@@ -11,7 +11,6 @@ import { CALL_TYPE_NAMES, MEETING_TYPE_NAMES, type TimelineEntry } from "@/lib/c
 import { DESIGNATIONS } from "../AccountContactsClient";
 import NextActionsSection, { NextActionStrip, type NextActionRow } from "./NextActionsSection";
 import ContactInsightSection, { type InsightRow } from "./ContactInsightSection";
-import WonDealModal from "@/components/crm/WonDealModal";
 
 type Contact = {
   id: string; name: string; phone: string | null; email: string | null;
@@ -34,10 +33,7 @@ type LeadSourceOption = { id: string; name: string; colorHex: string | null };
 type CustomerProfileOption = { id: string; name: string };
 type Deal = {
   id: string; code: string; title: string; quotedValue: number | null; wonValue: number | null;
-  estimatedValue: number | null; stageName: string; stageColorHex: string | null;
-  // Confirmed-project details (deals are won projects only).
-  outcome: string | null; expectedStartAt: string | null; wonNote: string | null;
-  executionStatus: string | null; closedAt: string | null;
+  estimatedValue: number | null; stageId: string; stageName: string; stageColorHex: string | null;
 };
 type ActivityRow = { id: string; subject: string; notes: string | null; occurredAt: string; typeName: string; ownerName: string };
 type QuotationRow = { id: string; number: string; sport: string; grandTotal: number; status: string; contactPhone: string | null; sentAt: string | null; createdAt: string };
@@ -116,12 +112,12 @@ const SECTIONS = [
 ];
 
 export default function ContactDetailClient({
-  contact, viewer, leadStages, assignableUsers, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, customerProfiles, contactNotes, reminders, attachments, leadSources, nextActions, insights,
+  contact, viewer, leadStages, assignableUsers, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, funnelStages, lossReasons, customerProfiles, contactNotes, reminders, attachments, leadSources, nextActions, insights,
 }: {
   contact: Contact; viewer: Viewer; leadStages: LeadStageOption[]; assignableUsers: UserOption[];
   deals: Deal[]; activities: ActivityRow[]; quotations: QuotationRow[]; courtImages: CourtImageRow[];
   productInterests: ProductInterestRow[]; timeline: TimelineEntry[]; products: ProductOption[];
-  activityTypes: ActivityTypeOption[];
+  activityTypes: ActivityTypeOption[]; funnelStages: StageOption[]; lossReasons: LossReasonOption[];
   customerProfiles: CustomerProfileOption[]; contactNotes: ContactNoteRow[]; reminders: ReminderRow[]; attachments: AttachmentRow[];
   leadSources: LeadSourceOption[];
   nextActions: NextActionRow[];
@@ -138,8 +134,7 @@ export default function ContactDetailClient({
   // Only quote/court still need a deal (their wizards key off dealId); the
   // "deal" case is the standalone +New Deal. Task/meeting/call no longer gate
   // on a deal — they anchor to the contact directly.
-  // "Won" — confirm this customer's project (creates the deal; see WonDealModal).
-  const [wonOpen, setWonOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"quote" | "court" | "deal" | null>(null);
   // Task = a one-off Reminder with a priority. It anchors to the contact
   // (deal optional), so a plain open-flag drives the modal — the deal, if any,
   // is passed straight from deals[0].
@@ -293,6 +288,7 @@ export default function ContactDetailClient({
     if (res.ok) { toast.success("Removed from Leads"); router.refresh(); }
     else toast.error("Could not remove from Leads");
   }
+  const [closeoutFor, setCloseoutFor] = useState<{ deal: Deal; stage: StageOption } | null>(null);
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -461,8 +457,9 @@ export default function ContactDetailClient({
   // duplicateFrom is wired up in the wizard itself (separate change); this
   // just gets the rep there with the right context in the URL.
   function duplicateQuotation(q: QuotationRow) {
-    const params = new URLSearchParams({ duplicateFrom: q.id, customerName: contact.name, contactId: contact.id });
+    const params = new URLSearchParams({ duplicateFrom: q.id, customerName: contact.name });
     if (contact.phone) params.set("phone", contact.phone);
+    if (deals.length > 0) params.set("dealId", deals[0].id);
     router.push(`/crm/quotations?${params.toString()}`);
   }
 
@@ -485,9 +482,9 @@ export default function ContactDetailClient({
     router.refresh();
   }
 
-  // Quotes/designs attach to this contact (deals are confirmed projects only).
-  function goToWizard(kind: "quote" | "court") {
-    const params = new URLSearchParams({ customerName: contact.name, contactId: contact.id });
+  function goToWizard(kind: "quote" | "court", dealId?: string | null) {
+    const params = new URLSearchParams({ customerName: contact.name });
+    if (dealId) params.set("dealId", dealId);
     if (contact.phone) params.set("phone", contact.phone);
     router.push(`${kind === "quote" ? "/crm/quotations" : "/crm/court-images"}?${params.toString()}`);
   }
@@ -501,7 +498,7 @@ export default function ContactDetailClient({
     if (kind === "product") { setShowProductPicker(true); return; }
     if (kind === "meeting" || kind === "call") { setChoosingFor({ mode: kind, dealId: deals[0]?.id ?? null }); return; }
     if (kind === "quote" || kind === "court") {
-      goToWizard(kind);
+      goToWizard(kind, deals[0]?.id ?? null);
       return;
     }
   }
@@ -779,6 +776,35 @@ export default function ContactDetailClient({
     }
   }
 
+  // Same transitionDeal() endpoint the Deals list uses — this is the sole
+  // place allowed to change Deal.currentStageId, so a change made here is
+  // already the single source of truth everywhere else reads from (Deal
+  // Detail, Deals list, Pipeline, analytics), not a separate copy to sync.
+  async function changeStage(deal: Deal, stage: StageOption, extra?: { wonValue?: number; lossReasonId?: string; lossReasonNote?: string }) {
+    const res = await fetch(`/api/deals/${deal.id}/stage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toStageId: stage.id, ...extra }),
+    });
+    if (res.ok) {
+      toast.success(`${deal.code} moved to ${stage.name}`);
+      router.refresh();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "Could not change stage");
+    }
+  }
+
+  function onStagePick(deal: Deal, stageId: string) {
+    const stage = funnelStages.find((s) => s.id === stageId);
+    if (!stage) return;
+    if (stage.stageType === "won" || stage.requiresLossReason) {
+      setCloseoutFor({ deal, stage });
+    } else {
+      changeStage(deal, stage);
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="mb-1.5">
@@ -911,15 +937,6 @@ export default function ContactDetailClient({
                       {convertingLead ? "Moving..." : "Move to Leads"}
                     </button>
                   ) : (
-                    <>
-                    <button
-                      onClick={() => setWonOpen(true)}
-                      title="Confirmed project — create the deal and move this customer to Deals"
-                      className="rounded-lg px-3 py-1.5 text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
-                      data-guide="crm-contact-won"
-                    >
-                      Won
-                    </button>
                     <button
                       onClick={removeFromLeads}
                       disabled={removingLead}
@@ -928,7 +945,6 @@ export default function ContactDetailClient({
                     >
                       {removingLead ? "Removing..." : "Remove from Leads"}
                     </button>
-                    </>
                   )}
                   <button onClick={startEdit} className="btn btn-secondary !px-3 !py-1.5 !text-sm" data-guide="crm-contact-edit">
                     Edit
@@ -1256,9 +1272,9 @@ export default function ContactDetailClient({
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-slate-900">Deals <span className="text-slate-400 font-normal font-mono">{deals.length}</span></h3>
                 <button
-                  onClick={() => setWonOpen(true)}
+                  onClick={() => setPendingAction("deal")}
                   aria-label="New deal"
-                  title="New deal — a confirmed project"
+                  title="New deal"
                   className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
                   data-guide="crm-contact-add-deal"
                 >
@@ -1266,28 +1282,32 @@ export default function ContactDetailClient({
                 </button>
               </div>
               {deals.length === 0 ? (
-                <p className="text-sm text-slate-400">No confirmed project yet — mark the lead Won when it's confirmed.</p>
+                <p className="text-sm text-slate-400">No deals where this person is the primary contact yet.</p>
               ) : (
                 <div className="space-y-2">
                   {deals.map((d) => (
                     <div key={d.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
                       <Link href={`/deals/${d.id}`} className="min-w-0">
                         <div className="text-sm font-medium text-slate-900 hover:underline truncate">{d.title}</div>
-                        <div className="text-xs text-slate-600 font-mono">{d.code}{d.closedAt && d.outcome === "WON" ? ` · won ${fmtDate(d.closedAt)}` : ""}</div>
-                        {d.wonNote && <div className="text-xs text-slate-500 truncate">{d.wonNote}</div>}
+                        <div className="text-xs text-slate-600 font-mono">{d.code}</div>
                       </Link>
                       <div className="text-right shrink-0 ml-3">
-                        <div className="text-sm font-semibold text-slate-900 font-mono">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
-                        <div className="text-xs text-slate-500">
-                          {d.outcome === "WON" ? (
-                            <>
-                              {d.executionStatus === "COMPLETED" ? "Completed" : d.executionStatus === "IN_EXECUTION" ? "In execution" : "Not started"}
-                              {d.expectedStartAt && <> · starts <span className="font-mono">{fmtDate(d.expectedStartAt)}</span></>}
-                            </>
-                          ) : (
-                            d.stageName
-                          )}
-                        </div>
+                        <select
+                          value={d.stageId}
+                          onChange={(e) => onStagePick(d, e.target.value)}
+                          className="text-[11px] font-medium border-0 rounded-full px-2 py-0.5 mb-0.5"
+                          style={{ background: (d.stageColorHex ?? "#64748b") + "20", color: d.stageColorHex ?? "#475569" }}
+                        >
+                          {funnelStages.map((s) => (
+                            // Without its own color, an <option> inherits the
+                            // <select>'s inline color — every row in the open
+                            // list rendered in the CURRENT stage's color
+                            // (see the screenshot this fixed) instead of its
+                            // own stage's.
+                            <option key={s.id} value={s.id} style={{ color: s.colorHex ?? "#475569" }}>{s.name}</option>
+                          ))}
+                        </select>
+                        <div className="text-xs text-slate-600 font-mono">{fmtInr(d.wonValue ?? d.quotedValue)}</div>
                       </div>
                     </div>
                   ))}
@@ -1685,11 +1705,24 @@ export default function ContactDetailClient({
         </div>
       )}
 
-      {wonOpen && (
-        <WonDealModal
-          contact={{ id: contact.id, name: contact.name }}
-          onClose={() => setWonOpen(false)}
-          onDone={() => { setWonOpen(false); router.refresh(); }}
+      {pendingAction && (
+        <CreateDealFirstModal
+          contactId={contact.id}
+          accountId={contact.accountId}
+          contactName={contact.name}
+          onClose={() => setPendingAction(null)}
+          onCreated={(dealId) => {
+            const action = pendingAction;
+            setPendingAction(null);
+            if (action === "deal") {
+              toast.success("Deal created");
+              router.refresh();
+            } else if (action) {
+              // Only quote/court reach here now — task/meeting/call anchor to
+              // the contact and never open this deal-first modal.
+              goToWizard(action, dealId);
+            }
+          }}
         />
       )}
 
@@ -1753,11 +1786,25 @@ export default function ContactDetailClient({
         />
       )}
 
+      {closeoutFor && (
+        <CloseoutModal
+          deal={closeoutFor.deal}
+          stage={closeoutFor.stage}
+          lossReasons={lossReasons}
+          onClose={() => setCloseoutFor(null)}
+          onConfirm={(extra) => {
+            changeStage(closeoutFor.deal, closeoutFor.stage, extra);
+            setCloseoutFor(null);
+          }}
+        />
+      )}
 
       {showProductPicker && (
         <ProductInterestModal
           contactId={contact.id}
+          accountId={contact.accountId}
           contactName={contact.name}
+          existingDealId={deals[0]?.id ?? null}
           products={products}
           onClose={() => setShowProductPicker(false)}
           onSaved={() => { setShowProductPicker(false); toast.success("Product interest recorded"); router.refresh(); }}
@@ -1982,6 +2029,44 @@ function InlineEditForm({
   );
 }
 
+function CreateDealFirstModal({
+  contactId, accountId, contactName, onClose, onCreated,
+}: { contactId: string; accountId: string; contactName: string; onClose: () => void; onCreated: (dealId: string) => void }) {
+  const toast = useToast();
+  const [creating, setCreating] = useState(false);
+
+  async function create() {
+    setCreating(true);
+    const res = await fetch("/api/deals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: `Deal for ${contactName}`, accountId, primaryContactId: contactId }),
+    }).catch(() => null);
+    setCreating(false);
+    if (res?.ok) {
+      const data = await res.json();
+      onCreated(data.deal.id);
+    } else {
+      toast.error("Could not create a deal — set one up from the Deals tab instead");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full p-5" data-guide="crm-new-deal-dialog">
+        <h2 className="font-semibold text-slate-900 mb-2">New deal</h2>
+        <p className="text-base text-slate-600 mb-4">Create a deal for {contactName} to track this opportunity.</p>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 btn btn-secondary">Cancel</button>
+          <button onClick={create} disabled={creating} className="flex-1 btn btn-primary disabled:opacity-50" data-guide="crm-deal-create-confirm">
+            {creating ? "Creating..." : "Create deal"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // A Task is a one-off Reminder with a priority — owned by the current user
 // (the POST endpoint forces ownerUserId to the caller), no assignee picker,
 // no repeat. It's an in-app + push reminder that surfaces in My Day like every
@@ -2191,11 +2276,71 @@ function ScheduleOrLogChoice({
   );
 }
 
-// Saved on the contact itself — deals are confirmed projects only, so there's
-// no deal to hang this on any more.
+function CloseoutModal({
+  deal, stage, lossReasons, onClose, onConfirm,
+}: {
+  deal: Deal; stage: StageOption; lossReasons: LossReasonOption[]; onClose: () => void;
+  onConfirm: (extra: { wonValue?: number; lossReasonId?: string; lossReasonNote?: string }) => void;
+}) {
+  const [wonValue, setWonValue] = useState(deal.estimatedValue?.toString() ?? "");
+  const [lossReasonId, setLossReasonId] = useState("");
+  const [lossReasonNote, setLossReasonNote] = useState("");
+
+  const needsValue = stage.stageType === "won";
+  const needsReason = stage.requiresLossReason;
+  const canConfirm = (!needsValue || !!wonValue) && (!needsReason || !!lossReasonId || !!lossReasonNote.trim());
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full p-5">
+        <h2 className="font-semibold text-slate-900 mb-4">Move {deal.code} to &quot;{stage.name}&quot;</h2>
+        <div className="space-y-3">
+          {needsValue && (
+            <div>
+              <label className="text-xs font-medium text-slate-600">Won value (₹) *</label>
+              <input type="number" min={0} value={wonValue} onChange={(e) => setWonValue(e.target.value)} autoFocus className="mt-1 w-full input" />
+            </div>
+          )}
+          {needsReason && (
+            <>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Reason {!lossReasonNote.trim() && "*"}</label>
+                <select value={lossReasonId} onChange={(e) => setLossReasonId(e.target.value)} className="mt-1 w-full input" autoFocus>
+                  <option value="">—</option>
+                  {lossReasons.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Notes {!lossReasonId && "*"}</label>
+                <textarea value={lossReasonNote} onChange={(e) => setLossReasonNote(e.target.value)} rows={2} placeholder="Optional detail beyond the reason picked above" className="mt-1 w-full input" />
+              </div>
+            </>
+          )}
+        </div>
+        <div className="flex gap-2 mt-4">
+          <button onClick={onClose} className="flex-1 btn btn-secondary">Cancel</button>
+          <button
+            onClick={() =>
+              onConfirm({
+                wonValue: needsValue ? Number(wonValue) : undefined,
+                lossReasonId: needsReason && lossReasonId ? lossReasonId : undefined,
+                lossReasonNote: needsReason && lossReasonNote.trim() ? lossReasonNote.trim() : undefined,
+              })
+            }
+            disabled={!canConfirm}
+            className="flex-1 btn btn-primary disabled:opacity-40"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProductInterestModal({
-  contactId, contactName, products, onClose, onSaved,
-}: { contactId: string; contactName: string; products: ProductOption[]; onClose: () => void; onSaved: () => void }) {
+  contactId, accountId, contactName, existingDealId, products, onClose, onSaved,
+}: { contactId: string; accountId: string; contactName: string; existingDealId: string | null; products: ProductOption[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [picked, setPicked] = useState<string[]>([]);
   const [otherChecked, setOtherChecked] = useState(false);
@@ -2211,7 +2356,21 @@ function ProductInterestModal({
   async function submit() {
     if (!canSubmit) return;
     setSaving(true);
-    const res = await fetch(`/api/account-contacts/${contactId}/product-interests`, {
+    let dealId = existingDealId;
+    if (!dealId) {
+      const res = await fetch("/api/deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: `Deal for ${contactName}`, accountId, primaryContactId: contactId }),
+      }).catch(() => null);
+      if (res?.ok) dealId = (await res.json()).deal.id;
+    }
+    if (!dealId) {
+      setSaving(false);
+      toast.error("Could not create a deal to attach this to");
+      return;
+    }
+    const res = await fetch(`/api/deals/${dealId}/interested-products`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

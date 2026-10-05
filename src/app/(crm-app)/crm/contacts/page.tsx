@@ -21,7 +21,7 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
     ...(dateRange ? { createdAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
   };
 
-  const [contacts, accounts, leadSources, customerProfiles, leadStages, users] = await Promise.all([
+  const [contacts, accounts, leadSources, customerProfiles, funnelStages, users] = await Promise.all([
     prisma.accountContact.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -38,7 +38,7 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
     }),
     prisma.leadSource.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
     prisma.customerProfile.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
-    prisma.leadStage.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, colorHex: true } }),
+    prisma.funnelStage.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, colorHex: true } }),
     // Only fetched for the rep filter / reassign-owner picker, which is
     // admin+manager UI — harmless to fetch either way given the pool size.
     manages
@@ -69,7 +69,7 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
       accounts={accounts}
       leadSources={leadSources}
       customerProfiles={customerProfiles}
-      leadStages={leadStages}
+      funnelStages={funnelStages}
       users={users}
       dateRange={dateRange}
       repFilter={repFilter ?? ""}

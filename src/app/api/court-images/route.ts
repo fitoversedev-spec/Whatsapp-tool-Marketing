@@ -9,7 +9,8 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildCourtImageNumber } from "@/lib/court-image/schema";
-import { logDocumentDeleted, resolveContactForDocument } from "@/lib/crm/contactLinks";
+import { findOrCreateDealForConversation } from "@/lib/crm/deals";
+import { logDocumentDeleted } from "@/lib/crm/contactLinks";
 
 // Permissive layout validator — we accept anything that looks like
 // the right shape and let the canvas reject unknown elements at render
@@ -37,11 +38,10 @@ const createSchema = z.object({
   video3dUrl: z.string().url().nullable().optional(),
   caption: z.string().max(1024).nullable().optional(),
   conversationId: z.string().uuid().nullable().optional(),
-  // A design belongs to the customer's contact (accountContactId, or resolved
-  // from the conversation / phone) and never creates a deal — same rule as
-  // POST /api/quotations. dealId only for an already-confirmed project.
+  // An explicit dealId (e.g. opened from a CRM Contact/Company page) skips
+  // the conversation-based find-or-create below entirely — same precedence
+  // rule POST /api/quotations already uses.
   dealId: z.string().uuid().nullable().optional(),
-  accountContactId: z.string().uuid().nullable().optional(),
   contactPhone: z.string().min(5).max(30).nullable().optional(),
   // Tier-1 classification — see docs/DECISIONS.md; same fields the quote
   // wizard now captures, mirrored here so a design-first flow classifies
@@ -113,18 +113,25 @@ export async function POST(req: NextRequest) {
 
   const year = new Date().getFullYear();
 
-  // Designs attach to the customer's contact and never create a deal (deals
-  // are confirmed projects only). An explicit dealId is kept for a design for
-  // an already-confirmed project.
-  const dealId = parsed.data.dealId ?? null;
-  const accountContactId = await resolveContactForDocument({
-    accountContactId: parsed.data.accountContactId,
-    conversationId: parsed.data.conversationId,
-    contactPhone: parsed.data.contactPhone,
-  });
+  // An explicit dealId wins outright; otherwise the same find-or-create-by-
+  // conversation resolution quotations uses (see docs/DECISIONS.md) — court
+  // designs previously never got a dealId at all, under any code path, so
+  // every design was permanently invisible to Deal-based analytics
+  // regardless of whether a deal already existed.
+  let dealId = parsed.data.dealId ?? null;
   if (!dealId) {
-    // nothing deal-side to sync
-  } else if (parsed.data.siteCity) {
+    const resolvedDeal = await findOrCreateDealForConversation({
+      conversationId: parsed.data.conversationId ?? null,
+      accountName: parsed.data.customerName,
+      dealTitle: `Court design for ${parsed.data.customerName}`,
+      ownerUserId: user.id,
+      leadSourceId: parsed.data.leadSourceId,
+      customerProfileId: parsed.data.customerProfileId,
+      businessType: parsed.data.businessType,
+    });
+    dealId = resolvedDeal.id;
+  }
+  if (parsed.data.siteCity) {
     await prisma.deal.update({ where: { id: dealId }, data: { siteCity: parsed.data.siteCity } }).catch(() => null);
   } else {
     // No explicit site city on this design — backfill the deal's from its
@@ -162,7 +169,6 @@ export async function POST(req: NextRequest) {
           createdByUserId: user.id,
           status: "draft",
           dealId,
-          accountContactId,
         },
       });
       break;

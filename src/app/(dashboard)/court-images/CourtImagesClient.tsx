@@ -43,19 +43,15 @@ export default function CourtImagesClient({
   const [rows, setRows] = useState<CourtImageRow[]>(initialCourtImages);
   const [showWizard, setShowWizard] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [wizardPrefill, setWizardPrefill] = useState<{ customerName?: string; contactPhone?: string; dealId?: string; contactId?: string } | undefined>(undefined);
+  const [wizardPrefill, setWizardPrefill] = useState<{ customerName?: string; contactPhone?: string; dealId?: string } | undefined>(undefined);
 
-  // Opened from a CRM Contact/Company page's "+ New Court Design" — with the
-  // customer's contactId (designs attach to the contact, never create a deal)
-  // or, for a confirmed project, its dealId.
+  // Opened from a CRM Contact/Company page's "+ New Court Design".
   const searchParams = useSearchParams();
   useEffect(() => {
     const dealId = searchParams.get("dealId");
-    const contactId = searchParams.get("contactId");
-    if (!dealId && !contactId) return;
+    if (!dealId) return;
     setWizardPrefill({
-      dealId: dealId ?? undefined,
-      contactId: contactId ?? undefined,
+      dealId,
       customerName: searchParams.get("customerName") ?? undefined,
       contactPhone: searchParams.get("phone") ?? undefined,
     });

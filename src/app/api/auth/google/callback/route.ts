@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { GOOGLE_STATE_COOKIE, googleStateCookieOptions, googleStateMatches } from "@/lib/google-oauth-state";
 import type { Role } from "@/lib/rbac";
 
 const BASE_URL =
@@ -13,9 +15,21 @@ export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   const errorParam = req.nextUrl.searchParams.get("error");
 
+  // The state cookie is single-use: clear it whatever happens below (cookies() changes ride on the returned redirect).
+  const cookieStore = cookies();
+  const expectedState = cookieStore.get(GOOGLE_STATE_COOKIE)?.value;
+  cookieStore.set(GOOGLE_STATE_COOKIE, "", { ...googleStateCookieOptions, maxAge: 0 });
+
   if (errorParam || !code) {
     return NextResponse.redirect(
       `${BASE_URL}/login?error=${encodeURIComponent(errorParam || "Google login cancelled")}`
+    );
+  }
+
+  // Checked before the code is exchanged, so a forged callback never reaches Google or creates a session.
+  if (!googleStateMatches(req.nextUrl.searchParams.get("state"), expectedState)) {
+    return NextResponse.redirect(
+      `${BASE_URL}/login?error=${encodeURIComponent("Google sign-in couldn't be verified. Please try again.")}`
     );
   }
 

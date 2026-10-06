@@ -522,6 +522,7 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
       { text: "Use the **Tags dropdown** (\"All tags\") to filter by a specific tag", target: "wa-contacts-tags" },
       { text: "Use the **Filter by field** dropdown to filter by a custom field (e.g., Location, City)", target: "wa-contacts-field-filter" },
       { text: "Enter a value — the table updates instantly to show matching contacts", target: "wa-contacts-field-value" },
+      { text: "To act on everyone your filter finds, tick the box at the top of the table, then click **Select all N matching** — tag, export or add them to a group in one go" },
     ],
     screenshot: {
       path: "/contacts",
@@ -533,6 +534,34 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
         { type: "type", selector: '[data-guide="wa-contacts-field-filter"]', text: "Attr" },
         { type: "wait", duration: 800 },
       ],
+    },
+  },
+  {
+    slug: "add-contacts-to-group",
+    title: "How to add WhatsApp contacts to a broadcast group",
+    summary: "Tick contacts — or every contact a filter finds — and put them in a new or existing broadcast group.",
+    section: "whatsapp",
+    category: "Contacts",
+    keywords: ["group", "groups", "broadcast", "contacts", "add", "select all", "tick", "audience"],
+    steps: [
+      { text: "Go to **Contacts** in the sidebar", target: "wa-sidebar-contacts" },
+      { text: "Search or filter the list (e.g., Attribute 1 equals Salem, or a tag)", target: "wa-contacts-search" },
+      { text: "Tick the contacts you want, or tick the box at the top to select the whole page" },
+      { text: "To take every contact your filter finds (not just the 50 on screen), click **Select all N matching** in the green bar", target: "wa-contacts-select-all-matching" },
+      { text: "Click **Add to group**, then pick an existing group or choose **New group** and type a name", target: "wa-contacts-add-to-group" },
+      { text: "Contacts who blocked campaigns can be added — broadcasts skip them" },
+    ],
+    screenshot: {
+      path: "/contacts",
+      file: "wa-add-contacts-to-group.png",
+      alt: "Contacts page with the page ticked, the Select all matching link and the Add to group button",
+      // Ticks the page (local UI state only) — nobody is added to any group.
+      setup: [
+        HYDRATE,
+        { type: "click", selector: 'th input[aria-label="Select all"]' },
+        { type: "wait", duration: 800 },
+      ],
+      blur: [".data-table tbody td:nth-child(2)", ".data-table tbody td:nth-child(3)"],
     },
   },
   {
@@ -569,14 +598,16 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
   {
     slug: "broadcast-groups",
     title: "How to manage broadcast groups",
-    summary: "See who is in each broadcast group, remove people, rename or delete a group, and send a broadcast to it.",
+    summary: "Make groups from your WhatsApp contacts, see who is in each one, add or remove people, rename or delete a group, and send a broadcast to it.",
     section: "whatsapp",
     category: "Broadcasts",
-    keywords: ["group", "groups", "broadcast", "list", "audience", "members", "send"],
+    keywords: ["group", "groups", "broadcast", "list", "audience", "members", "send", "new group", "add people"],
     steps: [
       { text: "Click **Broadcasts** in the sidebar", target: "wa-sidebar-broadcasts" },
       { text: "Click the **Groups** tab", target: "wa-broadcasts-tab-groups" },
+      { text: "Click **+ New group**, type a name, then search your WhatsApp contacts and tick people — **Select all N matching** takes everyone your search finds", target: "wa-groups-new" },
       { text: "Click **Open** on a group to see who is in it and who will get your messages", target: "wa-groups-list" },
+      { text: "On a group's page, click **+ Add people** to add more — people already in the group can't be added twice" },
       { text: "Tick people and click **Remove from group** to take them out (the group's maker or an admin)" },
       { text: "Use **Rename** or **Delete** to tidy up — deleting a group keeps the people in WhatsApp contacts" },
       { text: "Click **Send** to start a broadcast to that group" },

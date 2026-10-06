@@ -6,6 +6,7 @@ import NavigationTracker from "@/components/NavigationTracker";
 import FloatingChatLauncher from "@/components/chat/FloatingChatLauncher";
 import AskAiLauncher from "@/components/AskAiLauncher";
 import CrossTabRefresh from "@/components/CrossTabRefresh";
+import PendingNotesFlusher from "@/components/PendingNotesFlusher";
 import BottomNav from "@/components/BottomNav";
 import { endOfDayIST } from "@/lib/time";
 import type { Role } from "@/lib/rbac";
@@ -53,6 +54,7 @@ export default async function CrmAppLayout({ children }: { children: React.React
       <FloatingChatLauncher initialUnread={chatUnread} initialMentions={chatMentions} />
       <AskAiLauncher />
       <CrossTabRefresh events={["crm:contact-added", "crm:deal-updated", "crm:data-changed"]} />
+      <PendingNotesFlusher userId={user.id} />
       <BottomNav reminderCount={crmReminderCount} />
     </div>
   );

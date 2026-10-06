@@ -27,6 +27,10 @@ const schema = z.object({
   // are the picked contacts (filter rules ignored). Persisted inside the
   // variableMapping JSON blob so sender.ts can read it back.
   selectedContactIds: z.array(z.string().uuid()).optional(),
+  // When sourceType=contacts and set, the recipients are this broadcast
+  // group's members, read when the broadcast sends (filter rules and picked
+  // contacts are ignored). Persisted in the variableMapping blob too.
+  groupId: z.string().uuid().optional(),
   // ISO timestamp. When present and in the future, broadcast is saved in
   // "scheduled" status and waits for the cron sweep to launch it.
   scheduledAt: z.string().datetime().optional(),
@@ -52,6 +56,21 @@ export async function POST(req: NextRequest) {
   }
   if (sourceType === "sheet" && (!parsed.data.sheetUrl || !parsed.data.sheetRange)) {
     return NextResponse.json({ error: "Sheet URL and range are required" }, { status: 400 });
+  }
+
+  // Group recipients: the group must still exist and have someone in it.
+  const groupId = sourceType === "contacts" ? parsed.data.groupId ?? null : null;
+  let groupName: string | null = null;
+  if (groupId) {
+    const group = await prisma.broadcastGroup.findUnique({
+      where: { id: groupId },
+      select: { name: true, _count: { select: { members: true } } },
+    });
+    if (!group) return NextResponse.json({ error: "This group no longer exists" }, { status: 404 });
+    if (group._count.members === 0) {
+      return NextResponse.json({ error: "This group has no members yet" }, { status: 422 });
+    }
+    groupName = group.name;
   }
 
   const sheetId = parsed.data.sheetUrl ? parseSheetId(parsed.data.sheetUrl) : null;
@@ -91,8 +110,10 @@ export async function POST(req: NextRequest) {
         countryCodeColumn: parsed.data.countryCodeColumn ?? null,
         nameColumn: parsed.data.nameColumn ?? null,
         variables: parsed.data.variableMapping,
-        filterRules: (parsed.data.filterRules ?? []).filter((r) => (r.column || r.field || "").trim()),
-        selectedContactIds: parsed.data.selectedContactIds ?? null,
+        filterRules: groupId ? [] : (parsed.data.filterRules ?? []).filter((r) => (r.column || r.field || "").trim()),
+        selectedContactIds: groupId ? null : parsed.data.selectedContactIds ?? null,
+        groupId,
+        groupName,
       }),
       status: scheduledAt ? "scheduled" : "draft",
       scheduledAt,

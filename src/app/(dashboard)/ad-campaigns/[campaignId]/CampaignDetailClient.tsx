@@ -88,6 +88,10 @@ function AdBreakdown({ rows }: { rows: AdLeadBreakdownRow[] }) {
 const SPEND_COLOR = "#1C6E8C"; // court — daily spend bars
 const LEADS_COLOR = "#2E7D4F"; // turf — daily captured-insight lead bars
 
+// The page is split in two: Campaign leads (the captured-leads table — where
+// reps work) and Campaign analytics (KPIs, trend, leads by ad, documents).
+export type CampaignTab = "leads" | "analytics";
+
 export default function CampaignDetailClient({
   detail,
   leads,
@@ -97,6 +101,8 @@ export default function CampaignDetailClient({
   stageCatalog,
   currentUserId,
   isAdmin,
+  canBulkAssign,
+  initialTab,
   range,
 }: {
   detail: CampaignDetail;
@@ -107,10 +113,24 @@ export default function CampaignDetailClient({
   stageCatalog: MetaLeadStageRow[];
   currentUserId: string;
   isAdmin: boolean;
+  canBulkAssign: boolean;
+  initialTab: CampaignTab;
   range: DateRange;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [tab, setTab] = useState<CampaignTab>(initialTab);
+
+  // Switching tabs is instant (both tabs' data is already here); the URL keeps
+  // ?tab=analytics so a refresh or a shared link opens the same tab.
+  function switchTab(next: CampaignTab) {
+    setTab(next);
+    const params = new URLSearchParams(window.location.search);
+    if (next === "analytics") params.set("tab", "analytics");
+    else params.delete("tab");
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
+  }
   const [sport, setSport] = useState(detail.sport ?? "");
   const [customSport, setCustomSport] = useState(
     detail.sport && !SPORT_PRESETS.includes(detail.sport) ? detail.sport : "",
@@ -138,6 +158,7 @@ export default function CampaignDetailClient({
     const params = new URLSearchParams();
     if (next.from) params.set("from", next.from);
     if (next.to) params.set("to", next.to);
+    if (tab === "analytics") params.set("tab", "analytics");
     const qs = params.toString();
     const base = `/ad-campaigns/${detail.metaId}`;
     startTransition(() => {
@@ -215,84 +236,129 @@ export default function CampaignDetailClient({
           {pending && <span className="text-xs text-slate-400">Updating…</span>}
         </div>
 
-        {/* Headline KPIs. The two lead numbers are deliberately kept apart:
-            insightLeads is Meta's own Insights KPI, capturedLeads is the count
-            of Instant-Form submissions we actually ingested for this campaign. */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiTile label="Spend" value={fmtInr(detail.spend)} sub={`${fmtInt(detail.reach)} reach`} />
-          <KpiTile label="Impressions" value={fmtInt(detail.impressions)} />
-          <KpiTile label="Clicks" value={fmtInt(detail.clicks)} sub={`${fmtPct(detail.ctr)} CTR`} />
-          <KpiTile label="CTR" value={fmtPct(detail.ctr)} sub="Clicks ÷ impressions" />
-          <KpiTile label="Insight leads" value={fmtInt(detail.insightLeads)} sub="Meta insights KPI" />
-          <KpiTile label="Captured leads" value={fmtInt(detail.capturedLeads)} sub="Instant-Form submissions" />
-          <KpiTile label="Cost / lead" value={fmtCpl(detail.cpl)} sub="Spend ÷ insight leads" />
-          <KpiTile label="Reach" value={fmtInt(detail.reach)} sub="Summed per day (approx.)" />
+        <div role="tablist" aria-label="Campaign sections" className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          {(
+            [
+              { key: "leads", label: "Campaign leads", count: leads.length },
+              { key: "analytics", label: "Campaign analytics", count: null },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              id={`campaign-tab-${t.key}`}
+              aria-selected={tab === t.key}
+              aria-controls={`campaign-panel-${t.key}`}
+              onClick={() => switchTab(t.key)}
+              data-guide={`wa-campaign-tab-${t.key}`}
+              className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                tab === t.key
+                  ? "bg-court-600 text-white"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {t.label}
+              {t.count !== null && (
+                <span className={`ml-1.5 font-mono text-xs ${tab === t.key ? "text-court-100" : "text-slate-400"}`}>
+                  {fmtInt(t.count)}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
-        {/* Spend / leads trend */}
-        <AnalyticsCard title="Daily trend" description="Spend and lead volume per day over the selected range.">
-          {trend.length === 0 ? (
-            <p className="text-sm text-slate-400">No daily insights in this range.</p>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <div className="heading text-xs tracking-wide text-slate-500 mb-2">Spend / day</div>
-                <StackedBarChart
-                  data={trend}
-                  dataKey="date"
-                  stackKeys={["spend"]}
-                  height={220}
-                  colorFor={() => SPEND_COLOR}
-                  tooltipFormatter={(d) => fmtInr(d.spend)}
-                />
-              </div>
-              <div>
-                <div className="heading text-xs tracking-wide text-slate-500 mb-2">Leads / day</div>
-                <StackedBarChart
-                  data={trend}
-                  dataKey="date"
-                  stackKeys={["leads"]}
-                  height={220}
-                  colorFor={() => LEADS_COLOR}
-                  tooltipFormatter={(d) => `${fmtInt(d.leads)} leads`}
-                />
-              </div>
+        {/* Campaign leads — kept mounted while on the other tab so ticked
+            leads, filters and an open lead panel survive a tab switch. */}
+        <div
+          role="tabpanel"
+          id="campaign-panel-leads"
+          aria-labelledby="campaign-tab-leads"
+          hidden={tab !== "leads"}
+        >
+          <AnalyticsCard
+            title="Captured leads"
+            description="Every Instant-Form submission captured from this campaign. Filter by city or sport, click a breakdown value to drill in, tick leads to assign them or add them to a broadcast group, or open a lead for the full form answers."
+          >
+            <LeadsTable
+              leads={leads}
+              reps={reps}
+              showCampaignColumn={false}
+              exportFilename={`campaign-${detail.metaId}-leads`}
+              labelCatalog={labelCatalog}
+              stageCatalog={stageCatalog}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              canBulkAssign={canBulkAssign}
+            />
+          </AnalyticsCard>
+        </div>
+
+        {tab === "analytics" && (
+          <div role="tabpanel" id="campaign-panel-analytics" aria-labelledby="campaign-tab-analytics" className="space-y-4">
+            {/* Headline KPIs. The two lead numbers are deliberately kept apart:
+                insightLeads is Meta's own Insights KPI, capturedLeads is the count
+                of Instant-Form submissions we actually ingested for this campaign. */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <KpiTile label="Spend" value={fmtInr(detail.spend)} sub={`${fmtInt(detail.reach)} reach`} />
+              <KpiTile label="Impressions" value={fmtInt(detail.impressions)} />
+              <KpiTile label="Clicks" value={fmtInt(detail.clicks)} sub={`${fmtPct(detail.ctr)} CTR`} />
+              <KpiTile label="CTR" value={fmtPct(detail.ctr)} sub="Clicks ÷ impressions" />
+              <KpiTile label="Insight leads" value={fmtInt(detail.insightLeads)} sub="Meta insights KPI" />
+              <KpiTile label="Captured leads" value={fmtInt(detail.capturedLeads)} sub="Instant-Form submissions" />
+              <KpiTile label="Cost / lead" value={fmtCpl(detail.cpl)} sub="Spend ÷ insight leads" />
+              <KpiTile label="Reach" value={fmtInt(detail.reach)} sub="Summed per day (approx.)" />
             </div>
-          )}
-        </AnalyticsCard>
 
-        {/* Which ad drove the most leads, and from which cities */}
-        <AnalyticsCard
-          title="Leads by ad"
-          description="Which ad drove the most leads for this campaign — most to least — and the cities those leads came from."
-        >
-          <AdBreakdown rows={adBreakdown} />
-        </AnalyticsCard>
+            {/* Spend / leads trend */}
+            <AnalyticsCard title="Daily trend" description="Spend and lead volume per day over the selected range.">
+              {trend.length === 0 ? (
+                <p className="text-sm text-slate-400">No daily insights in this range.</p>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <div className="heading text-xs tracking-wide text-slate-500 mb-2">Spend / day</div>
+                    <StackedBarChart
+                      data={trend}
+                      dataKey="date"
+                      stackKeys={["spend"]}
+                      height={220}
+                      colorFor={() => SPEND_COLOR}
+                      tooltipFormatter={(d) => fmtInr(d.spend)}
+                    />
+                  </div>
+                  <div>
+                    <div className="heading text-xs tracking-wide text-slate-500 mb-2">Leads / day</div>
+                    <StackedBarChart
+                      data={trend}
+                      dataKey="date"
+                      stackKeys={["leads"]}
+                      height={220}
+                      colorFor={() => LEADS_COLOR}
+                      tooltipFormatter={(d) => `${fmtInt(d.leads)} leads`}
+                    />
+                  </div>
+                </div>
+              )}
+            </AnalyticsCard>
 
-        {/* Campaign documents — Tiptap editor, create/share/PDF/WhatsApp */}
-        <AnalyticsCard
-          title="Documents"
-          description="Create, share, and manage documents for this campaign."
-        >
-          <CampaignDocuments campaignMetaId={detail.metaId} />
-        </AnalyticsCard>
+            {/* Which ad drove the most leads, and from which cities */}
+            <AnalyticsCard
+              title="Leads by ad"
+              description="Which ad drove the most leads for this campaign — most to least — and the cities those leads came from."
+            >
+              <AdBreakdown rows={adBreakdown} />
+            </AnalyticsCard>
 
-        {/* This campaign's captured leads — filterable by city / sport */}
-        <AnalyticsCard
-          title="Captured leads"
-          description="Every Instant-Form submission captured from this campaign. Filter by city or sport, click a breakdown value to drill in, or open a lead for the full form answers."
-        >
-          <LeadsTable
-            leads={leads}
-            reps={reps}
-            showCampaignColumn={false}
-            exportFilename={`campaign-${detail.metaId}-leads`}
-            labelCatalog={labelCatalog}
-            stageCatalog={stageCatalog}
-            currentUserId={currentUserId}
-            isAdmin={isAdmin}
-          />
-        </AnalyticsCard>
+            {/* Campaign documents — Tiptap editor, create/share/PDF/WhatsApp */}
+            <AnalyticsCard
+              title="Documents"
+              description="Create, share, and manage documents for this campaign."
+            >
+              <CampaignDocuments campaignMetaId={detail.metaId} />
+            </AnalyticsCard>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -52,6 +52,7 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
     variables: Record<string, string>;
     filterRules?: FilterRule[];
     selectedContactIds?: string[] | null;
+    groupId?: string | null;
   };
 
   const recipientCount = await prisma.broadcastRecipient.count({ where: { broadcastId } });
@@ -101,6 +102,7 @@ async function materialiseFromContacts(
     variables: Record<string, string>;
     filterRules?: FilterRule[];
     selectedContactIds?: string[] | null;
+    groupId?: string | null;
   },
   optOuts: Set<string>
 ) {
@@ -108,21 +110,27 @@ async function materialiseFromContacts(
     .map((r) => ({ field: r.field ?? r.column ?? "", condition: r.condition, value: r.value }))
     .filter((r) => r.field.trim()) as ContactFilterRule[];
 
+  const groupId = mapping.groupId || null;
   const selectedIds = mapping.selectedContactIds?.length
     ? mapping.selectedContactIds
     : null;
 
+  // Group mode: the group's members as of now (people added after the
+  // broadcast was scheduled are included). A group that was deleted or emptied
+  // means nobody — it must never fall through to the whole contact pool.
   // Pick mode: query only the picked IDs, skip filter rules. Consent +
   // opt-out gates still apply (a hand-picked contact who's opted out
   // still gets skipped).
-  const contacts = selectedIds
-    ? await prisma.contact.findMany({ where: { id: { in: selectedIds } } })
-    : await prisma.contact.findMany();
+  const contacts = groupId
+    ? await prisma.contact.findMany({ where: { groups: { some: { groupId } } } })
+    : selectedIds
+      ? await prisma.contact.findMany({ where: { id: { in: selectedIds } } })
+      : await prisma.contact.findMany();
   const insertData: Array<{ broadcastId: string; phoneE164: string; name: string | null; variables: string }> = [];
 
   for (const c of contacts) {
     const fields = parseFields(c.fields);
-    if (!selectedIds && !contactPassesFilters({ name: c.name, fields }, rules)) continue;
+    if (!groupId && !selectedIds && !contactPassesFilters({ name: c.name, fields }, rules)) continue;
     if (!c.allowCampaign) continue; // consent gate — never message non-consenting contacts
     if (optOuts.has(c.phone)) continue;
     const variables: Record<string, string> = {};

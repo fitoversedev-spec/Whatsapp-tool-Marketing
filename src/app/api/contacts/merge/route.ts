@@ -1,7 +1,8 @@
 // Merge N secondary contacts into a primary. Moves messages by reassigning
 // the conversation phone (since conversations key off contactPhone, not
-// contactId, this is mostly metadata cleanup). Tags are unioned, broadcast
-// recipients are kept as-is (they're keyed by phone).
+// contactId, this is mostly metadata cleanup). Tags and broadcast-group
+// memberships are unioned onto the primary, broadcast recipients are kept
+// as-is (they're keyed by phone).
 //
 // CAUTION: the merge is irreversible. UI must show a confirm step.
 
@@ -54,9 +55,22 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Delete secondaries (cascade clears their tag joins via the schema)
+    // Keep the secondaries' broadcast groups: the primary joins any group they
+    // were in (it may already be a member).
+    const memberships = await tx.broadcastGroupMember.findMany({
+      where: { contactId: { in: secondaryIds } },
+      select: { groupId: true, addedByUserId: true },
+    });
+    if (memberships.length > 0) {
+      await tx.broadcastGroupMember.createMany({
+        data: memberships.map((m) => ({ groupId: m.groupId, contactId: primaryId, addedByUserId: m.addedByUserId })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Delete secondaries (cascade clears their tag + group joins via the schema)
     await tx.contact.deleteMany({ where: { id: { in: secondaryIds } } });
-  });
+  }, { timeout: 30_000, maxWait: 10_000 }); // same headroom as the CRM contact merge
 
   return NextResponse.json({ ok: true, mergedInto: primaryId, droppedCount: secondaryIds.length });
 }

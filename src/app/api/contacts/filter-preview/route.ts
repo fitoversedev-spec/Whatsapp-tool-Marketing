@@ -16,6 +16,9 @@ const schema = z.object({
   // When provided, skips filterRules and previews only these contact IDs.
   // Used by the "Pick specific" mode in the composer.
   selectedContactIds: z.array(z.string().uuid()).optional(),
+  // When provided, previews the members of this broadcast group (the
+  // composer's "Group" mode); filterRules and selectedContactIds are ignored.
+  groupId: z.string().uuid().optional(),
 });
 
 // Previews how many saved contacts a broadcast would reach given filter rules.
@@ -28,11 +31,19 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
   const rules = (parsed.data.filterRules ?? []).filter((r) => r.field?.trim()) as ContactFilterRule[];
-  const selectedIds = parsed.data.selectedContactIds ?? null;
+  const groupId = parsed.data.groupId ?? null;
+  const selectedIds = groupId ? null : parsed.data.selectedContactIds ?? null;
 
-  const contacts = selectedIds
-    ? await prisma.contact.findMany({ where: { id: { in: selectedIds } } })
-    : await prisma.contact.findMany();
+  if (groupId) {
+    const group = await prisma.broadcastGroup.findUnique({ where: { id: groupId }, select: { id: true } });
+    if (!group) return NextResponse.json({ error: "This group no longer exists" }, { status: 404 });
+  }
+
+  const contacts = groupId
+    ? await prisma.contact.findMany({ where: { groups: { some: { groupId } } } })
+    : selectedIds
+      ? await prisma.contact.findMany({ where: { id: { in: selectedIds } } })
+      : await prisma.contact.findMany();
   const optOuts = new Set(
     (await prisma.optOut.findMany({ select: { phoneE164: true } })).map((o) => o.phoneE164)
   );
@@ -45,9 +56,9 @@ export async function POST(req: NextRequest) {
 
   for (const c of contacts) {
     const fields = parseFields(c.fields);
-    // Selected-ID mode bypasses filter rules — the user already hand-
-    // picked these contacts, don't reject them for missing a field.
-    if (!selectedIds && !contactPassesFilters({ name: c.name, fields }, rules)) {
+    // Selected-ID and group modes bypass filter rules — the user already
+    // chose these contacts, don't reject them for missing a field.
+    if (!groupId && !selectedIds && !contactPassesFilters({ name: c.name, fields }, rules)) {
       filtered++;
       continue;
     }

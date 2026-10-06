@@ -45,6 +45,7 @@ export default function AdCampaignsClient({
   stageCatalog,
   currentUserId,
   isAdmin,
+  canBulkAssign,
   range,
 }: {
   overview: AdCampaignOverview;
@@ -55,6 +56,7 @@ export default function AdCampaignsClient({
   stageCatalog: MetaLeadStageRow[];
   currentUserId: string;
   isAdmin: boolean;
+  canBulkAssign: boolean;
   range: DateRange;
 }) {
   const router = useRouter();
@@ -267,7 +269,7 @@ export default function AdCampaignsClient({
           guide="wa-ad-leads-heading"
           description="Every Instant-Form submission captured from your ads. Filter by city or sport, click a breakdown value to drill in, or open a lead for the full form answers."
         >
-          <LeadsTable leads={leads} reps={reps} showCampaignColumn exportFilename="ad-leads" labelCatalog={labelCatalog} stageCatalog={stageCatalog} currentUserId={currentUserId} isAdmin={isAdmin} />
+          <LeadsTable leads={leads} reps={reps} showCampaignColumn exportFilename="ad-leads" labelCatalog={labelCatalog} stageCatalog={stageCatalog} currentUserId={currentUserId} isAdmin={isAdmin} canBulkAssign={canBulkAssign} />
         </AnalyticsCard>
       </div>
     </div>

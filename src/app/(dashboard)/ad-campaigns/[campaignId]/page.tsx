@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { isManagerOrAbove } from "@/lib/rbac";
 import { getCampaignById, getLeadsForCampaign, getAssignableReps, getAdLeadBreakdown, getMetaLeadLabels, getMetaLeadStages } from "@/lib/meta-ads/queries";
 import CampaignDetailClient from "./CampaignDetailClient";
 
@@ -13,7 +14,8 @@ import CampaignDetailClient from "./CampaignDetailClient";
 // range narrows to exactly that window, with the upper bound pushed to
 // end-of-day so the "to" day is fully included. Both ends are guarded against a
 // malformed param (an Invalid Date would throw when Prisma serializes the
-// filter and 500 the page).
+// filter and 500 the page). ?tab=analytics opens the Campaign analytics tab;
+// anything else opens Campaign leads.
 
 function parseFrom(raw: string | undefined): Date {
   const fallback = new Date("2000-01-01T00:00:00Z");
@@ -33,7 +35,7 @@ export default async function CampaignDetailPage({
   searchParams,
 }: {
   params: { campaignId: string };
-  searchParams: { from?: string; to?: string };
+  searchParams: { from?: string; to?: string; tab?: string };
 }) {
   const user = await requireUser();
 
@@ -60,6 +62,8 @@ export default async function CampaignDetailPage({
       stageCatalog={stageCatalog}
       currentUserId={user.id}
       isAdmin={user.role === "admin"}
+      canBulkAssign={isManagerOrAbove(user.role)}
+      initialTab={searchParams.tab === "analytics" ? "analytics" : "leads"}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}
     />
   );

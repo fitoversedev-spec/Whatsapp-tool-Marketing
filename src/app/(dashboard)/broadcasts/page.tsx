@@ -2,14 +2,21 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import BroadcastsClient from "./BroadcastsClient";
 
-export default async function BroadcastsPage() {
+// Two tabs: Broadcasts (non-admins see their own) and Groups (shared by the
+// whole team). ?tab=groups opens Groups; ?group=<id> opens the composer ready
+// to send to that group (the group page's "Send broadcast" button).
+export default async function BroadcastsPage({
+  searchParams,
+}: {
+  searchParams: { tab?: string; group?: string };
+}) {
   const user = await requireUser();
 
   const where = user.role === "admin" ? {} : { createdByUserId: user.id };
 
-  // The broadcast list and the approved-template list are independent, so
-  // fetch them concurrently rather than in a serial waterfall.
-  const [broadcasts, approvedTemplates] = await Promise.all([
+  // The broadcast list, the approved-template list and the groups are
+  // independent, so fetch them concurrently rather than in a serial waterfall.
+  const [broadcasts, approvedTemplates, groups] = await Promise.all([
     prisma.broadcast.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -24,7 +31,22 @@ export default async function BroadcastsPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, language: true, body: true },
     }),
+    prisma.broadcastGroup.findMany({
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        createdByUserId: true,
+        createdAt: true,
+        updatedAt: true,
+        createdBy: { select: { name: true } },
+        _count: { select: { members: true } },
+      },
+    }),
   ]);
+
+  const composeGroupId =
+    searchParams.group && groups.some((g) => g.id === searchParams.group) ? searchParams.group : null;
 
   return (
     <BroadcastsClient
@@ -43,6 +65,19 @@ export default async function BroadcastsPage() {
         scheduledAt: b.scheduledAt?.toISOString() ?? null,
       }))}
       approvedTemplates={approvedTemplates}
+      groups={groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        memberCount: g._count.members,
+        createdByUserId: g.createdByUserId,
+        createdByName: g.createdBy.name,
+        createdAt: g.createdAt.toISOString(),
+        updatedAt: g.updatedAt.toISOString(),
+      }))}
+      currentUserId={user.id}
+      isAdmin={user.role === "admin"}
+      initialTab={searchParams.tab === "groups" || composeGroupId ? "groups" : "broadcasts"}
+      composeGroupId={composeGroupId}
     />
   );
 }

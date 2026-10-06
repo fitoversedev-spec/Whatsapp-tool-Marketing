@@ -6,6 +6,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import * as XLSX from "xlsx";
+import GroupsPanel, { type GroupRow } from "./GroupsPanel";
 
 type Broadcast = {
   id: string;
@@ -43,18 +44,59 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "bg-red-100 text-red-800",
 };
 
+type PageTab = "broadcasts" | "groups";
+
 export default function BroadcastsClient({
   broadcasts,
   approvedTemplates,
+  groups,
+  currentUserId,
+  isAdmin,
+  initialTab,
+  composeGroupId,
 }: {
   broadcasts: Broadcast[];
   approvedTemplates: Template[];
+  groups: GroupRow[];
+  currentUserId: string;
+  isAdmin: boolean;
+  initialTab: PageTab;
+  // Open the composer aimed at this group (arriving from a group's page).
+  composeGroupId: string | null;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [, startTransition] = useTransition();
-  const [showComposer, setShowComposer] = useState(false);
+  const [tab, setTab] = useState<PageTab>(initialTab);
+  // A group's "Send" opens the composer ready to send to that group.
+  const [composerGroupId, setComposerGroupId] = useState<string | null>(
+    approvedTemplates.length > 0 ? composeGroupId : null,
+  );
+  const [showComposer, setShowComposer] = useState(composerGroupId !== null);
   const [syncing, setSyncing] = useState(false);
+
+  // The tab lives in the URL (?tab=groups) so refresh and back keep it; any
+  // ?group= hand-off is dropped once the composer has opened.
+  function setUrl(nextTab: PageTab) {
+    window.history.replaceState(null, "", nextTab === "groups" ? "/broadcasts?tab=groups" : "/broadcasts");
+  }
+  function switchTab(next: PageTab) {
+    setTab(next);
+    setUrl(next);
+  }
+  function openComposer(groupId: string | null) {
+    if (approvedTemplates.length === 0) {
+      toast.error("No approved templates yet");
+      return;
+    }
+    setComposerGroupId(groupId);
+    setShowComposer(true);
+  }
+  function closeComposer() {
+    setShowComposer(false);
+    setComposerGroupId(null);
+    setUrl(tab);
+  }
 
   async function syncBroadcasts() {
     if (syncing) return;
@@ -104,7 +146,7 @@ export default function BroadcastsClient({
               {syncing ? "Syncing…" : "Sync"}
             </button>
             <button
-              onClick={() => setShowComposer(true)}
+              onClick={() => openComposer(null)}
               className="btn btn-primary w-full sm:w-auto"
               disabled={approvedTemplates.length === 0}
               title={approvedTemplates.length === 0 ? "No approved templates yet" : ""}
@@ -117,7 +159,39 @@ export default function BroadcastsClient({
       />
 
       <div className="p-4 sm:p-6 lg:p-8">
-        {broadcasts.length === 0 ? (
+        <div role="tablist" aria-label="Broadcasts sections" className="flex gap-2 mb-4 sm:mb-6 overflow-x-auto pb-1 -mx-1 px-1">
+          {(
+            [
+              { key: "broadcasts", label: "Broadcasts", count: null },
+              { key: "groups", label: "Groups", count: groups.length },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => switchTab(t.key)}
+              data-guide={`wa-broadcasts-tab-${t.key}`}
+              className={`shrink-0 px-4 py-1.5 rounded-lg text-sm font-medium transition ${
+                tab === t.key
+                  ? "bg-court-600 text-white"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {t.label}
+              {t.count !== null && (
+                <span className={`ml-1.5 font-mono text-xs ${tab === t.key ? "text-court-100" : "text-slate-400"}`}>
+                  {t.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {tab === "groups" ? (
+          <GroupsPanel groups={groups} currentUserId={currentUserId} isAdmin={isAdmin} onSend={(id) => openComposer(id)} />
+        ) : broadcasts.length === 0 ? (
           <div className="card p-8 sm:p-12 text-center text-slate-500" data-guide="wa-broadcasts-list">
             No broadcasts yet. Click <strong>New broadcast</strong> to compose one.
           </div>
@@ -241,9 +315,12 @@ export default function BroadcastsClient({
       {showComposer && (
         <BroadcastComposer
           templates={approvedTemplates}
-          onClose={() => setShowComposer(false)}
+          groups={groups}
+          initialGroupId={composerGroupId}
+          onClose={closeComposer}
           onLaunched={() => {
-            setShowComposer(false);
+            closeComposer();
+            switchTab("broadcasts");
             router.refresh();
           }}
         />
@@ -265,10 +342,15 @@ function Stat({ label, value, color }: { label: string; value: number | string; 
 
 function BroadcastComposer({
   templates,
+  groups,
+  initialGroupId,
   onClose,
   onLaunched,
 }: {
   templates: Template[];
+  groups: GroupRow[];
+  // Start in "Group" mode with this group chosen (a group's "Send" button).
+  initialGroupId: string | null;
   onClose: () => void;
   onLaunched: () => void;
 }) {
@@ -278,11 +360,15 @@ function BroadcastComposer({
   // Saved Contacts state
   const [contactFields, setContactFields] = useState<string[]>([]);
   const [contactTotal, setContactTotal] = useState(0);
+  const [contactsLoaded, setContactsLoaded] = useState(false);
   const [contactFilters, setContactFilters] = useState<ContactFilter[]>([]);
   const [contactVar1, setContactVar1] = useState("name");
 
-  // Pick-specific mode: hand-pick individual contacts instead of filtering.
-  const [contactMode, setContactMode] = useState<"filter" | "pick">("filter");
+  // How saved contacts are chosen: filter by field, hand-pick, or everyone in
+  // one broadcast group (members are read when the broadcast sends).
+  const [contactMode, setContactMode] = useState<"filter" | "pick" | "group">(initialGroupId ? "group" : "filter");
+  const [groupId, setGroupId] = useState(initialGroupId ?? "");
+  const sortedGroups = [...groups].sort((a, b) => a.name.localeCompare(b.name));
   const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
   const [pickerSearch, setPickerSearch] = useState("");
   const [pickerContacts, setPickerContacts] = useState<PickerContact[]>([]);
@@ -326,7 +412,8 @@ function BroadcastComposer({
         setContactFields((d.fields ?? []).map((f: any) => f.key));
         setContactTotal(d.totalContacts ?? 0);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setContactsLoaded(true));
   }, []);
 
   // Debounced contact search for the "Pick specific" picker. Fires only
@@ -428,6 +515,25 @@ function BroadcastComposer({
   async function doPreview() {
     setBusy(true);
 
+    // Saved Contacts source, group mode — preview the group's members
+    if (source === "contacts" && contactMode === "group") {
+      if (!groupId) {
+        setBusy(false);
+        toast.error("Choose a group");
+        return;
+      }
+      const res = await fetch("/api/contacts/filter-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId, variableMapping: { "1": contactVar1 } }),
+      });
+      setBusy(false);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(data.error ?? "Preview failed"); return; }
+      setPreview(data);
+      return;
+    }
+
     // Saved Contacts source — preview against the contact pool
     if (source === "contacts") {
       const pickList = contactMode === "pick" ? Array.from(pickedIds) : null;
@@ -501,7 +607,10 @@ function BroadcastComposer({
 
     if (source === "contacts") {
       payload.variableMapping = { "1": contactVar1 };
-      if (contactMode === "pick") {
+      if (contactMode === "group") {
+        payload.filterRules = [];
+        payload.groupId = groupId;
+      } else if (contactMode === "pick") {
         payload.filterRules = [];
         payload.selectedContactIds = Array.from(pickedIds);
       } else {
@@ -602,17 +711,28 @@ function BroadcastComposer({
           {/* Saved Contacts source */}
           {source === "contacts" && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-              <div className="text-sm text-slate-700">
-                Sending to your saved contact pool —{" "}
-                <strong>{contactTotal} contact{contactTotal === 1 ? "" : "s"}</strong> available.
-              </div>
-              <div className="text-xs text-slate-500 mt-1">
-                Use the filters below to target a subset (e.g. Location equals Salem). No filters = the whole pool.
-              </div>
-              {contactTotal === 0 && (
-                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-2">
-                  No contacts saved yet. Go to the <strong>Contacts</strong> page and upload a file first.
+              {contactMode === "group" ? (
+                <div className="text-sm text-slate-700">
+                  Sending to everyone in one group. People who blocked campaigns or opted out are skipped.
                 </div>
+              ) : (
+                <>
+                  <div className="text-sm text-slate-700">
+                    Sending to your saved contact pool —{" "}
+                    <strong>
+                      {contactsLoaded ? `${contactTotal} contact${contactTotal === 1 ? "" : "s"}` : "…"}
+                    </strong>{" "}
+                    available.
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Use the filters below to target a subset (e.g. Location equals Salem). No filters = the whole pool.
+                  </div>
+                  {contactsLoaded && contactTotal === 0 && (
+                    <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-2">
+                      No contacts saved yet. Go to the <strong>Contacts</strong> page and upload a file first.
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -844,8 +964,10 @@ function BroadcastComposer({
             </div>
           )}
 
-          {/* Mode toggle: filter-by-field vs pick-specific */}
-          {source === "contacts" && contactTotal > 0 && (
+          {/* Mode toggle: filter-by-field vs pick-specific vs group (group
+              members are contacts, so groups existing means the pool isn't
+              empty — no need to wait for the contact count to show it) */}
+          {source === "contacts" && (contactTotal > 0 || groups.length > 0) && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 How to choose recipients
@@ -875,7 +997,52 @@ function BroadcastComposer({
                 >
                   Pick specific
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setContactMode("group"); setPreview(null); }}
+                  data-guide="wa-broadcast-mode-group"
+                  className={`px-3 py-1.5 rounded font-medium transition ${
+                    contactMode === "group"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Group
+                </button>
               </div>
+            </div>
+          )}
+
+          {/* Send to a broadcast group */}
+          {source === "contacts" && contactMode === "group" && (
+            <div data-guide="wa-broadcast-group">
+              <label htmlFor="broadcast-group" className="block text-sm font-medium text-slate-700 mb-2">
+                Group
+              </label>
+              {sortedGroups.length === 0 ? (
+                <div className="text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg px-4 py-3">
+                  No groups yet. On the <strong>Ad campaigns</strong> page, tick leads and choose <strong>Add to group</strong>.
+                </div>
+              ) : (
+                <>
+                  <select
+                    id="broadcast-group"
+                    value={groupId}
+                    onChange={(e) => { setGroupId(e.target.value); setPreview(null); }}
+                    className="input"
+                  >
+                    <option value="">Choose a group…</option>
+                    {sortedGroups.map((g) => (
+                      <option key={g.id} value={g.id} disabled={g.memberCount === 0}>
+                        {g.name} ({g.memberCount} {g.memberCount === 1 ? "person" : "people"})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1.5">
+                    The group&apos;s members are read when the broadcast sends, so anyone added before then is included.
+                  </p>
+                </>
+              )}
             </div>
           )}
 

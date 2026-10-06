@@ -146,7 +146,7 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
       { text: "Click **Broadcasts** in the sidebar", target: "wa-sidebar-broadcasts" },
       { text: "Click the **New broadcast** button at the top-right", target: "wa-broadcast-create" },
       { text: "Select a **template** from the dropdown — only approved templates appear", target: "wa-broadcast-template" },
-      { text: "Use **Filter by field** to pick which contacts receive the broadcast (e.g., Location equals Salem)", target: "wa-broadcast-filter-rules" },
+      { text: "Use **Filter by field** to pick which contacts receive the broadcast (e.g., Location equals Salem), or **Group** to send to everyone in a saved group", target: "wa-broadcast-filter-rules" },
       { text: "Click **Preview recipients →** to review who will receive it, then click **Launch**", target: "wa-broadcast-launch" },
     ],
     screenshot: {
@@ -373,7 +373,7 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
     steps: [
       { text: "Click **Ad campaigns** in the sidebar", target: "wa-sidebar-ad-campaigns" },
       { text: "View the list of active and past campaigns with spend and lead counts", target: "wa-campaigns-head" },
-      { text: "Click a campaign to drill into its metrics and individual leads", target: "wa-campaign-link" },
+      { text: "Click a campaign — **Campaign leads** shows its leads, **Campaign analytics** shows spend, clicks, cost per lead, the daily trend, leads by ad and documents", target: "wa-campaign-link" },
       { text: "Open **Lead Analytics** for city-wise demand, repeat submitters, and AI insights" },
     ],
     screenshot: {
@@ -548,6 +548,7 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
       { text: "Select **Filter by field** to add dynamic rules (e.g., Location equals \"Mumbai\")", target: "wa-broadcast-mode-filter" },
       { text: "Click **+ Add filter** to combine multiple conditions (e.g., Location + Name)", target: "wa-broadcast-add-filter" },
       { text: "Or select **Pick specific** to manually search and select individual contacts", target: "wa-broadcast-mode-pick" },
+      { text: "Or select **Group** to send to everyone in one of your broadcast groups", target: "wa-broadcast-mode-group" },
       { text: "Click **Preview recipients →** to see how many contacts match your filters", target: "wa-broadcast-preview" },
     ],
     screenshot: {
@@ -563,6 +564,33 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
         { type: "wait", duration: 600 },
       ],
       viewport: { width: 1440, height: 1100 },
+    },
+  },
+  {
+    slug: "broadcast-groups",
+    title: "How to manage broadcast groups",
+    summary: "See who is in each broadcast group, remove people, rename or delete a group, and send a broadcast to it.",
+    section: "whatsapp",
+    category: "Broadcasts",
+    keywords: ["group", "groups", "broadcast", "list", "audience", "members", "send"],
+    steps: [
+      { text: "Click **Broadcasts** in the sidebar", target: "wa-sidebar-broadcasts" },
+      { text: "Click the **Groups** tab", target: "wa-broadcasts-tab-groups" },
+      { text: "Click **Open** on a group to see who is in it and who will get your messages", target: "wa-groups-list" },
+      { text: "Tick people and click **Remove from group** to take them out (the group's maker or an admin)" },
+      { text: "Use **Rename** or **Delete** to tidy up — deleting a group keeps the people in WhatsApp contacts" },
+      { text: "Click **Send** to start a broadcast to that group" },
+    ],
+    screenshot: {
+      path: "/broadcasts",
+      file: "wa-broadcast-groups.png",
+      alt: "Broadcasts page on the Groups tab with each group's members, maker and actions",
+      // Only switches tabs — nothing is changed or sent.
+      setup: [
+        HYDRATE,
+        { type: "click", selector: '[data-guide="wa-broadcasts-tab-groups"]' },
+        { type: "wait", duration: 800 },
+      ],
     },
   },
   {
@@ -646,6 +674,100 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
       path: "/ad-campaigns",
       file: "wa-filter-ad-leads.png",
       alt: "Ad campaigns page with lead filter dropdowns for city, sport, area, start time, stage",
+    },
+  },
+  {
+    slug: "assign-ad-leads",
+    title: "How to assign many ad leads to a rep",
+    summary: "Tick ad campaign leads — or every lead a filter shows — and hand them to a rep in one go.",
+    section: "whatsapp",
+    category: "Ad Campaigns",
+    roles: ["admin", "manager"],
+    keywords: ["assign", "rep", "bulk", "select", "tick", "ad", "leads", "campaign"],
+    steps: [
+      { text: "Click **Ad campaigns** in the sidebar", target: "wa-sidebar-ad-campaigns" },
+      { text: "Open a campaign — or stay on this page to work with leads from every campaign" },
+      { text: "Use the filters to narrow the list (e.g., City, Start time)", target: "wa-ad-filters" },
+      { text: "Tick the leads you want, or tick the box at the top of the table to select every lead shown. Hold **Shift** to tick a run of rows", target: "wa-ad-select-all" },
+      { text: "Click **Assign to rep**, choose the rep and click **Assign** — or choose **Unassigned** to take the rep off", target: "wa-ad-bulk-bar" },
+      { text: "The rep finds their leads with the **Assigned To** filter", target: "wa-ad-assigned" },
+    ],
+    screenshot: {
+      path: "/ad-campaigns",
+      file: "wa-assign-ad-leads.png",
+      alt: "Ad campaigns lead list with leads ticked and the Assign to rep picker open",
+      // Ticks one row and opens the rep picker (local UI state only) — nobody is assigned.
+      setup: [
+        HYDRATE,
+        { type: "click", selector: ".data-table tbody tr:nth-child(1) td:first-child input[type=checkbox]" },
+        { type: "wait", duration: 500 },
+        { type: "click", selector: '[data-guide="wa-ad-bulk-assign"]' },
+        { type: "wait", duration: 500 },
+      ],
+      blur: [".data-table tbody td:nth-child(2)", ".data-table tbody td:nth-child(3)", ".data-table tbody td:nth-child(4)"],
+    },
+  },
+  {
+    slug: "ad-leads-to-group",
+    title: "How to add ad leads to a broadcast group",
+    summary: "Put ticked ad campaign leads into a new or existing broadcast group so you can message them later.",
+    section: "whatsapp",
+    category: "Ad Campaigns",
+    keywords: ["group", "broadcast", "add", "ad", "leads", "tick", "select", "audience"],
+    steps: [
+      { text: "Click **Ad campaigns** in the sidebar", target: "wa-sidebar-ad-campaigns" },
+      { text: "Tick the leads you want (filter the list first if needed)", target: "wa-ad-select-all" },
+      { text: "Click **Add to group**", target: "wa-ad-bulk-group" },
+      { text: "Pick an existing group, or choose **New group** and type a name", target: "wa-add-to-group" },
+      { text: "Click **Add to group** (or **Create and add**) — the leads go into your WhatsApp contacts; leads without a phone number are skipped" },
+      { text: "Send to the group later from **Broadcasts → Groups**" },
+    ],
+    screenshot: {
+      path: "/ad-campaigns",
+      file: "wa-ad-leads-to-group.png",
+      alt: "Ad campaigns lead list with leads ticked and the Add to group window open",
+      // Ticks one row and opens the window — nothing is added to any group.
+      setup: [
+        HYDRATE,
+        { type: "click", selector: ".data-table tbody tr:nth-child(1) td:first-child input[type=checkbox]" },
+        { type: "wait", duration: 500 },
+        { type: "click", selector: '[data-guide="wa-ad-bulk-group"]' },
+        { type: "wait", duration: 1500 },
+      ],
+      blur: [".data-table tbody td:nth-child(2)", ".data-table tbody td:nth-child(3)", ".data-table tbody td:nth-child(4)"],
+    },
+  },
+  {
+    slug: "ad-lead-notes",
+    title: "How notes save on an ad lead",
+    summary: "Notes on an ad campaign lead save by themselves while you type — no lost notes if you forget to press Save.",
+    section: "whatsapp",
+    category: "Ad Campaigns",
+    keywords: ["note", "notes", "save", "auto-save", "autosave", "ad", "lead"],
+    steps: [
+      { text: "Open a lead from an ad campaign's lead list" },
+      { text: "Type in the **Notes** box — it saves by itself 2 seconds after you stop typing and shows **Saved ✓**", target: "wa-lead-notes" },
+      { text: "Keep typing to update the same note" },
+      { text: "Click **Save note** when you're done — the box clears and your next words start a new note", target: "wa-lead-note-save" },
+      { text: "Closing the panel, opening another lead or leaving the page also saves what you typed — if the internet drops mid-save, it's sent the next time you open the app" },
+    ],
+    screenshot: {
+      path: "/ad-campaigns",
+      file: "wa-ad-lead-notes.png",
+      alt: "An ad lead's side panel with the Notes box and Save note button",
+      // Opens the first lead's side panel — nothing is typed or saved.
+      setup: [
+        HYDRATE,
+        { type: "click", selector: ".data-table tbody tr:nth-child(1) td:nth-child(3)" },
+        { type: "wait", duration: 2500 },
+      ],
+      blur: [
+        ".data-table tbody td:nth-child(2)",
+        ".data-table tbody td:nth-child(3)",
+        ".data-table tbody td:nth-child(4)",
+        "aside h3",
+        "aside ul",
+      ],
     },
   },
 

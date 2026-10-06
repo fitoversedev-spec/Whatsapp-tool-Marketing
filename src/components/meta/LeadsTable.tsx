@@ -7,6 +7,7 @@ import { ExportButtons } from "@/components/analytics/ExportButtons";
 import { useToast } from "@/components/Toast";
 import MoveToCrmDialog, { type Rep } from "@/components/meta/MoveToCrmDialog";
 import LeadManagementPanel from "@/components/meta/LeadManagementPanel";
+import AddToGroupDialog from "@/components/meta/AddToGroupDialog";
 import type { MetaLeadRow, MetaLeadDetail, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
 import { labelChip, labelDot, stageLabelFromRow, stageChipFromRow, type MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
 import { DropdownFilter, type DropdownOption } from "@/components/DropdownFilter";
@@ -75,6 +76,9 @@ function BreakdownList({
 
 const FILTER_STORAGE_PREFIX = "leads-filter-";
 
+function leadCount(n: number): string {
+  return `${n} lead${n === 1 ? "" : "s"}`;
+}
 
 export default function LeadsTable({
   leads: serverLeads,
@@ -85,6 +89,7 @@ export default function LeadsTable({
   stageCatalog = [],
   currentUserId = "",
   isAdmin = false,
+  canBulkAssign = false,
 }: {
   leads: MetaLeadRow[];
   reps: Rep[];
@@ -94,6 +99,8 @@ export default function LeadsTable({
   stageCatalog?: MetaLeadStageRow[];
   currentUserId?: string;
   isAdmin?: boolean;
+  // Admins and managers: show "Assign to rep" for ticked leads.
+  canBulkAssign?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -197,6 +204,65 @@ export default function LeadsTable({
     setLocalChanges((prev) => ({ ...prev, [leadId]: { ...prev[leadId], labels } }));
   }
 
+  // --- Ticked leads (bulk assign / add to group) ---------------------------
+  const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignTo, setAssignTo] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  // Shift-click ticks every row between the last tick and this one.
+  const lastPickedIndexRef = useRef<number | null>(null);
+  const shiftHeldRef = useRef(false);
+
+  function clearPicked() {
+    setPickedIds(new Set());
+    setAssignOpen(false);
+    setAssignTo("");
+    lastPickedIndexRef.current = null;
+  }
+
+  async function applyBulkAssign() {
+    if (!assignTo) return;
+    const ids = [...pickedIds];
+    const assignedToUserId = assignTo === "__none" ? null : assignTo;
+    setAssigning(true);
+    try {
+      const res = await fetch("/api/ad-campaigns/leads/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: ids, assignedToUserId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ? String(data.error) : "Could not assign the leads");
+        return;
+      }
+      const name: string | null = data.assignedToName ?? null;
+      setLocalChanges((prev) => {
+        const next = { ...prev };
+        for (const id of ids) next[id] = { ...next[id], assignedToName: name };
+        return next;
+      });
+      toast.success(name ? `${leadCount(ids.length)} assigned to ${name}` : `Rep removed from ${leadCount(ids.length)}`);
+      setAssignOpen(false);
+      setAssignTo("");
+      // The open side panel shows "Assigned to" — reload it quietly if it's one of these.
+      if (selectedLeadId && ids.includes(selectedLeadId)) {
+        fetch(`/api/ad-campaigns/leads/${selectedLeadId}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (d) setSidebarDetail((cur) => (cur && cur.id === d.id ? d : cur));
+          })
+          .catch(() => {});
+      }
+      router.refresh();
+    } catch {
+      toast.error("Could not assign the leads");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
   async function moveToMarketing(l: MetaLeadRow) {
     setMarketingBusyId(l.id);
     try {
@@ -269,6 +335,49 @@ export default function LeadsTable({
   const assignedBreakdown = useMemo(() => tally(filtered, (l) => l.assignedToName ?? "Unassigned"), [filtered]);
 
   const hasFilter = !!(cityQuery || sportQuery || areaQuery || stageFilter || assignedQuery || labelFilter || startFilter);
+
+  // Ticks only ever cover rows on screen: a filter change drops ticked leads it
+  // hides, so a bulk action never reaches a lead the user can't see.
+  useEffect(() => {
+    setPickedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visible = new Set(filtered.map((l) => l.id));
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+    lastPickedIndexRef.current = null;
+  }, [filtered]);
+
+  const allPicked = filtered.length > 0 && filtered.every((l) => pickedIds.has(l.id));
+  const somePicked = pickedIds.size > 0 && !allPicked;
+
+  function toggleAllPicked() {
+    setPickedIds(allPicked ? new Set() : new Set(filtered.map((l) => l.id)));
+    lastPickedIndexRef.current = null;
+  }
+
+  function togglePicked(index: number) {
+    const lead = filtered[index];
+    if (!lead) return;
+    const select = !pickedIds.has(lead.id);
+    const last = lastPickedIndexRef.current;
+    const range = shiftHeldRef.current && last !== null && last !== index;
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      const [from, to] = range ? [Math.min(last!, index), Math.max(last!, index)] : [index, index];
+      for (let i = from; i <= to; i++) {
+        const id = filtered[i]?.id;
+        if (!id) continue;
+        if (select) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+    lastPickedIndexRef.current = index;
+    shiftHeldRef.current = false;
+  }
+
+  const checkboxCls = "h-4 w-4 rounded border-slate-300 text-court-600 focus:ring-court-500 cursor-pointer";
 
   const headers = [
     "Name", "Phone", "Email", "City", "Sport", "Area", "Start", "Form",
@@ -385,25 +494,124 @@ export default function LeadsTable({
           />
         </div>
 
+        {/* Ticked leads → bulk actions */}
+        {pickedIds.size > 0 && (
+          <div
+            className="sticky top-0 z-20 bg-court-700 text-white rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 shadow-lg"
+            data-guide="wa-ad-bulk-bar"
+          >
+            <span className="font-medium text-sm">{pickedIds.size} selected</span>
+            <button type="button" onClick={clearPicked} className="text-xs underline opacity-80 hover:opacity-100">
+              Clear
+            </button>
+            <div className="flex-1" />
+            <div className="flex items-center gap-2 flex-wrap">
+              {canBulkAssign &&
+                (assignOpen ? (
+                  <div className="flex items-center gap-2 bg-white text-slate-900 rounded-md px-2 py-1.5">
+                    <select
+                      value={assignTo}
+                      onChange={(e) => setAssignTo(e.target.value)}
+                      aria-label="Rep to assign"
+                      className="text-sm border border-slate-200 rounded px-1.5 py-1 max-w-[12rem]"
+                      autoFocus
+                    >
+                      <option value="">Choose a rep…</option>
+                      {reps.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                      <option value="__none">Unassigned (remove rep)</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void applyBulkAssign()}
+                      disabled={!assignTo || assigning}
+                      className="text-xs font-medium bg-court-600 hover:bg-court-700 text-white px-2.5 py-1 rounded disabled:opacity-50"
+                    >
+                      {assigning ? "Assigning…" : "Assign"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAssignOpen(false);
+                        setAssignTo("");
+                      }}
+                      aria-label="Cancel assigning"
+                      className="text-xs text-slate-500 hover:text-slate-800 px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAssignOpen(true)}
+                    data-guide="wa-ad-bulk-assign"
+                    className="text-xs font-medium px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-md"
+                  >
+                    👤 Assign to rep
+                  </button>
+                ))}
+              <button
+                type="button"
+                onClick={() => setGroupDialogOpen(true)}
+                data-guide="wa-ad-bulk-group"
+                className="text-xs font-medium px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-md"
+              >
+                👥 Add to group
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table */}
         {filtered.length === 0 ? (
           <p className="text-sm text-slate-400">No leads match the current filters.</p>
         ) : (
           <>
+          {/* Mobile: select all */}
+          <label className="md:hidden flex items-center gap-2 px-1 text-xs font-medium text-slate-600">
+            <input
+              type="checkbox"
+              checked={allPicked}
+              ref={(el) => {
+                if (el) el.indeterminate = somePicked;
+              }}
+              onChange={toggleAllPicked}
+              className={checkboxCls}
+            />
+            Select all {filtered.length}
+          </label>
+
           {/* Mobile cards */}
           <div className="md:hidden border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100">
-            {filtered.map((l) => (
+            {filtered.map((l, i) => (
               <div
                 key={l.id}
                 onClick={() => handleRowClick(l)}
                 className={`p-4 cursor-pointer transition-colors ${
                   selectedLeadId === l.id
                     ? "bg-court-50 border-l-2 border-l-court-500"
-                    : "hover:bg-slate-50"
+                    : pickedIds.has(l.id)
+                      ? "bg-court-50"
+                      : "hover:bg-slate-50"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={pickedIds.has(l.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      shiftHeldRef.current = e.shiftKey;
+                    }}
+                    onChange={() => togglePicked(i)}
+                    aria-label={`Select ${l.fullName ?? "lead"}`}
+                    className={`${checkboxCls} mt-0.5 shrink-0`}
+                  />
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="font-medium text-slate-900 truncate">{l.fullName ?? "—"}</span>
                       <Link
@@ -443,6 +651,20 @@ export default function LeadsTable({
             <table className="data-table">
               <thead>
                 <tr>
+                  <th className="w-8 !pr-0">
+                    <input
+                      type="checkbox"
+                      checked={allPicked}
+                      ref={(el) => {
+                        if (el) el.indeterminate = somePicked;
+                      }}
+                      onChange={toggleAllPicked}
+                      aria-label={allPicked ? "Unselect all leads" : `Select all ${filtered.length} leads`}
+                      title={allPicked ? "Unselect all" : `Select all ${filtered.length} leads shown`}
+                      data-guide="wa-ad-select-all"
+                      className={checkboxCls}
+                    />
+                  </th>
                   {headers.map((h, i) => (
                     <th key={i} className={`whitespace-nowrap ${h === "CRM" ? "!text-right" : ""}`}>
                       {h}
@@ -451,16 +673,30 @@ export default function LeadsTable({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((l) => (
+                {filtered.map((l, i) => (
                   <tr
                     key={l.id}
                     onClick={() => handleRowClick(l)}
                     className={`cursor-pointer transition-colors ${
                       selectedLeadId === l.id
                         ? "bg-court-50 border-l-2 border-l-court-500"
-                        : "hover:bg-slate-50"
+                        : pickedIds.has(l.id)
+                          ? "bg-court-50"
+                          : "hover:bg-slate-50"
                     }`}
                   >
+                    <td className="w-8 !pr-0" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={pickedIds.has(l.id)}
+                        onClick={(e) => {
+                          shiftHeldRef.current = e.shiftKey;
+                        }}
+                        onChange={() => togglePicked(i)}
+                        aria-label={`Select ${l.fullName ?? "lead"}`}
+                        className={checkboxCls}
+                      />
+                    </td>
                     <td className="whitespace-nowrap font-medium">
                       <div className="flex items-center gap-1.5">
                         <span className="text-slate-900">{l.fullName ?? "—"}</span>
@@ -598,6 +834,14 @@ export default function LeadsTable({
             </div>
           </aside>
         </>
+      )}
+
+      {groupDialogOpen && (
+        <AddToGroupDialog
+          leadIds={[...pickedIds]}
+          onClose={() => setGroupDialogOpen(false)}
+          onDone={() => setGroupDialogOpen(false)}
+        />
       )}
 
       {movingLead && (

@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { isManagerOrAbove } from "@/lib/rbac";
 import {
   getAdCampaignOverview,
   getMetaLeads,
@@ -59,6 +60,7 @@ export default async function AdCampaignsPage({
       stageCatalog={stageCatalog}
       currentUserId={user.id}
       isAdmin={user.role === "admin"}
+      canBulkAssign={isManagerOrAbove(user.role)}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}
     />
   );

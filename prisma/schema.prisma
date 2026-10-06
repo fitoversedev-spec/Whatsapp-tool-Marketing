@@ -90,6 +90,7 @@ model User {
   aiUsage                 AiUsage[]        @relation("AiUsageUser")
   metaLeadsAssigned       MetaLead[]       @relation("MetaLeadAssignee")
   metaLeadNotes           MetaLeadNote[]   @relation("MetaLeadNoteAuthor")
+  broadcastGroups         BroadcastGroup[] @relation("BroadcastGroupCreator")
   pushEnabled             Boolean          @default(false) @map("push_enabled")
   pushSubscriptions       PushSubscription[]
 
@@ -341,6 +342,7 @@ model Contact {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   tags           ContactTag[]
+  groups         BroadcastGroupMember[]
   accountContact AccountContact? @relation(fields: [accountContactId], references: [id], onDelete: SetNull)
 
   @@map("contacts")
@@ -406,6 +408,40 @@ model BroadcastRecipient {
   @@unique([broadcastId, phoneE164])
   @@index([waMessageId])
   @@map("broadcast_recipients")
+}
+
+// A named list of WhatsApp contacts a broadcast can be sent to ("Groups" tab on
+// the Broadcasts page). Shared by the whole team: anyone can add people and
+// send to a group; only its maker or an admin can rename it, delete it or
+// remove members. Filled from the Ad campaigns lead lists (tick leads → Add to
+// group). A broadcast stores the group id and reads the members when it sends,
+// so people added later get future broadcasts.
+model BroadcastGroup {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  createdBy User                   @relation("BroadcastGroupCreator", fields: [createdByUserId], references: [id])
+  members   BroadcastGroupMember[]
+
+  @@index([createdByUserId])
+  @@map("broadcast_groups")
+}
+
+model BroadcastGroupMember {
+  groupId       String   @map("group_id")
+  contactId     String   @map("contact_id")
+  addedByUserId String?  @map("added_by_user_id")
+  addedAt       DateTime @default(now()) @map("added_at")
+
+  group   BroadcastGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  contact Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, contactId])
+  @@index([contactId])
+  @@map("broadcast_group_members")
 }
 
 model OptOut {

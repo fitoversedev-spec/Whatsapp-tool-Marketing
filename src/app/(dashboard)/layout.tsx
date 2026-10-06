@@ -8,6 +8,7 @@ import AskAiLauncher from "@/components/AskAiLauncher";
 import axios from "axios";
 import { getMetaAccessToken } from "@/lib/token-manager";
 import CrossTabRefresh from "@/components/CrossTabRefresh";
+import PendingNotesFlusher from "@/components/PendingNotesFlusher";
 import BottomNav from "@/components/BottomNav";
 import { endOfDayIST } from "@/lib/time";
 import type { Role } from "@/lib/rbac";
@@ -101,6 +102,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <FloatingChatLauncher initialUnread={chatUnread} initialMentions={chatMentions} />
       <AskAiLauncher />
       <CrossTabRefresh events={["marketing:contact-added", "marketing:data-changed"]} />
+      <PendingNotesFlusher userId={user.id} />
       <BottomNav reminderCount={reminderCount} />
     </div>
   );

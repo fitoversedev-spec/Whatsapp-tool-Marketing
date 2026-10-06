@@ -23,15 +23,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "Pick at least one product" }, { status: 400 });
   }
 
-  // Skip products already recorded for this contact.
+  // Only real catalogue products, each once.
+  const requested = Array.from(new Set(parsed.data.productIds));
+  const known = requested.length
+    ? await prisma.product.findMany({ where: { id: { in: requested } }, select: { id: true } })
+    : [];
+  if (known.length !== requested.length) return NextResponse.json({ error: "One of those products no longer exists" }, { status: 400 });
+
+  // Skip what's already recorded for this contact (products, or the same "Other" text).
+  const label = parsed.data.otherLabel || null;
   const existing = await prisma.contactProductInterest.findMany({
-    where: { accountContactId: params.id, productId: { in: parsed.data.productIds } },
-    select: { productId: true },
+    where: {
+      accountContactId: params.id,
+      OR: [{ productId: { in: requested } }, ...(label ? [{ productId: null, label: { equals: label, mode: "insensitive" as const } }] : [])],
+    },
+    select: { productId: true, label: true },
   });
-  const have = new Set(existing.map((e) => e.productId));
+  const have = new Set(existing.map((e) => e.productId).filter(Boolean));
+  const labelKnown = existing.some((e) => !e.productId);
   const rows = [
-    ...parsed.data.productIds.filter((id) => !have.has(id)).map((productId) => ({ accountContactId: params.id, productId, createdByUserId: user.id })),
-    ...(parsed.data.otherLabel ? [{ accountContactId: params.id, label: parsed.data.otherLabel, createdByUserId: user.id }] : []),
+    ...requested.filter((id) => !have.has(id)).map((productId) => ({ accountContactId: params.id, productId, createdByUserId: user.id })),
+    ...(label && !labelKnown ? [{ accountContactId: params.id, label, createdByUserId: user.id }] : []),
   ];
   if (rows.length) await prisma.contactProductInterest.createMany({ data: rows });
   return NextResponse.json({ added: rows.length });

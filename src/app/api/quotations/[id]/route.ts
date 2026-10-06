@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
 import { reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
 import { logDocumentDeleted } from "@/lib/crm/contactLinks";
+import { customerAccess } from "@/lib/rbac";
 
 const patchSchema = z.object({
   customerName: z.string().min(1).max(200).optional(),
@@ -18,6 +19,8 @@ const patchSchema = z.object({
   validityDays: z.number().int().min(1).max(365).optional(),
   status: z.enum(["draft", "sent", "viewed", "accepted", "expired", "rejected", "superseded"]).optional(),
   dealId: z.string().uuid().nullable().optional(),
+  // Link the quote to a customer (the contact page's "Link existing quotation").
+  accountContactId: z.string().uuid().nullable().optional(),
   // Lets a draft created with no phone (the standalone "New Quote" flow
   // previously had no field for this at all — see docs/DECISIONS.md) be
   // corrected from the /quotations list without recreating the quote.
@@ -83,7 +86,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: "Cannot edit line items on a sent quotation" }, { status: 422 });
   }
 
+  if (parsed.data.accountContactId) {
+    const c = await prisma.accountContact.findUnique({
+      where: { id: parsed.data.accountContactId },
+      select: { deletedAt: true, account: { select: { ownerUserId: true } } },
+    });
+    if (!c || c.deletedAt) return NextResponse.json({ error: "Contact not found" }, { status: 404 });
+    if (!customerAccess(user, c.account.ownerUserId).canEdit) {
+      return NextResponse.json({ error: "You can't link quotations to this customer" }, { status: 403 });
+    }
+  }
+
   const data: Record<string, unknown> = {};
+  if (parsed.data.accountContactId !== undefined) data.accountContactId = parsed.data.accountContactId;
   if (parsed.data.customerName !== undefined) data.customerName = parsed.data.customerName;
   if (parsed.data.lengthFt !== undefined) data.lengthFt = parsed.data.lengthFt;
   if (parsed.data.widthFt !== undefined) data.widthFt = parsed.data.widthFt;
@@ -177,7 +192,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     // remaining one and keep Deal.quotedValue in sync — see docs/DECISIONS.md.
     await reconcileDealAfterQuotationDelete(deleted.dealId);
     await logDocumentDeleted(
-      { kind: "quotation", number: deleted.number, dealId: deleted.dealId, contactPhone: deleted.contactPhone, createdAt: deleted.createdAt },
+      { kind: "quotation", number: deleted.number, accountContactId: deleted.accountContactId, dealId: deleted.dealId, contactPhone: deleted.contactPhone, createdAt: deleted.createdAt },
       user.id,
     );
     return NextResponse.json({ ok: true });

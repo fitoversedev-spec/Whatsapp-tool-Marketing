@@ -13,6 +13,7 @@ type Deal = {
   id: string;
   code: string;
   title: string;
+  accountId: string;
   accountName: string;
   accountCity: string | null;
   accountOwnerUserId: string | null;
@@ -56,15 +57,6 @@ type Deal = {
   deliveryCompletedAt: string | null;
 };
 
-type StageHistoryRow = {
-  id: string;
-  fromStageName: string | null;
-  toStageName: string;
-  changedByName: string;
-  changedAt: string;
-  durationInFromStageSeconds: number | null;
-};
-
 
 function fmtInr(n: number | null): string {
   if (n == null) return "—";
@@ -73,12 +65,12 @@ function fmtInr(n: number | null): string {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 }
 // Day only — the won date and the expected start carry no meaningful time.
 function fmtDay(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 }
 
 // Quotation/court-design status pill colours (same convention as the contact page).
@@ -93,18 +85,9 @@ function statusPill(status: string): string {
   return `badge ${STATUS_COLORS[status] ?? "bg-slate-100 text-slate-700"}`;
 }
 
-function fmtDuration(seconds: number | null): string {
-  if (seconds == null) return "";
-  const days = Math.floor(seconds / 86400);
-  if (days >= 1) return `${days}d in previous stage`;
-  const hours = Math.floor(seconds / 3600);
-  if (hours >= 1) return `${hours}h in previous stage`;
-  return `${Math.max(1, Math.floor(seconds / 60))}m in previous stage`;
-}
-
 export default function DealDetailClient({
   deal,
-  stageHistory,
+  canViewCustomer,
   activityTypes,
   offices,
   cityTiers,
@@ -119,7 +102,7 @@ export default function DealDetailClient({
   productInterests,
 }: {
   deal: Deal;
-  stageHistory: StageHistoryRow[];
+  canViewCustomer: boolean;
   activityTypes: { id: string; name: string }[];
   offices: { id: string; name: string }[];
   cityTiers: { id: string; name: string }[];
@@ -181,17 +164,20 @@ export default function DealDetailClient({
     }
   }
 
-  // The customer: the primary contact, else the company's first contact.
-  const primary = deal.contacts.find((c) => c.id === deal.primaryContactId) ?? deal.contacts[0] ?? null;
+  // The customer: the deal's (live) primary contact; without one, the company.
+  // Linked only for viewers who can open that customer.
+  const primary = deal.contacts.find((c) => c.id === deal.primaryContactId) ?? null;
+  const customerHref = !canViewCustomer ? null : primary ? `/crm/contacts/${primary.id}` : `/crm/companies/${deal.accountId}`;
+  const customerLabel = primary?.name ?? deal.accountName;
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex items-start justify-between gap-3">
         <div data-guide="crm-deal-title">
           <PageHeader large title={deal.title} description={deal.code} backHref="/deals" />
-          {primary && (
-            <Link href={`/crm/contacts/${primary.id}`} className="text-sm font-medium text-court-700 hover:underline" data-guide="crm-deal-customer-link">
-              {primary.name} →
+          {customerHref && (
+            <Link href={customerHref} className="text-sm font-medium text-court-700 hover:underline" data-guide="crm-deal-customer-link">
+              {customerLabel} →
             </Link>
           )}
         </div>
@@ -367,10 +353,10 @@ export default function DealDetailClient({
             </div>
             <div className="flex justify-between" data-guide="crm-deal-primary-contact">
               <span className="text-slate-600">Customer</span>
-              {primary ? (
-                <Link href={`/crm/contacts/${primary.id}`} className="text-court-700 hover:underline font-medium">{primary.name}</Link>
+              {customerHref ? (
+                <Link href={customerHref} className="text-court-700 hover:underline font-medium">{customerLabel}</Link>
               ) : (
-                <span className="text-slate-800">—</span>
+                <span className="text-slate-800">{customerLabel}</span>
               )}
             </div>
 
@@ -458,10 +444,8 @@ export default function DealDetailClient({
   );
 }
 
-// Editable fields not already reachable elsewhere (stage/value/loss-reason
-// come from the pipeline board and won/lost close-out, not here — see
-// api/deals/[id]/stage/route.ts). These had columns on Deal/Account since
-// Phase 1 but no form ever wrote them (see docs/DECISIONS.md) — this is
+// Editable deal details, including the confirmed project's final value,
+// expected start and note (set when the customer was marked Won). This is
 // also the only way to CORRECT lead source/customer type/business type
 // after the fact without re-submitting a whole new quote, since those are
 // otherwise only ever set once, at Deal/Account creation.
@@ -500,11 +484,19 @@ function EditDealDetailsModal({
   const [customerProfileId, setCustomerProfileId] = useState(deal.customerProfileId ?? "");
   const [businessType, setBusinessType] = useState(deal.businessType ?? "");
   const [ownerUserId, setOwnerUserId] = useState(deal.ownerUserId ?? "");
-  const [expectedCloseAt, setExpectedCloseAt] = useState(deal.expectedCloseAt ? deal.expectedCloseAt.slice(0, 10) : "");
+  const isWon = deal.outcome === "WON";
+  const [wonValue, setWonValue] = useState(deal.wonValue != null ? String(deal.wonValue) : "");
+  // The start date as the IST calendar day it was picked for.
+  const [expectedStartAt, setExpectedStartAt] = useState(
+    deal.expectedStartAt ? new Date(deal.expectedStartAt).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) : "",
+  );
+  const [wonNote, setWonNote] = useState(deal.wonNote ?? "");
   const [saving, setSaving] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    const amount = Number(wonValue);
+    if (isWon && !(Number.isFinite(amount) && amount > 0)) { toast.error("Enter the final value"); return; }
     setSaving(true);
     const res = await fetch(`/api/deals/${deal.id}`, {
       method: "PATCH",
@@ -521,7 +513,13 @@ function EditDealDetailsModal({
         leadSourceId: leadSourceId || null,
         customerProfileId: customerProfileId || null,
         businessType: businessType || null,
-        expectedCloseAt: expectedCloseAt ? new Date(`${expectedCloseAt}T12:00:00`).toISOString() : null,
+        ...(isWon
+          ? {
+              wonValue: amount,
+              expectedStartAt: expectedStartAt ? new Date(`${expectedStartAt}T09:00:00+05:30`).toISOString() : null,
+              wonNote: wonNote.trim() || null,
+            }
+          : {}),
         // Owner reassignment is admin-only (same rule as reassigning a
         // Conversation) — only include it when this modal actually shows
         // the control, so a sales rep's own PATCH request never carries a
@@ -648,10 +646,24 @@ function EditDealDetailsModal({
               </select>
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Expected close date</label>
-            <input type="date" value={expectedCloseAt} onChange={(e) => setExpectedCloseAt(e.target.value)} className="modal-input" />
-          </div>
+          {isWon && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="deal-won-value" className="block text-sm font-medium text-slate-700 mb-1.5">Final value (₹)</label>
+                  <input id="deal-won-value" type="number" min="1" inputMode="decimal" value={wonValue} onChange={(e) => setWonValue(e.target.value)} className="modal-input" required />
+                </div>
+                <div>
+                  <label htmlFor="deal-start" className="block text-sm font-medium text-slate-700 mb-1.5">Expected start</label>
+                  <input id="deal-start" type="date" value={expectedStartAt} onChange={(e) => setExpectedStartAt(e.target.value)} className="modal-input" />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="deal-note" className="block text-sm font-medium text-slate-700 mb-1.5">Note</label>
+                <textarea id="deal-note" value={wonNote} onChange={(e) => setWonNote(e.target.value)} rows={3} maxLength={1000} className="modal-input" />
+              </div>
+            </>
+          )}
           <div className="pt-4 border-t border-slate-200 -mx-5 sm:-mx-6 px-5 sm:px-6 flex flex-col sm:flex-row sm:justify-end gap-2">
             <button type="button" onClick={onClose} className="order-2 sm:order-1 btn btn-ghost">
               Cancel

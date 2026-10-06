@@ -20,7 +20,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if ("error" in res) return NextResponse.json({ error: res.error }, { status: res.status });
 
   const parsed = schema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Enter the final value" }, { status: 400 });
+  if (!parsed.success) {
+    const f = parsed.error.flatten().fieldErrors;
+    const error = f.value
+      ? "Enter the final value (more than ₹0, up to ₹99,99,99,999)"
+      : f.note
+        ? "Keep the note under 1000 characters"
+        : f.expectedStartAt
+          ? "Pick a valid start date"
+          : "Check the details and try again";
+    return NextResponse.json({ error }, { status: 400 });
+  }
 
   try {
     const deal = await confirmDeal({
@@ -32,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     });
     return NextResponse.json({ deal: { id: deal.id, code: deal.code } });
   } catch (err) {
-    if (err instanceof ConfirmDealError) return NextResponse.json({ error: err.message }, { status: 422 });
+    if (err instanceof ConfirmDealError) return NextResponse.json({ error: err.message, deal: err.deal }, { status: err.status });
     throw err;
   }
 }

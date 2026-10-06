@@ -8,7 +8,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { logDocumentDeleted } from "@/lib/crm/contactLinks";
+import { applyDocumentClassification, logDocumentDeleted } from "@/lib/crm/contactLinks";
+import { customerAccess } from "@/lib/rbac";
 
 const layoutSchema = z
   .object({
@@ -138,6 +139,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       })
       .catch(() => null);
   }
+  // A design on a customer (no deal): the wizard's answers land on them.
+  if (!row.dealId && row.accountContactId) {
+    const c = await prisma.accountContact.findUnique({ where: { id: row.accountContactId }, select: { account: { select: { ownerUserId: true } } } });
+    if (c && customerAccess(user, c.account.ownerUserId).canEdit) {
+      await applyDocumentClassification({
+        contactId: row.accountContactId,
+        siteCity: parsed.data.siteCity,
+        leadSourceId: parsed.data.leadSourceId,
+        customerProfileId: parsed.data.customerProfileId,
+        businessType: parsed.data.businessType,
+      });
+    }
+  }
   if (row.dealId && (parsed.data.customerProfileId || parsed.data.businessType)) {
     const dealAccount = await prisma.deal.findUnique({ where: { id: row.dealId }, select: { accountId: true } });
     if (dealAccount) {
@@ -176,6 +190,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   // Admins may delete even a sent design (e.g. a mistaken send / test run).
   await prisma.courtImage.delete({ where: { id: params.id } });
-  await logDocumentDeleted({ kind: "design", number: row.number, dealId: row.dealId, contactPhone: null, createdAt: row.createdAt }, user.id);
+  await logDocumentDeleted({ kind: "design", number: row.number, accountContactId: row.accountContactId, dealId: row.dealId, contactPhone: null, createdAt: row.createdAt }, user.id);
   return NextResponse.json({ ok: true });
 }

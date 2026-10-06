@@ -60,7 +60,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (parsed.data.assignedToUserId !== undefined) {
     await prisma.deal
       .updateMany({
-        where: { conversationId: convo.id, deletedAt: null },
+        where: { conversationId: convo.id, deletedAt: null, outcome: null },
         data: { ownerUserId: parsed.data.assignedToUserId },
       })
       .catch(() => null);

@@ -37,7 +37,8 @@ type CommitResponse = {
 // (2026-07-20, see docs/DECISIONS.md). CONTACTS already captures everything
 // it did, plus more. mapping.ts/dedupe.ts keep the LEADS-target logic intact
 // (unreachable via this picker, not deleted) so it's a cheap restore if ever needed.
-const TARGETS: ImportTarget[] = ["CONTACTS", "COMPANIES", "DEALS"];
+// DEALS excluded too — a deal is a confirmed project, created only with "Won".
+const TARGETS: ImportTarget[] = ["CONTACTS", "COMPANIES"];
 
 export default function ImportWizardClient() {
   const toast = useToast();
@@ -140,7 +141,7 @@ export default function ImportWizardClient() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
-      <PageHeader large title="Import" description="Bulk-load contacts, companies, leads, or deals from a spreadsheet" />
+      <PageHeader large title="Import" description="Bulk-load contacts and companies from a spreadsheet" />
 
       {step === "target" && (
         <div className="bg-white rounded-xl border border-slate-200 p-5">

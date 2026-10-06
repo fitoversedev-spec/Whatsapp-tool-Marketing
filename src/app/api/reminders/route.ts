@@ -119,9 +119,14 @@ export async function POST(req: NextRequest) {
   // are confirmed projects only. If the chat was moved to CRM it's anchored to
   // that contact too, so it shows on the contact page and Leads list.
   const dealId = parsed.data.dealId ?? null;
-  const accountContactId =
-    parsed.data.accountContactId ??
-    (parsed.data.conversationId ? await resolveContactForDocument({ conversationId: parsed.data.conversationId }) : null);
+  // A reminder is the creator's own, so seeing the customer is enough.
+  const resolved = parsed.data.accountContactId || parsed.data.conversationId
+    ? await resolveContactForDocument({ accountContactId: parsed.data.accountContactId, conversationId: parsed.data.conversationId }, user)
+    : null;
+  if (parsed.data.accountContactId && (!resolved?.explicit || !resolved.canView)) {
+    return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+  }
+  const accountContactId = resolved?.id ?? null;
 
   const reminder = await prisma.reminder.create({
     data: {

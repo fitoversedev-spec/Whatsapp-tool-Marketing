@@ -198,7 +198,7 @@ export async function getContactTimeline(
   const deals = await prisma.deal.findMany({
     where: { primaryContactId: contactId },
     select: {
-      id: true, code: true, title: true, createdAt: true, deletedAt: true, outcome: true, wonValue: true,
+      id: true, code: true, title: true, createdAt: true, closedAt: true, deletedAt: true, outcome: true, wonValue: true,
       expectedStartAt: true, wonNote: true, owner: { select: { name: true } },
     },
   });
@@ -299,12 +299,15 @@ export async function getContactTimeline(
     ...deals.map((d) => ({
       id: `deal-${d.id}`,
       kind: "deal" as const,
-      // Deals are confirmed projects: a won one reads as the win itself.
-      title: d.outcome === "WON" ? `Won — confirmed project ${d.code}` : `Deal created — ${d.title}`,
+      // Deals are confirmed projects: a won one reads as the win itself (on
+      // the day it was won). Removed deals stay as history, marked as such.
+      title: d.outcome === "WON"
+        ? `Won — confirmed project ${d.code}${d.deletedAt ? " (since removed)" : ""}`
+        : `Deal created — ${d.title}${d.deletedAt ? " (since removed)" : ""}`,
       detail: d.outcome === "WON"
         ? [d.wonValue != null ? fmtInr(Number(d.wonValue)) : null, d.expectedStartAt ? `starts ${fmtIstDate(d.expectedStartAt)}` : null, d.wonNote].filter(Boolean).join(" · ") || null
         : d.code,
-      timestamp: d.createdAt.toISOString(),
+      timestamp: (d.outcome === "WON" && d.closedAt ? d.closedAt : d.createdAt).toISOString(),
       ownerName: d.owner?.name ?? null,
     })),
     ...activities.map((a) => ({

@@ -9,7 +9,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildQuotationNumber, recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
 import { reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
-import { logDocumentDeleted, resolveContactForDocument } from "@/lib/crm/contactLinks";
+import { applyDocumentClassification, logDocumentDeleted, resolveContactForDocument } from "@/lib/crm/contactLinks";
 
 const createSchema = z.object({
   customerName: z.string().min(1).max(200),
@@ -155,11 +155,14 @@ export async function POST(req: NextRequest) {
   // are confirmed projects only — see confirmDeal.ts). An explicit dealId is
   // kept for a quote against an already-confirmed project.
   const dealId = parsed.data.dealId ?? null;
-  const accountContactId = await resolveContactForDocument({
-    accountContactId: parsed.data.accountContactId,
-    conversationId: parsed.data.conversationId,
-    contactPhone: parsed.data.contactPhone,
-  });
+  const resolved = await resolveContactForDocument(
+    { accountContactId: parsed.data.accountContactId, conversationId: parsed.data.conversationId, contactPhone: parsed.data.contactPhone },
+    user,
+  );
+  if (resolved?.explicit && !resolved.canEdit) {
+    return NextResponse.json({ error: "You can't add a quotation to this customer" }, { status: 403 });
+  }
+  const accountContactId = resolved?.id ?? null;
   // Run independent writes in parallel: deal update, isPrimary demotion, sequence number lookup.
   const [dealAfterQuote, , nextSeqResult] = await Promise.all([
     dealId
@@ -177,22 +180,16 @@ export async function POST(req: NextRequest) {
     dealId ? prisma.quotation.updateMany({ where: { dealId, isPrimary: true }, data: { isPrimary: false } }) : Promise.resolve(null),
     nextSequenceForYear(year),
   ]);
-  // Classification picked in the wizard lands on the customer's company.
-  if (accountContactId && !dealId && (parsed.data.customerProfileId || parsed.data.businessType)) {
-    prisma.accountContact
-      .findUnique({ where: { id: accountContactId }, select: { accountId: true } })
-      .then((c) =>
-        c
-          ? prisma.account.update({
-              where: { id: c.accountId },
-              data: {
-                ...(parsed.data.customerProfileId ? { customerProfileId: parsed.data.customerProfileId } : {}),
-                ...(parsed.data.businessType ? { businessType: parsed.data.businessType } : {}),
-              },
-            })
-          : null,
-      )
-      .catch(() => null);
+  // What the wizard asked about the customer lands on the customer — only
+  // when this user may change that customer.
+  if (accountContactId && !dealId && resolved?.canEdit) {
+    await applyDocumentClassification({
+      contactId: accountContactId,
+      siteCity: parsed.data.siteCity,
+      leadSourceId: parsed.data.leadSourceId,
+      customerProfileId: parsed.data.customerProfileId,
+      businessType: parsed.data.businessType,
+    });
   }
 
   // Conversation + Account syncs (depend on dealAfterQuote, but independent of each other).
@@ -341,7 +338,7 @@ export async function DELETE(req: NextRequest) {
   // so each can be reconciled afterward — see docs/DECISIONS.md.
   const affected = await prisma.quotation.findMany({
     where: { id: { in: parsed.data.ids } },
-    select: { number: true, dealId: true, contactPhone: true, createdAt: true },
+    select: { number: true, dealId: true, accountContactId: true, contactPhone: true, createdAt: true },
   });
   const dealIds = [...new Set(affected.map((q) => q.dealId).filter((id): id is string => !!id))];
 

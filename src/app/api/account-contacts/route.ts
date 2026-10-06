@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canSeeAllCustomers, customerAccess } from "@/lib/rbac";
+import { canManageAllCustomers, canSeeAllCustomers, customerAccess } from "@/lib/rbac";
 import { findAccountContactDuplicate, findAccountDuplicate } from "@/lib/crm/accounts";
 import { firstLeadStage } from "@/lib/crm/leadStages";
 
@@ -131,7 +131,13 @@ export async function GET(req: NextRequest) {
     ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
     ...(accountId ? { accountId } : {}),
   };
-  if (!canSeeAllCustomers(user.role)) {
+  if (searchParams.get("editable") === "1") {
+    // Only customers this user may change (e.g. the "+ New Deal" picker):
+    // admins/managers any; everyone else their own plus unassigned ones.
+    where.account = canManageAllCustomers(user.role)
+      ? { deletedAt: null }
+      : { deletedAt: null, OR: [{ ownerUserId: user.id }, { ownerUserId: null }] };
+  } else if (!canSeeAllCustomers(user.role)) {
     where.account = { ownerUserId: user.id };
   }
 

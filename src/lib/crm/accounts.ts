@@ -103,14 +103,36 @@ export async function findAccountContactDuplicate(
 
 export async function mergeAccountContacts(primaryId: string, secondaryIds: string[]): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    const from = { in: secondaryIds };
+    const to = { accountContactId: primaryId };
     await tx.deal.updateMany({
-      where: { primaryContactId: { in: secondaryIds } },
+      where: { primaryContactId: from },
       data: { primaryContactId: primaryId },
     });
-    await tx.activity.updateMany({
-      where: { accountContactId: { in: secondaryIds } },
-      data: { accountContactId: primaryId },
-    });
-    await tx.accountContact.deleteMany({ where: { id: { in: secondaryIds } } });
-  });
+    // Everything recorded against the merged-away people moves to the one
+    // that stays — deleting them would otherwise cascade-delete or orphan it.
+    await tx.activity.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.reminder.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.quotation.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.courtImage.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.contactProductInterest.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.accountContactNote.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.accountContactAttachment.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.contactNextAction.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.contactInsight.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.contactEvent.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.handoffRequest.updateMany({ where: { accountContactId: from }, data: to });
+    await tx.coverageGrant.updateMany({ where: { accountContactId: from }, data: to });
+    // A WhatsApp contact and a team chat thread can each belong to one CRM
+    // contact only — move a secondary's across when the primary has none.
+    if (!(await tx.contact.findFirst({ where: { accountContactId: primaryId }, select: { id: true } }))) {
+      const chat = await tx.contact.findFirst({ where: { accountContactId: from }, select: { id: true } });
+      if (chat) await tx.contact.update({ where: { id: chat.id }, data: to });
+    }
+    if (!(await tx.chatThread.findFirst({ where: { accountContactId: primaryId }, select: { id: true } }))) {
+      const thread = await tx.chatThread.findFirst({ where: { accountContactId: from }, select: { id: true } });
+      if (thread) await tx.chatThread.update({ where: { id: thread.id }, data: to });
+    }
+    await tx.accountContact.deleteMany({ where: { id: from } });
+  }, { timeout: 30_000, maxWait: 10_000 });
 }

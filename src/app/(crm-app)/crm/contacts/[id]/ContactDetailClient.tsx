@@ -85,10 +85,10 @@ function fmtInr(n: number | null): string {
   return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 }
 function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 }
 function fmtFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -944,15 +944,19 @@ export default function ContactDetailClient({
 
       {/* Quick actions — attach a new quotation/court design/product interest against this lead. Deal and Activity each have their own + in their own section below instead. */}
       <div className="flex flex-wrap gap-2 mb-5">
-        <button onClick={() => onQuickAction("quote")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
-          <span>📄</span> New Quotation
-        </button>
-        <button onClick={() => onQuickAction("court")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
-          <span>🎨</span> New Court Design
-        </button>
-        <button onClick={() => onQuickAction("product")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
-          <span>📦</span> Product interest
-        </button>
+        {viewer.canEdit && (
+          <>
+            <button onClick={() => onQuickAction("quote")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
+              <span>📄</span> New Quotation
+            </button>
+            <button onClick={() => onQuickAction("court")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
+              <span>🎨</span> New Court Design
+            </button>
+            <button onClick={() => onQuickAction("product")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
+              <span>📦</span> Product interest
+            </button>
+          </>
+        )}
         <button onClick={() => onQuickAction("meeting")} className="btn btn-secondary !px-3 !py-1.5 !text-xs flex items-center gap-1.5">
           <span>📅</span> Schedule Meeting
         </button>
@@ -1255,15 +1259,17 @@ export default function ContactDetailClient({
             <div id="deals" className="card p-4 scroll-mt-4" data-guide="crm-contact-deals">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-slate-900">Deals <span className="text-slate-400 font-normal font-mono">{deals.length}</span></h3>
-                <button
-                  onClick={() => setWonOpen(true)}
-                  aria-label="New deal"
-                  title="New deal — a confirmed project"
-                  className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
-                  data-guide="crm-contact-add-deal"
-                >
-                  +
-                </button>
+                {viewer.canEdit && (
+                  <button
+                    onClick={() => setWonOpen(true)}
+                    aria-label="New deal"
+                    title="New deal — a confirmed project"
+                    className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
+                    data-guide="crm-contact-add-deal"
+                  >
+                    +
+                  </button>
+                )}
               </div>
               {deals.length === 0 ? (
                 <p className="text-sm text-slate-400">No confirmed project yet — mark the lead Won when it's confirmed.</p>
@@ -1399,14 +1405,16 @@ export default function ContactDetailClient({
             <div id="products" className="card p-4 scroll-mt-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-slate-900">Product interest <span className="text-slate-400 font-normal font-mono">{productInterests.length}</span></h3>
-                <button
-                  onClick={() => onQuickAction("product")}
-                  aria-label="Add product interest"
-                  title="Add product interest"
-                  className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
-                >
-                  +
-                </button>
+                {viewer.canEdit && (
+                  <button
+                    onClick={() => onQuickAction("product")}
+                    aria-label="Add product interest"
+                    title="Add product interest"
+                    className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-base leading-none"
+                  >
+                    +
+                  </button>
+                )}
               </div>
               {productInterests.length === 0 ? (
                 <p className="text-sm text-slate-400">No products marked as interesting yet.</p>
@@ -1769,7 +1777,6 @@ export default function ContactDetailClient({
           contactPhone={contact.phone}
           contactName={contact.name}
           contactId={contact.id}
-          dealId={deals[0]?.id ?? null}
           onClose={() => { setShowAttachQuote(false); router.refresh(); }}
         />
       )}
@@ -2280,8 +2287,8 @@ type QuotationSearchRow = {
 // its own header comment) so the PDF goes to THIS contact regardless of
 // whichever phone the quote was originally created for.
 function AttachQuotationModal({
-  contactPhone, contactName, contactId, dealId, onClose,
-}: { contactPhone: string | null; contactName: string; contactId: string; dealId: string | null; onClose: () => void }) {
+  contactPhone, contactName, contactId, onClose,
+}: { contactPhone: string | null; contactName: string; contactId: string; onClose: () => void }) {
   const toast = useToast();
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<QuotationSearchRow[]>([]);
@@ -2311,19 +2318,18 @@ function AttachQuotationModal({
 
   async function attachToContact(q: QuotationSearchRow) {
     setBusy(q.id);
-    const patch: Record<string, unknown> = {};
+    const patch: Record<string, unknown> = { accountContactId: contactId };
     if (contactPhone) patch.contactPhone = contactPhone;
-    if (dealId) patch.dealId = dealId;
-    if (Object.keys(patch).length) {
-      const res = await fetch(`/api/quotations/${q.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      setBusy(null);
-      if (!res.ok) { toast.error("Could not link quotation"); return; }
-    } else {
-      setBusy(null);
+    const res = await fetch(`/api/quotations/${q.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).catch(() => null);
+    setBusy(null);
+    if (!res?.ok) {
+      const err = await res?.json().catch(() => ({}));
+      toast.error(err?.error === "forbidden" ? "Only the quotation's creator or an admin can link it" : err?.error ?? "Could not link quotation");
+      return;
     }
     toast.success(`${q.number} linked to ${contactName}`);
     onClose();
@@ -2332,8 +2338,7 @@ function AttachQuotationModal({
   async function sendToContact(q: QuotationSearchRow) {
     if (!contactPhone) { toast.error("This contact has no phone number"); return; }
     setBusy(q.id);
-    const patch: Record<string, unknown> = { contactPhone };
-    if (dealId) patch.dealId = dealId;
+    const patch: Record<string, unknown> = { contactPhone, accountContactId: contactId };
     await fetch(`/api/quotations/${q.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

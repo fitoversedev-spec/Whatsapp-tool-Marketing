@@ -33,10 +33,9 @@ export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActiv
   const { from, to } = filter;
   const ownerWhere = filter.ownerIds?.length ? { id: { in: filter.ownerIds } } : {};
   const dealChannelWhere = filter.dealChannel ? { dealChannel: filter.dealChannel } : {};
-  // Quotation.dealId is nullable — only add the `deal` relation filter at
-  // all when actually narrowing by channel, so unfiltered callers (Team
-  // Performance) still count standalone/no-deal quotations as before.
-  const quoteDealWhere = filter.dealChannel ? { deal: { dealChannel: filter.dealChannel } } : {};
+  // Quotation.dealId is nullable, and quotes for customers no longer create a
+  // deal at all — the channel filter only narrows quotes that do have a deal.
+  const quoteDealWhere = filter.dealChannel ? { OR: [{ dealId: null }, { deal: { dealChannel: filter.dealChannel } }] } : {};
 
   const [owners, promotedLeads, dealGroups, siteVisitGroups, sampleGroups, sentQuotes, closedDeals] = await Promise.all([
     prisma.user.findMany({
@@ -53,7 +52,6 @@ export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActiv
     // account relation (mirrors the sentQuotes JS-tally below).
     prisma.accountContact.findMany({
       where: {
-        pipelineStage: "LEAD",
         deletedAt: null,
         promotedToLeadAt: { gte: from, lte: to },
         account: { ownerUserId: { not: null } },
@@ -80,7 +78,7 @@ export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActiv
     // "count distinct X" directly.
     prisma.quotation.findMany({
       where: { status: "sent", sentAt: { gte: from, lte: to }, ...quoteDealWhere },
-      select: { createdByUserId: true, dealId: true, grandTotal: true },
+      select: { id: true, createdByUserId: true, dealId: true, accountContactId: true, contactPhone: true, grandTotal: true },
     }),
     prisma.deal.findMany({
       where: { outcome: { in: ["WON", "LOST"] }, closedAt: { gte: from, lte: to }, deletedAt: null, ownerUserId: { not: null }, ...dealChannelWhere },
@@ -102,7 +100,7 @@ export async function salesActivity(filter: AnalyticsFilter): Promise<SalesActiv
   for (const q of sentQuotes) {
     const entry = quoteByOwner.get(q.createdByUserId) ?? { count: 0, dealIds: new Set<string>(), value: 0 };
     entry.count += 1;
-    if (q.dealId) entry.dealIds.add(q.dealId);
+    entry.dealIds.add(q.dealId ? `d:${q.dealId}` : q.accountContactId ? `c:${q.accountContactId}` : q.contactPhone ? `p:${q.contactPhone}` : `q:${q.id}`);
     entry.value += Number(q.grandTotal);
     quoteByOwner.set(q.createdByUserId, entry);
   }

@@ -15,6 +15,8 @@ export type MyDayData = {
   overdue: MyDayReminder[];
   untouchedLeads: MyDayLead[];
   nextActionsThisWeek: MyDayNextAction[];
+  // How many there are in all (the list stops at 20).
+  nextActionsThisWeekTotal: number;
 };
 
 export async function getMyDay(userId: string): Promise<MyDayData> {
@@ -24,7 +26,19 @@ export async function getMyDay(userId: string): Promise<MyDayData> {
   const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
   const endOfWeek = endOfDayIST(new Date(now.getTime() + 7 * 86_400_000));
 
-  const [reminders, leads, nextActions] = await Promise.all([
+  // Open, dated next actions after today on the rep's customers (or ones
+  // they set themselves on a customer nobody handles yet).
+  const nextActionsWhere = {
+    deletedAt: null,
+    doneAt: null,
+    dueAt: { gt: endOfToday, lte: endOfWeek },
+    accountContact: { deletedAt: null },
+    OR: [
+      { accountContact: { account: { ownerUserId: userId } } },
+      { createdByUserId: userId, accountContact: { account: { ownerUserId: null } } },
+    ],
+  };
+  const [reminders, leads, nextActions, nextActionsThisWeekTotal] = await Promise.all([
     prisma.reminder.findMany({
       where: { ownerUserId: userId, completedAt: null, dueAt: { lte: endOfToday } },
       orderBy: { dueAt: "asc" },
@@ -34,20 +48,13 @@ export async function getMyDay(userId: string): Promise<MyDayData> {
       where: { deletedAt: null, pipelineStage: "LEAD", account: { ownerUserId: userId } },
       select: { id: true, name: true, createdAt: true, promotedToLeadAt: true, account: { select: { name: true } } },
     }),
-    // Open, dated next actions after today on the rep's customers (or ones
-    // they set themselves on an unassigned customer).
     prisma.contactNextAction.findMany({
-      where: {
-        deletedAt: null,
-        doneAt: null,
-        dueAt: { gt: endOfToday, lte: endOfWeek },
-        accountContact: { deletedAt: null },
-        OR: [{ accountContact: { account: { ownerUserId: userId } } }, { createdByUserId: userId }],
-      },
+      where: nextActionsWhere,
       orderBy: { dueAt: "asc" },
       take: 20,
       select: { id: true, text: true, dueAt: true, accountContact: { select: { id: true, name: true } } },
     }),
+    prisma.contactNextAction.count({ where: nextActionsWhere }),
   ]);
 
   // A lead's last touch: its newest timeline event, activity or note —
@@ -95,6 +102,7 @@ export async function getMyDay(userId: string): Promise<MyDayData> {
       contactId: a.accountContact.id,
       contactName: a.accountContact.name.trim(),
     })),
+    nextActionsThisWeekTotal,
   };
 }
 

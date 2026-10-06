@@ -13,7 +13,7 @@ export default async function CompanyDetailPage({ params }: { params: { id: stri
     include: {
       owner: { select: { id: true, name: true } },
       customerProfile: { select: { id: true, name: true } },
-      contacts: { orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" } ] },
+      contacts: { where: { deletedAt: null }, orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" } ] },
       deals: {
         where: { deletedAt: null },
         orderBy: { updatedAt: "desc" },
@@ -75,7 +75,7 @@ export default async function CompanyDetailPage({ params }: { params: { id: stri
       }))}
       activities={activities.map((a) => ({
         id: a.id, subject: a.subject, notes: a.notes, occurredAt: a.occurredAt.toISOString(),
-        typeName: a.activityType.name, ownerName: a.owner.name, dealId: a.dealId,
+        typeName: a.activityType.name, ownerName: a.owner.name, dealId: a.dealId && dealIds.includes(a.dealId) ? a.dealId : null,
       }))}
       customerProfiles={customerProfiles.map((c) => ({ id: c.id, name: c.name }))}
       users={users}

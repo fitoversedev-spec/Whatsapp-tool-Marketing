@@ -5,7 +5,7 @@
 // calls sendText() itself, so it's safe to unit-test directly against a
 // dev database without ever touching the live Meta API.
 import { prisma } from "@/lib/prisma";
-import { transitionDeal, TransitionDealError } from "@/lib/funnel/transitionDeal";
+import { firstLeadStage } from "@/lib/crm/leadStages";
 import { parseNaturalDate, parseStaffCommand, type ParsedCommand } from "@/lib/chatbot/staffParse";
 import { getMyDay } from "@/lib/crm/myDay";
 
@@ -15,10 +15,9 @@ const PENDING_ACTION_TTL_MS = 10 * 60_000;
 const HELP_TEXT = `Commands:
 • new lead <name> <city> <phone>
 • remind <when> <text> — e.g. "remind tomorrow 9am call the client"
-• my day — today's reminders, overdue, stuck deals
+• my day — today's reminders, overdue, leads to follow up
 • deal <code> — deal summary
-• stage <code> <stage name> — move a deal (asks to confirm)
-• quote <code> — link to the quotation builder
+• quote <code> — new quotation for that deal's customer
 • help — this message`;
 
 function formatDateTime(d: Date): string {
@@ -31,23 +30,6 @@ function formatDateTime(d: Date): string {
     minute: "2-digit",
     hour12: true,
   });
-}
-
-function normalizeStageText(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function fuzzyMatchStage(
-  query: string,
-  stages: { id: string; name: string; slug: string }[],
-): { id: string; name: string; slug: string } | "ambiguous" | null {
-  const q = normalizeStageText(query);
-  const exact = stages.find((s) => normalizeStageText(s.name) === q || s.slug === q.replace(/ /g, "_"));
-  if (exact) return exact;
-  const contains = stages.filter((s) => normalizeStageText(s.name).includes(q) || q.includes(normalizeStageText(s.name)));
-  if (contains.length === 1) return contains[0];
-  if (contains.length > 1) return "ambiguous";
-  return null;
 }
 
 // The one function with real logic — every command's DB effect and reply
@@ -75,15 +57,6 @@ export async function executeStaffCommand(
       });
       return `✅ Reminder set for ${formatDateTime(new Date(payload.dueAt))} — "${payload.text}"`;
     }
-    if (pending.kind === "stage") {
-      try {
-        await transitionDeal({ dealId: payload.dealId, toStageId: payload.toStageId, userId: user.id });
-        return `✅ ${payload.dealCode} moved to "${payload.stageName}".`;
-      } catch (err) {
-        const msg = err instanceof TransitionDealError ? err.message : "Could not change stage.";
-        return `❌ ${msg}`;
-      }
-    }
     return "Nothing to confirm right now.";
   }
 
@@ -100,13 +73,18 @@ export async function executeStaffCommand(
     // create a real Contact instead (auto-named account, same simplified
     // flow the New Contact form itself uses), so this command still lands
     // somewhere visible rather than silently writing to a dead table.
+    // "new lead" puts them straight into Leads at the first sales stage.
     const account = await prisma.account.create({
       data: { name: parsed.name, city: parsed.city, ownerUserId: user.id },
     });
+    const stage = await firstLeadStage();
     const contact = await prisma.accountContact.create({
-      data: { accountId: account.id, name: parsed.name, phone: parsed.phone, isPrimary: true, createdByUserId: user.id },
+      data: {
+        accountId: account.id, name: parsed.name, phone: parsed.phone, isPrimary: true, createdByUserId: user.id,
+        pipelineStage: "LEAD", promotedToLeadAt: now, leadStageId: stage?.id ?? null,
+      },
     });
-    return `✅ Contact created: ${contact.name} (${account.city}, ${contact.phone}).`;
+    return `✅ Lead created: ${contact.name} (${account.city}, ${contact.phone})${stage ? ` — ${stage.name}` : ""}.`;
   }
 
   if (parsed.type === "remind") {
@@ -130,7 +108,7 @@ export async function executeStaffCommand(
   }
 
   if (parsed.type === "my_day") {
-    const { dueToday, overdue, untouchedLeads, nextActionsThisWeek } = await getMyDay(user.id);
+    const { dueToday, overdue, untouchedLeads, nextActionsThisWeek, nextActionsThisWeekTotal } = await getMyDay(user.id);
 
     const lines: string[] = [`☀️ My Day — ${user.name}`];
     lines.push("");
@@ -147,19 +125,20 @@ export async function executeStaffCommand(
     }
     if (nextActionsThisWeek.length) {
       lines.push("");
-      lines.push(`🗓️ Next actions this week (${nextActionsThisWeek.length}):`);
+      lines.push(`🗓️ Next actions this week (${nextActionsThisWeekTotal}):`);
       lines.push(...nextActionsThisWeek.slice(0, 5).map((a) => `  • ${formatDateTime(new Date(a.dueAt))} — ${a.contactName}: ${a.text}`));
     }
     return lines.join("\n");
   }
 
   if (parsed.type === "deal") {
-    const deal = await prisma.deal.findUnique({
-      where: { code: parsed.code },
+    const deal = await prisma.deal.findFirst({
+      where: { code: parsed.code, deletedAt: null },
       select: {
         id: true,
         code: true,
         title: true,
+        outcome: true,
         account: { select: { name: true, city: true } },
         currentStage: { select: { name: true } },
         owner: { select: { name: true } },
@@ -173,7 +152,7 @@ export async function executeStaffCommand(
     return [
       `📁 ${deal.code} — ${deal.title}`,
       `Account: ${deal.account.name}${deal.account.city ? ` (${deal.account.city})` : ""}`,
-      `Stage: ${deal.currentStage.name}`,
+      `Status: ${deal.outcome === "WON" ? "Confirmed" : deal.currentStage.name}`,
       `Owner: ${deal.owner?.name ?? "unassigned"}`,
       `Value: ${value ? "₹" + Number(value).toLocaleString("en-IN") : "—"}`,
       `${APP_URL}/deals/${deal.id}`,
@@ -181,33 +160,20 @@ export async function executeStaffCommand(
   }
 
   if (parsed.type === "stage") {
-    const deal = await prisma.deal.findUnique({ where: { code: parsed.code }, select: { id: true, code: true, title: true } });
-    if (!deal) return `No deal found with code ${parsed.code}.`;
-    const stages = await prisma.funnelStage.findMany({ where: { isActive: true }, select: { id: true, name: true, slug: true } });
-    const match = fuzzyMatchStage(parsed.stageQuery, stages);
-    if (match === "ambiguous") return `"${parsed.stageQuery}" matches more than one stage — be more specific.`;
-    if (!match) return `No stage matching "${parsed.stageQuery}". Send "help" to see the command list.`;
-    await prisma.pendingStaffAction.upsert({
-      where: { userId: user.id },
-      create: {
-        userId: user.id,
-        kind: "stage",
-        payload: JSON.stringify({ dealId: deal.id, dealCode: deal.code, toStageId: match.id, stageName: match.name }),
-        expiresAt: new Date(now.getTime() + PENDING_ACTION_TTL_MS),
-      },
-      update: {
-        kind: "stage",
-        payload: JSON.stringify({ dealId: deal.id, dealCode: deal.code, toStageId: match.id, stageName: match.name }),
-        expiresAt: new Date(now.getTime() + PENDING_ACTION_TTL_MS),
-      },
-    });
-    return `Move ${deal.code} — "${deal.title}" to "${match.name}"? Reply YES to confirm or NO to cancel.`;
+    // Deals are confirmed projects now — sales stages live on leads.
+    return `Deals no longer move through stages. Move leads between stages in the app: ${APP_URL}/pipeline`;
   }
 
   if (parsed.type === "quote") {
-    const deal = await prisma.deal.findUnique({ where: { code: parsed.code }, select: { id: true, code: true } });
+    const deal = await prisma.deal.findFirst({
+      where: { code: parsed.code, deletedAt: null },
+      select: { id: true, code: true, primaryContact: { select: { id: true, name: true, phone: true, deletedAt: true } } },
+    });
     if (!deal) return `No deal found with code ${parsed.code}.`;
-    return `Open the quotation builder for ${deal.code}: ${APP_URL}/deals/${deal.id}`;
+    const c = deal.primaryContact && !deal.primaryContact.deletedAt ? deal.primaryContact : null;
+    if (!c) return `${deal.code} has no customer contact — open it here: ${APP_URL}/deals/${deal.id}`;
+    const params = new URLSearchParams({ contactId: c.id, customerName: c.name, ...(c.phone ? { phone: c.phone } : {}) });
+    return `New quotation for ${c.name} (${deal.code}): ${APP_URL}/crm/quotations?${params.toString()}`;
   }
 
   return `Sorry, I didn't understand that. Send "help" for the command list, or open the app: ${APP_URL}`;

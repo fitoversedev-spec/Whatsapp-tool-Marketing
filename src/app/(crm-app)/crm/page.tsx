@@ -10,10 +10,10 @@ function fmtInr(n: number): string {
   return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
 function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 }
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
 }
 
 export default async function CrmDashboardPage() {
@@ -81,7 +81,7 @@ export default async function CrmDashboardPage() {
 
   return (
     <>
-      <PageHeader large title="My Day" description={new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })} />
+      <PageHeader large title="My Day" description={new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" })} />
       <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-4">
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="card p-4">
@@ -127,7 +127,7 @@ export default async function CrmDashboardPage() {
           </div>
 
           <div className="card p-4" data-guide="crm-myday-next-actions">
-            <h3 className="text-lg font-bold text-slate-900 mb-3">Next actions this week <span className="text-slate-400 font-normal font-mono">{myDay.nextActionsThisWeek.length}</span></h3>
+            <h3 className="text-lg font-bold text-slate-900 mb-3">Next actions this week <span className="text-slate-400 font-normal font-mono">{myDay.nextActionsThisWeekTotal}</span></h3>
             {myDay.nextActionsThisWeek.length === 0 ? (
               <p className="text-sm text-slate-400">No next actions due in the next 7 days.</p>
             ) : (

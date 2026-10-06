@@ -53,10 +53,10 @@ export async function fireDueReminders(): Promise<{ notified: number }> {
     const pushIds = new Set(pushUsers.map((u) => u.id));
     for (const reminder of due) {
       if (!pushIds.has(reminder.ownerUserId)) continue;
-      const url = reminder.dealId
-        ? `/deals/${reminder.dealId}`
-        : reminder.accountContactId
-          ? `/crm/contacts/${reminder.accountContactId}`
+      const url = reminder.accountContactId
+        ? `/crm/contacts/${reminder.accountContactId}`
+        : reminder.dealId
+          ? `/deals/${reminder.dealId}`
           : reminder.metaLeadId
             ? `/ad-campaigns/leads/${reminder.metaLeadId}`
             : reminder.conversationId

@@ -15,18 +15,20 @@ export default async function DealDetailPage({ params }: { params: { id: string 
     prisma.deal.findUnique({
       where: { id: params.id },
       include: {
-        account: { include: { contacts: true, customerProfile: true, owner: { select: { id: true, name: true } } } },
+        account: {
+          include: {
+            contacts: { where: { deletedAt: null }, orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }] },
+            customerProfile: true,
+            owner: { select: { id: true, name: true } },
+          },
+        },
         owner: { select: { id: true, name: true } },
         office: true,
         currentStage: true,
         leadSource: true,
         lossReason: true,
         siteCityTier: true,
-        primaryContact: { select: { name: true } },
-        stageHistory: {
-          orderBy: { changedAt: "desc" },
-          include: { fromStage: { select: { name: true } }, toStage: { select: { name: true } }, changedBy: { select: { name: true } } },
-        },
+        primaryContact: { select: { name: true, phone: true, deletedAt: true } },
       },
     }),
     prisma.activityType.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
@@ -43,7 +45,11 @@ export default async function DealDetailPage({ params }: { params: { id: string 
   ]);
 
   if (!deal || deal.deletedAt) notFound();
-  if (!customerAccess(user, deal.ownerUserId).canView) notFound();
+  // The rep who won it, or anyone who can see the customer now (e.g. the rep
+  // the customer was reassigned to).
+  const canViewCustomer = customerAccess(user, deal.account.ownerUserId).canView;
+  if (!customerAccess(user, deal.ownerUserId).canView && !canViewCustomer) notFound();
+  const primaryContact = deal.primaryContact && !deal.primaryContact.deletedAt ? deal.primaryContact : null;
 
   // Show the primary contact's quotations / court designs / product interest
   // across that contact's deals (same set the contact detail page shows) — a
@@ -65,10 +71,31 @@ export default async function DealDetailPage({ params }: { params: { id: string 
       ).map((d) => d.id)
     : [deal.id];
 
-  const [dealQuotations, dealCourtImages, dealLineItems] = await Promise.all([
-    prisma.quotation.findMany({ where: { dealId: { in: contactDealIds } }, select: { id: true, number: true, sport: true, grandTotal: true, status: true, sentAt: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
-    prisma.courtImage.findMany({ where: { dealId: { in: contactDealIds } }, select: { id: true, number: true, status: true, imageUrl: true, image2dUrl: true, sentAt: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
+  // Quotes, designs and product interest live on the customer (contact) now,
+  // so a confirmed deal shows its customer's documents — for viewers who can
+  // see that customer — plus anything attached to the deals themselves.
+  const contactId = canViewCustomer && primaryContact ? deal.primaryContactId : null;
+  const [dealQuotations, dealCourtImages, dealLineItems, contactInterests] = await Promise.all([
+    prisma.quotation.findMany({
+      where: {
+        OR: [
+          { dealId: { in: contactDealIds } },
+          ...(contactId ? [{ accountContactId: contactId }] : []),
+          ...(contactId && primaryContact?.phone ? [{ contactPhone: primaryContact.phone }] : []),
+        ],
+      },
+      select: { id: true, number: true, sport: true, grandTotal: true, status: true, sentAt: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.courtImage.findMany({
+      where: { OR: [{ dealId: { in: contactDealIds } }, ...(contactId ? [{ accountContactId: contactId }] : [])] },
+      select: { id: true, number: true, status: true, imageUrl: true, image2dUrl: true, sentAt: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
     prisma.dealLineItem.findMany({ where: { dealId: { in: contactDealIds }, OR: [{ isEnquiryOnly: true }, { productId: { not: null } }] }, select: { label: true, product: { select: { name: true } } } }),
+    contactId
+      ? prisma.contactProductInterest.findMany({ where: { accountContactId: contactId }, select: { label: true, product: { select: { name: true } } } })
+      : Promise.resolve([] as { label: string | null; product: { name: string } | null }[]),
   ]);
 
   return (
@@ -79,6 +106,7 @@ export default async function DealDetailPage({ params }: { params: { id: string 
         id: deal.id,
         code: deal.code,
         title: deal.title,
+        accountId: deal.account.id,
         accountName: deal.account.name,
         accountCity: deal.account.city,
         accountOwnerUserId: deal.account.ownerUserId,
@@ -121,17 +149,10 @@ export default async function DealDetailPage({ params }: { params: { id: string 
       cityTiers={cityTiers.map((c) => ({ id: c.id, name: c.name }))}
       leadSources={leadSources.map((s) => ({ id: s.id, name: s.name }))}
       customerProfiles={customerProfiles.map((c) => ({ id: c.id, name: c.name }))}
-      stageHistory={deal.stageHistory.map((h) => ({
-        id: h.id,
-        fromStageName: h.fromStage?.name ?? null,
-        toStageName: h.toStage.name,
-        changedByName: h.changedBy?.name ?? "system",
-        changedAt: h.changedAt.toISOString(),
-        durationInFromStageSeconds: h.durationInFromStageSeconds,
-      }))}
+      canViewCustomer={canViewCustomer}
       activityTypes={activityTypes.map((t) => ({ id: t.id, name: t.name }))}
       timeline={timeline}
-      customerName={deal.primaryContact?.name ?? deal.account.name}
+      customerName={primaryContact?.name ?? deal.account.name}
       quotations={dealQuotations.map((q) => ({
         id: q.id,
         number: q.number,
@@ -148,7 +169,7 @@ export default async function DealDetailPage({ params }: { params: { id: string 
         date: (c.sentAt ?? c.createdAt).toISOString(),
       }))}
       productInterests={Array.from(
-        new Set(dealLineItems.map((li) => li.product?.name ?? li.label).filter((n): n is string => !!n)),
+        new Set([...contactInterests, ...dealLineItems].map((li) => li.product?.name ?? li.label).filter((n): n is string => !!n)),
       )}
     />
   );

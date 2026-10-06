@@ -25,7 +25,7 @@ const BLUR_CONTACT_DETAIL = [
 ];
 
 const BLUR_SEGMENT_TABLE = [".data-table tbody td:nth-child(1)"]; // Name (a solo customer's own name)
-const BLUR_DEALS_TABLE = [".data-table tbody td:nth-child(2)", ".data-table tbody td:nth-child(3)"]; // Deal title, Account
+const BLUR_DEALS_TABLE = [".data-table tbody td:nth-child(2)", ".data-table tbody td:nth-child(4)"]; // Customer (+ note), Company — admin view (column 1 is the checkbox)
 const BLUR_COMPANY_DETAIL = [
   '[data-guide="crm-company-name"]',
   "#details .font-medium",
@@ -40,9 +40,10 @@ const BLUR_DEAL_DETAIL = [
   '[data-guide="crm-deal-main"] span.text-slate-900',
   '[data-guide="crm-deal-activity"] > :not(:first-child)',
   '[data-guide="crm-deal-site-address"] span:last-child',
-  '[data-guide="crm-deal-primary-contact"] span:last-child',
+  '[data-guide="crm-deal-primary-contact"] > :last-child',
+  '[data-guide="crm-deal-customer-link"]',
 ];
-const BLUR_PIPELINE_CARDS = [".cursor-grab .min-w-0.flex-1", ".cursor-grab .line-clamp-2"]; // Card name / phone, last message
+const BLUR_PIPELINE_CARDS = ['[data-guide="crm-pipeline-card-open"]', '[data-guide="crm-pipeline-card"] > div:nth-child(2)']; // Lead name, company · city
 const BLUR_ACTIVITIES_TABLE = [
   ".data-table tbody td:nth-child(3)", // Activity (titles carry the customer's name)
   ".data-table tbody td:nth-child(4)", // Customer
@@ -134,14 +135,14 @@ export const CRM_ENTRIES: GuideEntry[] = [
   {
     slug: "crm-import",
     title: "How to import contacts from a spreadsheet",
-    summary: "Bulk-load contacts, companies, leads, or deals from a CSV or Excel file.",
+    summary: "Bulk-load contacts and companies from a CSV or Excel file.",
     section: "crm",
     category: "Contacts",
     roles: ["admin"],
     keywords: ["import", "csv", "excel", "spreadsheet", "bulk", "upload"],
     steps: [
       { text: "Open **Import** from the CRM All Tools menu", target: "crm-sidebar-all-tools" },
-      { text: "Select what you're importing: Contacts, Companies, or Deals", target: "crm-import-targets" },
+      { text: "Select what you're importing: Contacts or Companies", target: "crm-import-targets" },
       { text: "Upload your CSV or Excel file", target: "crm-import-file" },
       { text: "Map each column to the matching field (name, phone, email, etc.)" },
       { text: "Review the preview and click **Import** to load the data" },
@@ -177,21 +178,21 @@ export const CRM_ENTRIES: GuideEntry[] = [
   {
     slug: "crm-leads",
     title: "How to manage CRM leads",
-    summary: "View, filter, and progress leads through stages from new to qualified to converted.",
+    summary: "View your leads, move them through the sales stages, and mark them Won when the project is confirmed.",
     section: "crm",
     category: "Leads",
-    keywords: ["lead", "manage", "stage", "qualify", "convert", "funnel"],
+    keywords: ["lead", "manage", "stage", "won", "confirm", "funnel", "reminder"],
     steps: [
       { text: "Click **Leads** in the CRM sidebar", target: "crm-sidebar-leads" },
-      { text: "View leads organized by stage (New, Contacted, Qualified, etc.)" },
-      { text: "Use the **filters** to narrow by source, date, or owner" },
-      { text: "Click a lead to open their detail and update the stage", target: "crm-leads-row-link" },
-      { text: "Click **Convert to Deal** on a lead to create its deal — its status becomes **Converted**", target: "crm-leads-convert" },
+      { text: "Each lead shows its **stage**, who **handles** it, and its next **reminder**" },
+      { text: "Use the **filters** to narrow by location, stage, or rep", target: "crm-leads-stage-filter" },
+      { text: "Change a lead's stage from the row's **Stage** dropdown, or click the name to open their contact page", target: "crm-leads-row-link" },
+      { text: "Click **Won** when the project is confirmed — enter the final value, expected start date and a note, and the customer moves to **Deals**", target: "crm-leads-convert" },
     ],
     screenshot: {
       path: "/crm/leads",
       file: "crm-leads.png",
-      alt: "CRM leads list with each lead's status and the Convert to Deal button",
+      alt: "CRM leads list with each lead's stage, rep and reminder, and the Won button",
       blur: BLUR_LEADS_TABLE,
     },
   },
@@ -199,45 +200,47 @@ export const CRM_ENTRIES: GuideEntry[] = [
   // ── Deals ──────────────────────────────────────────────
   {
     slug: "create-deal",
-    title: "How to create a deal",
-    summary: "Attach a deal to a contact to track pipeline value, stage, and expected close date.",
+    title: "How to mark a customer Won (create a deal)",
+    summary: "A deal is a confirmed project. Mark a lead Won to create it with the final value, start date and a note.",
     section: "crm",
     category: "Deals",
-    keywords: ["deal", "create", "pipeline", "revenue", "stage"],
+    keywords: ["deal", "create", "won", "confirm", "project", "value", "revenue"],
     steps: [
-      { text: "Open a **contact's detail page** by clicking their name", target: "crm-contact-name" },
-      { text: "Scroll to the **Deals** section and click the **+** button", target: "crm-contact-add-deal" },
-      { text: "Enter deal name, value, expected close date, and funnel stage" },
-      { text: "Click **Create deal** — the deal appears in both the contact view and the Pipeline board", target: "crm-deal-create-confirm" },
+      { text: "Open the customer's **contact page** by clicking their name", target: "crm-contact-name" },
+      { text: "Click **Won** at the top (for a lead), or the **+** in the **Deals** section", target: "crm-contact-add-deal" },
+      { text: "Enter the **final value**, the **expected start date** and a short **note**", target: "crm-won-dialog" },
+      { text: "Click **Confirm deal** — the customer moves from Leads to Deals" },
+      { text: "From the Deals page, **+ New Deal** asks which customer first" },
     ],
     screenshot: {
       path: "/crm/contacts",
       file: "crm-create-deal.png",
-      alt: "Contact detail page with the New deal dialog open from the Deals section's + button",
-      // Opens the first contact, then the + button's New deal dialog — Create deal is never clicked.
+      alt: "Contact page with the Won form open: final value, expected start date and note",
+      // Opens the first contact, then the Deals section's + (the Won form) — Confirm deal is never clicked.
       setup: [...OPEN_FIRST_CONTACT, { type: "click", selector: '[data-guide="crm-contact-add-deal"]' }, { type: "wait", duration: 800 }],
-      blur: [...BLUR_CONTACT_DETAIL, '[data-guide="crm-new-deal-dialog"] p'],
+      blur: [...BLUR_CONTACT_DETAIL, '[data-guide="crm-won-dialog"] h2'],
       viewport: { width: 1440, height: 1200 },
     },
   },
   {
     slug: "deals-list",
     title: "How to manage deals",
-    summary: "View all deals in a table, filter by stage, owner, or value, and track progress.",
+    summary: "Your confirmed projects: value, start date, who won it, and how the work is going.",
     section: "crm",
     category: "Deals",
-    keywords: ["deals", "list", "filter", "stage", "value", "manage"],
+    keywords: ["deals", "projects", "list", "filter", "value", "won", "manage"],
     steps: [
       { text: "Click **Deals** in the CRM sidebar", target: "crm-sidebar-deals" },
-      { text: "View all deals with their stage, value, owner, and close date", target: "crm-deals-columns" },
-      { text: "Use **filters** to narrow by channel, owner, or date range", target: "crm-deals-filters" },
-      { text: "Click a deal row to open its detail page with notes and activity log", target: "crm-deals-row-link" },
-      { text: "Update the deal stage by picking a new stage from the row's **Stage** dropdown", target: "crm-deals-stage" },
+      { text: "Each project shows the customer, deal code, company, final value, expected start, won date, rep and status", target: "crm-deals-columns" },
+      { text: "Filter by **rep** or by the **date it was won**", target: "crm-deals-filters" },
+      { text: "Click the **customer's name** to open their contact page", target: "crm-deals-customer-link" },
+      { text: "Click the **deal code** to open the deal page", target: "crm-deals-row-link" },
+      { text: "Click **+ New Deal** to confirm a project for an existing customer", target: "crm-deals-new" },
     ],
     screenshot: {
       path: "/deals",
       file: "crm-deals-list.png",
-      alt: "Deals list page with the filters, the Stage dropdown and the value column",
+      alt: "Deals list of confirmed projects with the rep and won-date filters",
       blur: BLUR_DEALS_TABLE,
     },
   },
@@ -246,21 +249,21 @@ export const CRM_ENTRIES: GuideEntry[] = [
   {
     slug: "pipeline-board",
     title: "How to use the Pipeline board",
-    summary: "Drag-and-drop deals across funnel stages on a visual Kanban board.",
+    summary: "Your leads on a board by sales stage — move them along as they progress.",
     section: "crm",
     category: "Pipeline",
-    keywords: ["pipeline", "kanban", "board", "drag", "drop", "stage", "funnel"],
+    keywords: ["pipeline", "kanban", "board", "drag", "drop", "stage", "leads"],
     steps: [
       { text: "Click **Pipeline** in the CRM sidebar", target: "crm-sidebar-pipeline" },
-      { text: "View deals arranged in columns by stage (Enquiry Received → Contacted / Qualified → Site Visit Done → … → Won)", target: "crm-pipeline-stage" },
-      { text: "**Drag a deal card** from one column to another to change its stage", target: "crm-pipeline-card" },
-      { text: "Click a deal card to open its detail page", target: "crm-pipeline-card-open" },
-      { text: "Use the **filter bar** to show only specific owners or date ranges", target: "crm-pipeline-owner" },
+      { text: "Leads are arranged in columns by sales stage (Lead Generation → Initial Outreach → … → Post-Sales Analysis)", target: "crm-pipeline-stage" },
+      { text: "**Drag a lead card** to another column, or pick a stage from the card's dropdown", target: "crm-pipeline-card" },
+      { text: "Click a lead's **name** to open their contact page", target: "crm-pipeline-card-open" },
+      { text: "Use the **rep filter** to see your leads, unassigned leads, or a specific rep's", target: "crm-pipeline-owner" },
     ],
     screenshot: {
       path: "/pipeline",
       file: "crm-pipeline.png",
-      alt: "Pipeline Kanban board with deals organized by stage (names, phones and messages blurred)",
+      alt: "Pipeline board with leads in columns by sales stage (names and companies blurred)",
       blur: BLUR_PIPELINE_CARDS,
     },
   },
@@ -291,7 +294,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
   {
     slug: "crm-quotations",
     title: "How to create a CRM quotation",
-    summary: "Generate quotations linked to CRM contacts and deals, with sport-based rate calculation.",
+    summary: "Generate quotations linked to CRM contacts, with sport-based rate calculation.",
     section: "crm",
     category: "Quotations",
     keywords: ["quotation", "quote", "CRM", "price", "rate", "send"],
@@ -386,7 +389,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
       { text: "Click **Court Designer** in the CRM sidebar", target: "crm-sidebar-court-images" },
       { text: "Select the sport and customize the court dimensions" },
       { text: "Choose surface type and colors for the layout" },
-      { text: "Link the design to a contact or deal for proposals" },
+      { text: "Link the design to a contact for proposals" },
       { text: "Export as image or add to a quotation PDF" },
     ],
     screenshot: {
@@ -425,14 +428,14 @@ export const CRM_ENTRIES: GuideEntry[] = [
   {
     slug: "crm-taxonomies",
     title: "How to manage taxonomies",
-    summary: "Edit funnel stages, lead sources, customer profiles, and other configurable lists.",
+    summary: "Edit lead stages, lead sources, customer profiles, and other configurable lists.",
     section: "crm",
     category: "Admin",
     roles: ["admin"],
     keywords: ["taxonomy", "stage", "source", "profile", "configure", "list"],
     steps: [
       { text: "Open **Taxonomies** from the CRM Admin tools" },
-      { text: "Select the list to edit: Funnel Stages, Lead Sources, or Customer Profiles", target: "crm-taxonomy-tabs" },
+      { text: "Select the list to edit: Lead Stages, Lead Sources, or Customer Profiles", target: "crm-taxonomy-tabs" },
       { text: "Type a name in the **Add new…** box at the bottom of the list and click **Add**", target: "crm-taxonomy-add" },
       { text: "Use the **↑** and **↓** arrows in the **Order** column to reorder items (this changes the order in dropdowns)", target: "crm-taxonomy-order" },
       { text: "Click a name to rename it, or untick **Active** to retire an item you no longer need", target: "crm-taxonomy-active" },
@@ -440,7 +443,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
     screenshot: {
       path: "/crm/admin/taxonomies",
       file: "crm-taxonomies.png",
-      alt: "Taxonomies page with editable funnel stages",
+      alt: "Taxonomies page with editable lists",
       viewport: { width: 1440, height: 1500 },
     },
   },
@@ -492,20 +495,20 @@ export const CRM_ENTRIES: GuideEntry[] = [
   {
     slug: "filter-pipeline",
     title: "How to filter the pipeline board",
-    summary: "Search deals, filter by owner, and switch between Kanban and Funnel views.",
+    summary: "Search leads, filter by rep, and switch between Board and Funnel views.",
     section: "crm",
     category: "Pipeline",
-    keywords: ["filter", "pipeline", "search", "owner", "kanban", "funnel", "view"],
+    keywords: ["filter", "pipeline", "search", "rep", "board", "funnel", "view", "leads"],
     steps: [
       { text: "Click **Pipeline** in the CRM sidebar", target: "crm-sidebar-pipeline" },
-      { text: "Type in the **search bar** to find deals by name, phone, or message", target: "crm-pipeline-search" },
-      { text: "Use the **Owner dropdown** to see only your deals, unassigned deals, or a specific rep's deals", target: "crm-pipeline-owner" },
-      { text: "Switch between **Kanban** (card columns) and **Funnel** (stage chart) views", target: "crm-pipeline-view" },
+      { text: "Type in the **search bar** to find leads by name, company, or phone", target: "crm-pipeline-search" },
+      { text: "Use the **rep dropdown**: My leads, All reps, Unassigned, or one rep", target: "crm-pipeline-owner" },
+      { text: "Switch between **Board** (card columns) and **Funnel** (stage chart) views", target: "crm-pipeline-view" },
     ],
     screenshot: {
       path: "/pipeline",
       file: "crm-filter-pipeline.png",
-      alt: "Pipeline board with search, owner filter, and Kanban/Funnel view toggle",
+      alt: "Pipeline board with search, rep filter, and Board/Funnel view toggle",
       blur: BLUR_PIPELINE_CARDS,
     },
   },
@@ -585,7 +588,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
       { text: "Click on a contact's name to open their detail page", target: "crm-contact-name" },
       { text: "View their company, designation, lead source, and contact info", target: "crm-contact-info" },
       { text: "Scroll to see linked **Deals**, **Activities**, and **Notes**", target: "crm-contact-deals" },
-      { text: "Click **Edit** to update any field, or the **+** button in the **Deals** section to create a new deal", target: "crm-contact-edit" },
+      { text: "Click **Edit** to update any field. For a lead, click **Won** (or the **+** in **Deals**) to confirm a project", target: "crm-contact-edit" },
     ],
     screenshot: {
       path: "/crm/contacts",
@@ -630,16 +633,17 @@ export const CRM_ENTRIES: GuideEntry[] = [
   {
     slug: "crm-deal-detail",
     title: "How to view deal details",
-    summary: "Open a deal to see its value, stage history, linked contact, notes, and activity log.",
+    summary: "Open a confirmed project to see its final value, start date, note, customer, documents, and timeline.",
     section: "crm",
     category: "Deals",
-    keywords: ["deal", "detail", "view", "stage", "history", "notes", "value"],
+    keywords: ["deal", "detail", "view", "project", "value", "start", "notes"],
     steps: [
-      { text: "Click **Deals** in the CRM sidebar or open a deal from the Pipeline board", target: "crm-sidebar-deals" },
-      { text: "Click on a deal row to open its detail page", target: "crm-deal-title" },
-      { text: "View the deal value, current stage, expected close date, and owner", target: "crm-deal-summary" },
-      { text: "Check the **Timeline** for all calls, meetings, and notes linked to this deal", target: "crm-deal-activity" },
-      { text: "Update the stage by clicking the **stage badge** and selecting a new stage" },
+      { text: "Click **Deals** in the CRM sidebar", target: "crm-sidebar-deals" },
+      { text: "Click a deal code to open its page", target: "crm-deal-title" },
+      { text: "See the status (Confirmed), final value, won date, expected start and the note", target: "crm-deal-summary" },
+      { text: "Click the **customer's name** to open their contact page", target: "crm-deal-customer-link" },
+      { text: "Click **Edit details** to correct the final value, start date or note" },
+      { text: "Check the **Timeline** for calls, meetings and notes on this deal", target: "crm-deal-activity" },
     ],
     screenshot: {
       path: "/deals",
@@ -784,7 +788,7 @@ export const CRM_RECORDING: SectionRecording = {
   section: "crm",
   startUrl: "/crm",
   actions: [
-    { type: "caption", text: "CRM — track your entire sales process from first contact to closed deal", duration: 3000 },
+    { type: "caption", text: "CRM — track your whole sales process, from first contact to confirmed project", duration: 3000 },
 
     { type: "caption", text: "The Dashboard shows team performance — quotations sent, deal values, and top movers this month" },
     { type: "wait", duration: 2500 },
@@ -796,22 +800,22 @@ export const CRM_RECORDING: SectionRecording = {
     { type: "caption", text: "Add new contacts manually or import them — each contact links to their WhatsApp conversation" },
     { type: "highlight", selector: "[data-guide='crm-contact-create']", label: "New Contact" },
 
-    { type: "caption", text: "Leads — incoming prospects from WhatsApp chatbot, ad campaigns, and manual entry" },
+    { type: "caption", text: "Leads — the prospects you're working on, each at a sales stage" },
     { type: "click", selector: "[data-guide='crm-sidebar-leads']" },
     { type: "wait", duration: 2000 },
-    { type: "caption", text: "Qualify leads, assign them to sales reps, and convert them into deals when ready" },
+    { type: "caption", text: "Move leads through the stages, and mark them Won when the project is confirmed" },
     { type: "wait", duration: 2000 },
 
-    { type: "caption", text: "Deals — track revenue with amounts, stages, expected close dates, and win probability" },
+    { type: "caption", text: "Deals — your confirmed projects: final value, start date and progress" },
     { type: "click", selector: "[data-guide='crm-sidebar-deals']" },
     { type: "wait", duration: 2000 },
-    { type: "caption", text: "Each deal links to a contact and company — attach quotations and log all activities" },
+    { type: "caption", text: "Each deal links to its customer — click the name to open their contact page" },
     { type: "wait", duration: 1500 },
 
-    { type: "caption", text: "Pipeline — drag-and-drop Kanban board showing deals across custom stages" },
+    { type: "caption", text: "Pipeline — your leads on a board by sales stage" },
     { type: "click", selector: "[data-guide='crm-sidebar-pipeline']" },
     { type: "wait", duration: 2500 },
-    { type: "caption", text: "Move deals between stages by dragging — the pipeline updates totals automatically" },
+    { type: "caption", text: "Drag a lead to another stage, or pick one from its card" },
     { type: "scroll", direction: "down", amount: 300 },
     { type: "wait", duration: 2000 },
 

@@ -1,13 +1,13 @@
 // Convert a (confirmed) quotation into an invoice — one invoice per quote.
 // Snapshots the quote's line items + totals, names it "<Customer>.inv (<Sport>)",
-// marks the quote accepted (stamping acceptedAt, which the PATCH route never
-// did), and marks the deal WON via the canonical transitionDeal() path.
+// and marks the quote accepted (stamping acceptedAt, which the PATCH route
+// never did). It doesn't touch deals: a deal is a confirmed project, created
+// only with "Won" on the customer.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { nextInvoiceNumber } from "@/lib/invoice/number";
-import { transitionDeal } from "@/lib/funnel/transitionDeal";
 
 export const runtime = "nodejs";
 
@@ -92,32 +92,6 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   if (!invoice) {
     console.error("[invoice/convert] number collision after retries", lastError);
     return NextResponse.json({ error: "Could not assign a unique invoice number. Try again." }, { status: 503 });
-  }
-
-  // Mark the deal WON (best-effort — the invoice already exists and must not be
-  // rolled back if the stage move fails). Uses the canonical transition, which
-  // sets outcome=WON, wonValue, closedAt, stage history and Conversation sync.
-  if (quote.dealId) {
-    try {
-      const wonStage = await prisma.funnelStage.findFirst({ where: { stageType: "won", isActive: true } });
-      if (wonStage) {
-        // Won value = the SUM of all invoices on this deal (the just-created one
-        // is already persisted), not just this quote's total — a deal with two
-        // converted quotes should show the combined invoiced value, and
-        // transitionDeal overwrites (not accumulates) wonValue by design.
-        const agg = await prisma.invoice.aggregate({ where: { dealId: quote.dealId }, _sum: { grandTotal: true } });
-        const wonValue = Number(agg._sum.grandTotal ?? quote.grandTotal);
-        await transitionDeal({
-          dealId: quote.dealId,
-          toStageId: wonStage.id,
-          userId: user.id,
-          wonValue,
-          note: `Invoice ${invoice.number} issued`,
-        });
-      }
-    } catch (err) {
-      console.error("[invoice/convert] mark-won failed", err);
-    }
   }
 
   return NextResponse.json({ invoice: { id: invoice.id, number: invoice.number, status: invoice.status } });

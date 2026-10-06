@@ -5,7 +5,7 @@
 // shows the customer, the final value, when work starts and how the project
 // is going. The customer's name opens their contact page; the deal code opens
 // the deal page.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
@@ -38,7 +38,7 @@ function fmtInr(n: number | null): string {
 }
 
 function fmtDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
+  return iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }) : "—";
 }
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -81,26 +81,43 @@ export default function DealsClient({
   deals,
   users,
   dateRange,
+  repFilter,
+  summary,
 }: {
   isAdmin: boolean;
   showOwnerFilter: boolean;
   deals: Deal[];
   users: Option[];
   dateRange: DateRange | null;
+  repFilter: string;
+  // Count and total of every deal matching the filters (the list may be capped).
+  summary: { count: number; value: number };
 }) {
   const router = useRouter();
   const toast = useToast();
   const [showNew, setShowNew] = useState(false);
-  const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  // A new filter (or a refresh) brings a new list — never keep ticks on rows
+  // that are no longer shown.
+  useEffect(() => setSelected(new Set()), [deals]);
 
+  // Filters live in the URL so the count and total cover every matching deal.
+  function navigate(next: { from?: string; to?: string; rep?: string }) {
+    const params = new URLSearchParams();
+    const from = next.from ?? dateRange?.from;
+    const to = next.to ?? dateRange?.to;
+    const rep = next.rep ?? repFilter;
+    if (from && to) { params.set("from", from); params.set("to", to); }
+    if (rep) params.set("rep", rep);
+    const qs = params.toString();
+    router.push(qs ? `/deals?${qs}` : "/deals");
+  }
   function applyDateRange(range: DateRange) {
-    router.push(`/deals?from=${range.from}&to=${range.to}`);
+    navigate({ from: range.from, to: range.to });
   }
 
-  const visible = deals.filter((d) => ownerFilter === "all" || d.ownerId === ownerFilter);
-  const total = visible.reduce((sum, d) => sum + (d.value ?? 0), 0);
+  const visible = deals;
 
   function toggleSelected(id: string) {
     setSelected((prev) => {
@@ -123,12 +140,12 @@ export default function DealsClient({
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ deleted: true }),
-        }),
+        }).catch(() => null),
       ),
     );
     setDeleting(false);
     setSelected(new Set());
-    const failed = results.filter((r) => !r.ok).length;
+    const failed = results.filter((r) => !r?.ok).length;
     if (failed > 0) toast.error(`${failed} of ${ids.length} deal(s) could not be deleted`);
     else toast.success(`${ids.length} deal${ids.length === 1 ? "" : "s"} deleted`);
     router.refresh();
@@ -139,7 +156,7 @@ export default function DealsClient({
       <PageHeader
         large
         title="Deals"
-        description={`${visible.length} confirmed project${visible.length === 1 ? "" : "s"} · ${fmtInr(total)}`}
+        description={`${summary.count} confirmed project${summary.count === 1 ? "" : "s"} · ${fmtInr(summary.value)}${summary.count > visible.length ? ` · showing the latest ${visible.length}` : ""}`}
         action={
           <button onClick={() => setShowNew(true)} className="btn btn-primary" data-guide="crm-deals-new">
             + New Deal
@@ -149,7 +166,7 @@ export default function DealsClient({
 
       <div className="mb-3 flex items-center gap-2 flex-wrap" data-guide="crm-deals-filters">
         {showOwnerFilter && (
-          <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="input w-auto text-sm">
+          <select value={repFilter || "all"} onChange={(e) => navigate({ rep: e.target.value === "all" ? "" : e.target.value })} className="input w-auto text-sm" aria-label="Rep">
             <option value="all">All reps</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
@@ -158,7 +175,7 @@ export default function DealsClient({
         )}
         <DateRangePicker value={dateRange ?? { from: "", to: "" }} onApply={applyDateRange} />
         {dateRange && (
-          <button onClick={() => router.push("/deals")} className="text-xs text-slate-500 hover:underline">
+          <button onClick={() => router.push(repFilter ? `/deals?rep=${repFilter}` : "/deals")} className="text-xs text-slate-500 hover:underline">
             Clear date filter
           </button>
         )}
@@ -210,7 +227,7 @@ export default function DealsClient({
         <div className="hidden md:block overflow-x-auto">
           <table className="data-table">
             <thead>
-              <tr>
+              <tr data-guide="crm-deals-columns">
                 {isAdmin && (
                   <th className="w-8">
                     <SelectAllCheckbox ids={visible.map((d) => d.id)} selected={selected} onChange={setSelected} />

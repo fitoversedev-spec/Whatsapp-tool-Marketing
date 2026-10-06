@@ -7,6 +7,10 @@ import LeadsPipelineClient from "./LeadsPipelineClient";
 // The Pipeline board shows LEADS in their sales stages (Lead Generation →
 // Post-Sales Analysis). Deals are confirmed projects only, so they no longer
 // move through a pipeline — they live on the Deals page.
+// The board loads at most this many leads (newest first); beyond that the
+// header says how many are hidden.
+const LIMIT = 1000;
+
 export default async function PipelinePage({
   searchParams,
 }: {
@@ -30,17 +34,19 @@ export default async function PipelinePage({
             ? { ownerUserId: ownerFilter }
             : { ownerUserId: user.id };
 
-  const [stages, leads, reps] = await Promise.all([
+  const leadsWhere = { deletedAt: null, pipelineStage: "LEAD", account: ownerWhere };
+  const [stages, leads, total, reps] = await Promise.all([
     listLeadStages(),
     prisma.accountContact.findMany({
-      where: { deletedAt: null, pipelineStage: "LEAD", account: ownerWhere },
+      where: leadsWhere,
       orderBy: { createdAt: "desc" },
-      take: 500,
+      take: LIMIT,
       select: {
         id: true, name: true, phone: true, leadStageId: true, createdAt: true, promotedToLeadAt: true,
         account: { select: { name: true, city: true, ownerUserId: true, owner: { select: { name: true } } } },
       },
     }),
+    prisma.accountContact.count({ where: leadsWhere }),
     seesAll
       ? prisma.user.findMany({
           where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
@@ -54,6 +60,7 @@ export default async function PipelinePage({
     <LeadsPipelineClient
       view={view}
       owner={ownerFilter}
+      total={total}
       reps={reps}
       stages={stages}
       cards={leads.map((l) => ({

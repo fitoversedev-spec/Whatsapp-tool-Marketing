@@ -35,7 +35,7 @@ const CRM_ALL_TOOLS_GROUPS: AllToolsGroup[] = [
     items: [
       { href: "/crm/companies", label: "Customer segments", icon: "\u{1F3E2}", description: "Contacts grouped by customer segment, business type, lead source, or city" },
       { href: "/crm/invoices", label: "Invoices", icon: "\u{1F9FE}", description: "Convert confirmed quotes to invoices; track payments" },
-      { href: "/crm/import", label: "Import", icon: "\u{1F4E4}", description: "Bulk-load contacts, companies, leads, or deals from a spreadsheet" },
+      { href: "/crm/import", label: "Import", icon: "\u{1F4E4}", description: "Bulk-load contacts and companies from a spreadsheet" },
       { href: "/crm/analytics", label: "CRM Analytics", icon: "\u{1F4C8}", description: "Individual and team performance, best sellers, platform performance" },
       { href: "/crm/settings", label: "CRM Settings", icon: "⚙️", description: "Taxonomies, users, and audit log gathered in one place", adminOnly: true },
     ],

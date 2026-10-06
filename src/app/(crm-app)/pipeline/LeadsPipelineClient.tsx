@@ -29,10 +29,12 @@ function daysSince(iso: string): number {
 }
 
 export default function LeadsPipelineClient({
-  view, owner, reps, stages, cards: initialCards,
+  view, owner, total, reps, stages, cards: initialCards,
 }: {
   view: "kanban" | "funnel";
   owner: string;
+  // All leads matching the rep filter (the board may load fewer).
+  total: number;
   reps: { id: string; name: string }[];
   stages: Stage[];
   cards: Card[];
@@ -62,7 +64,11 @@ export default function LeadsPipelineClient({
     const toStageId = toColId === NO_STAGE ? null : toColId;
     if (card.stageId === toStageId) return;
     if (!card.canEdit) { toast.error("You can't change this lead"); return; }
-    const before = cards;
+    if (toStageId && !stages.find((s) => s.id === toStageId)?.isActive) {
+      toast.error("That stage is switched off — pick another one");
+      return;
+    }
+    const fromStageId = card.stageId;
     setCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, stageId: toStageId } : c)));
     const res = await fetch(`/api/account-contacts/${card.id}`, {
       method: "PATCH",
@@ -70,7 +76,8 @@ export default function LeadsPipelineClient({
       body: JSON.stringify({ leadStageId: toStageId }),
     }).catch(() => null);
     if (!res?.ok) {
-      setCards(before);
+      // Undo just this card's move — other moves may have succeeded meanwhile.
+      setCards((cs) => cs.map((c) => (c.id === card.id && c.stageId === toStageId ? { ...c, stageId: fromStageId } : c)));
       const err = await res?.json().catch(() => ({}));
       toast.error(err?.error ?? "Could not move the lead");
       return;
@@ -89,7 +96,11 @@ export default function LeadsPipelineClient({
 
   return (
     <div className="p-4 sm:p-6">
-      <PageHeader large title="Pipeline" description={`${cards.length} lead${cards.length === 1 ? "" : "s"} by sales stage`} />
+      <PageHeader
+        large
+        title="Pipeline"
+        description={`${total} lead${total === 1 ? "" : "s"} by sales stage${total > cards.length ? ` · showing the newest ${cards.length} — use search or the rep filter` : ""}`}
+      />
 
       <div className="mb-4 flex items-center gap-2 flex-wrap" data-guide="crm-pipeline-controls">
         <input
@@ -157,7 +168,12 @@ export default function LeadsPipelineClient({
                   <div
                     key={c.id}
                     draggable={c.canEdit}
-                    onDragStart={() => setDragId(c.id)}
+                    onDragStart={(e) => {
+                      // Firefox only starts a drag when some data is set.
+                      e.dataTransfer.setData("text/plain", c.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      setDragId(c.id);
+                    }}
                     onDragEnd={() => setDragId(null)}
                     data-guide="crm-pipeline-card"
                     className={`rounded-lg border border-slate-200 bg-white p-2.5 text-sm shadow-sm ${c.canEdit ? "cursor-grab" : ""} ${dragId === c.id ? "opacity-50" : ""}`}
@@ -177,7 +193,11 @@ export default function LeadsPipelineClient({
                         aria-label={`Stage for ${c.name}`}
                         className="mt-1.5 w-full text-xs border border-slate-200 rounded px-1.5 py-1 bg-white"
                       >
-                        {columns.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        {columns.map((s) => (
+                          <option key={s.id} value={s.id} disabled={!s.isActive && s.id !== (c.stageId ?? NO_STAGE)}>
+                            {s.name}{s.isActive ? "" : " (off)"}
+                          </option>
+                        ))}
                       </select>
                     )}
                   </div>

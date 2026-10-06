@@ -21,6 +21,9 @@ export async function POST(req: NextRequest) {
 
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
+  if (parsed.data.target === "DEALS") {
+    return NextResponse.json({ error: "Deals can't be imported — a deal is created by marking a customer Won" }, { status: 400 });
+  }
   const { target, fileName, rows, columnMap, duplicateAction } = parsed.data;
 
   const headers = (rows[0] ?? []).map((h) => String(h ?? ""));

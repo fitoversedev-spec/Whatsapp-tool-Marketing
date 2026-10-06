@@ -63,12 +63,12 @@ export default async function RemindersPage({
     if (r.metaLeadId) {
       section = "Meta Leads";
       sectionLink = `/ad-campaigns/leads/${r.metaLeadId}`;
-    } else if (r.dealId) {
-      section = "CRM Deals";
-      sectionLink = `/deals/${r.dealId}`;
     } else if (r.accountContactId) {
       section = "CRM Contacts";
       sectionLink = `/crm/contacts/${r.accountContactId}`;
+    } else if (r.dealId) {
+      section = "CRM Deals";
+      sectionLink = `/deals/${r.dealId}`;
     } else if (r.conversationId) {
       section = "WhatsApp Inbox";
       sectionLink = `/inbox?conversation=${r.conversationId}`;

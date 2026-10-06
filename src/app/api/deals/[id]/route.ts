@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAdmin, canManageAllCustomers, customerAccess } from "@/lib/rbac";
 import { reassignCustomerRep } from "@/lib/crm/assignRep";
+import { logContactEvent } from "@/lib/crm/contactEvents";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -65,6 +66,10 @@ const patchSchema = z.object({
   estimatedValue: z.number().min(0).max(999999999).nullable().optional(),
   quotedValue: z.number().min(0).max(999999999).nullable().optional(),
   expectedCloseAt: z.string().datetime().nullable().optional(),
+  // The confirmed project's details, set at Won — correctable afterwards.
+  wonValue: z.number().positive().max(999999999).optional(),
+  expectedStartAt: z.string().datetime().nullable().optional(),
+  wonNote: z.string().trim().max(1000).nullable().optional(),
   deleted: z.boolean().optional(),
   // Post-won delivery tracking (Deal.executionStatus/executionStartedAt/
   // deliveryCompletedAt — analytics v2 Phase 4's execution.ts reads these).
@@ -104,6 +109,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (parsed.data.deleted && !isAdmin(user.role)) {
     return NextResponse.json({ error: "Only admin can delete a deal" }, { status: 403 });
   }
+  if ((parsed.data.wonValue !== undefined || parsed.data.expectedStartAt !== undefined || parsed.data.wonNote !== undefined) && deal.outcome !== "WON") {
+    return NextResponse.json({ error: "Only a confirmed (Won) deal has a final value, start date and note" }, { status: 422 });
+  }
   if (parsed.data.executionStatus !== undefined && deal.outcome !== "WON") {
     return NextResponse.json({ error: "Execution status can only be set on a WON deal" }, { status: 422 });
   }
@@ -120,8 +128,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
-  const { deleted, expectedCloseAt, customerProfileId, businessType, accountName, accountCity, accountOwnerUserId, executionStatus, nextActionDueAt, ...rest } = parsed.data;
+  const { deleted, expectedCloseAt, customerProfileId, businessType, accountName, accountCity, accountOwnerUserId, executionStatus, nextActionDueAt, expectedStartAt, wonNote, ...rest } = parsed.data;
   const patch: Record<string, unknown> = { ...rest };
+  if (expectedStartAt !== undefined) patch.expectedStartAt = expectedStartAt ? new Date(expectedStartAt) : null;
+  if (wonNote !== undefined) patch.wonNote = wonNote || null;
   if (expectedCloseAt !== undefined) patch.expectedCloseAt = expectedCloseAt ? new Date(expectedCloseAt) : null;
   if (nextActionDueAt !== undefined) patch.nextActionDueAt = nextActionDueAt ? new Date(nextActionDueAt) : null;
   if (deleted) patch.deletedAt = new Date();
@@ -138,6 +148,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const updated = await prisma.deal.update({ where: { id: params.id }, data: patch });
+
+  // Deleting a confirmed deal undoes the Won: the customer goes back into
+  // Leads at the stage they were in — unless another confirmed deal remains.
+  if (deleted && deal.outcome === "WON" && deal.primaryContactId) {
+    const [contact, otherWon] = await Promise.all([
+      prisma.accountContact.findUnique({ where: { id: deal.primaryContactId }, select: { id: true, deletedAt: true, pipelineStage: true, promotedToLeadAt: true } }),
+      prisma.deal.count({ where: { primaryContactId: deal.primaryContactId, outcome: "WON", deletedAt: null, id: { not: deal.id } } }),
+    ]);
+    if (contact && !contact.deletedAt && contact.pipelineStage !== "LEAD" && otherWon === 0) {
+      await prisma.accountContact.update({
+        where: { id: contact.id },
+        data: { pipelineStage: "LEAD", promotedToLeadAt: contact.promotedToLeadAt ?? new Date() },
+      });
+      await logContactEvent({ contactId: contact.id, actorUserId: user.id, kind: "lead_added", summary: `Back in Leads — deal ${deal.code} was deleted` });
+    }
+  }
 
   if (customerProfileId !== undefined || businessType !== undefined || accountName !== undefined || accountCity !== undefined) {
     await prisma.account.update({

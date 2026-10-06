@@ -12,7 +12,6 @@ import { renderQuotationPdf } from "@/lib/quotation/pdf";
 import { uploadToBlob } from "@/lib/media";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { resolveWhatsAppDelivery } from "@/lib/whatsapp-delivery";
-import { advanceDealStageIfEarlier } from "@/lib/funnel/transitionDeal";
 import { scheduleQuoteFollowUp } from "@/lib/crm/contactLinks";
 import { z } from "zod";
 
@@ -133,19 +132,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     linkedConversationId: q.conversationId,
   });
   if (delivery.mode === "whatsapp-web") {
+    // Only the request that actually turns the draft into "sent" schedules
+    // the follow-up (two quick sends must not create two reminders).
+    const firstSend = (await prisma.quotation.updateMany({ where: { id: params.id, status: "draft" }, data: { status: "sent" } })).count === 1;
     await prisma.quotation.update({
       where: { id: params.id },
       data: { pdfUrl, status: "sent", sentAt: new Date() },
     });
-    if (q.dealId) {
-      await advanceDealStageIfEarlier({
-        dealId: q.dealId,
-        targetStageSlug: "quotation_sent",
-        userId: user.id,
-        note: `Quotation ${q.number} sent`,
-      });
-    } else if (q.accountContactId && q.status === "draft") {
-      await scheduleQuoteFollowUp({ quotationNumber: q.number, accountContactId: q.accountContactId, actorUserId: user.id });
+    // Deals are confirmed projects and never change stage on a send. The
+    // first send gets the 3-day follow-up (on the customer when known).
+    if (firstSend) {
+      await scheduleQuoteFollowUp({ quotationNumber: q.number, accountContactId: q.accountContactId, conversationId: q.conversationId, actorUserId: user.id });
     }
     const introText =
       q.caption?.trim() ||
@@ -188,6 +185,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // 3. Update quotation + mirror to inbox if conversation exists
+  const firstSend = (await prisma.quotation.updateMany({ where: { id: params.id, status: "draft" }, data: { status: "sent" } })).count === 1;
   await prisma.quotation.update({
     where: { id: params.id },
     data: {
@@ -197,21 +195,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     },
   });
 
-  // A quote actually going out is real progress — advance the deal to
-  // "Quotation Sent" if it hasn't reached that point yet (never regresses
-  // a deal already further along). This also write-throughs to the legacy
-  // /pipeline board via transitionDeal()'s own sync (see docs/DECISIONS.md).
-  if (q.dealId) {
-    await advanceDealStageIfEarlier({
-      dealId: q.dealId,
-      targetStageSlug: "quotation_sent",
-      userId: user.id,
-      note: `Quotation ${q.number} sent`,
+  // Deals are confirmed projects and never change stage on a send. The first
+  // send gets the 3-day follow-up (on the customer when known, else the chat).
+  if (firstSend) {
+    await scheduleQuoteFollowUp({
+      quotationNumber: q.number,
+      accountContactId: q.accountContactId,
+      conversationId: q.conversationId ?? delivery.conversationId ?? null,
+      actorUserId: user.id,
     });
-  } else if (q.accountContactId && q.status === "draft") {
-    // No deal for a customer still being worked — keep the 3-day follow-up,
-    // now on the customer's contact (first send only).
-    await scheduleQuoteFollowUp({ quotationNumber: q.number, accountContactId: q.accountContactId, actorUserId: user.id });
   }
 
   const mirrorConversationId = delivery.conversationId;

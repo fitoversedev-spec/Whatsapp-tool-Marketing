@@ -9,7 +9,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildCourtImageNumber } from "@/lib/court-image/schema";
-import { logDocumentDeleted, resolveContactForDocument } from "@/lib/crm/contactLinks";
+import { applyDocumentClassification, logDocumentDeleted, resolveContactForDocument } from "@/lib/crm/contactLinks";
 
 // Permissive layout validator — we accept anything that looks like
 // the right shape and let the canvas reject unknown elements at render
@@ -117,13 +117,25 @@ export async function POST(req: NextRequest) {
   // are confirmed projects only). An explicit dealId is kept for a design for
   // an already-confirmed project.
   const dealId = parsed.data.dealId ?? null;
-  const accountContactId = await resolveContactForDocument({
-    accountContactId: parsed.data.accountContactId,
-    conversationId: parsed.data.conversationId,
-    contactPhone: parsed.data.contactPhone,
-  });
+  const resolved = await resolveContactForDocument(
+    { accountContactId: parsed.data.accountContactId, conversationId: parsed.data.conversationId, contactPhone: parsed.data.contactPhone },
+    user,
+  );
+  if (resolved?.explicit && !resolved.canEdit) {
+    return NextResponse.json({ error: "You can't add a court design to this customer" }, { status: 403 });
+  }
+  const accountContactId = resolved?.id ?? null;
   if (!dealId) {
-    // nothing deal-side to sync
+    // What the wizard asked about the customer lands on the customer.
+    if (accountContactId && resolved?.canEdit) {
+      await applyDocumentClassification({
+        contactId: accountContactId,
+        siteCity: parsed.data.siteCity,
+        leadSourceId: parsed.data.leadSourceId,
+        customerProfileId: parsed.data.customerProfileId,
+        businessType: parsed.data.businessType,
+      });
+    }
   } else if (parsed.data.siteCity) {
     await prisma.deal.update({ where: { id: dealId }, data: { siteCity: parsed.data.siteCity } }).catch(() => null);
   } else {
@@ -215,7 +227,7 @@ export async function DELETE(req: NextRequest) {
 
   const affected = await prisma.courtImage.findMany({
     where: { id: { in: parsed.data.ids } },
-    select: { number: true, dealId: true, createdAt: true },
+    select: { number: true, dealId: true, accountContactId: true, createdAt: true },
   });
   const result = await prisma.courtImage.deleteMany({
     where: { id: { in: parsed.data.ids } },

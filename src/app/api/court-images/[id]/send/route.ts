@@ -13,7 +13,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { resolveWhatsAppDelivery } from "@/lib/whatsapp-delivery";
-import { advanceDealStageIfEarlier } from "@/lib/funnel/transitionDeal";
 
 // Same convention as staffCommands.ts's own APP_URL constant.
 const APP_URL = process.env.APP_URL ?? "https://whatsapp-tool-marketing.vercel.app";
@@ -126,14 +125,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       where: { id: params.id },
       data: { status: "sent", sentAt: new Date() },
     });
-    if (row.dealId) {
-      await advanceDealStageIfEarlier({
-        dealId: row.dealId,
-        targetStageSlug: "design_shared",
-        userId: user.id,
-        note: `Court design ${row.number} sent`,
-      });
-    }
+    // Deals are confirmed projects — sending a design never moves one.
     const links = items.map((i) => `${i.format}: ${APP_URL}/d/${row.id}?format=${i.format}`).join("\n");
     const message = `${baseCaption}\n\n${links}`;
     const digits = delivery.normalizedPhone ?? row.contactPhone.replace(/[^0-9]/g, "");
@@ -200,14 +192,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Same forward-only advance as the quotation send route — a design
   // actually going out is real progress, moves the deal to "Design Shared"
   // if it hasn't gotten there yet (see docs/DECISIONS.md).
-  if (row.dealId) {
-    await advanceDealStageIfEarlier({
-      dealId: row.dealId,
-      targetStageSlug: "design_shared",
-      userId: user.id,
-      note: `Court design ${row.number} sent`,
-    });
-  }
 
   const mirrorConversationId = delivery.conversationId;
   if (mirrorConversationId) {

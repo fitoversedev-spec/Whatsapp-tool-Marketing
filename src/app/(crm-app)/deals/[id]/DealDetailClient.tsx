@@ -41,6 +41,9 @@ type Deal = {
   officeName: string | null;
   primaryContactId: string | null;
   expectedCloseAt: string | null;
+  // Confirmed-project details, set when the lead was marked Won.
+  expectedStartAt: string | null;
+  wonNote: string | null;
   enquiryAt: string;
   siteVisitAt: string | null;
   firstQuotedAt: string | null;
@@ -71,6 +74,11 @@ function fmtInr(n: number | null): string {
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+}
+// Day only — the won date and the expected start carry no meaningful time.
+function fmtDay(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
 // Quotation/court-design status pill colours (same convention as the contact page).
@@ -173,11 +181,19 @@ export default function DealDetailClient({
     }
   }
 
+  // The customer: the primary contact, else the company's first contact.
+  const primary = deal.contacts.find((c) => c.id === deal.primaryContactId) ?? deal.contacts[0] ?? null;
+
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex items-start justify-between gap-3">
         <div data-guide="crm-deal-title">
           <PageHeader large title={deal.title} description={deal.code} backHref="/deals" />
+          {primary && (
+            <Link href={`/crm/contacts/${primary.id}`} className="text-sm font-medium text-court-700 hover:underline" data-guide="crm-deal-customer-link">
+              {primary.name} →
+            </Link>
+          )}
         </div>
         <div className="mt-1 shrink-0 flex items-center gap-3">
           <button
@@ -290,36 +306,29 @@ export default function DealDetailClient({
             <UnifiedTimeline entries={timeline} />
           </div>
 
-          <div className="card p-4">
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Stage history</h3>
-            {stageHistory.length === 0 ? (
-              <p className="text-sm text-slate-400">No stage changes yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {stageHistory.map((h) => (
-                  <div key={h.id} className="text-sm flex items-baseline justify-between">
-                    <div>
-                      <span className="text-slate-400">{h.fromStageName ?? "(start)"}</span>
-                      <span className="mx-1.5 text-slate-300">→</span>
-                      <span className="font-medium text-slate-800">{h.toStageName}</span>
-                    </div>
-                    <div className="text-xs text-slate-500 text-right">
-                      <span className="font-mono">{fmtDate(h.changedAt)}</span>
-                      {h.durationInFromStageSeconds != null && <div className="font-mono">{fmtDuration(h.durationInFromStageSeconds)}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
         <div className="space-y-4">
           <div className="card p-4 space-y-2 text-sm" data-guide="crm-deal-summary">
             <div className="flex justify-between" data-guide="crm-deal-stage">
-              <span className="text-slate-600">Stage</span>
-              <span className="font-medium" style={{ color: deal.stageColorHex ?? undefined }}>{deal.stageName}</span>
+              <span className="text-slate-600">Status</span>
+              <span className="font-medium text-emerald-700">{deal.outcome === "WON" ? "Confirmed" : deal.stageName}</span>
             </div>
+            {deal.wonValue != null && (
+              <div className="flex justify-between">
+                <span className="text-slate-600">Final value</span>
+                <span className="font-semibold text-turf-600 font-mono">{fmtInr(deal.wonValue)}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-slate-600">Won on</span>
+              <span className="text-slate-800 font-mono">{fmtDay(deal.closedAt)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-600">Expected start</span>
+              <span className="text-slate-800 font-mono">{fmtDay(deal.expectedStartAt)}</span>
+            </div>
+            {deal.wonNote && <div className="text-sm text-slate-700 whitespace-pre-wrap border-l-2 border-slate-200 pl-2">{deal.wonNote}</div>}
             <div className="flex justify-between">
               <span className="text-slate-600">Owner</span>
               <span className="text-slate-800">{deal.ownerName ?? "—"}</span>
@@ -357,29 +366,14 @@ export default function DealDetailClient({
               <span className="text-slate-800">{deal.officeName ?? "—"}</span>
             </div>
             <div className="flex justify-between" data-guide="crm-deal-primary-contact">
-              <span className="text-slate-600">Primary contact</span>
-              <span className="text-slate-800">{deal.contacts.find((c) => c.id === deal.primaryContactId)?.name ?? "—"}</span>
+              <span className="text-slate-600">Customer</span>
+              {primary ? (
+                <Link href={`/crm/contacts/${primary.id}`} className="text-court-700 hover:underline font-medium">{primary.name}</Link>
+              ) : (
+                <span className="text-slate-800">—</span>
+              )}
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-600">Expected close</span>
-              <span className="text-slate-800 font-mono">{deal.expectedCloseAt ? new Date(deal.expectedCloseAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
-            </div>
-            <div className="border-t border-slate-100 pt-2 flex justify-between">
-              <span className="text-slate-600">Est. value</span>
-              <span className="text-slate-800 font-mono">{fmtInr(deal.estimatedValue)}</span>
-            </div>
-            {deal.wonValue != null && (
-              <div className="flex justify-between">
-                <span className="text-slate-600">Won value</span>
-                <span className="font-medium text-turf-600 font-mono">{fmtInr(deal.wonValue)}</span>
-              </div>
-            )}
-            {deal.outcome && (
-              <div className="flex justify-between">
-                <span className="text-slate-600">Outcome</span>
-                <span className="text-slate-800">{deal.outcome}</span>
-              </div>
-            )}
+
             {(deal.lossReasonName || deal.lossReasonNote) && (
               <div className="pt-1 text-sm text-slate-600">{deal.lossReasonName ?? deal.lossReasonNote}</div>
             )}

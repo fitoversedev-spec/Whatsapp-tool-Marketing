@@ -109,6 +109,7 @@ model User {
   nextActionsDone    ContactNextAction[] @relation("NextActionDoneBy")
   contactInsights    ContactInsight[]    @relation("ContactInsightAuthor")
   contactEvents      ContactEvent[]      @relation("ContactEventActor")
+  contactProductInterests ContactProductInterest[] @relation("ContactProductInterestCreatedBy")
 
   @@map("users")
 }
@@ -724,6 +725,10 @@ model Quotation {
   conversation Conversation?  @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   createdBy    User           @relation(fields: [createdByUserId], references: [id])
   deal         Deal?          @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  // The customer this quote is for — set directly now that quotes no longer
+  // create a deal (dealId stays for confirmed projects and older quotes).
+  accountContactId String?    @map("account_contact_id")
+  accountContact AccountContact? @relation(fields: [accountContactId], references: [id], onDelete: SetNull)
   dealLineItems DealLineItem[]
   invoice      Invoice?
 
@@ -732,6 +737,7 @@ model Quotation {
   @@index([contactPhone])
   @@index([createdAt])
   @@index([dealId, version])
+  @@index([accountContactId])
   @@map("quotations")
 }
 
@@ -962,6 +968,9 @@ model CourtImage {
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   createdBy    User          @relation(fields: [createdByUserId], references: [id])
   deal         Deal?         @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  // The customer this design is for (see Quotation.accountContactId).
+  accountContactId String?   @map("account_contact_id")
+  accountContact AccountContact? @relation(fields: [accountContactId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([conversationId])
@@ -973,6 +982,7 @@ model CourtImage {
   // dealId IN (...) for every deal on a rep's roster; without this it's a
   // full-table scan of court_images on every call.
   @@index([dealId])
+  @@index([accountContactId])
   @@map("court_images")
 }
 
@@ -1085,6 +1095,7 @@ model Product {
   media           ProductMedia[]
   tdsFiles        TdsFile[]
   dealLineItems   DealLineItem[]
+  contactInterests ContactProductInterest[]
   rateHistory     ProductRateHistory[]
 
   @@index([type])
@@ -1463,6 +1474,11 @@ model AccountContact {
   // Internal team-chat thread anchored to this contact (one per contact).
   chatThread ChatThread?
   handoffRequests HandoffRequest[] @relation("HandoffContact")
+  // Quotations / court designs / product interest belong to the contact
+  // directly — deals are only created for confirmed (won) projects.
+  quotations       Quotation[]
+  courtImages      CourtImage[]
+  productInterests ContactProductInterest[]
   coverageGrants  CoverageGrant[]  @relation("CoverageContact")
 
   @@index([accountId])
@@ -1601,6 +1617,27 @@ model ContactEvent {
   @@map("contact_events")
 }
 
+// A product a contact is interested in, kept on the contact itself — the old
+// enquiry-only DealLineItem rows forced a deal into existence just to hold it.
+model ContactProductInterest {
+  id               String   @id @default(uuid())
+  accountContactId String   @map("account_contact_id")
+  productId        String?  @map("product_id")
+  sportId          String?  @map("sport_id")
+  // Free text when no catalogue product fits.
+  label            String?
+  createdByUserId  String?  @map("created_by_user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  accountContact AccountContact @relation(fields: [accountContactId], references: [id], onDelete: Cascade)
+  product        Product?       @relation(fields: [productId], references: [id])
+  sport          Sport?         @relation(fields: [sportId], references: [id])
+  createdBy      User?          @relation("ContactProductInterestCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([accountContactId])
+  @@map("contact_product_interests")
+}
+
 model InsightDocument {
   id             String    @id @default(uuid())
   authorId       String    @map("author_id")
@@ -1712,6 +1749,10 @@ model Deal {
   negotiationAt   DateTime? @map("negotiation_at")
   closedAt        DateTime? @map("closed_at")
   expectedCloseAt DateTime? @map("expected_close_at")
+  // Filled in when a project is confirmed ("Won" / "+ New Deal"): when work
+  // is expected to start on site, and the rep's short note.
+  expectedStartAt DateTime? @map("expected_start_at")
+  wonNote         String?   @map("won_note")
 
   // "WON" | "LOST" | "DROPPED" | null (still open)
   outcome        String?
@@ -1856,6 +1897,7 @@ model Sport {
   createdAt DateTime @default(now()) @map("created_at")
 
   dealLineItems DealLineItem[]
+  contactInterests ContactProductInterest[]
 
   @@map("sports")
 }

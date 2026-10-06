@@ -13,6 +13,7 @@ import { uploadToBlob } from "@/lib/media";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { resolveWhatsAppDelivery } from "@/lib/whatsapp-delivery";
 import { advanceDealStageIfEarlier } from "@/lib/funnel/transitionDeal";
+import { scheduleQuoteFollowUp } from "@/lib/crm/contactLinks";
 import { z } from "zod";
 
 // Same convention as staffCommands.ts's own APP_URL constant.
@@ -143,6 +144,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         userId: user.id,
         note: `Quotation ${q.number} sent`,
       });
+    } else if (q.accountContactId && q.status === "draft") {
+      await scheduleQuoteFollowUp({ quotationNumber: q.number, accountContactId: q.accountContactId, actorUserId: user.id });
     }
     const introText =
       q.caption?.trim() ||
@@ -205,6 +208,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       userId: user.id,
       note: `Quotation ${q.number} sent`,
     });
+  } else if (q.accountContactId && q.status === "draft") {
+    // No deal for a customer still being worked — keep the 3-day follow-up,
+    // now on the customer's contact (first send only).
+    await scheduleQuoteFollowUp({ quotationNumber: q.number, accountContactId: q.accountContactId, actorUserId: user.id });
   }
 
   const mirrorConversationId = delivery.conversationId;

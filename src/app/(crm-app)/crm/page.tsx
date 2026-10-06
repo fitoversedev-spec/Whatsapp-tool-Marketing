@@ -110,29 +110,32 @@ export default async function CrmDashboardPage() {
             )}
           </div>
 
-          <div className="card p-4">
-            <h3 className="text-lg font-bold text-slate-900 mb-3">Untouched 7+ days <span className="text-slate-400 font-normal font-mono">{myDay.noRecentActivityDeals.length}</span></h3>
-            {myDay.noRecentActivityDeals.length === 0 ? (
-              <p className="text-sm text-slate-400">Every open deal has recent activity.</p>
+          <div className="card p-4" data-guide="crm-myday-untouched">
+            <h3 className="text-lg font-bold text-slate-900 mb-3">Leads untouched 7+ days <span className="text-slate-400 font-normal font-mono">{myDay.untouchedLeads.length}</span></h3>
+            {myDay.untouchedLeads.length === 0 ? (
+              <p className="text-sm text-slate-400">Every lead has recent activity.</p>
             ) : (
-              <div className="space-y-1.5">
-                {myDay.noRecentActivityDeals.map((d) => (
-                  <Link key={d.id} href={`/deals/${d.id}`} className="block text-sm text-court-700 hover:underline"><span className="font-mono">{d.code}</span> — {d.title}</Link>
+              <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                {myDay.untouchedLeads.map((l) => (
+                  <Link key={l.id} href={`/crm/contacts/${l.id}`} className="flex items-center justify-between gap-2 text-sm text-court-700 hover:underline">
+                    <span className="truncate">{l.name}{l.company ? <span className="text-slate-500"> · {l.company}</span> : null}</span>
+                    <span className="text-xs text-slate-400 font-mono shrink-0">{fmtDate(l.lastTouchAt)}</span>
+                  </Link>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="card p-4">
-            <h3 className="text-lg font-bold text-slate-900 mb-3">Closing this week <span className="text-slate-400 font-normal font-mono">{myDay.closingThisWeek.length}</span></h3>
-            {myDay.closingThisWeek.length === 0 ? (
-              <p className="text-sm text-slate-400">No expected close dates in the next 7 days.</p>
+          <div className="card p-4" data-guide="crm-myday-next-actions">
+            <h3 className="text-lg font-bold text-slate-900 mb-3">Next actions this week <span className="text-slate-400 font-normal font-mono">{myDay.nextActionsThisWeek.length}</span></h3>
+            {myDay.nextActionsThisWeek.length === 0 ? (
+              <p className="text-sm text-slate-400">No next actions due in the next 7 days.</p>
             ) : (
-              <div className="space-y-1.5">
-                {myDay.closingThisWeek.map((d) => (
-                  <Link key={d.id} href={`/deals/${d.id}`} className="flex items-center justify-between text-sm text-court-700 hover:underline">
-                    <span><span className="font-mono">{d.code}</span> — {d.title}</span>
-                    <span className="text-xs text-slate-400 font-mono">{fmtDate(d.expectedCloseAt)}</span>
+              <div className="space-y-2">
+                {myDay.nextActionsThisWeek.map((a) => (
+                  <Link key={a.id} href={`/crm/contacts/${a.contactId}`} className="block text-sm hover:underline">
+                    <span className="text-slate-800">{a.text}</span>
+                    <div className="text-xs text-slate-500"><span className="text-court-700">{a.contactName}</span> · <span className="font-mono">{fmtDateTime(a.dueAt)}</span></div>
                   </Link>
                 ))}
               </div>
@@ -141,19 +144,6 @@ export default async function CrmDashboardPage() {
         </div>
 
         <UpcomingSchedule data={upcoming} />
-
-        {myDay.stuckDeals.length > 0 && (
-          <div className="rounded-md border border-red-200 bg-white p-4">
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Stuck in stage <span className="text-slate-400 font-normal font-mono">{myDay.stuckDeals.length}</span></h3>
-            <div className="flex flex-wrap gap-2">
-              {myDay.stuckDeals.map((d) => (
-                <Link key={d.id} href={`/deals/${d.id}`} className="badge bg-red-100 text-red-700 hover:bg-red-200 font-mono">
-                  {d.code}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

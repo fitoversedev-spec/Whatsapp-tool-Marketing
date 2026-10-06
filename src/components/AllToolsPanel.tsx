@@ -97,14 +97,9 @@ export const ALL_TOOLS_GROUPS: AllToolsGroup[] = [
     ],
   },
   {
+    // Ad Campaigns itself is in the sidebar's main list.
     title: "Meta Ads",
     items: [
-      {
-        href: "/ad-campaigns",
-        label: "Ad Campaigns",
-        icon: "📣",
-        description: "Meta ad performance, lead-gen leads & AI summaries",
-      },
       {
         href: "/ad-campaigns/lead-analytics",
         label: "Lead Analytics",

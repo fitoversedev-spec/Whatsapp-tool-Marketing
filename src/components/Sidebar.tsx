@@ -17,7 +17,7 @@ type Props = {
   tokenExpired?: boolean;
 };
 
-// Primary nav — the 6 most-used items, always visible in the sidebar.
+// Primary nav — the most-used items, always visible in the sidebar.
 // Everything else lives in the All Tools popover (see AllToolsPanel.tsx
 // for the full categorized list).
 const PRIMARY_NAV = [
@@ -27,6 +27,7 @@ const PRIMARY_NAV = [
   { href: "/broadcasts", label: "Broadcasts", icon: "📣" },
   { href: "/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
   { href: "/leads", label: "Bot leads", icon: "🤖" },
+  { href: "/ad-campaigns", label: "Ad campaigns", icon: "📢" },
 ];
 
 export default function Sidebar({
@@ -141,10 +142,7 @@ export default function Sidebar({
     { href: "/portfolio", label: "Portfolio" },
     { href: "/analytics", label: "Broadcast Analytics" },
     { href: "/media", label: "Media library" },
-    // More specific first: startsWith("/ad-campaigns") also matches this URL,
-    // so the lead-analytics entry must precede it to win the label lookup.
     { href: "/ad-campaigns/lead-analytics", label: "Lead Analytics" },
-    { href: "/ad-campaigns", label: "Ad Campaigns" },
     { href: "/settings/quotation-rates", label: "Quotation rates" },
     { href: "/connection", label: "Connection" },
     { href: "/users", label: "Users" },
@@ -153,8 +151,10 @@ export default function Sidebar({
     { href: "/admin/ai-usage", label: "AI usage" },
     { href: "/scout", label: "Site Scout" },
   ];
+  // The most specific match wins (e.g. /ad-campaigns/lead-analytics over /ad-campaigns).
   const currentLabel =
-    ALL_PAGES.find((n) => pathname.startsWith(n.href))?.label ?? "WhatsApp Tool";
+    ALL_PAGES.filter((n) => pathname.startsWith(n.href)).sort((a, b) => b.href.length - a.href.length)[0]?.label ??
+    "WhatsApp Tool";
 
   return (
     <>

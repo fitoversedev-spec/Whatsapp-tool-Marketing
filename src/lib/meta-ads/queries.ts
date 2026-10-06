@@ -12,7 +12,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { fetchAdNames } from "./client";
-import { extractArea } from "./fieldMap";
+import { extractArea, extractStartTime } from "./fieldMap";
 
 export type AdCampaignKpis = {
   totalSpend: number; // rupees
@@ -156,6 +156,7 @@ export type MetaLeadRow = {
   city: string | null; // extracted at ingest from the form's city question
   sport: string | null; // extracted at ingest from the form's sport question
   area: string | null; // extracted at ingest from the form's area/dimensions question
+  startTime: string | null; // "When are you planning to start?" answer as a tidy label (read from fieldData)
   fieldData: string; // raw JSON string of all form answers — client parses defensively
   stage: string; // lead pipeline stage (NEW|CONTACTED|QUALIFIED|CONVERTED|LOST); shown + filtered in the list
   labels: { id: string; name: string; color: string }[]; // applied label chips (for the list view)
@@ -226,6 +227,7 @@ function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
     city: l.city,
     sport: l.sport,
     area,
+    startTime: extractStartTime(l.fieldData),
     fieldData: l.fieldData,
     stage: l.stage,
     labels: l.labels.map((j) => j.label),

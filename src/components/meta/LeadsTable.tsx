@@ -10,6 +10,7 @@ import LeadManagementPanel from "@/components/meta/LeadManagementPanel";
 import type { MetaLeadRow, MetaLeadDetail, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
 import { labelChip, labelDot, stageLabelFromRow, stageChipFromRow, type MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
 import { DropdownFilter, type DropdownOption } from "@/components/DropdownFilter";
+import { START_TIME_ORDER } from "@/lib/meta-ads/fieldMap";
 
 type Tally = { key: string; label: string; count: number };
 
@@ -133,7 +134,7 @@ export default function LeadsTable({
 
   // Filter persistence via sessionStorage
   const storageKey = FILTER_STORAGE_PREFIX + exportFilename;
-  function readSavedFilters(): { city: string; sport: string; area: string; stage: string; assigned?: string; label?: string } {
+  function readSavedFilters(): { city: string; sport: string; area: string; stage: string; assigned?: string; label?: string; start?: string } {
     try {
       const raw = sessionStorage.getItem(storageKey);
       if (raw) return JSON.parse(raw);
@@ -148,13 +149,14 @@ export default function LeadsTable({
   const [stageFilter, setStageFilter] = useState(saved.stage);
   const [assignedQuery, setAssignedQuery] = useState(saved.assigned ?? "");
   const [labelFilter, setLabelFilter] = useState(saved.label ?? "");
+  const [startFilter, setStartFilter] = useState(saved.start ?? "");
 
   // Persist filters to sessionStorage on change
   useEffect(() => {
     try {
-      sessionStorage.setItem(storageKey, JSON.stringify({ city: cityQuery, sport: sportQuery, area: areaQuery, stage: stageFilter, assigned: assignedQuery, label: labelFilter }));
+      sessionStorage.setItem(storageKey, JSON.stringify({ city: cityQuery, sport: sportQuery, area: areaQuery, stage: stageFilter, assigned: assignedQuery, label: labelFilter, start: startFilter }));
     } catch { /* ignore */ }
-  }, [cityQuery, sportQuery, areaQuery, stageFilter, assignedQuery, labelFilter, storageKey]);
+  }, [cityQuery, sportQuery, areaQuery, stageFilter, assignedQuery, labelFilter, startFilter, storageKey]);
 
   // Fetch sidebar detail when a lead is selected
   const fetchSidebarDetail = useCallback(async (leadId: string) => {
@@ -227,9 +229,11 @@ export default function LeadsTable({
         const assignedName = l.assignedToName ?? "Unassigned";
         const assignedOk = !asq || assignedName.toLowerCase().includes(asq);
         const labelOk = !labelFilter || l.labels.some((lb) => lb.name === labelFilter);
-        return cityOk && sportOk && areaOk && stageOk && assignedOk && labelOk;
+        // Exact match — "1–3 months" must not also catch "Within 3 months".
+        const startOk = !startFilter || l.startTime === startFilter;
+        return cityOk && sportOk && areaOk && stageOk && assignedOk && labelOk && startOk;
       }),
-    [localLeads, cq, sq, aq, stageFilter, asq, labelFilter],
+    [localLeads, cq, sq, aq, stageFilter, asq, labelFilter, startFilter],
   );
 
   const allCities = useMemo(() => tally(localLeads, (l) => l.city), [localLeads]);
@@ -247,15 +251,27 @@ export default function LeadsTable({
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   }, [localLeads]);
+  // Start-time answers, soonest first (any unfamiliar answer goes last).
+  const allStartTimes: DropdownOption[] = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of localLeads) if (l.startTime) m.set(l.startTime, (m.get(l.startTime) ?? 0) + 1);
+    const rank = (s: string) => {
+      const i = START_TIME_ORDER.indexOf(s);
+      return i < 0 ? START_TIME_ORDER.length : i;
+    };
+    return [...m.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => rank(a.label) - rank(b.label) || b.count - a.count);
+  }, [localLeads]);
   const cityBreakdown = useMemo(() => tally(filtered, (l) => l.city), [filtered]);
   const sportBreakdown = useMemo(() => tally(filtered, (l) => l.sport), [filtered]);
   const areaBreakdown = useMemo(() => tally(filtered, (l) => l.area), [filtered]);
   const assignedBreakdown = useMemo(() => tally(filtered, (l) => l.assignedToName ?? "Unassigned"), [filtered]);
 
-  const hasFilter = !!(cityQuery || sportQuery || areaQuery || stageFilter || assignedQuery || labelFilter);
+  const hasFilter = !!(cityQuery || sportQuery || areaQuery || stageFilter || assignedQuery || labelFilter || startFilter);
 
   const headers = [
-    "Name", "Phone", "Email", "City", "Sport", "Area", "Form",
+    "Name", "Phone", "Email", "City", "Sport", "Area", "Start", "Form",
     ...(showCampaignColumn ? ["Campaign"] : []),
     "Stage", "Labels", "Captured", "CRM",
   ];
@@ -293,6 +309,9 @@ export default function LeadsTable({
           <DropdownFilter guide="wa-ad-city" label="City" value={cityQuery} onChange={setCityQuery} options={allCities.filter((c) => c.label !== "—")} />
           <DropdownFilter guide="wa-ad-sport" label="Sport" value={sportQuery} onChange={setSportQuery} options={allSports.filter((s) => s.label !== "—")} />
           <DropdownFilter label="Area" value={areaQuery} onChange={setAreaQuery} options={allAreas.filter((a) => a.label !== "—")} />
+          {allStartTimes.length > 0 && (
+            <DropdownFilter guide="wa-ad-start" label="Start time" value={startFilter} onChange={setStartFilter} options={allStartTimes} />
+          )}
           <div data-guide="wa-ad-stage">
             <label className="block text-[11px] font-medium text-slate-600 mb-1">Stage</label>
             <select
@@ -326,6 +345,7 @@ export default function LeadsTable({
                 setStageFilter("");
                 setAssignedQuery("");
                 setLabelFilter("");
+                setStartFilter("");
               }}
               className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
             >
@@ -412,6 +432,7 @@ export default function LeadsTable({
                   {showCampaignColumn && <div className="truncate">{l.campaignName ?? "—"}</div>}
                   <div className="truncate">{l.city ?? "—"}</div>
                   <div className="truncate">{l.sport ?? "—"}</div>
+                  {l.startTime && <div className="truncate">Starts: {l.startTime}</div>}
                 </div>
               </div>
             ))}
@@ -460,6 +481,7 @@ export default function LeadsTable({
                     <td className="whitespace-nowrap text-slate-700">{l.city ?? "—"}</td>
                     <td className="whitespace-nowrap text-slate-700">{l.sport ?? "—"}</td>
                     <td className="whitespace-nowrap text-slate-700">{l.area ?? "—"}</td>
+                    <td className="whitespace-nowrap text-slate-700">{l.startTime ?? "—"}</td>
                     <td className="whitespace-nowrap text-slate-700">{l.formName ?? "—"}</td>
                     {showCampaignColumn && (
                       <td className="whitespace-nowrap text-slate-700">{l.campaignName ?? "—"}</td>

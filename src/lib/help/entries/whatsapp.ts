@@ -371,7 +371,7 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
     roles: ["admin"],
     keywords: ["ad", "campaign", "meta", "facebook", "leads", "performance"],
     steps: [
-      { text: "Open **Ad Campaigns** from the All Tools menu", target: "wa-sidebar-all-tools" },
+      { text: "Click **Ad campaigns** in the sidebar", target: "wa-sidebar-ad-campaigns" },
       { text: "View the list of active and past campaigns with spend and lead counts", target: "wa-campaigns-head" },
       { text: "Click a campaign to drill into its metrics and individual leads", target: "wa-campaign-link" },
       { text: "Open **Lead Analytics** for city-wise demand, repeat submitters, and AI insights" },
@@ -627,16 +627,17 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
   {
     slug: "filter-ad-leads",
     title: "How to filter ad campaign leads",
-    summary: "Filter Meta ad leads by city, sport, area, stage, and assigned rep with searchable dropdowns.",
+    summary: "Filter Meta ad leads by city, sport, area, start time, stage, and assigned rep with searchable dropdowns.",
     section: "whatsapp",
     category: "Ad Campaigns",
     roles: ["admin"],
-    keywords: ["filter", "ad", "leads", "city", "sport", "area", "stage", "assigned"],
+    keywords: ["filter", "ad", "leads", "city", "sport", "area", "start", "timeline", "stage", "assigned"],
     steps: [
-      { text: "Open **Ad Campaigns** from the All Tools menu" },
+      { text: "Click **Ad campaigns** in the sidebar", target: "wa-sidebar-ad-campaigns" },
       { text: "Scroll to the **Lead-gen leads** table", target: "wa-ad-leads-heading" },
       { text: "Use the **City** dropdown to filter leads from a specific city", target: "wa-ad-city" },
       { text: "Use the **Sport** dropdown to filter by sport interest", target: "wa-ad-sport" },
+      { text: "Use the **Start time** dropdown to see leads by when they plan to start (e.g., Immediately, 1–3 months)", target: "wa-ad-start" },
       { text: "Use the **Stage** dropdown to filter by lead stage (e.g., New, Contacted)", target: "wa-ad-stage" },
       { text: "Use the **Assigned To** dropdown to see leads assigned to a specific rep", target: "wa-ad-assigned" },
       { text: "Click **Clear** to reset all filters — filters are remembered during the session" },
@@ -644,7 +645,7 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
     screenshot: {
       path: "/ad-campaigns",
       file: "wa-filter-ad-leads.png",
-      alt: "Ad campaigns page with lead filter dropdowns for city, sport, area, stage",
+      alt: "Ad campaigns page with lead filter dropdowns for city, sport, area, start time, stage",
     },
   },
 

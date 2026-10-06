@@ -1,17 +1,21 @@
 // Members of one broadcast group.
-//   POST   { metaLeadIds } — add ticked Meta ad leads (anyone on the team).
-//   DELETE { contactIds }  — remove people (the group's maker or an admin only).
+//   POST   { metaLeadIds?, contactIds? } — add ticked Meta ad leads and/or
+//          WhatsApp contacts (anyone on the team).
+//   DELETE { contactIds } — remove people (the group's maker or an admin only).
 // Removing someone takes them out of this group only; they stay in WhatsApp
 // contacts and in any other group.
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { MAX_LEADS_PER_REQUEST, addMetaLeadsToGroup, canEditGroup } from "@/lib/broadcast-groups";
+import { MAX_LEADS_PER_REQUEST, addPeopleToGroup, canEditGroup } from "@/lib/broadcast-groups";
 
-const addSchema = z.object({
-  metaLeadIds: z.array(z.string().uuid()).min(1).max(MAX_LEADS_PER_REQUEST),
-});
+const addSchema = z
+  .object({
+    metaLeadIds: z.array(z.string().uuid()).max(MAX_LEADS_PER_REQUEST).optional(),
+    contactIds: z.array(z.string().uuid()).max(MAX_LEADS_PER_REQUEST).optional(),
+  })
+  .refine((b) => (b.metaLeadIds?.length ?? 0) + (b.contactIds?.length ?? 0) > 0, { message: "nobody to add" });
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -23,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const group = await prisma.broadcastGroup.findUnique({ where: { id: params.id }, select: { id: true, name: true } });
   if (!group) return NextResponse.json({ error: "This group no longer exists" }, { status: 404 });
 
-  const result = await addMetaLeadsToGroup(group.id, parsed.data.metaLeadIds, user.id);
+  const result = await addPeopleToGroup(group.id, parsed.data, user.id);
   return NextResponse.json({ ok: true, group, result });
 }
 

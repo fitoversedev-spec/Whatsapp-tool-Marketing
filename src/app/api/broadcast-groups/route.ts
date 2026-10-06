@@ -1,6 +1,7 @@
 // Broadcast groups — list every group (they're shared by the whole team) and
-// create one, optionally filling it with ticked Meta ad leads in the same call
-// (the lead list's "Add to group" → "New group").
+// create one, optionally filling it in the same call with ticked Meta ad leads
+// (a lead list's "Add to group" → "New group") and/or WhatsApp contacts (the
+// Contacts page's "Add to group", or the Groups tab's "New group" picker).
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
@@ -8,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import {
   GROUP_NAME_MAX,
   MAX_LEADS_PER_REQUEST,
-  addMetaLeadsToGroup,
+  addPeopleToGroup,
   findGroupByName,
   tidyGroupName,
 } from "@/lib/broadcast-groups";
@@ -46,6 +47,7 @@ export async function GET() {
 const createSchema = z.object({
   name: z.string().min(1).max(200),
   metaLeadIds: z.array(z.string().uuid()).max(MAX_LEADS_PER_REQUEST).optional(),
+  contactIds: z.array(z.string().uuid()).max(MAX_LEADS_PER_REQUEST).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -80,9 +82,11 @@ export async function POST(req: NextRequest) {
     throw err;
   }
 
-  const result = parsed.data.metaLeadIds?.length
-    ? await addMetaLeadsToGroup(group.id, parsed.data.metaLeadIds, user.id)
-    : { added: 0, alreadyIn: 0, noPhone: 0 };
+  const result = await addPeopleToGroup(
+    group.id,
+    { metaLeadIds: parsed.data.metaLeadIds, contactIds: parsed.data.contactIds },
+    user.id,
+  );
 
   return NextResponse.json({ ok: true, group, result });
 }

@@ -1,19 +1,36 @@
 // Streaming-ish CSV export of selected contacts (or all if no ids given).
 // Returns text/csv so the browser triggers a download with the filename
 // hint we set in Content-Disposition.
+//   GET  ?ids=a,b,c — a handful of ticked contacts
+//   POST form field ids=a,b,c — any number ("Select all N matching" can tick
+//        hundreds, which would be too long for a URL)
 
 import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseFields } from "@/lib/contacts";
 
+function parseIds(raw: string | null): string[] | null {
+  return raw ? raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : null;
+}
+
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return new Response("unauthorized", { status: 401 });
+  return csvResponse(parseIds(req.nextUrl.searchParams.get("ids")));
+}
 
-  const idsParam = req.nextUrl.searchParams.get("ids");
-  const ids = idsParam ? idsParam.split(",").filter((s) => s.length > 0) : null;
+export async function POST(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return new Response("unauthorized", { status: 401 });
+  const form = await req.formData().catch(() => null);
+  const ids = parseIds(form ? String(form.get("ids") ?? "") : null);
+  // A POST always names its contacts — never fall back to exporting everyone.
+  if (!ids?.length) return new Response("no contacts selected", { status: 400 });
+  return csvResponse(ids);
+}
 
+async function csvResponse(ids: string[] | null): Promise<Response> {
   const contacts = await prisma.contact.findMany({
     where: ids ? { id: { in: ids } } : {},
     include: { tags: { include: { tag: true } } },

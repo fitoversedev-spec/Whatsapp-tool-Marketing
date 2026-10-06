@@ -48,12 +48,16 @@ function ConsentBadge({ allowed }: { allowed: boolean }) {
 export default function ContactsClient({
   initialContacts,
   total,
+  poolTotal: poolTotalProp,
   fieldKeys,
   allTags,
   activeTagFilter,
 }: {
   initialContacts: Contact[];
+  // Contacts matching the opening ?tag= filter (or the whole pool without one).
   total: number;
+  // Every contact in the pool, whatever the filter.
+  poolTotal: number;
   fieldKeys: string[];
   allTags: ContactTag[];
   activeTagFilter: string | null;
@@ -67,7 +71,7 @@ export default function ContactsClient({
   const allTagsMap = useMemo(() => new Map(allTags.map((t) => [t.id, t])), [allTags]);
   // poolTotal = unfiltered count of every contact in the pool (header).
   // filteredCount = how many match the current search/filter (shown alongside when active).
-  const [poolTotal, setPoolTotal] = useState(total);
+  const [poolTotal, setPoolTotal] = useState(poolTotalProp);
   const [filteredCount, setFilteredCount] = useState(total);
   const [keys, setKeys] = useState<string[]>(fieldKeys);
   const [page, setPage] = useState(1);
@@ -86,12 +90,7 @@ export default function ContactsClient({
     async (opts?: { page?: number }) => {
       setLoading(true);
       const p = opts?.page ?? 1;
-      const params = new URLSearchParams();
-      if (search) params.set("search", search);
-      if (filterField && filterValue) {
-        params.set("field", filterField);
-        params.set("value", filterValue);
-      }
+      const params = filterParams();
       params.set("page", String(p));
       const res = await fetch(`/api/contacts?${params}`);
       setLoading(false);
@@ -103,14 +102,78 @@ export default function ContactsClient({
         setPage(data.page);
       }
     },
-    [search, filterField, filterValue]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [search, filterField, filterValue, tagFilter]
   );
 
-  // Debounced reload on search/filter change
+  // The list's current search + field filter + tag, as /api/contacts params.
+  // The tag must be included: without it the reload below would replace a
+  // tag-filtered list with every contact.
+  function filterParams(): URLSearchParams {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (filterField && filterValue) {
+      params.set("field", filterField);
+      params.set("value", filterValue);
+    }
+    if (tagFilter) params.set("tag", tagFilter);
+    return params;
+  }
+
+  // Debounced reload on search/filter/tag change
   useEffect(() => {
     const t = setTimeout(() => load({ page: 1 }), 300);
     return () => clearTimeout(t);
-  }, [search, filterField, filterValue, load]);
+  }, [search, filterField, filterValue, tagFilter, load]);
+
+  // "Select all N matching": ticks every contact the current search/filter
+  // finds, beyond this page. Bulk actions (tag, campaigns on/off, add to group,
+  // export, delete) then apply to all of them. Changing the search or filter
+  // afterwards drops that selection so it can't act on contacts no longer shown.
+  const [selectingAll, setSelectingAll] = useState(false);
+  const [allMatchingFor, setAllMatchingFor] = useState<string | null>(null);
+  const filterKey = JSON.stringify([search, filterField, filterValue, tagFilter]);
+  useEffect(() => {
+    if (allMatchingFor !== null && allMatchingFor !== filterKey) {
+      setSelectedIds(new Set());
+      setAllMatchingFor(null);
+    }
+  }, [filterKey, allMatchingFor]);
+
+  async function selectAllMatching() {
+    setSelectingAll(true);
+    try {
+      const params = filterParams();
+      params.set("idsOnly", "1");
+      const res = await fetch(`/api/contacts?${params}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setSelectedIds(new Set(data.ids as string[]));
+      setAllMatchingFor(filterKey);
+    } catch {
+      toast.error("Could not select them all — try again");
+    } finally {
+      setSelectingAll(false);
+    }
+  }
+
+  const pageAllSelected = contacts.length > 0 && contacts.every((c) => selectedIds.has(c.id));
+  const selectionNote =
+    filteredCount > contacts.length ? (
+      allMatchingFor === filterKey && selectedIds.size >= filteredCount ? (
+        <span className="text-xs opacity-90">All {filteredCount.toLocaleString()} matching are selected</span>
+      ) : pageAllSelected ? (
+        <button
+          type="button"
+          onClick={() => void selectAllMatching()}
+          disabled={selectingAll}
+          data-guide="wa-contacts-select-all-matching"
+          className="text-xs font-semibold underline hover:opacity-90 disabled:opacity-60"
+        >
+          {selectingAll ? "Selecting…" : `Select all ${filteredCount.toLocaleString()} matching`}
+        </button>
+      ) : null
+    ) : null;
 
   function refreshAll() {
     load({ page: 1 });
@@ -238,9 +301,14 @@ export default function ContactsClient({
             count={selectedIds.size}
             selectedIds={Array.from(selectedIds)}
             allTags={allTags}
-            onClear={() => setSelectedIds(new Set())}
+            selectionNote={selectionNote}
+            onClear={() => {
+              setSelectedIds(new Set());
+              setAllMatchingFor(null);
+            }}
             onApplied={() => {
               setSelectedIds(new Set());
+              setAllMatchingFor(null);
               router.refresh();
             }}
           />
@@ -248,11 +316,11 @@ export default function ContactsClient({
 
         {contacts.length === 0 ? (
           <div className="card p-8 sm:p-12 text-center text-slate-500">
-            {search || filterField
+            {search || filterField || tagFilter
               ? "No contacts match your search/filter."
               : "No contacts yet. Click "}
-            {!search && !filterField && <strong>Upload file</strong>}
-            {!search && !filterField && " to import your contact list."}
+            {!search && !filterField && !tagFilter && <strong>Upload file</strong>}
+            {!search && !filterField && !tagFilter && " to import your contact list."}
           </div>
         ) : (
           <>

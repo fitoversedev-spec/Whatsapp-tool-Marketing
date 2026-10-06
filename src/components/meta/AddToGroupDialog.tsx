@@ -19,19 +19,27 @@ function resultMessage(groupName: string, r: AddResult): string {
   return parts.join(" · ");
 }
 
-// Put the ticked ad leads into a broadcast group — an existing one or a new
-// one named here. Each lead's phone goes into WhatsApp contacts (same as the
-// row's "→ WhatsApp" button) and joins the group; leads without a phone are
-// skipped. Groups are listed and sent to from the Broadcasts page.
+// Put ticked people into a broadcast group — an existing one or a new one named
+// here. Two kinds of people:
+//   leads    — ad campaign leads; each lead's phone goes into WhatsApp contacts
+//              (same as the row's "→ WhatsApp" button) and joins the group;
+//              leads without a phone are skipped.
+//   contacts — WhatsApp contacts ticked on the Contacts page; they join as is.
+// Groups are listed and sent to from the Broadcasts page.
 export default function AddToGroupDialog({
   leadIds,
+  contactIds,
   onClose,
   onDone,
 }: {
-  leadIds: string[];
+  leadIds?: string[];
+  contactIds?: string[];
   onClose: () => void;
   onDone: () => void;
 }) {
+  const people = leadIds?.length
+    ? { key: "metaLeadIds" as const, ids: leadIds, one: "lead", many: "leads" }
+    : { key: "contactIds" as const, ids: contactIds ?? [], one: "contact", many: "contacts" };
   const toast = useToast();
   const [groups, setGroups] = useState<GroupOption[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -85,12 +93,12 @@ export default function AddToGroupDialog({
           ? await fetch(`/api/broadcast-groups/${groupId}/members`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ metaLeadIds: leadIds }),
+              body: JSON.stringify({ [people.key]: people.ids }),
             })
           : await fetch("/api/broadcast-groups", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: newName, metaLeadIds: leadIds }),
+              body: JSON.stringify({ name: newName, [people.key]: people.ids }),
             });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -132,14 +140,17 @@ export default function AddToGroupDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="add-to-group-title" className="font-semibold text-slate-900">
-          Add {plural(leadIds.length, "lead", "leads")} to a group
+          Add {plural(people.ids.length, people.one, people.many)} to a group
         </h2>
         <p className="text-xs text-slate-500 mt-1">
           Groups are lists you can send a broadcast to from the{" "}
           <Link href="/broadcasts?tab=groups" className="text-court-600 hover:underline">
             Broadcasts
           </Link>{" "}
-          page. The leads are added to your WhatsApp contacts; leads without a phone number are skipped.
+          page.
+          {people.key === "metaLeadIds"
+            ? " The leads are added to your WhatsApp contacts; leads without a phone number are skipped."
+            : " Contacts who blocked campaigns can be added — broadcasts skip them."}
         </p>
 
         <div className="mt-4 inline-flex bg-slate-100 rounded-md p-0.5 text-xs">

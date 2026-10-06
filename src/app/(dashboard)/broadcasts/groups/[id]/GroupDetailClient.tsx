@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import ContactPickerDialog from "../../ContactPickerDialog";
 
 export type GroupMemberRow = {
   contactId: string;
@@ -49,6 +50,8 @@ export default function GroupDetailClient({
   const [newName, setNewName] = useState<string | null>(null);
   const group = newName ? { ...groupProp, name: newName } : groupProp;
   const members = useMemo(() => membersProp.filter((m) => !removedIds.has(m.contactId)), [membersProp, removedIds]);
+  const [addingPeople, setAddingPeople] = useState(false);
+  const memberIds = useMemo(() => new Set(members.map((m) => m.contactId)), [members]);
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -179,6 +182,14 @@ export default function GroupDetailClient({
                 Send broadcast
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => setAddingPeople(true)}
+              data-guide="wa-group-add-people"
+              className="btn btn-secondary"
+            >
+              + Add people
+            </button>
             {canEdit && !renaming && (
               <>
                 <button type="button" onClick={() => setRenaming(true)} disabled={busy} className="btn btn-secondary">
@@ -197,6 +208,20 @@ export default function GroupDetailClient({
           </div>
         }
       />
+
+      {addingPeople && (
+        <ContactPickerDialog
+          mode="add"
+          group={{ id: group.id, name: group.name }}
+          existingIds={memberIds}
+          onClose={() => setAddingPeople(false)}
+          onDone={() => {
+            setAddingPeople(false);
+            setRemovedIds(new Set());
+            router.refresh();
+          }}
+        />
+      )}
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-4">
         {renaming && (
@@ -240,11 +265,16 @@ export default function GroupDetailClient({
 
         {members.length === 0 ? (
           <div className="card p-8 text-center text-slate-500">
-            Nobody in this group yet. On the{" "}
+            Nobody in this group yet. Click <strong>+ Add people</strong> to pick WhatsApp contacts, or tick people on
+            the{" "}
+            <Link href="/contacts" className="text-court-600 font-medium hover:underline">
+              Contacts
+            </Link>{" "}
+            or{" "}
             <Link href="/ad-campaigns" className="text-court-600 font-medium hover:underline">
               Ad campaigns
             </Link>{" "}
-            page, tick leads and choose <strong>Add to group</strong>.
+            page and choose <strong>Add to group</strong>.
           </div>
         ) : (
           <>

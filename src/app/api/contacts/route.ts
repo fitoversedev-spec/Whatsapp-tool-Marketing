@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizePhone } from "@/lib/phone";
 import { parseFields, contactPassesFilters, ContactFilterRule } from "@/lib/contacts";
 
-// GET /api/contacts?search=&page=&field=&value=
+// GET /api/contacts?search=&page=&field=&value=&tag=[&idsOnly=1]
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -60,6 +60,13 @@ export async function GET(req: NextRequest) {
   }
 
   const total = filtered.length;
+
+  // ?idsOnly=1 — every matching id, unpaged: "Select all N matching" on the
+  // Contacts page and in a group's "Add people" picker.
+  if (sp.get("idsOnly") === "1") {
+    return NextResponse.json({ ids: filtered.map((c) => c.id), total });
+  }
+
   const start = (page - 1) * pageSize;
   const pageItems = filtered.slice(start, start + pageSize);
 

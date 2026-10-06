@@ -52,6 +52,7 @@ export default async function ContactsPage({
         accountContactId: c.accountContactId,
       }))}
       total={total}
+      poolTotal={allForMeta.length}
       fieldKeys={Array.from(fieldKeys).sort()}
       allTags={allTags.map((t) => ({ id: t.id, name: t.name, color: t.color }))}
       activeTagFilter={tagFilter}

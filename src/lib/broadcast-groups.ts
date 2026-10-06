@@ -1,7 +1,9 @@
 // Broadcast groups — named, shared lists of WhatsApp marketing contacts that a
 // broadcast can be sent to (see the BroadcastGroup model). People get in from
-// the Ad campaigns lead lists: tick leads → Add to group. A broadcast stores the
-// group id and reads the members when it sends, so later additions are included.
+// the Ad campaigns lead lists (tick leads → Add to group), from the Contacts
+// page (tick contacts → Add to group) and from a group's own "Add people"
+// picker. A broadcast stores the group id and reads the members when it sends,
+// so later additions are included.
 import { prisma } from "./prisma";
 import { normalizePhone } from "./phone";
 
@@ -117,12 +119,52 @@ export async function addMetaLeadsToGroup(
   }
 
   const contacts = await prisma.contact.findMany({ where: { phone: { in: phones } }, select: { id: true } });
+  const { added, alreadyIn } = await joinGroup(groupId, contacts.map((c) => c.id), userId);
+  return { added, alreadyIn, noPhone };
+}
+
+/**
+ * Put WhatsApp marketing contacts (picked on the Contacts page or in a group's
+ * "Add people" window) into a group. Unknown ids are ignored. Contacts who
+ * blocked campaigns can join — broadcasts skip them when sending.
+ */
+export async function addContactsToGroup(
+  groupId: string,
+  contactIds: string[],
+  userId: string,
+): Promise<AddLeadsResult> {
+  const found = await prisma.contact.findMany({ where: { id: { in: contactIds } }, select: { id: true } });
+  const { added, alreadyIn } = await joinGroup(groupId, found.map((c) => c.id), userId);
+  return { added, alreadyIn, noPhone: 0 };
+}
+
+async function joinGroup(groupId: string, contactIds: string[], userId: string) {
+  if (contactIds.length === 0) return { added: 0, alreadyIn: 0 };
   const created = await prisma.broadcastGroupMember.createMany({
-    data: contacts.map((c) => ({ groupId, contactId: c.id, addedByUserId: userId })),
+    data: contactIds.map((contactId) => ({ groupId, contactId, addedByUserId: userId })),
     skipDuplicates: true,
   });
   if (created.count > 0) {
     await prisma.broadcastGroup.update({ where: { id: groupId }, data: { updatedAt: new Date() } });
   }
-  return { added: created.count, alreadyIn: contacts.length - created.count, noPhone };
+  return { added: created.count, alreadyIn: contactIds.length - created.count };
+}
+
+/** Add whichever of leads / contacts a request carries, and total the counts. */
+export async function addPeopleToGroup(
+  groupId: string,
+  people: { metaLeadIds?: string[]; contactIds?: string[] },
+  userId: string,
+): Promise<AddLeadsResult> {
+  const total: AddLeadsResult = { added: 0, alreadyIn: 0, noPhone: 0 };
+  for (const r of [
+    people.metaLeadIds?.length ? await addMetaLeadsToGroup(groupId, people.metaLeadIds, userId) : null,
+    people.contactIds?.length ? await addContactsToGroup(groupId, people.contactIds, userId) : null,
+  ]) {
+    if (!r) continue;
+    total.added += r.added;
+    total.alreadyIn += r.alreadyIn;
+    total.noPhone += r.noPhone;
+  }
+  return total;
 }

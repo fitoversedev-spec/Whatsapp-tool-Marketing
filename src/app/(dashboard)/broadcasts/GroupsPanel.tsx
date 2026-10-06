@@ -1,14 +1,16 @@
 "use client";
 
 // The Broadcasts page's "Groups" tab: every broadcast group (shared by the
-// whole team) with its size and maker. Open a group to see or remove members;
-// "Send" opens the broadcast composer aimed at that group. Renaming and
-// deleting are for the group's maker or an admin (the API enforces the same).
+// whole team) with its size and maker. "New group" makes one from WhatsApp
+// contacts; open a group to see, add or remove members; "Send" opens the
+// broadcast composer aimed at that group. Renaming and deleting are for the
+// group's maker or an admin (the API enforces the same).
 
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
+import ContactPickerDialog from "./ContactPickerDialog";
 
 export type GroupRow = {
   id: string;
@@ -44,6 +46,7 @@ export default function GroupsPanel({
   // server's list.
   const [newNames, setNewNames] = useState<Record<string, string>>({});
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
   const groups = groupsProp
     .filter((g) => !deletedIds.has(g.id))
     .map((g) => (newNames[g.id] ? { ...g, name: newNames[g.id] } : g));
@@ -103,18 +106,6 @@ export default function GroupsPanel({
     } finally {
       setBusyId(null);
     }
-  }
-
-  if (groups.length === 0) {
-    return (
-      <div className="card p-8 sm:p-12 text-center text-slate-500" data-guide="wa-groups-list">
-        No groups yet. On the{" "}
-        <Link href="/ad-campaigns" className="text-court-600 font-medium hover:underline">
-          Ad campaigns
-        </Link>{" "}
-        page, tick leads and choose <strong>Add to group</strong>.
-      </div>
-    );
   }
 
   function nameCell(g: GroupRow) {
@@ -198,49 +189,83 @@ export default function GroupsPanel({
 
   return (
     <>
-      {/* Mobile cards */}
-      <div className="md:hidden space-y-3" data-guide="wa-groups-list">
-        {groups.map((g) => (
-          <div key={g.id} className="card p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">{nameCell(g)}</div>
-              <span className="shrink-0 text-sm font-mono text-slate-700">{g.memberCount}</span>
-            </div>
-            <div className="text-xs text-slate-500 mt-1">
-              Made by {g.createdByName} · updated {fmtDate(g.updatedAt)}
-            </div>
-            <div className="mt-3">{actions(g)}</div>
-          </div>
-        ))}
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <p className="text-sm text-slate-500">Lists of WhatsApp contacts you can send a broadcast to.</p>
+        <button type="button" onClick={() => setCreating(true)} data-guide="wa-groups-new" className="btn btn-primary">
+          + New group
+        </button>
       </div>
 
-      {/* Desktop table */}
-      <div className="hidden md:block card overflow-hidden" data-guide="wa-groups-list">
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="text-left">Group</th>
-                <th className="!text-right">Members</th>
-                <th className="text-left">Made by</th>
-                <th className="text-left">Updated</th>
-                <th className="!text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((g) => (
-                <tr key={g.id}>
-                  <td>{nameCell(g)}</td>
-                  <td className="text-right font-mono text-slate-700">{g.memberCount}</td>
-                  <td className="text-slate-600">{g.createdByName}</td>
-                  <td className="text-slate-500 text-sm">{fmtDate(g.updatedAt)}</td>
-                  <td>{actions(g)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {creating && (
+        <ContactPickerDialog
+          mode="create"
+          onClose={() => setCreating(false)}
+          onDone={(g) => {
+            setCreating(false);
+            router.push(`/broadcasts/groups/${g.id}`);
+          }}
+        />
+      )}
+
+      {groups.length === 0 ? (
+        <div className="card p-8 sm:p-12 text-center text-slate-500" data-guide="wa-groups-list">
+          No groups yet. Click <strong>+ New group</strong> to make one from your WhatsApp contacts, or tick people on the{" "}
+          <Link href="/contacts" className="text-court-600 font-medium hover:underline">
+            Contacts
+          </Link>{" "}
+          or{" "}
+          <Link href="/ad-campaigns" className="text-court-600 font-medium hover:underline">
+            Ad campaigns
+          </Link>{" "}
+          page and choose <strong>Add to group</strong>.
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3" data-guide="wa-groups-list">
+            {groups.map((g) => (
+              <div key={g.id} className="card p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">{nameCell(g)}</div>
+                  <span className="shrink-0 text-sm font-mono text-slate-700">{g.memberCount}</span>
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  Made by {g.createdByName} · updated {fmtDate(g.updatedAt)}
+                </div>
+                <div className="mt-3">{actions(g)}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block card overflow-hidden" data-guide="wa-groups-list">
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th className="text-left">Group</th>
+                    <th className="!text-right">Members</th>
+                    <th className="text-left">Made by</th>
+                    <th className="text-left">Updated</th>
+                    <th className="!text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((g) => (
+                    <tr key={g.id}>
+                      <td>{nameCell(g)}</td>
+                      <td className="text-right font-mono text-slate-700">{g.memberCount}</td>
+                      <td className="text-slate-600">{g.createdByName}</td>
+                      <td className="text-slate-500 text-sm">{fmtDate(g.updatedAt)}</td>
+                      <td>{actions(g)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }

@@ -153,7 +153,7 @@ export default function ContactDetailClient({
   // Only quote/court still need a deal (their wizards key off dealId); the
   // "deal" case is the standalone +New Deal. Task/meeting/call no longer gate
   // on a deal — they anchor to the contact directly.
-  // "Won" — confirm this customer's project (creates the deal; see WonDealModal).
+  // "Move to deal" — confirm this customer's project (creates the deal; see WonDealModal).
   const [wonOpen, setWonOpen] = useState(false);
   // Task = a one-off Reminder with a priority. It anchors to the contact
   // (deal optional), so a plain open-flag drives the modal — the deal, if any,
@@ -932,10 +932,10 @@ export default function ContactDetailClient({
                     <button
                       onClick={() => setWonOpen(true)}
                       title="Confirmed project — create the deal and move this customer to Deals"
-                      className="rounded-lg px-3 py-1.5 text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
+                      className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
                       data-guide="crm-contact-won"
                     >
-                      Won
+                      Move to deal
                     </button>
                     <button
                       onClick={removeFromLeads}
@@ -1289,7 +1289,7 @@ export default function ContactDetailClient({
                 )}
               </div>
               {deals.length === 0 ? (
-                <p className="text-sm text-slate-400">No confirmed project yet — mark the lead Won when it's confirmed.</p>
+                <p className="text-sm text-slate-400">No confirmed project yet — click Move to deal when it's confirmed.</p>
               ) : (
                 <div className="space-y-2">
                   {deals.map((d) => (

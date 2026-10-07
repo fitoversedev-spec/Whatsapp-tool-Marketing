@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import { DropdownFilter, type DropdownOption } from "@/components/DropdownFilter";
+import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 import WonDealModal from "@/components/crm/WonDealModal";
+import { safeFetch } from "@/lib/safe-fetch";
 
 type Lead = {
   id: string;
@@ -69,9 +71,63 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
   const [repFilter, setRepFilter] = useState("");
   const [stageFilter, setStageFilter] = useState("");
   const [savingStageId, setSavingStageId] = useState<string | null>(null);
-  // "Won" — confirm the project: creates the deal and moves the lead to Deals.
+  // "Move to deal" — confirm the project: creates the deal and moves the lead to Deals.
   const [wonFor, setWonFor] = useState<Lead | null>(null);
   const cities = useMemo(() => cityOptions(leads), [leads]);
+
+  // Ticked leads, for "Remove from Leads". Cleared whenever the filters
+  // change, so it never acts on rows that aren't on screen.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  useEffect(() => {
+    setSelected(new Set());
+  }, [q, cityFilter, repFilter, stageFilter]);
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Takes the ticked leads out of Leads — same as "Remove from Leads" on a
+  // contact page: they stay in Contacts with their stage, notes and
+  // reminders, and "Move to Leads" there brings them back. Leads this viewer
+  // can't edit are skipped by the server (and can't be ticked here anyway).
+  async function removeSelected() {
+    const ids = [...selected];
+    if (!ids.length) return;
+    setRemoving(true);
+    let updated = 0;
+    let skipped = 0;
+    try {
+      for (let i = 0; i < ids.length; i += 200) {
+        const res = await safeFetch("/api/account-contacts/bulk-pipeline", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contactIds: ids.slice(i, i + 200), pipelineStage: null }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast.error(data.error ?? "Could not remove leads");
+          return;
+        }
+        updated += data.updated ?? 0;
+        skipped += data.skippedForbidden ?? 0;
+      }
+      toast.success(
+        `Removed ${updated} lead${updated === 1 ? "" : "s"} from Leads${skipped ? ` · ${skipped} skipped (not yours to edit)` : ""}`
+      );
+      setSelected(new Set());
+      setConfirmRemove(false);
+      router.refresh();
+    } finally {
+      setRemoving(false);
+    }
+  }
 
   async function changeStage(lead: Lead, stageId: string) {
     setSavingStageId(lead.id);
@@ -189,6 +245,8 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
       (!stageFilter || (stageFilter === "__none__" ? !l.leadStageId : l.leadStageId === stageFilter)),
   );
   const filtering = !!(qt || cityQ || repFilter || stageFilter);
+  // Only leads this viewer may edit can be ticked.
+  const selectableIds = visible.filter((l) => l.canEdit).map((l) => l.id);
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
@@ -244,13 +302,47 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
         )}
       </div>
 
+      {selected.size > 0 && (
+        <div
+          className="sticky top-0 z-20 mb-3 flex items-center gap-3 flex-wrap rounded-xl border border-court-200 bg-court-50 px-4 py-2 text-sm text-court-800"
+          data-guide="crm-leads-bulk-bar"
+        >
+          <span className="font-semibold">{selected.size} selected</span>
+          <button
+            onClick={() => setConfirmRemove(true)}
+            className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+            data-guide="crm-leads-remove"
+          >
+            Remove from Leads
+          </button>
+          <button onClick={() => setSelected(new Set())} className="text-xs text-court-700 hover:underline">
+            Clear
+          </button>
+        </div>
+      )}
+
       <div className="card">
         {/* Mobile cards */}
         <div className="md:hidden divide-y divide-slate-100">
+          {selectableIds.length > 0 && (
+            <label className="flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600">
+              <SelectAllCheckbox ids={selectableIds} selected={selected} onChange={setSelected} />
+              Select all
+            </label>
+          )}
           {visible.map((l) => (
-            <div key={l.id} className="p-4">
+            <div key={l.id} className={`p-4 ${selected.has(l.id) ? "bg-court-50" : ""}`}>
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
+                {l.canEdit && (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(l.id)}
+                    onChange={() => toggle(l.id)}
+                    aria-label={`Select ${l.name}`}
+                    className="mt-1 rounded shrink-0"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
                   <Link href={`/crm/contacts/${l.id}`} className="block truncate font-medium text-court-700 hover:underline">
                     {l.name}
                   </Link>
@@ -276,7 +368,7 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
               {l.canEdit && (
                 <div className="mt-3 pt-3 border-t border-slate-100">
                   <button onClick={() => setWonFor(l)} className="w-full rounded-lg py-1.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700">
-                    Won
+                    Move to deal
                   </button>
                 </div>
               )}
@@ -294,6 +386,9 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
           <table className="data-table">
             <thead>
               <tr>
+                <th className="w-8" data-guide="crm-leads-select-all">
+                  <SelectAllCheckbox ids={selectableIds} selected={selected} onChange={setSelected} />
+                </th>
                 <th>Name</th>
                 <th>Company</th>
                 <th>Phone</th>
@@ -307,7 +402,18 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
             </thead>
             <tbody>
               {visible.map((l) => (
-                <tr key={l.id}>
+                <tr key={l.id} className={selected.has(l.id) ? "bg-court-50" : undefined}>
+                  <td>
+                    {l.canEdit && (
+                      <input
+                        type="checkbox"
+                        checked={selected.has(l.id)}
+                        onChange={() => toggle(l.id)}
+                        aria-label={`Select ${l.name}`}
+                        className="rounded"
+                      />
+                    )}
+                  </td>
                   <td>
                     <Link href={`/crm/contacts/${l.id}`} className="font-medium text-court-700 hover:underline" data-guide="crm-leads-row-link">
                       {l.name}
@@ -328,10 +434,10 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
                       <button
                         onClick={() => setWonFor(l)}
                         title="Confirmed project — create the deal and move this lead to Deals"
-                        className="rounded-lg px-3 py-1 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
+                        className="whitespace-nowrap rounded-lg px-3 py-1 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
                         data-guide="crm-leads-convert"
                       >
-                        Won
+                        Move to deal
                       </button>
                     )}
                   </td>
@@ -339,7 +445,7 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
               ))}
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-400">
+                  <td colSpan={10} className="py-8 text-center text-slate-400">
                     {filtering ? "No leads match these filters." : "No leads yet — promote a contact from the Contacts list."}
                   </td>
                 </tr>
@@ -348,6 +454,35 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
           </table>
         </div>
       </div>
+
+      {confirmRemove && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !removing && setConfirmRemove(false)}
+        >
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-slate-900 mb-1">
+              Remove {selected.size} lead{selected.size === 1 ? "" : "s"} from Leads?
+            </h2>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              They stay in Contacts with their stage, notes and reminders. Move to Leads on their contact page brings
+              them back.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button onClick={() => setConfirmRemove(false)} disabled={removing} className="btn btn-ghost">
+                Cancel
+              </button>
+              <button
+                onClick={removeSelected}
+                disabled={removing}
+                className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                {removing ? "Removing…" : "Remove from Leads"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {wonFor && (
         <WonDealModal

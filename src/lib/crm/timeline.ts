@@ -299,10 +299,10 @@ export async function getContactTimeline(
     ...deals.map((d) => ({
       id: `deal-${d.id}`,
       kind: "deal" as const,
-      // Deals are confirmed projects: a won one reads as the win itself (on
+      // Deals are confirmed projects: a won one reads as the move to Deals (on
       // the day it was won). Removed deals stay as history, marked as such.
       title: d.outcome === "WON"
-        ? `Won — confirmed project ${d.code}${d.deletedAt ? " (since removed)" : ""}`
+        ? `Moved to Deals — confirmed project ${d.code}${d.deletedAt ? " (since removed)" : ""}`
         : `Deal created — ${d.title}${d.deletedAt ? " (since removed)" : ""}`,
       detail: d.outcome === "WON"
         ? [d.wonValue != null ? fmtInr(Number(d.wonValue)) : null, d.expectedStartAt ? `starts ${fmtIstDate(d.expectedStartAt)}` : null, d.wonNote].filter(Boolean).join(" · ") || null

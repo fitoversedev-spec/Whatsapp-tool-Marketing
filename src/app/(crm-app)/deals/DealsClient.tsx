@@ -1,7 +1,7 @@
 "use client";
 
-// Deals = confirmed projects only. A deal is created when a lead is marked
-// Won (or from "+ New Deal" here), so there's no stage to move — the list
+// Deals = confirmed projects only. A deal is created when a lead is moved to
+// a deal ("Move to deal", or "+ New Deal" here), so there's no stage to move — the list
 // shows the customer, the final value, when work starts and how the project
 // is going. The customer's name opens their contact page; the deal code opens
 // the deal page.
@@ -196,7 +196,7 @@ export default function DealsClient({
         <div className="md:hidden divide-y divide-slate-100">
           {visible.length === 0 && (
             <div className="py-10 text-center text-sm text-slate-400">
-              No confirmed projects yet — mark a lead Won, or use &quot;+ New Deal&quot;.
+              No confirmed projects yet — click &quot;Move to deal&quot; on a lead, or use &quot;+ New Deal&quot;.
             </div>
           )}
           {visible.map((d) => (
@@ -215,7 +215,7 @@ export default function DealsClient({
                 </div>
               </div>
               <div className="mt-2 text-xs text-slate-500">
-                Won <span className="font-mono">{fmtDate(d.wonAt)}</span>
+                Deal date <span className="font-mono">{fmtDate(d.wonAt)}</span>
                 {d.expectedStartAt && <> · starts <span className="font-mono">{fmtDate(d.expectedStartAt)}</span></>}
                 {d.ownerName && <> · {d.ownerName}</>}
               </div>
@@ -238,7 +238,7 @@ export default function DealsClient({
                 <th className="text-left">Company</th>
                 <th className="!text-right">Value</th>
                 <th className="text-left">Expected start</th>
-                <th className="text-left">Won on</th>
+                <th className="text-left">Deal date</th>
                 <th className="text-left">Rep</th>
                 <th className="text-left">Status</th>
                 {isAdmin && <th className="w-8"><span className="sr-only">Delete</span></th>}
@@ -248,7 +248,7 @@ export default function DealsClient({
               {visible.length === 0 && (
                 <tr>
                   <td colSpan={isAdmin ? 10 : 8} className="py-10 text-center text-slate-400">
-                    No confirmed projects yet — mark a lead Won, or use &quot;+ New Deal&quot;.
+                    No confirmed projects yet — click &quot;Move to deal&quot; on a lead, or use &quot;+ New Deal&quot;.
                   </td>
                 </tr>
               )}

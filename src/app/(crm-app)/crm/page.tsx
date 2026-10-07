@@ -31,8 +31,8 @@ export default async function CrmDashboardPage() {
             {[
               { label: "Quotations sent", curr: thisMonth.quotationsSent, prev: lastMonth.quotationsSent, fmt: (n: number) => String(n) },
               { label: "Quoted value", curr: thisMonth.quotedValue, prev: lastMonth.quotedValue, fmt: fmtInr },
-              { label: "Deals won", curr: thisMonth.dealsWon, prev: lastMonth.dealsWon, fmt: (n: number) => String(n) },
-              { label: "Won value", curr: thisMonth.wonValue, prev: lastMonth.wonValue, fmt: fmtInr },
+              { label: "New deals", curr: thisMonth.dealsWon, prev: lastMonth.dealsWon, fmt: (n: number) => String(n) },
+              { label: "Deal value", curr: thisMonth.wonValue, prev: lastMonth.wonValue, fmt: fmtInr },
             ].map((m) => {
               const d = delta(m.curr, m.prev);
               return (

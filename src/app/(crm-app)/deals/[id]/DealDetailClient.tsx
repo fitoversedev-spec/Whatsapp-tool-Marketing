@@ -308,7 +308,7 @@ export default function DealDetailClient({
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-slate-600">Won on</span>
+              <span className="text-slate-600">Deal date</span>
               <span className="text-slate-800 font-mono">{fmtDay(deal.closedAt)}</span>
             </div>
             <div className="flex justify-between">

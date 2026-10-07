@@ -68,7 +68,7 @@ export async function confirmDeal(args: {
           where: { primaryContactId: contact.id, outcome: "WON", deletedAt: null, createdAt: { gte: new Date(Date.now() - DUPLICATE_WINDOW_MS) } },
           select: { id: true, code: true },
         });
-        if (recent) throw new ConfirmDealError(`${contact.name.trim()} was just marked Won (${recent.code})`, 409, recent);
+        if (recent) throw new ConfirmDealError(`${contact.name.trim()} was just moved to Deals (${recent.code})`, 409, recent);
 
         const d = await tx.deal.create({
           data: {
@@ -100,7 +100,7 @@ export async function confirmDeal(args: {
         return d;
       }, { timeout: 15_000, maxWait: 10_000 });
       if (contact.pipelineStage === "LEAD") {
-        await logContactEvent({ contactId: contact.id, actorUserId: args.actorUserId, kind: "lead_removed", summary: `Won — moved from Leads to Deals (${deal.code})` });
+        await logContactEvent({ contactId: contact.id, actorUserId: args.actorUserId, kind: "lead_removed", summary: `Moved from Leads to Deals (${deal.code})` });
       }
       return deal;
     } catch (err) {

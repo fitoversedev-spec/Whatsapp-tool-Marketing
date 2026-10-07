@@ -1,6 +1,6 @@
 "use client";
 
-// "Won" — confirm a project: final value, expected start date and a short
+// "Move to deal" — confirm a project: final value, expected start date and a short
 // note. Creates the confirmed deal and moves the customer out of Leads. With no
 // contact given (Deals page "+ New Deal") it first asks which customer.
 import { useEffect, useRef, useState } from "react";
@@ -69,7 +69,7 @@ export default function WonDealModal({
     }).catch(() => null);
     const data = await res?.json().catch(() => ({}));
     if (res?.ok) {
-      toast.success(`Won — ${data.deal.code} created`);
+      toast.success(`Moved to Deals — ${data.deal.code} created`);
       onDone(data.deal); // keeps "Saving..." until the parent closes the form
       return;
     }
@@ -92,7 +92,7 @@ export default function WonDealModal({
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !saving && onClose()}>
       <div className="bg-white rounded-xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()} data-guide="crm-won-dialog">
-        <h2 className="font-semibold text-slate-900 mb-1">{contact ? `Won — ${contact.name}` : "New deal"}</h2>
+        <h2 className="font-semibold text-slate-900 mb-1">{contact ? `Move to deal — ${contact.name}` : "New deal"}</h2>
         <p className="text-sm text-slate-600 mb-4">A deal is a confirmed project. The customer moves from Leads to Deals.</p>
         <div className="space-y-3">
           {!contact && (

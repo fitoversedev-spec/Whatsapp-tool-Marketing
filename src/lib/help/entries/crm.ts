@@ -71,7 +71,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
     keywords: ["dashboard", "overview", "KPI", "pipeline", "summary", "crm"],
     steps: [
       { text: "Click **Dashboard** in the CRM sidebar", target: "crm-sidebar-crm" },
-      { text: "Review the KPI cards at the top (quotations sent, quoted value, deals won, won value)", target: "crm-dashboard-kpis" },
+      { text: "Review the KPI cards at the top (quotations sent, quoted value, new deals, deal value)", target: "crm-dashboard-kpis" },
       { text: "Check the **Recent Activity** section for latest updates" },
       { text: "Use the **quick action buttons** to jump to common tasks" },
     ],
@@ -178,21 +178,22 @@ export const CRM_ENTRIES: GuideEntry[] = [
   {
     slug: "crm-leads",
     title: "How to manage CRM leads",
-    summary: "View your leads, move them through the sales stages, and mark them Won when the project is confirmed.",
+    summary: "View your leads, move them through the sales stages, and move them to Deals when the project is confirmed.",
     section: "crm",
     category: "Leads",
-    keywords: ["lead", "manage", "stage", "won", "confirm", "funnel", "reminder"],
+    keywords: ["lead", "manage", "stage", "won", "move to deal", "confirm", "funnel", "reminder", "remove"],
     steps: [
       { text: "Click **Leads** in the CRM sidebar", target: "crm-sidebar-leads" },
       { text: "Each lead shows its **stage**, who **handles** it, and its next **reminder**" },
       { text: "Use the **filters** to narrow by location, stage, or rep", target: "crm-leads-stage-filter" },
       { text: "Change a lead's stage from the row's **Stage** dropdown, or click the name to open their contact page", target: "crm-leads-row-link" },
-      { text: "Click **Won** when the project is confirmed — enter the final value, expected start date and a note, and the customer moves to **Deals**", target: "crm-leads-convert" },
+      { text: "Click **Move to deal** when the project is confirmed — enter the final value, expected start date and a note, and the customer moves to **Deals**", target: "crm-leads-convert" },
+      { text: "Tick leads and click **Remove from Leads** to take them out — they stay in Contacts, and **Move to Leads** on the contact page brings them back", target: "crm-leads-select-all" },
     ],
     screenshot: {
       path: "/crm/leads",
       file: "crm-leads.png",
-      alt: "CRM leads list with each lead's stage, rep and reminder, and the Won button",
+      alt: "CRM leads list with each lead's stage, rep and reminder, and the Move to deal button",
       blur: BLUR_LEADS_TABLE,
     },
   },
@@ -200,14 +201,14 @@ export const CRM_ENTRIES: GuideEntry[] = [
   // ── Deals ──────────────────────────────────────────────
   {
     slug: "create-deal",
-    title: "How to mark a customer Won (create a deal)",
-    summary: "A deal is a confirmed project. Mark a lead Won to create it with the final value, start date and a note.",
+    title: "How to move a customer to Deals (create a deal)",
+    summary: "A deal is a confirmed project. Move a lead to Deals to create it with the final value, start date and a note.",
     section: "crm",
     category: "Deals",
-    keywords: ["deal", "create", "won", "confirm", "project", "value", "revenue"],
+    keywords: ["deal", "create", "won", "move to deal", "confirm", "project", "value", "revenue"],
     steps: [
       { text: "Open the customer's **contact page** by clicking their name", target: "crm-contact-name" },
-      { text: "Click **Won** at the top (for a lead), or the **+** in the **Deals** section", target: "crm-contact-add-deal" },
+      { text: "Click **Move to deal** at the top (for a lead), or the **+** in the **Deals** section", target: "crm-contact-add-deal" },
       { text: "Enter the **final value**, the **expected start date** and a short **note**", target: "crm-won-dialog" },
       { text: "Click **Confirm deal** — the customer moves from Leads to Deals" },
       { text: "From the Deals page, **+ New Deal** asks which customer first" },
@@ -215,8 +216,8 @@ export const CRM_ENTRIES: GuideEntry[] = [
     screenshot: {
       path: "/crm/contacts",
       file: "crm-create-deal.png",
-      alt: "Contact page with the Won form open: final value, expected start date and note",
-      // Opens the first contact, then the Deals section's + (the Won form) — Confirm deal is never clicked.
+      alt: "Contact page with the Move to deal form open: final value, expected start date and note",
+      // Opens the first contact, then the Deals section's + (the Move to deal form) — Confirm deal is never clicked.
       setup: [...OPEN_FIRST_CONTACT, { type: "click", selector: '[data-guide="crm-contact-add-deal"]' }, { type: "wait", duration: 800 }],
       blur: [...BLUR_CONTACT_DETAIL, '[data-guide="crm-won-dialog"] h2'],
       viewport: { width: 1440, height: 1200 },
@@ -225,14 +226,14 @@ export const CRM_ENTRIES: GuideEntry[] = [
   {
     slug: "deals-list",
     title: "How to manage deals",
-    summary: "Your confirmed projects: value, start date, who won it, and how the work is going.",
+    summary: "Your confirmed projects: value, start date, the rep, and how the work is going.",
     section: "crm",
     category: "Deals",
     keywords: ["deals", "projects", "list", "filter", "value", "won", "manage"],
     steps: [
       { text: "Click **Deals** in the CRM sidebar", target: "crm-sidebar-deals" },
-      { text: "Each project shows the customer, deal code, company, final value, expected start, won date, rep and status", target: "crm-deals-columns" },
-      { text: "Filter by **rep** or by the **date it was won**", target: "crm-deals-filters" },
+      { text: "Each project shows the customer, deal code, company, final value, expected start, deal date, rep and status", target: "crm-deals-columns" },
+      { text: "Filter by **rep** or by the **deal date**", target: "crm-deals-filters" },
       { text: "Click the **customer's name** to open their contact page", target: "crm-deals-customer-link" },
       { text: "Click the **deal code** to open the deal page", target: "crm-deals-row-link" },
       { text: "Click **+ New Deal** to confirm a project for an existing customer", target: "crm-deals-new" },
@@ -240,7 +241,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
     screenshot: {
       path: "/deals",
       file: "crm-deals-list.png",
-      alt: "Deals list of confirmed projects with the rep and won-date filters",
+      alt: "Deals list of confirmed projects with the rep and deal-date filters",
       blur: BLUR_DEALS_TABLE,
     },
   },
@@ -588,7 +589,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
       { text: "Click on a contact's name to open their detail page", target: "crm-contact-name" },
       { text: "View their company, designation, lead source, and contact info", target: "crm-contact-info" },
       { text: "Scroll to see linked **Deals**, **Activities**, and **Notes**", target: "crm-contact-deals" },
-      { text: "Click **Edit** to update any field. For a lead, click **Won** (or the **+** in **Deals**) to confirm a project", target: "crm-contact-edit" },
+      { text: "Click **Edit** to update any field. For a lead, click **Move to deal** (or the **+** in **Deals**) to confirm a project", target: "crm-contact-edit" },
     ],
     screenshot: {
       path: "/crm/contacts",
@@ -640,7 +641,7 @@ export const CRM_ENTRIES: GuideEntry[] = [
     steps: [
       { text: "Click **Deals** in the CRM sidebar", target: "crm-sidebar-deals" },
       { text: "Click a deal code to open its page", target: "crm-deal-title" },
-      { text: "See the status (Confirmed), final value, won date, expected start and the note", target: "crm-deal-summary" },
+      { text: "See the status (Confirmed), final value, deal date, expected start and the note", target: "crm-deal-summary" },
       { text: "Click the **customer's name** to open their contact page", target: "crm-deal-customer-link" },
       { text: "Click **Edit details** to correct the final value, start date or note" },
       { text: "Check the **Timeline** for calls, meetings and notes on this deal", target: "crm-deal-activity" },
@@ -803,7 +804,7 @@ export const CRM_RECORDING: SectionRecording = {
     { type: "caption", text: "Leads — the prospects you're working on, each at a sales stage" },
     { type: "click", selector: "[data-guide='crm-sidebar-leads']" },
     { type: "wait", duration: 2000 },
-    { type: "caption", text: "Move leads through the stages, and mark them Won when the project is confirmed" },
+    { type: "caption", text: "Move leads through the stages, and move them to Deals when the project is confirmed" },
     { type: "wait", duration: 2000 },
 
     { type: "caption", text: "Deals — your confirmed projects: final value, start date and progress" },

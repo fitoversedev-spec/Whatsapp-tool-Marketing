@@ -37,11 +37,14 @@ export default function ChatPanel({
   onMinimize,
   onClose,
   onActivity,
+  paused = false,
 }: {
   onMinimize: () => void;
   onClose: () => void;
   // Bubble a read/refresh up so the launcher badge re-polls.
   onActivity: () => void;
+  // True while the panel is minimized: the open thread stops polling.
+  paused?: boolean;
 }) {
   const [view, setView] = useState<"inbox" | "thread">("inbox");
   const [current, setCurrent] = useState<{ entityType: ChatEntityType; entityId: string; label: string } | null>(null);
@@ -185,7 +188,7 @@ export default function ChatPanel({
         </div>
       ) : current ? (
         <div className="flex-1 min-h-0">
-          <ChatThreadView entityType={current.entityType} entityId={current.entityId} onRead={onActivity} />
+          <ChatThreadView entityType={current.entityType} entityId={current.entityId} onRead={onActivity} paused={paused} />
         </div>
       ) : null}
 

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { setFaviconBadge } from "@/lib/favicon";
+import { subscribeLiveCounts } from "@/lib/live-counts";
+import { clearOfflineCaches } from "@/lib/sw-client";
 import ThemeToggle from "./ThemeToggle";
 import AllToolsPanel from "./AllToolsPanel";
 import SectionBadge from "./SectionBadge";
@@ -14,6 +16,7 @@ type Props = {
   pendingCount?: number;
   unreadCount?: number;
   reminderCount?: number;
+  pendingTemplates?: number;
   tokenExpired?: boolean;
 };
 
@@ -35,14 +38,16 @@ export default function Sidebar({
   pendingCount = 0,
   unreadCount: unreadInitial = 0,
   reminderCount: reminderInitial = 0,
-  tokenExpired = false,
+  pendingTemplates: pendingTemplatesInitial = 0,
+  tokenExpired: tokenExpiredInitial = false,
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(unreadInitial);
   const [reminderCount, setReminderCount] = useState(reminderInitial);
-  const [pendingTemplates, setPendingTemplates] = useState(0);
+  const [pendingTemplates, setPendingTemplates] = useState(pendingTemplatesInitial);
+  const [tokenExpired, setTokenExpired] = useState(tokenExpiredInitial);
   const [allToolsOpen, setAllToolsOpen] = useState(false);
   // Collapsed sidebar (desktop only — mobile already uses a drawer).
   // Persisted in localStorage so the user's preference survives reloads.
@@ -83,32 +88,18 @@ export default function Sidebar({
     setAllToolsOpen(false);
   }, [pathname]);
 
-  // Live-poll unread + reminder counts every 15s. Pauses when tab is hidden.
-  useEffect(() => {
-    let cancelled = false;
-    async function refresh() {
-      if (document.visibilityState !== "visible") return;
-      try {
-        const res = await fetch("/api/unread/count");
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        if (cancelled) return;
-        setUnreadCount(data.unread ?? 0);
-        setReminderCount(data.reminders ?? 0);
-        setPendingTemplates(data.pendingTemplates ?? 0);
-      } catch {
-        // ignore transient network errors
-      }
-    }
-    refresh();
-    const timer = setInterval(refresh, 15000);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, []);
+  // Live badge counts from the shared poller (every 30s while the tab is
+  // visible, instantly on a push) — see src/lib/live-counts.ts.
+  useEffect(
+    () =>
+      subscribeLiveCounts((c) => {
+        setUnreadCount(c.unread ?? 0);
+        setReminderCount(c.reminders ?? 0);
+        setPendingTemplates(c.pendingTemplates ?? 0);
+        setTokenExpired(Boolean(c.tokenExpired));
+      }),
+    []
+  );
 
   // Sync browser tab title + favicon when unread count changes.
   useEffect(() => {
@@ -123,6 +114,7 @@ export default function Sidebar({
   }, [unreadCount]);
 
   async function logout() {
+    clearOfflineCaches();
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   }

@@ -377,6 +377,10 @@ model Broadcast {
   // status to "paused" once it's actually safe to stop. Resume clears both.
   pauseRequestedAt DateTime? @map("pause_requested_at")
   pausedAt         DateTime? @map("paused_at")
+  // Sending lock. Sends go out in time-boxed slices (one ~45 s server run
+  // each, see src/lib/sender.ts runSlice); a slice holds this until it ends so
+  // two runs can never send the same broadcast at once. Null = nobody sending.
+  sendingUntil     DateTime? @map("sending_until")
 
   template      Template             @relation(fields: [templateId], references: [id])
   createdBy     User                 @relation(fields: [createdByUserId], references: [id])

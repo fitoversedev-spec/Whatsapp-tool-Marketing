@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import ThemeToggle from "./ThemeToggle";
 import type { Role } from "@/lib/rbac";
 import { GUIDE_SECTIONS } from "@/lib/help/registry";
+import { clearOfflineCaches } from "@/lib/sw-client";
 
 type Props = {
   user: { name: string; email: string; role: Role };
@@ -58,6 +59,7 @@ export default function HelpSidebar({ user }: Props) {
   }
 
   async function logout() {
+    clearOfflineCaches();
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   }

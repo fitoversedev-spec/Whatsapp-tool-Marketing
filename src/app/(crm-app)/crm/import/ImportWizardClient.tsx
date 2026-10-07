@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, ChangeEvent } from "react";
-import * as XLSX from "xlsx";
 import PageHeader from "@/components/PageHeader";
+import { lazyImport } from "@/lib/chunk-reload";
 import { useToast } from "@/components/Toast";
 import { IMPORT_FIELDS, IMPORT_TARGET_LABELS, templateHeaders, autoMatchColumns, type ImportTarget } from "@/lib/import/mapping";
 
@@ -54,7 +54,9 @@ export default function ImportWizardClient() {
 
   const headers = (rows[0] ?? []).map((h) => String(h ?? ""));
 
-  function downloadTemplate(t: ImportTarget) {
+  // The Excel library (~135 kB) loads only when a template or file is used.
+  async function downloadTemplate(t: ImportTarget) {
+    const XLSX = await lazyImport(() => import("xlsx"));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([templateHeaders(t)]);
     XLSX.utils.book_append_sheet(wb, ws, IMPORT_TARGET_LABELS[t]);
@@ -65,7 +67,8 @@ export default function ImportWizardClient() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
+      const XLSX = await lazyImport(() => import("xlsx"));
       const wb = XLSX.read(evt.target?.result, { type: "binary" });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const parsed: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });

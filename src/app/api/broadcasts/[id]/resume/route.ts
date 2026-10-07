@@ -1,15 +1,15 @@
-// Resume a paused broadcast. Clears the pause flags and re-invokes the
-// sender on the same broadcast id. runBroadcast is idempotent — it picks
-// up unsent recipients by querying BroadcastRecipient.status.
+// Resume a paused broadcast. Clears the pause flags and sends the rest in the
+// background, in slices — it picks up unsent recipients by querying
+// BroadcastRecipient.status (src/lib/broadcast-chain.ts).
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { runBroadcast } from "@/lib/sender";
+import { sendInBackground } from "@/lib/broadcast-chain";
 
 export const maxDuration = 60;
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -25,27 +25,18 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     );
   }
 
-  await prisma.broadcast.update({
-    where: { id: params.id },
+  const claimed = await prisma.broadcast.updateMany({
+    where: { id: params.id, status: "paused" },
     data: {
       status: "running",
       pauseRequestedAt: null,
       pausedAt: null,
     },
   });
-
-  try {
-    await runBroadcast(params.id);
-    return NextResponse.json({ ok: true, status: "completed" });
-  } catch (err) {
-    console.error("[broadcast/resume]", params.id, err);
-    await prisma.broadcast.update({
-      where: { id: params.id },
-      data: { status: "failed" },
-    });
-    return NextResponse.json(
-      { error: "resume_failed", message: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+  if (claimed.count === 0) {
+    return NextResponse.json({ error: "Already resumed" }, { status: 422 });
   }
+
+  sendInBackground(new URL(req.url).origin, params.id);
+  return NextResponse.json({ ok: true, status: "running" });
 }

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
+import { postQuoteSend } from "@/lib/quotation/send-client";
 
 // The wizard is heavy and only opens behind "+ New quotation", so code-split
 // it out of the list page's initial bundle and load its chunk on first open.
@@ -52,29 +53,38 @@ export default function QuotationsClient({
   const router = useRouter();
   const toast = useToast();
   const [quotations, setQuotations] = useState<Quotation[]>(initialQuotations);
+  // Quotes whose Send is in flight — the button is locked so a second click
+  // can't send the customer the quote twice.
+  const [sendingIds, setSendingIds] = useState<Set<string>>(() => new Set());
   const [showWizard, setShowWizard] = useState(false);
   const [wizardPrefill, setWizardPrefill] = useState<{ customerName?: string; contactPhone?: string; dealId?: string; contactId?: string; duplicateFrom?: string } | undefined>(undefined);
 
   // Opened from a CRM Contact/Company page's "+ New Quotation" or
-  // "Duplicate" — auto-opens the wizard. contactId attaches the quote to that
-  // customer; quotes never create a deal (deals are confirmed projects only).
+  // "Duplicate", the Inbox contact drawer's "Create quote", or the phone
+  // bottom bar's "New Quote" (?new=1) — auto-opens the wizard. contactId
+  // attaches the quote to that customer; quotes never create a deal (deals
+  // are confirmed projects only). Re-runs when the URL changes, because the
+  // bottom bar can link here while this page is already open.
   const searchParams = useSearchParams();
   useEffect(() => {
+    const isNew = searchParams.get("new") === "1";
     const dealId = searchParams.get("dealId");
     const contactId = searchParams.get("contactId");
     const customerName = searchParams.get("customerName");
     const duplicateFrom = searchParams.get("duplicateFrom");
-    if (!dealId && !contactId && !customerName && !duplicateFrom) return;
+    if (!isNew && !dealId && !contactId && !customerName && !duplicateFrom) return;
     setWizardPrefill({
       dealId: dealId ?? undefined,
       contactId: contactId ?? undefined,
       customerName: customerName ?? undefined,
-      contactPhone: searchParams.get("phone") ?? undefined,
+      // CRM pages send `phone`; the Inbox contact drawer sends `contactPhone`.
+      contactPhone: searchParams.get("phone") ?? searchParams.get("contactPhone") ?? undefined,
       duplicateFrom: duplicateFrom ?? undefined,
     });
     setShowWizard(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Consume the params so closing the wizard doesn't reopen it.
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [searchParams]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
@@ -150,27 +160,44 @@ export default function QuotationsClient({
       toast.error("No contact phone on this quotation");
       return;
     }
+    if (sendingIds.has(q.id)) return;
+    setSendingIds((prev) => new Set(prev).add(q.id));
     // Opened synchronously so browsers don't block it as a popup — its
     // location is set once we know the WhatsApp Web URL (only used for
     // CRM-channel deals; see /api/quotations/[id]/send).
     const pendingTab = window.open("about:blank", "_blank");
-    const res = await fetch(`/api/quotations/${q.id}/send`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) {
+    try {
+      const res = await postQuoteSend(q.id);
+      if (!res) {
+        pendingTab?.close(); // chose not to send it again
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        pendingTab?.close();
+        toast.error(data.error ?? "Send failed");
+        return;
+      }
+      if (data.whatsappWebUrl) {
+        if (pendingTab) pendingTab.location.href = data.whatsappWebUrl;
+        else window.open(data.whatsappWebUrl, "_blank");
+        toast.success(`Quotation ${q.number} ready — send it from the WhatsApp tab that just opened`);
+      } else {
+        pendingTab?.close();
+        toast.success(`Quotation ${q.number} sent`);
+      }
+      setQuotations((prev) => prev.map((x) => x.id === q.id ? { ...x, status: "sent", sentAt: new Date().toISOString() } : x));
+      router.refresh();
+    } catch {
       pendingTab?.close();
-      toast.error(data.error ?? "Send failed");
-      return;
+      toast.error("Network problem — check the quote's status before sending again.");
+    } finally {
+      setSendingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(q.id);
+        return next;
+      });
     }
-    if (data.whatsappWebUrl) {
-      if (pendingTab) pendingTab.location.href = data.whatsappWebUrl;
-      else window.open(data.whatsappWebUrl, "_blank");
-      toast.success(`Quotation ${q.number} ready — send it from the WhatsApp tab that just opened`);
-    } else {
-      pendingTab?.close();
-      toast.success(`Quotation ${q.number} sent`);
-    }
-    setQuotations((prev) => prev.map((x) => x.id === q.id ? { ...x, status: "sent", sentAt: new Date().toISOString() } : x));
-    router.refresh();
   }
 
   async function markStatus(q: Quotation, status: string) {
@@ -258,8 +285,9 @@ export default function QuotationsClient({
         action={
           <div className="flex gap-2">
             {isAdmin && (
+              // One rate sheet page for both apps (there is no /crm copy).
               <Link
-                href={`${basePath || ""}/settings/quotation-rates`}
+                href="/settings/quotation-rates"
                 className="hidden sm:inline-flex self-center text-xs text-slate-600 hover:text-slate-900 px-2"
               >
                 ⚙ Rate sheet
@@ -445,8 +473,12 @@ export default function QuotationsClient({
                       View PDF
                     </a>
                     {q.status === "draft" && q.contactPhone && (
-                      <button onClick={() => send(q)} className="text-xs text-blue-700 hover:underline">
-                        Send
+                      <button
+                        onClick={() => send(q)}
+                        disabled={sendingIds.has(q.id)}
+                        className="text-xs text-blue-700 hover:underline disabled:opacity-50 disabled:no-underline"
+                      >
+                        {sendingIds.has(q.id) ? "Sending…" : "Send"}
                       </button>
                     )}
                     {q.status === "sent" && (
@@ -588,10 +620,11 @@ export default function QuotationsClient({
                           {q.status === "draft" && q.contactPhone && (
                             <button
                               onClick={() => send(q)}
-                              className="text-sm text-blue-700 hover:underline"
+                              disabled={sendingIds.has(q.id)}
+                              className="text-sm text-blue-700 hover:underline disabled:opacity-50 disabled:no-underline"
                               data-guide="wa-quote-send"
                             >
-                              Send
+                              {sendingIds.has(q.id) ? "Sending…" : "Send"}
                             </button>
                           )}
                           {q.status === "sent" && (

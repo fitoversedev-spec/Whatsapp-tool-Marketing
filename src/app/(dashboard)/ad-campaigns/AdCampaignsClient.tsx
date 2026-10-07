@@ -8,7 +8,7 @@ import PageHeader from "@/components/PageHeader";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import { AnalyticsCard } from "@/components/analytics/AnalyticsCard";
 import { ExportButtons } from "@/components/analytics/ExportButtons";
-import { fmtInr, fmtPct } from "@/components/analytics/charts";
+import { fmtInr, fmtPct } from "@/lib/format";
 import { StatusBadge } from "@/components/meta/StatusBadge";
 import MetaAiSummary from "@/components/MetaAiSummary";
 import LeadsTable from "@/components/meta/LeadsTable";

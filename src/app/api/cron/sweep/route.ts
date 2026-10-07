@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     }
   }
   try {
-    const result = await sweepAll();
+    const result = await sweepAll({ origin: req.nextUrl.origin });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     console.error("[cron/sweep] failed", err);

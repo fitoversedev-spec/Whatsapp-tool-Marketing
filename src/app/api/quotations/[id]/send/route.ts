@@ -26,7 +26,14 @@ const APP_URL = process.env.APP_URL ?? "https://whatsapp-tool-marketing.vercel.a
 const bodySchema = z.object({
   caption: z.string().max(1024).nullable().optional(),
   contactPhone: z.string().min(5).max(30).optional(),
+  // Set after the user confirmed "Send it again?" (see RESEND_CONFIRM_MS).
+  confirmResend: z.boolean().optional(),
 });
+
+// A second send of the same quote within this window needs the user's
+// explicit confirm — a double click, a second tab or a retried request must
+// not send the customer a duplicate (src/lib/quotation/send-client.ts asks).
+const RESEND_CONFIRM_MS = 10 * 60 * 1000;
 import type { QuoteLineItem } from "@/lib/quotation/calculator";
 
 export const runtime = "nodejs";
@@ -73,6 +80,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { error: "No contact phone on this quotation; cannot send via WhatsApp" },
       { status: 422 }
     );
+  }
+  if (q.sentAt && Date.now() - q.sentAt.getTime() < RESEND_CONFIRM_MS && !(parsed.success && parsed.data.confirmResend)) {
+    return NextResponse.json({ error: "recently_sent", sentAt: q.sentAt.toISOString() }, { status: 409 });
   }
 
   // 1. Render PDF (or reuse cached)

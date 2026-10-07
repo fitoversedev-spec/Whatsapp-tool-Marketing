@@ -175,7 +175,7 @@ export const PLATFORM_RECORDING: SectionRecording = {
   actions: [
     { type: "caption", text: "Welcome to Fitoverse — your all-in-one sports business platform", duration: 3000 },
     { type: "caption", text: "After logging in, you land on the WhatsApp Marketing Inbox — all your customer conversations appear here", duration: 3000 },
-    { type: "highlight", selector: "[data-guide='wa-inbox']", label: "Inbox" },
+    { type: "highlight", selector: "[data-guide='wa-sidebar-inbox']", label: "Inbox" },
 
     { type: "caption", text: "The sidebar lets you navigate between features — Contacts, Broadcasts, Reminders, and more" },
     { type: "highlight", selector: "[data-guide='wa-sidebar-contacts']", label: "Contacts" },

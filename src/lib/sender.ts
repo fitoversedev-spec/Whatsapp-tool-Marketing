@@ -7,6 +7,16 @@ import { parseFields, contactPassesFilters, ContactFilterRule } from "./contacts
 const PACE_MS = parseInt(process.env.SENDER_PACE_MS || "120", 10); // ~8/sec
 const CHUNK_SIZE = parseInt(process.env.SENDER_CHUNK_SIZE || "50", 10);
 
+// Big broadcasts are sent in slices: one server run sends for SLICE_MS, then
+// hands over to a fresh run (src/lib/broadcast-chain.ts). A Vercel run is
+// capped at 60 s, so one long loop used to be cut off after ~150 people,
+// leaving the broadcast stuck on "running".
+export const SLICE_MS = 45_000;
+// The sending lock outlives its slice a little, in case the last send overruns.
+const LOCK_GRACE_MS = 30_000;
+// How often a running slice re-checks for a Pause request.
+const PAUSE_CHECK_MS = 5_000;
+
 async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -37,13 +47,16 @@ type Template = {
   header?: string | null;
 };
 
-export async function runBroadcast(broadcastId: string): Promise<void> {
-  const broadcast = await prisma.broadcast.findUnique({
-    where: { id: broadcastId },
-    include: { template: true },
-  });
+// Build the recipient list for a broadcast that has just been claimed for
+// sending (its status is already "running"). Only the first time — a resumed
+// broadcast keeps its list. No messages are sent here, so it's quick; it throws
+// if the source (file / sheet) can't be read.
+export async function prepareBroadcast(broadcastId: string): Promise<{ total: number }> {
+  const broadcast = await prisma.broadcast.findUnique({ where: { id: broadcastId } });
   if (!broadcast) throw new Error("broadcast not found");
-  if (broadcast.status === "completed" || broadcast.status === "failed") return;
+
+  const recipientCount = await prisma.broadcastRecipient.count({ where: { broadcastId } });
+  if (recipientCount > 0) return { total: recipientCount };
 
   const mapping = JSON.parse(broadcast.variableMapping) as {
     phoneColumn: string;
@@ -55,44 +68,75 @@ export async function runBroadcast(broadcastId: string): Promise<void> {
     groupId?: string | null;
   };
 
-  const recipientCount = await prisma.broadcastRecipient.count({ where: { broadcastId } });
+  const optOuts = new Set(
+    (await prisma.optOut.findMany({ select: { phoneE164: true } })).map((o) => o.phoneE164)
+  );
 
-  if (recipientCount === 0) {
-    const optOuts = new Set(
-      (await prisma.optOut.findMany({ select: { phoneE164: true } })).map((o) => o.phoneE164)
-    );
+  const insertData =
+    broadcast.sourceType === "contacts"
+      ? await materialiseFromContacts(broadcastId, mapping, optOuts)
+      : await materialiseFromFileOrSheet(broadcastId, broadcast, mapping, optOuts);
 
-    let insertData: Array<{
-      broadcastId: string;
-      phoneE164: string;
-      name: string | null;
-      variables: string;
-    }> = [];
-
-    if (broadcast.sourceType === "contacts") {
-      insertData = await materialiseFromContacts(broadcastId, mapping, optOuts);
-    } else {
-      insertData = await materialiseFromFileOrSheet(broadcastId, broadcast, mapping, optOuts);
-    }
-
-    if (insertData.length > 0) {
-      await prisma.broadcastRecipient.createMany({ data: insertData, skipDuplicates: true });
-    }
-    await prisma.broadcast.update({
-      where: { id: broadcastId },
-      data: { total: insertData.length, status: "running", launchedAt: new Date() },
-    });
-  } else {
-    await prisma.broadcast.update({
-      where: { id: broadcastId },
-      data: { status: "running" },
-    });
+  if (insertData.length > 0) {
+    await prisma.broadcastRecipient.createMany({ data: insertData, skipDuplicates: true });
   }
-
-  await dispatchQueued(broadcastId, broadcast.template, {
-    templateId: broadcast.template.id,
-    senderUserId: broadcast.createdByUserId,
+  await prisma.broadcast.update({
+    where: { id: broadcastId },
+    data: { total: insertData.length },
   });
+  return { total: insertData.length };
+}
+
+// Send one slice of a "running" broadcast: queued recipients for up to
+// `budgetMs`, then stop. Only one slice can hold a broadcast at a time (the
+// Broadcast.sendingUntil lock), so two server runs never send the same
+// broadcast. `more` = recipients are still queued and another slice should run.
+export async function runSlice(
+  broadcastId: string,
+  budgetMs: number = SLICE_MS
+): Promise<{ ran: boolean; more: boolean }> {
+  const startedAt = Date.now();
+  const claimed = await prisma.broadcast.updateMany({
+    where: {
+      id: broadcastId,
+      status: "running",
+      OR: [{ sendingUntil: null }, { sendingUntil: { lt: new Date(startedAt) } }],
+    },
+    data: { sendingUntil: new Date(startedAt + budgetMs + LOCK_GRACE_MS) },
+  });
+  // Paused / finished, or another run is sending it right now.
+  if (claimed.count === 0) return { ran: false, more: false };
+
+  try {
+    // A run that died mid-send leaves that recipient marked "sending". Whether
+    // WhatsApp got the message is unknown, so it's marked failed rather than
+    // risking sending it twice.
+    await prisma.broadcastRecipient.updateMany({
+      where: { broadcastId, status: "sending" },
+      data: {
+        status: "failed",
+        errorMessage: "Sending was interrupted — this person may not have received the message.",
+      },
+    });
+
+    const broadcast = await prisma.broadcast.findUnique({
+      where: { id: broadcastId },
+      include: { template: true },
+    });
+    if (!broadcast) return { ran: true, more: false };
+
+    const outcome = await dispatchQueued(
+      broadcastId,
+      broadcast.template,
+      { templateId: broadcast.template.id, senderUserId: broadcast.createdByUserId },
+      startedAt + budgetMs
+    );
+    return { ran: true, more: outcome === "more" };
+  } finally {
+    await prisma.broadcast
+      .updateMany({ where: { id: broadcastId }, data: { sendingUntil: null } })
+      .catch(() => null);
+  }
 }
 
 // ─── Source: Saved Contacts ─────────────────────────────────────────────────
@@ -231,11 +275,14 @@ function renderTemplateBody(templateBody: string, rVars: Record<string, string>)
 }
 
 // ─── Dispatch: process queued recipients in throttled chunks ────────────────
+// Stops at `deadline` (the slice's time budget) with the rest still queued →
+// "more"; "paused" when a pause was requested; "done" once nobody is queued.
 async function dispatchQueued(
   broadcastId: string,
   template: Template,
-  ctx: { templateId: string; senderUserId: string }
-) {
+  ctx: { templateId: string; senderUserId: string },
+  deadline: number
+): Promise<"done" | "more" | "paused"> {
   while (true) {
     // Honor pause requests between chunks. The /pause endpoint sets
     // pauseRequestedAt; here we observe it and write pausedAt + flip status.
@@ -248,8 +295,9 @@ async function dispatchQueued(
         where: { id: broadcastId },
         data: { status: "paused", pausedAt: new Date() },
       });
-      return;
+      return "paused";
     }
+    if (Date.now() >= deadline) return "more";
 
     const batch = await prisma.broadcastRecipient.findMany({
       where: { broadcastId, status: "queued" },
@@ -286,7 +334,22 @@ async function dispatchQueued(
       }
     }
 
+    let pauseCheckedAt = Date.now();
     for (const r of batch) {
+      if (Date.now() >= deadline) break; // out of time — the rest stay queued for the next slice
+      // Notice a Pause within a few seconds, not only between chunks of 50.
+      if (Date.now() - pauseCheckedAt > PAUSE_CHECK_MS) {
+        pauseCheckedAt = Date.now();
+        const p = await prisma.broadcast.findUnique({ where: { id: broadcastId }, select: { pauseRequestedAt: true } });
+        if (p?.pauseRequestedAt) break; // the loop's next pass marks it paused
+      }
+      // Mark first: if this run dies mid-send, the next slice marks it failed
+      // instead of sending it a second time (see runSlice).
+      const mine = await prisma.broadcastRecipient.updateMany({
+        where: { id: r.id, status: "queued" },
+        data: { status: "sending" },
+      });
+      if (mine.count === 0) continue;
       try {
         const rVars = JSON.parse(r.variables) as Record<string, string>;
         // Only include body component if the template body actually has {{N}} placeholders.
@@ -380,4 +443,5 @@ async function dispatchQueued(
     where: { id: broadcastId },
     data: { status: "completed", completedAt: new Date() },
   });
+  return "done";
 }

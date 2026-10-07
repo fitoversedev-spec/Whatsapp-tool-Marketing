@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { subscribeLiveCounts } from "@/lib/live-counts";
+import { clearOfflineCaches } from "@/lib/sw-client";
 import ThemeToggle from "./ThemeToggle";
 import AllToolsPanel from "./AllToolsPanel";
 import type { AllToolsGroup } from "./AllToolsPanel";
@@ -108,33 +110,16 @@ export default function CrmSidebar({
     setAllToolsOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function refresh() {
-      if (document.visibilityState !== "visible") return;
-      try {
-        const res = await fetch("/api/crm-app/badge-count");
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        if (cancelled) return;
-        setReminderCount(data.reminders ?? 0);
-      } catch {}
-    }
-    refresh();
-    const timer = setInterval(refresh, 15000);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, []);
+  // CRM reminder badge from the shared poller (every 30s while the tab is
+  // visible) — the same request feeds the chat bubble. See src/lib/live-counts.ts.
+  useEffect(() => subscribeLiveCounts((c) => setReminderCount(c.crmReminders ?? 0)), []);
 
   useEffect(() => {
     document.title = "Fitoverse CRM";
   }, []);
 
   async function logout() {
+    clearOfflineCaches();
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   }

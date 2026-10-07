@@ -3,12 +3,13 @@
 //   - /api/cron/tick — on-load ping from the dashboard layout (Hobby safety net)
 //
 // Idempotent: each reminder is marked notifiedAt once; each scheduled broadcast
-// flips from "scheduled" to "running" once via a status check inside the
-// launch path. Concurrent invocations are safe — runBroadcast itself bails
-// if status isn't "draft"/"scheduled".
+// flips from "scheduled" to "running" once via an atomic status claim. Sending
+// itself runs in the background in slices, and a slice holds the broadcast's
+// sending lock, so concurrent invocations can't send anything twice.
 
 import { prisma } from "@/lib/prisma";
-import { runBroadcast } from "@/lib/sender";
+import { prepareBroadcast } from "@/lib/sender";
+import { sendInBackground } from "@/lib/broadcast-chain";
 import { runWeeklyDigest } from "@/lib/analytics/digestJob";
 import { postThreadNote } from "@/lib/chat/events";
 import { syncAdsInsights } from "@/lib/meta-ads/sync";
@@ -74,7 +75,9 @@ export async function fireDueReminders(): Promise<{ notified: number }> {
   return { notified: due.length };
 }
 
-export async function launchDueScheduledBroadcasts(): Promise<{ launched: number; failed: number }> {
+// `origin` is this deployment's own address (from the request that triggered
+// the sweep) — the background sender hands each slice over through it.
+export async function launchDueScheduledBroadcasts(origin: string): Promise<{ launched: number; failed: number }> {
   const now = new Date();
   const due = await prisma.broadcast.findMany({
     where: {
@@ -95,10 +98,11 @@ export async function launchDueScheduledBroadcasts(): Promise<{ launched: number
     });
     if (claimed.count === 0) continue;
     try {
-      await runBroadcast(b.id);
+      await prepareBroadcast(b.id);
+      sendInBackground(origin, b.id);
       launched += 1;
     } catch (err) {
-      console.error("[cron] runBroadcast failed", b.id, err);
+      console.error("[cron] scheduled broadcast failed to start", b.id, err);
       await prisma.broadcast.update({
         where: { id: b.id },
         data: { status: "failed" },
@@ -107,6 +111,27 @@ export async function launchDueScheduledBroadcasts(): Promise<{ launched: number
     }
   }
   return { launched, failed };
+}
+
+// Safety net for the slice hand-over: a "running" broadcast that nobody is
+// sending right now (its sending lock is free or expired) — e.g. a hand-over
+// request got lost — is picked up again. The slice it starts finds out for
+// itself whether anyone is still queued, and marks the broadcast completed if
+// not. Harmless when a slice is mid-hand-over: only one run can take the lock.
+export async function resumeStalledBroadcasts(origin: string): Promise<{ resumed: number }> {
+  const now = new Date();
+  const stalled = await prisma.broadcast.findMany({
+    where: {
+      status: "running",
+      OR: [{ sendingUntil: null }, { sendingUntil: { lt: now } }],
+      // Leave just-launched ones to their own first slice.
+      launchedAt: { lt: new Date(now.getTime() - 2 * 60_000) },
+    },
+    select: { id: true },
+    take: 5,
+  });
+  for (const b of stalled) sendInBackground(origin, b.id);
+  return { resumed: stalled.length };
 }
 
 // Ends coverage windows whose expiresAt has passed: revoke the grant, remove
@@ -168,10 +193,14 @@ export async function markOverdueInvoices(): Promise<{ overdue: number }> {
   return { overdue: Number(overdue) || 0 };
 }
 
-export async function sweepAll() {
-  const [reminders, broadcasts, coverage, staleSessions, overdueInvoices, adsInsights] = await Promise.all([
+export async function sweepAll({ origin }: { origin: string }) {
+  const [reminders, broadcasts, stalledBroadcasts, coverage, staleSessions, overdueInvoices, adsInsights] = await Promise.all([
     fireDueReminders(),
-    launchDueScheduledBroadcasts(),
+    launchDueScheduledBroadcasts(origin),
+    resumeStalledBroadcasts(origin).catch((err) => {
+      console.error("[cron] stalled-broadcast sweep threw", err);
+      return { resumed: 0 };
+    }),
     revertExpiredCoverage().catch((err) => {
       console.error("[cron] coverage sweep threw", err);
       return { reverted: 0 };
@@ -206,5 +235,5 @@ export async function sweepAll() {
     }
   }
 
-  return { reminders, broadcasts, coverage, staleSessions, overdueInvoices, adsInsights, digest, sweptAt: new Date().toISOString() };
+  return { reminders, broadcasts, stalledBroadcasts, coverage, staleSessions, overdueInvoices, adsInsights, digest, sweptAt: new Date().toISOString() };
 }

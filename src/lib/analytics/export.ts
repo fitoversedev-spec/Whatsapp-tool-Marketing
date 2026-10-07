@@ -1,5 +1,5 @@
 // Shared CSV + XLSX exporter, usable from any analytics table.
-import * as XLSX from "xlsx";
+import { lazyImport } from "@/lib/chunk-reload";
 
 export function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
   const escape = (v: string | number) => {
@@ -16,7 +16,10 @@ export function downloadCsv(filename: string, headers: string[], rows: (string |
   URL.revokeObjectURL(url);
 }
 
-export function downloadXlsx(filename: string, headers: string[], rows: (string | number)[][]) {
+// The Excel library (~135 kB) is only downloaded when someone actually exports,
+// not with every page that shows an Export button.
+export async function downloadXlsx(filename: string, headers: string[], rows: (string | number)[][]) {
+  const XLSX = await lazyImport(() => import("xlsx"));
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   XLSX.utils.book_append_sheet(wb, ws, "Data");

@@ -1112,7 +1112,7 @@ export const WHATSAPP_RECORDING: SectionRecording = {
     { type: "caption", text: "WhatsApp Marketing — send messages, manage contacts, and capture leads via WhatsApp", duration: 3000 },
 
     { type: "caption", text: "The Inbox shows all customer conversations — open, closed, and unread messages in one place" },
-    { type: "highlight", selector: "[data-guide='wa-inbox']", label: "Inbox" },
+    { type: "highlight", selector: "[data-guide='wa-sidebar-inbox']", label: "Inbox" },
     { type: "caption", text: "Click any conversation to read messages, send replies, share media, and use quick replies" },
     { type: "wait", duration: 2000 },
 

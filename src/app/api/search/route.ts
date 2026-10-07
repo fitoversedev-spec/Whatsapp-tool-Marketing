@@ -168,6 +168,22 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
+  // A rep can only open a contact whose WhatsApp chat is assigned to them (or
+  // who has no chat yet) — /contacts/[id] sends them back to the list
+  // otherwise — so leave the others out of their results.
+  let contactsVisible = contactsRaw;
+  if (user.role !== "admin" && contactsRaw.length > 0) {
+    const notMine = await prisma.conversation.findMany({
+      where: {
+        contactPhone: { in: contactsRaw.map((c) => c.phone) },
+        OR: [{ assignedToUserId: null }, { assignedToUserId: { not: user.id } }],
+      },
+      select: { contactPhone: true },
+    });
+    const hidden = new Set(notMine.map((c) => c.contactPhone));
+    contactsVisible = contactsRaw.filter((c) => !hidden.has(c.phone));
+  }
+
   return NextResponse.json({
     query: raw,
     messages: messagesRaw.map((m) => ({
@@ -188,7 +204,7 @@ export async function GET(req: NextRequest) {
       authorName: n.author.name,
       createdAt: n.createdAt.toISOString(),
     })),
-    contacts: contactsRaw.map((c) => ({
+    contacts: contactsVisible.map((c) => ({
       id: c.id,
       name: c.name,
       phone: c.phone,

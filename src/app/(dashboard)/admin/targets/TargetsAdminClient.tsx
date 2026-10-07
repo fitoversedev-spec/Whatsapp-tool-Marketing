@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import { PeriodPicker } from "@/components/analytics/PeriodPicker";
-import { fmtInr } from "@/components/analytics/charts";
+import { fmtInr } from "@/lib/format";
 import { currentPeriod, describePeriod, type Period } from "@/lib/analytics/periodPresets";
 
 type AssignableUser = { id: string; name: string; role: string; email: string };

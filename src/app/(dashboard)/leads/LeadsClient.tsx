@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
-import * as XLSX from "xlsx";
+import { lazyImport } from "@/lib/chunk-reload";
 
 type Lead = {
   id: string;
@@ -119,7 +119,9 @@ export default function LeadsClient({
     router.refresh();
   }
 
-  function exportXlsx() {
+  async function exportXlsx() {
+    // The Excel library (~135 kB) loads only when someone exports.
+    const XLSX = await lazyImport(() => import("xlsx"));
     const rows = filtered.map((l) => ({
       "Created": new Date(l.createdAt).toLocaleString("en-IN"),
       "Name": l.contactName ?? "",

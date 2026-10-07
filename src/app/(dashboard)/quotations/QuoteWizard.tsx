@@ -23,6 +23,7 @@ import {
 import { extractHtmlTables } from "@/lib/products/format";
 import SectionEditor from "@/components/quotation/SectionEditor";
 import { type PdfSection, buildDefaultSections } from "@/lib/quotation/section-types";
+import { postQuoteSend } from "@/lib/quotation/send-client";
 
 type RateSheetItem = {
   id: string;
@@ -722,12 +723,12 @@ export default function QuoteWizard({ open, onClose, onComplete, prefill }: Prop
     const pendingTab = window.open("about:blank", "_blank");
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/quotations/${draftId}/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption: caption.trim() || null, contactPhone: contactPhone.trim() }),
-      });
-      const data = await res.json();
+      const res = await postQuoteSend(draftId, { caption: caption.trim() || null, contactPhone: contactPhone.trim() });
+      if (!res) {
+        pendingTab?.close(); // chose not to send it again
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         pendingTab?.close();
         toast.error(data.error ?? "Send failed");

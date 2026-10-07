@@ -1,5 +1,5 @@
-// Active-time heartbeat. The sidebar and the chat launcher both poll
-// GET /api/unread/count every 15s, and only while the browser tab is visible
+// Active-time heartbeat. The shared badge poller (src/lib/live-counts.ts) hits
+// GET /api/unread/count every 30s, and only while the browser tab is visible
 // (document.visibilityState === "visible"). That poll is our "this rep is
 // actively looking at the tool right now" signal — this records it.
 //
@@ -9,8 +9,8 @@
 // hidden / laptop asleep) and is discarded — that cap is what makes this
 // *active* time rather than *tab-open* time.
 //
-// Race-safety: the two pollers mount together, so their 15s timers fire roughly
-// in phase and can hit this within the same instant. We accumulate with ONE
+// Race-safety: two tabs (or two browsers) of the same rep can poll within the
+// same instant. We accumulate with ONE
 // atomic SQL statement that computes the delta from the row's own last_seen_at
 // under a FOR UPDATE lock, so a near-simultaneous second ping sees a ~0 gap and
 // cannot double-count. The returned delta is mirrored into the hourly bucket so
@@ -19,10 +19,10 @@
 import { prisma } from "@/lib/prisma";
 import { startOfHourIST } from "@/lib/time";
 
-// Max seconds a single gap can contribute. A little over two 15s intervals, so
+// Max seconds a single gap can contribute. A little over two 30s intervals, so
 // one dropped ping still counts as continuous presence but a real absence does
 // not inflate the total.
-const IDLE_CAP_SECONDS = 60;
+const IDLE_CAP_SECONDS = 75;
 
 export async function recordHeartbeat(userId: string): Promise<void> {
   try {

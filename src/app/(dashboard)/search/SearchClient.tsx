@@ -64,26 +64,37 @@ export default function SearchClient({
     const q = query.trim();
     if (!q && !date) {
       setResults(null);
+      setLoading(false);
       return;
     }
+    // A newer query cancels the request in flight, so a slow older answer can
+    // never overwrite newer results.
+    const controller = new AbortController();
     const handle = setTimeout(async () => {
       setLoading(true);
       try {
         const url = new URL("/api/search", window.location.origin);
         if (q) url.searchParams.set("q", q);
         if (date) url.searchParams.set("date", date);
-        const res = await fetch(url.toString());
+        const res = await fetch(url.toString(), { signal: controller.signal });
         if (res.ok) setResults(await res.json());
+      } catch {
+        // Cancelled by a newer query, or a network blip — keep the last results.
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
-      // Sync URL so the result is shareable / browser-back-able
+      if (controller.signal.aborted) return;
+      // Sync URL so the result is shareable — address bar only; router.replace
+      // re-rendered the page on the server after every search.
       const next = new URLSearchParams(params.toString());
       if (q) next.set("q", q); else next.delete("q");
       if (date) next.set("date", date); else next.delete("date");
-      router.replace(`/search?${next}`);
+      window.history.replaceState(null, "", `/search?${next}`);
     }, 250);
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      controller.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, date]);
 

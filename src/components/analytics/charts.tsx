@@ -25,23 +25,10 @@ const TT: React.CSSProperties = {
 };
 const CURSOR_FILL = "rgba(148,163,184,0.12)";
 
-export function fmtInr(n: number): string {
-  return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
-}
-export function fmtPct(n: number | null): string {
-  return n == null ? "—" : `${Math.round(n * 100)}%`;
-}
-export function fmtDays(n: number | null): string {
-  return n == null ? "—" : n < 1 ? `${Math.round(n * 24)}h` : `${n.toFixed(1)}d`;
-}
-// A duration in seconds → compact "3h 42m" / "18m" / "0m" (used by Rep Usage).
-export function fmtDuration(seconds: number | null): string {
-  if (seconds == null) return "—";
-  const total = Math.max(0, Math.round(seconds / 60));
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
+// The formatters moved to src/lib/format.ts (so number-only pages skip the
+// charts library); re-exported here for the chart pages that import both.
+import { fmtInr, fmtPct, fmtDays, fmtDuration } from "@/lib/format";
+export { fmtInr, fmtPct, fmtDays, fmtDuration };
 
 // Shared horizontal bar chart for every magnitude-by-category comparison
 // across analytics (stage velocity, pipeline by stage, best-selling

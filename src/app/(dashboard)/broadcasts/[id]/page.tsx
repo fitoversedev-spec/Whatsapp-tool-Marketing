@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import PageHeader from "@/components/PageHeader";
 import RecipientsTable from "./RecipientsTable";
 import BroadcastControls from "./BroadcastControls";
+import RefreshWhileRunning from "./RefreshWhileRunning";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700",
@@ -32,11 +33,28 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
     redirect("/broadcasts");
   }
 
-  const recipients = await prisma.broadcastRecipient.findMany({
-    where: { broadcastId: broadcast.id },
-    orderBy: [{ status: "asc" }, { phoneE164: "asc" }],
-    take: 500,
-  });
+  const [recipients, statusGroups] = await Promise.all([
+    prisma.broadcastRecipient.findMany({
+      where: { broadcastId: broadcast.id },
+      orderBy: [{ status: "asc" }, { phoneE164: "asc" }],
+      take: 500,
+    }),
+    // Live counts straight from the recipients — the stored counters are only
+    // refreshed every few seconds while delivery updates stream in.
+    prisma.broadcastRecipient.groupBy({
+      by: ["status"],
+      where: { broadcastId: broadcast.id },
+      _count: { _all: true },
+    }),
+  ]);
+  const byStatus: Record<string, number> = {};
+  for (const g of statusGroups) byStatus[g.status] = g._count._all;
+  const counts = {
+    sent: byStatus.sent ?? 0,
+    delivered: byStatus.delivered ?? 0,
+    read: byStatus.read ?? 0,
+    failed: byStatus.failed ?? 0,
+  };
 
   return (
     <>
@@ -84,6 +102,7 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
                 {broadcast.status}
               </span>
               <BroadcastControls broadcastId={broadcast.id} status={broadcast.status} />
+              <RefreshWhileRunning running={broadcast.status === "running"} />
             </div>
             <div className="text-xs text-slate-500 text-right">
               {broadcast.scheduledAt && broadcast.status === "scheduled" && (
@@ -99,10 +118,10 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <Stat label="Total" value={broadcast.total} />
-            <Stat label="Sent" value={broadcast.sent} color="text-blue-700" />
-            <Stat label="Delivered" value={broadcast.delivered} color="text-emerald-700" />
-            <Stat label="Read" value={broadcast.read} color="text-purple-700" />
-            <Stat label="Failed" value={broadcast.failed} color={broadcast.failed > 0 ? "text-red-600" : "text-slate-700"} />
+            <Stat label="Sent" value={counts.sent} color="text-blue-700" />
+            <Stat label="Delivered" value={counts.delivered} color="text-emerald-700" />
+            <Stat label="Read" value={counts.read} color="text-purple-700" />
+            <Stat label="Failed" value={counts.failed} color={counts.failed > 0 ? "text-red-600" : "text-slate-700"} />
           </div>
           {broadcast.total > 0 && (
             <div className="mt-4 pt-4 border-t border-slate-100">
@@ -110,12 +129,12 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-wa-green transition-all"
-                  style={{ width: `${Math.min(100, (broadcast.sent / broadcast.total) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (counts.sent / broadcast.total) * 100)}%` }}
                 />
               </div>
               <div className="flex justify-between text-xs text-slate-500 mt-1">
-                <span><span className="font-mono">{broadcast.sent}</span> of <span className="font-mono">{broadcast.total}</span> sent</span>
-                <span className="font-mono">{Math.round((broadcast.sent / broadcast.total) * 100)}%</span>
+                <span><span className="font-mono">{counts.sent}</span> of <span className="font-mono">{broadcast.total}</span> sent</span>
+                <span className="font-mono">{Math.round((counts.sent / broadcast.total) * 100)}%</span>
               </div>
             </div>
           )}

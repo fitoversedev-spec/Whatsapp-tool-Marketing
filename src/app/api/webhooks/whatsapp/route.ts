@@ -10,6 +10,15 @@ import { handleStaffMessage } from "@/lib/chatbot/staffCommands";
 import { handleLeadgen } from "@/lib/meta-ads/leads";
 import { notifyInboundMessage } from "@/lib/push";
 
+// A big broadcast produces thousands of sent/delivered/read events, and
+// recounting every recipient of the broadcast on each one was the heaviest
+// part of this webhook. Recount at most once per RECOUNT_EVERY_MS per
+// broadcast (per server instance). The sender recounts after every chunk and
+// when it finishes, and the Broadcasts page re-syncs counts when opened, so the
+// numbers never stay behind for long.
+const RECOUNT_EVERY_MS = 10_000;
+const lastRecountAt = new Map<string, number>();
+
 // Meta requires GET for verification handshake
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -118,7 +127,9 @@ async function handleStatusUpdate(status: any) {
     }
     await prisma.broadcastRecipient.update({ where: { waMessageId }, data: patch });
 
-    // Recompute broadcast counters
+    // Recompute broadcast counters (throttled — see RECOUNT_EVERY_MS)
+    if (Date.now() - (lastRecountAt.get(recipient.broadcastId) ?? 0) < RECOUNT_EVERY_MS) return;
+    lastRecountAt.set(recipient.broadcastId, Date.now());
     const groups = await prisma.broadcastRecipient.groupBy({
       by: ["status"],
       where: { broadcastId: recipient.broadcastId },

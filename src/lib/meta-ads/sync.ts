@@ -21,6 +21,34 @@ function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+// The sweep also runs from every logged-in browser's 5-minute tick
+// (src/components/CronTick.tsx), so without a shared gate the full Meta sync
+// ran once per open browser. One run per ~5 minutes for the whole team: whoever
+// moves this timestamp forward runs it, everyone else skips. 30 s of slack so a
+// tick landing at 4:59 doesn't push the next run out to 10 minutes.
+const SYNC_EVERY_MS = 5 * 60 * 1000 - 30_000;
+const KEY_LAST_SYNC = "meta_ads_insights_synced_at";
+
+async function claimSyncSlot(): Promise<boolean> {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - SYNC_EVERY_MS).toISOString();
+  // Atomic: only one concurrent sweep can move an old timestamp forward.
+  // (ISO-8601 UTC strings compare correctly as text.)
+  const claimed = await prisma.setting.updateMany({
+    where: { key: KEY_LAST_SYNC, value: { lt: cutoff } },
+    data: { value: now.toISOString() },
+  });
+  if (claimed.count === 1) return true;
+  if (await prisma.setting.findUnique({ where: { key: KEY_LAST_SYNC } })) return false;
+  try {
+    // Very first run — a concurrent creator loses on the primary key.
+    await prisma.setting.create({ data: { key: KEY_LAST_SYNC, value: now.toISOString() } });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function syncAdsInsights(): Promise<
   { campaigns: number; days: number } | { skipped: string }
 > {
@@ -28,6 +56,7 @@ export async function syncAdsInsights(): Promise<
     // Gate inside the try so the config DB read is subject to the same no-throw
     // swallow as the rest of the body (honours the "NEVER throws" contract).
     if (!(await metaAdsConfigured())) return { skipped: "ads_not_configured" };
+    if (!(await claimSyncSlot())) return { skipped: "synced_recently" };
 
     const cfg = await getMetaAdsConfig();
 

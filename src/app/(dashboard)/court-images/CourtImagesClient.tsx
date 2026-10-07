@@ -9,7 +9,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
-import CourtImageWizard from "./CourtImageWizard";
+import dynamic from "next/dynamic";
+
+// The designer (thousands of lines) is only downloaded when it's opened.
+const CourtImageWizard = dynamic(() => import("./CourtImageWizard"), { ssr: false });
 
 type CourtImageRow = {
   id: string;
@@ -297,6 +300,9 @@ export default function CourtImagesClient({
                     <img
                       src={r.imageUrl}
                       alt={r.customerName}
+                      // Up to 200 full-size designs — only fetch the ones scrolled into view.
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                   ) : (
@@ -394,16 +400,18 @@ export default function CourtImagesClient({
         )}
       </div>
 
-      <CourtImageWizard
-        open={showWizard}
-        prefill={wizardPrefill}
-        onClose={() => { setShowWizard(false); setWizardPrefill(undefined); }}
-        onComplete={() => {
-          setWizardPrefill(undefined);
-          reload();
-        }}
-        editingId={editingId ?? undefined}
-      />
+      {showWizard && (
+        <CourtImageWizard
+          open={showWizard}
+          prefill={wizardPrefill}
+          onClose={() => { setShowWizard(false); setWizardPrefill(undefined); }}
+          onComplete={() => {
+            setWizardPrefill(undefined);
+            reload();
+          }}
+          editingId={editingId ?? undefined}
+        />
+      )}
     </>
   );
 }

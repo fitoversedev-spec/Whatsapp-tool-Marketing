@@ -9,11 +9,11 @@ import { sweepAll } from "@/lib/cron-runner";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
-    const result = await sweepAll();
+    const result = await sweepAll({ origin: new URL(req.url).origin });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     return NextResponse.json(

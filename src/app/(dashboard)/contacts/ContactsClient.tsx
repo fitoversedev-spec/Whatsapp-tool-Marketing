@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, FormEvent, ChangeEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import TagPicker from "@/components/TagPicker";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import { analyzeFile, Detection } from "@/lib/file-analysis";
-import * as XLSX from "xlsx";
+import { lazyImport } from "@/lib/chunk-reload";
 import BulkActionBar from "./BulkActionBar";
 import { postCrossTab } from "@/lib/cross-tab";
 
@@ -52,6 +53,7 @@ export default function ContactsClient({
   fieldKeys,
   allTags,
   activeTagFilter,
+  isAdmin = false,
 }: {
   initialContacts: Contact[];
   // Contacts matching the opening ?tag= filter (or the whole pool without one).
@@ -61,6 +63,8 @@ export default function ContactsClient({
   fieldKeys: string[];
   allTags: ContactTag[];
   activeTagFilter: string | null;
+  // "Find duplicates" opens an admin-only page — hidden for everyone else.
+  isAdmin?: boolean;
 }) {
   const toast = useToast();
   const router = useRouter();
@@ -75,7 +79,8 @@ export default function ContactsClient({
   const [filteredCount, setFilteredCount] = useState(total);
   const [keys, setKeys] = useState<string[]>(fieldKeys);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  // 50 per page — same page size as the server render and /api/contacts.
+  const [totalPages, setTotalPages] = useState(Math.max(1, Math.ceil(total / 50)));
   const [search, setSearch] = useState("");
   const [filterField, setFilterField] = useState("");
   const [filterValue, setFilterValue] = useState("");
@@ -120,8 +125,13 @@ export default function ContactsClient({
     return params;
   }
 
-  // Debounced reload on search/filter/tag change
+  // Debounced reload on search/filter/tag change. The server already rendered
+  // page 1 for the opening filter, so that one isn't fetched again on mount.
+  const loadedFilterKey = useRef(JSON.stringify(["", "", "", activeTagFilter]));
   useEffect(() => {
+    const key = JSON.stringify([search, filterField, filterValue, tagFilter]);
+    if (key === loadedFilterKey.current) return;
+    loadedFilterKey.current = key;
     const t = setTimeout(() => load({ page: 1 }), 300);
     return () => clearTimeout(t);
   }, [search, filterField, filterValue, tagFilter, load]);
@@ -213,13 +223,15 @@ export default function ContactsClient({
         }
         action={
           <div className="flex gap-2 w-full sm:w-auto">
-            <a
-              href="/contacts/duplicates"
-              className="hidden sm:inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 self-center px-2"
-              data-guide="wa-contacts-duplicates"
-            >
-              🔍 Find duplicates
-            </a>
+            {isAdmin && (
+              <Link
+                href="/contacts/duplicates"
+                className="hidden sm:inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 self-center px-2"
+                data-guide="wa-contacts-duplicates"
+              >
+                🔍 Find duplicates
+              </Link>
+            )}
             <button
               onClick={() => setShowAdd(true)}
               className="btn btn-secondary flex-1 sm:flex-none"
@@ -256,7 +268,9 @@ export default function ContactsClient({
               const params = new URLSearchParams(urlParams.toString());
               if (v) params.set("tag", v);
               else params.delete("tag");
-              router.push(`/contacts${params.toString() ? `?${params}` : ""}`);
+              // Keep the URL shareable without re-rendering the whole page on
+              // the server — the list reloads itself (effect above).
+              window.history.replaceState(null, "", `/contacts${params.toString() ? `?${params}` : ""}`);
             }}
             className="input sm:w-auto"
             data-guide="wa-contacts-tags"
@@ -612,7 +626,9 @@ function UploadModal({
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
+      // The Excel library (~135 kB) loads only when a file is picked.
+      const XLSX = await lazyImport(() => import("xlsx"));
       const wb = XLSX.read(evt.target?.result, { type: "binary" });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const parsed: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });

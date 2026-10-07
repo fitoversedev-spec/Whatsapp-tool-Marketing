@@ -21,26 +21,33 @@ export default function ChatThreadView({
   entityType,
   entityId,
   onRead,
+  paused = false,
 }: {
   entityType: "account_contact" | "deal" | "team" | "dm";
   entityId: string;
   // Fired after the thread is marked read so a parent (the launcher) can
   // refresh its unread badge.
   onRead?: () => void;
+  // True while the floating panel is minimized: no polling, no read receipts.
+  paused?: boolean;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The message list we last marked read — the read receipt (PATCH /read +
+  // badge refresh) is only sent again when something new has arrived.
+  const readKey = useRef<string | null>(null);
 
   const base = `/api/chat/threads/${entityType}/${entityId}`;
 
   const markRead = useCallback(async () => {
     try {
-      await fetch(`${base}/read`, { method: "PATCH" });
+      const res = await fetch(`${base}/read`, { method: "PATCH" });
       onRead?.();
+      return res.ok;
     } catch {
-      /* ignore */
+      return false;
     }
   }, [base, onRead]);
 
@@ -53,9 +60,15 @@ export default function ChatThreadView({
           return;
         }
         const data = await res.json();
+        const list: Message[] = data.messages ?? [];
         setError(null);
-        setMessages(data.messages ?? []);
-        if (opts?.markReadAfter) markRead();
+        setMessages(list);
+        const key = `${list.length}:${list[0]?.id ?? ""}:${list[list.length - 1]?.id ?? ""}`;
+        if (opts?.markReadAfter && key !== readKey.current) {
+          void markRead().then((ok) => {
+            if (ok) readKey.current = key;
+          });
+        }
       } catch {
         setError("Could not load messages.");
       } finally {
@@ -65,15 +78,23 @@ export default function ChatThreadView({
     [base, markRead],
   );
 
+  // A different thread → show the loader and send it a fresh read receipt.
   useEffect(() => {
     setLoading(true);
+    readKey.current = null;
+  }, [entityType, entityId]);
+
+  // Fetch now and every POLL_MS while the tab is visible. Paused while the
+  // floating panel is minimized; reopening it catches up straight away.
+  useEffect(() => {
+    if (paused) return;
     load({ markReadAfter: true });
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") load({ markReadAfter: true });
     }, POLL_MS);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityType, entityId]);
+  }, [entityType, entityId, paused]);
 
   useEffect(() => {
     // Stick to the bottom as messages arrive.

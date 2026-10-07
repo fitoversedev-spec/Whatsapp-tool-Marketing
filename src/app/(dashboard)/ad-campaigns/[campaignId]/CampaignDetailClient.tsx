@@ -2,10 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import PageHeader from "@/components/PageHeader";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import { AnalyticsCard } from "@/components/analytics/AnalyticsCard";
-import { StackedBarChart, fmtInr, fmtPct } from "@/components/analytics/charts";
+import { fmtInr, fmtPct } from "@/lib/format";
+
+// The charts library (~106 kB) only loads when the Campaign analytics tab is
+// opened — the page opens on Campaign leads.
+const StackedBarChart = dynamic(
+  () => import("@/components/analytics/charts").then((m) => m.StackedBarChart),
+  { ssr: false, loading: () => <div style={{ height: 220 }} /> }
+) as typeof import("@/components/analytics/charts").StackedBarChart;
 import { StatusBadge } from "@/components/meta/StatusBadge";
 import LeadsTable from "@/components/meta/LeadsTable";
 import CampaignDocuments from "@/components/meta/CampaignDocuments";

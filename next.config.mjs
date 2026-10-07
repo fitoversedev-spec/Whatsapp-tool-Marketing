@@ -4,6 +4,20 @@ const withSerwist = withSerwistInit({
   swSrc: "src/app/sw.ts",
   swDest: "public/sw.js",
   disable: process.env.NODE_ENV === "development",
+  // <SwRegister /> registers the worker inside the signed-in layouts only —
+  // not on /login or the customer-facing share pages (/p, /q, /view …).
+  register: false,
+  // Serwist's default reloads the page on every "online" event (Wi-Fi ↔ 4G
+  // switch, laptop waking up), throwing away typed replies and open wizards.
+  reloadOnOnline: false,
+  // Precache only the icons, the web manifest and the UI fonts (~0.6 MB).
+  // The default "**/*" pulled all of public/ — ~69 MB of help videos and
+  // quotation artwork — onto every device on its first visit.
+  globPublicPatterns: ["*.png", "manifest.webmanifest", "fonts/*.woff2"],
+  // …and none of the build's JS/CSS chunks: they're content-hashed, so the
+  // browser's HTTP cache already keeps them, and precaching all of them meant
+  // ~1.6 MB downloaded up front, mostly for pages a user never opens.
+  exclude: [/./],
 });
 
 /** @type {import('next').NextConfig} */
@@ -25,7 +39,10 @@ const nextConfig = {
     // Disable the client-side Router Cache so every navigation fetches fresh
     // server data. The default (30s dynamic / 5min static) causes stale lists
     // after mutations (delete deal → navigate back → old list until manual F5).
-    staleTimes: { dynamic: 0, static: 0 },
+    // `static: 30` only lets a link's prefetched loading.tsx skeleton be shown
+    // instantly on click (for up to 30 s after the prefetch); the page data is
+    // still fetched fresh on every navigation because `dynamic` stays 0.
+    staleTimes: { dynamic: 0, static: 30 },
     // Empty array intentionally OVERRIDES Next.js's auto-included default
     // list (which contains recharts since 14.x). Without this override
     // recharts gets barrel-optimized and we hit the OneDrive race.

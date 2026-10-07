@@ -5,32 +5,18 @@ import CronTick from "@/components/CronTick";
 import NavigationTracker from "@/components/NavigationTracker";
 import FloatingChatLauncher from "@/components/chat/FloatingChatLauncher";
 import AskAiLauncher from "@/components/AskAiLauncher";
-import axios from "axios";
-import { getMetaAccessToken } from "@/lib/token-manager";
 import CrossTabRefresh from "@/components/CrossTabRefresh";
 import PendingNotesFlusher from "@/components/PendingNotesFlusher";
 import BottomNav from "@/components/BottomNav";
+import SwRegister from "@/components/SwRegister";
+import { metaTokenValid } from "@/lib/meta-token-status";
 import { endOfDayIST } from "@/lib/time";
 import type { Role } from "@/lib/rbac";
 
-async function checkTokenValid(): Promise<boolean> {
-  const token = await getMetaAccessToken();
-  const phoneId = process.env.META_PHONE_NUMBER_ID;
-  if (!token || !phoneId) return true; // not configured, don't show expired warning
-  try {
-    // Token-manager auto-refreshes within 5d of expiry, so this check covers
-    // the (rare) case where refresh failed or the token was revoked.
-    await axios.get(`https://graph.facebook.com/${process.env.META_GRAPH_API_VERSION || "v21.0"}/${phoneId}?fields=id`, {
-      headers: { Authorization: `Bearer ${token}` },
-      timeout: 2000,
-    });
-    return true;
-  } catch (err: any) {
-    const code = err?.response?.data?.error?.code;
-    // Code 190 = OAuthException (expired/invalid token)
-    if (code === 190) return false;
-    return true; // network error or other — don't show false alarm
-  }
+// A badge count that fails (DB hiccup, cold start) shows 0 instead of taking
+// the whole page down with it — the 30 s badge poll corrects it.
+function orZero(p: Promise<number>): Promise<number> {
+  return p.catch(() => 0);
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -49,39 +35,58 @@ export default async function DashboardLayout({ children }: { children: React.Re
         };
 
   // These are all independent — run them in one parallel batch instead of
-  // stacking serial round-trips to the Neon pooler. Previously the admin-only
-  // pending count and the Meta token check (a graph.facebook.com call, up to
-  // 2s) ran serially BEFORE the two counts, so that latency was added to first
-  // paint on every dashboard load; now the token check overlaps the DB reads.
-  const [pendingCount, tokenValid, unreadAgg, reminderCount, chatAgg, chatMentions] = await Promise.all([
-    isAdminUser
-      ? prisma.user.count({ where: { approvalStatus: "pending", deletedAt: null } })
-      : Promise.resolve(0),
-    // Only admins see the token-expiry warning (non-blocking banner)
-    isAdminUser ? checkTokenValid() : Promise.resolve(true),
-    prisma.conversation.aggregate({ where: unreadWhere, _sum: { unreadCount: true } }),
-    // Today's reminder count — overdue + due before end-of-IST-day, excluding
-    // completed. IST end-of-day matches the /reminders page filter and prevents
-    // off-by-a-day badges on Vercel (UTC server).
-    // Marketing-only reminders: exclude CRM Deals + CRM Contacts
-    prisma.reminder.count({
-      where: {
-        ownerUserId: user.id,
-        completedAt: null,
-        dueAt: { lte: endOfDayIST(new Date()) },
-        dealId: null,
-        accountContactId: null,
-      },
-    }),
-    // Team-chat unread + unseen mentions, to seed the floating launcher badge
-    // on first paint (it then self-polls /api/unread/count like the sidebar).
-    prisma.chatParticipant.aggregate({ where: { userId: user.id }, _sum: { unreadCount: true } }),
-    prisma.chatMention.count({ where: { mentionedUserId: user.id, seenAt: null } }),
-  ]);
+  // stacking serial round-trips to the Neon pooler. They seed every badge
+  // (sidebar, bottom nav, chat bubble), so the shared badge poller
+  // (src/lib/live-counts.ts) doesn't need to re-fetch them on page load.
+  const [pendingCount, unreadCount, reminderCount, chatUnread, chatMentions, chatRequests, pendingTemplates] =
+    await Promise.all([
+      isAdminUser
+        ? orZero(prisma.user.count({ where: { approvalStatus: "pending", deletedAt: null } }))
+        : 0,
+      orZero(
+        prisma.conversation
+          .aggregate({ where: unreadWhere, _sum: { unreadCount: true } })
+          .then((a) => a._sum.unreadCount ?? 0)
+      ),
+      // Today's reminder count — overdue + due before end-of-IST-day, excluding
+      // completed. IST end-of-day matches the /reminders page filter and prevents
+      // off-by-a-day badges on Vercel (UTC server).
+      // Marketing-only reminders: exclude CRM Deals + CRM Contacts
+      orZero(
+        prisma.reminder.count({
+          where: {
+            ownerUserId: user.id,
+            completedAt: null,
+            dueAt: { lte: endOfDayIST(new Date()) },
+            dealId: null,
+            accountContactId: null,
+          },
+        })
+      ),
+      // Team-chat unread, unseen mentions and pending handoff asks — the
+      // floating launcher's badge.
+      orZero(
+        prisma.chatParticipant
+          .aggregate({ where: { userId: user.id }, _sum: { unreadCount: true } })
+          .then((a) => a._sum.unreadCount ?? 0)
+      ),
+      orZero(prisma.chatMention.count({ where: { mentionedUserId: user.id, seenAt: null } })),
+      orZero(
+        prisma.handoffRequest.count({
+          where: isAdminUser
+            ? { OR: [{ toUserId: user.id, status: "REQUESTED" }, { kind: "TAKEOVER", status: "ACCEPTED" }] }
+            : { toUserId: user.id, status: "REQUESTED" },
+        })
+      ),
+      // Templates awaiting admin review — the admin-only Templates badge.
+      isAdminUser
+        ? orZero(prisma.template.count({ where: { status: "pending_admin", deletedAt: null } }))
+        : 0,
+    ]);
 
-  const tokenExpired = !tokenValid;
-  const unreadCount = unreadAgg._sum.unreadCount ?? 0;
-  const chatUnread = chatAgg._sum.unreadCount ?? 0;
+  // Admin-only "Meta token expired" warning: the last known answer, re-checked
+  // in the background every 10 minutes — the page never waits on Facebook.
+  const tokenExpired = isAdminUser && !metaTokenValid();
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-slate-50">
@@ -94,16 +99,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
         pendingCount={pendingCount}
         unreadCount={unreadCount}
         reminderCount={reminderCount}
+        pendingTemplates={pendingTemplates}
         tokenExpired={tokenExpired}
       />
       <main className="flex-1 min-w-0 overflow-x-hidden pb-14 md:pb-0">{children}</main>
       <NavigationTracker />
       <CronTick />
-      <FloatingChatLauncher initialUnread={chatUnread} initialMentions={chatMentions} />
+      <FloatingChatLauncher
+        initialUnread={chatUnread}
+        initialMentions={chatMentions}
+        initialRequests={chatRequests}
+      />
       <AskAiLauncher />
       <CrossTabRefresh events={["marketing:contact-added", "marketing:data-changed"]} />
       <PendingNotesFlusher userId={user.id} />
       <BottomNav reminderCount={reminderCount} />
+      <SwRegister userId={user.id} pushEnabled={user.pushEnabled} />
     </div>
   );
 }

@@ -118,14 +118,19 @@ export default function LeadsTable({
 
   // Refresh server data when the page becomes visible again (picks up
   // stage/label changes made on the detail page). Uses visibilitychange
-  // (hidden→visible) instead of focus to avoid firing on every click.
+  // (hidden→visible) instead of focus to avoid firing on every click — and
+  // only when the data is over a minute old: each refresh re-renders the whole
+  // page on the server, which used to happen on every quick alt-tab.
   const wasHiddenRef = useRef(false);
+  const refreshedAtRef = useRef(Date.now());
   useEffect(() => {
     function onVisChange() {
       if (document.visibilityState === "hidden") {
         wasHiddenRef.current = true;
       } else if (wasHiddenRef.current) {
         wasHiddenRef.current = false;
+        if (Date.now() - refreshedAtRef.current < 60_000) return;
+        refreshedAtRef.current = Date.now();
         setLocalChanges({});
         router.refresh();
       }

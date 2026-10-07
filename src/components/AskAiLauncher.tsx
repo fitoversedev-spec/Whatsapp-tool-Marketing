@@ -10,7 +10,17 @@
 // is scoped per user (admins → company-wide, reps → their own deals only), so
 // it's safe to show to everyone. Internal-assist only: read-only reporting.
 import { useState } from "react";
-import AiPanel from "@/components/AiPanel";
+import dynamic from "next/dynamic";
+
+// The panel's code is only downloaded the first time someone opens it.
+const AiPanel = dynamic(() => import("@/components/AiPanel"), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed z-50 flex items-center justify-center bg-white shadow-2xl border border-slate-200 inset-0 w-full h-full md:inset-auto md:right-4 md:bottom-4 md:w-[440px] md:h-[600px] md:rounded-2xl md:max-w-[calc(100vw-5rem)] lg:right-[404px] text-sm text-slate-400">
+      Loading…
+    </div>
+  ),
+});
 
 export default function AskAiLauncher() {
   const [mounted, setMounted] = useState(false); // panel exists (open or minimized)

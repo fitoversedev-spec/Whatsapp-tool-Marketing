@@ -10,8 +10,22 @@ import UnifiedTimeline from "@/components/crm/UnifiedTimeline";
 import { CALL_TYPE_NAMES, MEETING_TYPE_NAMES, type TimelineEntry } from "@/lib/crm/timelineShared";
 import { DESIGNATIONS } from "../AccountContactsClient";
 import NextActionsSection, { NextActionStrip, type NextActionRow } from "./NextActionsSection";
-import ContactInsightSection, { type InsightRow } from "./ContactInsightSection";
+import dynamic from "next/dynamic";
+import type { InsightRow } from "./ContactInsightSection";
+
+// The Insight section needs the rich-text editor (~126 kB), so it loads just
+// after the rest of the page instead of holding it up.
+const ContactInsightSection = dynamic(() => import("./ContactInsightSection"), {
+  ssr: false,
+  loading: () => (
+    <div id="insight" className="card p-4 scroll-mt-4">
+      <h3 className="text-base font-semibold text-slate-900">Insight</h3>
+      <p className="text-sm text-slate-400 mt-1">Loading…</p>
+    </div>
+  ),
+});
 import WonDealModal from "@/components/crm/WonDealModal";
+import { postQuoteSend } from "@/lib/quotation/send-client";
 
 type Contact = {
   id: string; name: string; phone: string | null; email: string | null;
@@ -441,8 +455,10 @@ export default function ContactDetailClient({
     // CRM-channel deals; see /api/quotations/[id]/send).
     const pendingTab = window.open("about:blank", "_blank");
     setResending(q.id);
-    const res = await fetch(`/api/quotations/${q.id}/send`, { method: "POST" });
+    const res = await postQuoteSend(q.id).catch(() => undefined);
     setResending(null);
+    if (res === null) { pendingTab?.close(); return; } // chose not to send it again
+    if (!res) { pendingTab?.close(); toast.error("Network problem — check the quote's status before sending again."); return; }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { pendingTab?.close(); toast.error(data.error ?? "Send failed"); return; }
     if (data.whatsappWebUrl) {
@@ -2345,12 +2361,10 @@ function AttachQuotationModal({
       body: JSON.stringify(patch),
     }).catch(() => null);
     const pendingTab = window.open("about:blank", "_blank");
-    const res = await fetch(`/api/quotations/${q.id}/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contactPhone }),
-    });
+    const res = await postQuoteSend(q.id, { contactPhone }).catch(() => undefined);
     setBusy(null);
+    if (res === null) { pendingTab?.close(); return; } // chose not to send it again
+    if (!res) { pendingTab?.close(); toast.error("Network problem — check the quote's status before sending again."); return; }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { pendingTab?.close(); toast.error(data.error ?? "Send failed"); return; }
     if (data.whatsappWebUrl) {

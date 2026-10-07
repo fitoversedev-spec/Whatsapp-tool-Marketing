@@ -65,7 +65,9 @@ export default function GuideClient({
     } else {
       params.delete("q");
     }
-    router.replace(`/help?${params.toString()}`, { scroll: false });
+    // Filtering is local, so only the address bar changes — router.replace
+    // re-rendered the page on the server on every key press.
+    window.history.replaceState(null, "", `/help?${params.toString()}`);
   }
 
   const sectionCounts = useMemo(() => {

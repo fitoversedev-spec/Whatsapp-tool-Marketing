@@ -24,7 +24,8 @@ const STATUS_STYLE: Record<string, string> = { issued: "bg-slate-100 text-slate-
 const inr = (s: string | number) => "₹" + Math.round(Number(s)).toLocaleString("en-IN");
 const dt = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
-export default function InvoiceDetailClient({ id }: { id: string }) {
+// basePath "/crm" when shown inside the CRM app (/crm/invoices/<id>).
+export default function InvoiceDetailClient({ id, basePath = "" }: { id: string; basePath?: string }) {
   const toast = useToast();
   const [inv, setInv] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,7 +112,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
-      <Link href="/invoices" className="inline-block mb-2 text-xs text-slate-400 hover:text-slate-700">← All invoices</Link>
+      <Link href={`${basePath}/invoices`} className="inline-block mb-2 text-xs text-slate-400 hover:text-slate-700">← All invoices</Link>
       <PageHeader
         large
         title={inv.number}

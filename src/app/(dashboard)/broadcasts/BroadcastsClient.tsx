@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
-import * as XLSX from "xlsx";
+import type { WorkBook } from "xlsx";
+import { lazyImport } from "@/lib/chunk-reload";
 import GroupsPanel, { type GroupRow } from "./GroupsPanel";
 
 type Broadcast = {
@@ -380,7 +381,7 @@ function BroadcastComposer({
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [selectedSheet, setSelectedSheet] = useState("");
   const [fileLabel, setFileLabel] = useState("");
-  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
+  const [workbook, setWorkbook] = useState<WorkBook | null>(null);
 
   // Google sheet state
   const [sheetUrl, setSheetUrl] = useState("");
@@ -473,20 +474,23 @@ function BroadcastComposer({
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       const data = evt.target?.result;
+      // The Excel library (~135 kB) loads only when a file is picked.
+      const XLSX = await lazyImport(() => import("xlsx"));
       const wb = XLSX.read(data, { type: "binary" });
       setWorkbook(wb);
       setSheetNames(wb.SheetNames);
       const firstSheet = wb.SheetNames[0];
       setSelectedSheet(firstSheet);
-      loadSheet(wb, firstSheet);
+      void loadSheet(wb, firstSheet);
       setFileLabel(`${file.name} — ${wb.SheetNames.length} sheet(s)`);
     };
     reader.readAsBinaryString(file);
   }
 
-  function loadSheet(wb: XLSX.WorkBook, sheetName: string) {
+  async function loadSheet(wb: WorkBook, sheetName: string) {
+    const XLSX = await lazyImport(() => import("xlsx"));
     const ws = wb.Sheets[sheetName];
     const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
     setFileRows(rows);
@@ -495,7 +499,7 @@ function BroadcastComposer({
 
   function onSheetSelect(sheetName: string) {
     setSelectedSheet(sheetName);
-    if (workbook) loadSheet(workbook, sheetName);
+    if (workbook) void loadSheet(workbook, sheetName);
   }
 
   // ── Filter Rule Helpers ─────────────────────────────────────────────────────
@@ -632,29 +636,37 @@ function BroadcastComposer({
       }
     }
 
-    const res = await fetch("/api/broadcasts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    setBusy(false);
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error ?? "Launch failed"); return; }
-
-    if (sendMode === "later") {
-      const when = new Date(scheduledAt).toLocaleString("en-IN", {
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
+    // The button stays locked until the launch itself has finished. It used to
+    // unlock as soon as the draft was saved, so a second click during the slow
+    // launch call created — and sent — a second broadcast.
+    try {
+      const res = await fetch("/api/broadcasts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      toast.success(`Scheduled for ${when} · ${preview.willSend} contacts`);
-    } else {
-      const launchRes = await fetch(`/api/broadcasts/${data.broadcast.id}/launch`, { method: "POST" });
-      if (!launchRes.ok) { toast.error("Broadcast saved but launch failed"); return; }
-      toast.success(`Broadcast launched to ${preview.willSend} contacts`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(data.error ?? "Launch failed"); return; }
+
+      if (sendMode === "later") {
+        const when = new Date(scheduledAt).toLocaleString("en-IN", {
+          day: "numeric",
+          month: "short",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        toast.success(`Scheduled for ${when} · ${preview.willSend} contacts`);
+      } else {
+        const launchRes = await fetch(`/api/broadcasts/${data.broadcast.id}/launch`, { method: "POST" });
+        if (!launchRes.ok) { toast.error("Broadcast saved but launch failed"); return; }
+        toast.success(`Broadcast launched to ${preview.willSend} contacts`);
+      }
+      onLaunched();
+    } catch {
+      toast.error("Network problem — check the Broadcasts list before trying again.");
+    } finally {
+      setBusy(false);
     }
-    onLaunched();
   }
 
   return (

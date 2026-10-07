@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import ThemeToggle from "./ThemeToggle";
 import type { Role } from "@/lib/rbac";
+import { clearOfflineCaches } from "@/lib/sw-client";
 
 type Props = {
   user: { name: string; email: string; role: Role };
@@ -63,6 +64,7 @@ export default function ScoutSidebar({ user }: Props) {
   }, []);
 
   async function logout() {
+    clearOfflineCaches();
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   }

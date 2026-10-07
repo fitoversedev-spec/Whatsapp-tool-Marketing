@@ -8,7 +8,7 @@ export default async function ContactsPage({
 }: {
   searchParams: { tag?: string };
 }) {
-  await requireUser();
+  const user = await requireUser();
 
   // Optional ?tag=<id> filter, set when clicking a tag count on /tags or
   // selecting a tag in the in-page filter. Empty value = no filter.
@@ -56,6 +56,7 @@ export default async function ContactsPage({
       fieldKeys={Array.from(fieldKeys).sort()}
       allTags={allTags.map((t) => ({ id: t.id, name: t.name, color: t.color }))}
       activeTagFilter={tagFilter}
+      isAdmin={user.role === "admin"}
     />
   );
 }

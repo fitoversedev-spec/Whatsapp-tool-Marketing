@@ -1,54 +1,53 @@
 "use client";
 
-// The always-on team-chat bubble, mounted globally in the dashboard layout so
-// it sits bottom-right on every page (like a website's WhatsApp widget). Shows
-// an unread badge, opens the ChatPanel, and supports minimize (hide, keep the
-// panel's place) vs close (unmount, reset). Polls the same /api/unread/count
-// the sidebar uses — one endpoint, no extra round-trip.
+// The always-on team-chat bubble, mounted globally in the dashboard and CRM
+// layouts so it sits bottom-right on every page (like a website's WhatsApp
+// widget). Shows an unread badge, opens the ChatPanel, and supports minimize
+// (hide, keep the panel's place) vs close (unmount, reset). Its counts come from
+// the shared badge poller the sidebar also reads (src/lib/live-counts.ts) — one
+// request for both, no extra round-trip.
 import { useEffect, useState } from "react";
-import ChatPanel from "./ChatPanel";
+import dynamic from "next/dynamic";
+import { refreshLiveCounts, subscribeLiveCounts } from "@/lib/live-counts";
+
+// The panel's code is only downloaded the first time someone opens chat.
+const ChatPanel = dynamic(() => import("./ChatPanel"), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed z-[60] flex items-center justify-center bg-white shadow-2xl border border-slate-200 inset-0 w-full h-full md:inset-auto md:right-4 md:bottom-4 md:w-[380px] md:h-[560px] md:rounded-2xl text-sm text-slate-400">
+      Loading chat…
+    </div>
+  ),
+});
+
+function refreshCounts() {
+  void refreshLiveCounts({ ignoreFresh: true });
+}
 
 export default function FloatingChatLauncher({
   initialUnread = 0,
   initialMentions = 0,
+  initialRequests = 0,
 }: {
   initialUnread?: number;
   initialMentions?: number;
+  initialRequests?: number;
 }) {
   const [mounted, setMounted] = useState(false); // panel exists (open or minimized)
   const [visible, setVisible] = useState(false); // panel shown
   const [unread, setUnread] = useState(initialUnread);
   const [mentions, setMentions] = useState(initialMentions);
-  const [requests, setRequests] = useState(0);
+  const [requests, setRequests] = useState(initialRequests);
 
-  async function refreshCounts() {
-    try {
-      const res = await fetch("/api/unread/count");
-      if (!res.ok) return;
-      const d = await res.json();
-      setUnread(d.chatUnread ?? 0);
-      setMentions(d.chatMentions ?? 0);
-      setRequests(d.chatRequests ?? 0);
-    } catch {
-      /* transient — ignore */
-    }
-  }
-
-  // Live-poll every 15s, paused when the tab is hidden — mirrors Sidebar.tsx.
-  useEffect(() => {
-    let cancelled = false;
-    const tick = () => {
-      if (document.visibilityState === "visible" && !cancelled) refreshCounts();
-    };
-    tick();
-    const timer = setInterval(tick, 15000);
-    document.addEventListener("visibilitychange", tick);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", tick);
-    };
-  }, []);
+  useEffect(
+    () =>
+      subscribeLiveCounts((c) => {
+        setUnread(c.chatUnread ?? 0);
+        setMentions(c.chatMentions ?? 0);
+        setRequests(c.chatRequests ?? 0);
+      }),
+    []
+  );
 
   function openPanel() {
     setMounted(true);
@@ -64,10 +63,12 @@ export default function FloatingChatLauncher({
   return (
     <>
       {/* Panel — kept mounted while minimized so its state survives; only
-          rendered visible when open. */}
+          rendered visible when open. Minimized = paused: no polling and
+          nothing gets marked read behind the user's back. */}
       {mounted && (
         <div className={visible ? "" : "hidden"}>
           <ChatPanel
+            paused={!visible}
             onMinimize={() => setVisible(false)}
             onClose={() => {
               setVisible(false);

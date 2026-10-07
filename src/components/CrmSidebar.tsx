@@ -128,8 +128,11 @@ export default function CrmSidebar({
     window.open("/inbox", "fitoverse-marketing");
   }
 
+  // The most specific match wins (/crm/leads is "Leads", not "Dashboard");
+  // "exact" entries only match their own page.
   const currentLabel =
-    CRM_ALL_PAGES.find((n) => pathname.startsWith(n.href))?.label ?? "Fitoverse CRM";
+    CRM_ALL_PAGES.filter((n) => ("exact" in n && n.exact ? pathname === n.href : pathname.startsWith(n.href)))
+      .sort((a, b) => b.href.length - a.href.length)[0]?.label ?? "Fitoverse CRM";
 
   return (
     <>

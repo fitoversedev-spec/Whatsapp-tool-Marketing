@@ -29,7 +29,7 @@ type LeadStageOption = { id: string; name: string; colorHex: string | null; isAc
 type RepOption = { id: string; name: string };
 
 function fmtDue(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
 
 // Location options grouped ignoring case/spacing ("salem" + "Salem" → one),

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import NavigationTracker from "@/components/NavigationTracker";
 import ScoutSidebar from "@/components/ScoutSidebar";
+import SessionGuard from "@/components/SessionGuard";
 import type { Role } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export default async function ScoutLayout({ children }: { children: ReactNode })
       />
       <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto pb-14 md:pb-0">{children}</main>
       <NavigationTracker />
+      <SessionGuard />
     </div>
   );
 }

@@ -9,6 +9,7 @@
 // featured project's hero photo as a follow-up image message.
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useToast } from "@/components/Toast";
 
 const SPORT_OPTIONS = [
@@ -222,9 +223,9 @@ export default function SendCatalogueWizard({
 
               <div className="text-xs text-slate-500 bg-blue-50 border border-blue-200 rounded p-2.5 leading-relaxed">
                 💡 Featured past projects are configured on the{" "}
-                <a href="/portfolio" className="underline">
+                <Link href="/portfolio" className="underline">
                   Portfolio page
-                </a>
+                </Link>
                 . If no projects are featured for this sport, the PDF still ships
                 — without the past-projects section.
               </div>

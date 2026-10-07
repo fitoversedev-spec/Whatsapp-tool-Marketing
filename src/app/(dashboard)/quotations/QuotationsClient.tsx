@@ -8,6 +8,7 @@ import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 import { postQuoteSend } from "@/lib/quotation/send-client";
+import { safeFetch } from "@/lib/safe-fetch";
 
 // The wizard is heavy and only opens behind "+ New quotation", so code-split
 // it out of the list page's initial bundle and load its chunk on first open.
@@ -103,7 +104,7 @@ export default function QuotationsClient({
     const phone = (phoneEdits[q.id] ?? "").trim();
     if (!phone) return;
     setSavingPhone(q.id);
-    const res = await fetch(`/api/quotations/${q.id}`, {
+    const res = await safeFetch(`/api/quotations/${q.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contactPhone: phone }),
@@ -201,7 +202,7 @@ export default function QuotationsClient({
   }
 
   async function markStatus(q: Quotation, status: string) {
-    const res = await fetch(`/api/quotations/${q.id}`, {
+    const res = await safeFetch(`/api/quotations/${q.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
@@ -216,7 +217,7 @@ export default function QuotationsClient({
   // accepted and the deal WON server-side, then opens the new invoice.
   async function convertToInvoice(q: Quotation) {
     if (!confirm(`Convert ${q.number} into an invoice? This marks the quote accepted and the deal as WON.`)) return;
-    const res = await fetch(`/api/quotations/${q.id}/convert-to-invoice`, { method: "POST" });
+    const res = await safeFetch(`/api/quotations/${q.id}/convert-to-invoice`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.invoice) {
       toast.success(`Invoice ${data.invoice.number} created`);
@@ -234,7 +235,7 @@ export default function QuotationsClient({
 
   async function remove(q: Quotation) {
     if (!confirm(`Delete quotation ${q.number}? This cannot be undone.`)) return;
-    const res = await fetch(`/api/quotations/${q.id}`, { method: "DELETE" });
+    const res = await safeFetch(`/api/quotations/${q.id}`, { method: "DELETE" });
     if (res.ok) {
       setQuotations((prev) => prev.filter((x) => x.id !== q.id));
       setSelected((prev) => {
@@ -261,7 +262,7 @@ export default function QuotationsClient({
     const n = selected.size;
     if (!confirm(`Delete ${n} quotation${n === 1 ? "" : "s"}? This cannot be undone.`)) return;
     const ids = Array.from(selected);
-    const res = await fetch("/api/quotations", {
+    const res = await safeFetch("/api/quotations", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids }),

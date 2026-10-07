@@ -4,7 +4,8 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { GOOGLE_STATE_COOKIE, googleStateCookieOptions, googleStateMatches } from "@/lib/google-oauth-state";
+import { GOOGLE_NEXT_COOKIE, GOOGLE_STATE_COOKIE, googleStateCookieOptions, googleStateMatches } from "@/lib/google-oauth-state";
+import { safeNextPath } from "@/lib/next-path";
 import type { Role } from "@/lib/rbac";
 
 const BASE_URL =
@@ -19,6 +20,9 @@ export async function GET(req: NextRequest) {
   const cookieStore = cookies();
   const expectedState = cookieStore.get(GOOGLE_STATE_COOKIE)?.value;
   cookieStore.set(GOOGLE_STATE_COOKIE, "", { ...googleStateCookieOptions, maxAge: 0 });
+  // Same for the page to land on afterwards (set when /login had ?next=).
+  const nextPath = safeNextPath(cookieStore.get(GOOGLE_NEXT_COOKIE)?.value) ?? "/inbox";
+  cookieStore.set(GOOGLE_NEXT_COOKIE, "", { ...googleStateCookieOptions, maxAge: 0 });
 
   if (errorParam || !code) {
     return NextResponse.redirect(
@@ -107,6 +111,7 @@ export async function GET(req: NextRequest) {
       session.email = user.email;
       session.name = user.name;
       session.role = user.role as Role;
+      session.refreshedAt = Date.now();
       await session.save();
 
       // Usage tracking (same pattern as login route)
@@ -117,7 +122,7 @@ export async function GET(req: NextRequest) {
         /* usage tracking must never block login */
       }
 
-      return NextResponse.redirect(`${BASE_URL}/inbox`);
+      return NextResponse.redirect(`${BASE_URL}${nextPath}`);
     }
 
     // User does not exist -- create with pending approval

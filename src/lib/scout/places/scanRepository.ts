@@ -498,11 +498,16 @@ export interface ScanRow {
   readonly searchTerms: Record<string, unknown>;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Raw: `centre` is `Unsupported`, so the point has to be projected out. */
 export async function getScan(
   scanId: string,
   database: Database = prisma,
 ): Promise<ScanRow | null> {
+  // A truncated or mistyped link is "not found", not a database error (the
+  // ::uuid cast below rejects anything that isn't a UUID).
+  if (!UUID_RE.test(scanId)) return null;
   const [row] = await database.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
     SELECT id, owner_id, area_label, radius_m, status::text AS status, search_terms,
            ST_Y(centre::geometry) AS lat,

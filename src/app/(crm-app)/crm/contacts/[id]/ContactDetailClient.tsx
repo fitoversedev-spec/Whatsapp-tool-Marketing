@@ -26,6 +26,7 @@ const ContactInsightSection = dynamic(() => import("./ContactInsightSection"), {
 });
 import WonDealModal from "@/components/crm/WonDealModal";
 import { postQuoteSend } from "@/lib/quotation/send-client";
+import { safeFetch } from "@/lib/safe-fetch";
 
 type Contact = {
   id: string; name: string; phone: string | null; email: string | null;
@@ -186,7 +187,7 @@ export default function ContactDetailClient({
   async function submitNote() {
     if (!noteBody.trim()) return;
     setSavingNote(true);
-    const res = await fetch(`/api/account-contacts/${contact.id}/notes`, {
+    const res = await safeFetch(`/api/account-contacts/${contact.id}/notes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: noteTitle.trim() || undefined, body: noteBody.trim() }),
@@ -219,7 +220,7 @@ export default function ContactDetailClient({
   async function saveNoteEdit() {
     if (!editingNoteId || !editNoteBody.trim()) return;
     setSavingNoteEdit(true);
-    const res = await fetch(`/api/account-contacts/${contact.id}/notes/${editingNoteId}`, {
+    const res = await safeFetch(`/api/account-contacts/${contact.id}/notes/${editingNoteId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: editNoteTitle.trim() || null, body: editNoteBody.trim() }),
@@ -236,7 +237,7 @@ export default function ContactDetailClient({
 
   async function deleteNote(n: ContactNoteRow) {
     if (!confirm("Delete this note? The Timeline will still show it was added and deleted.")) return;
-    const res = await fetch(`/api/account-contacts/${contact.id}/notes/${n.id}`, { method: "DELETE" });
+    const res = await safeFetch(`/api/account-contacts/${contact.id}/notes/${n.id}`, { method: "DELETE" });
     if (res.ok) { toast.success("Note deleted"); router.refresh(); }
     else toast.error("Could not delete note");
   }
@@ -259,7 +260,7 @@ export default function ContactDetailClient({
 
   async function changeLeadStage(stageId: string) {
     setSavingStage(true);
-    const res = await fetch(`/api/account-contacts/${contact.id}`, {
+    const res = await safeFetch(`/api/account-contacts/${contact.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ leadStageId: stageId || null }),
@@ -280,7 +281,7 @@ export default function ContactDetailClient({
       ? `Assign ${contact.name} to ${toName}? Their open deals move to ${toName} too.`
       : `Remove the rep from ${contact.name}? They'll be unassigned.`)) return;
     setAssigning(true);
-    const res = await fetch(`/api/account-contacts/${contact.id}/assign`, {
+    const res = await safeFetch(`/api/account-contacts/${contact.id}/assign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: userId || null }),
@@ -298,7 +299,7 @@ export default function ContactDetailClient({
   async function removeFromLeads() {
     if (!confirm(`Remove ${contact.name} from Leads? Their stage and history stay.`)) return;
     setRemovingLead(true);
-    const res = await fetch(`/api/account-contacts/${contact.id}`, {
+    const res = await safeFetch(`/api/account-contacts/${contact.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pipelineStage: null }),
@@ -383,7 +384,7 @@ export default function ContactDetailClient({
         isBusinessTypeOther && businessTypeOther.trim() ? `Business type detail: ${businessTypeOther.trim()}` : "",
         notes.trim(),
       ].filter(Boolean).join("\n\n") || null;
-    const res = await fetch(`/api/account-contacts/${contact.id}`, {
+    const res = await safeFetch(`/api/account-contacts/${contact.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -412,7 +413,7 @@ export default function ContactDetailClient({
 
   async function syncToMarketing() {
     setSyncing(true);
-    const res = await fetch("/api/account-contacts/sync-to-marketing", {
+    const res = await safeFetch("/api/account-contacts/sync-to-marketing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contactIds: [contact.id] }),
@@ -431,7 +432,7 @@ export default function ContactDetailClient({
   async function unlinkFromCrm() {
     if (!confirm("Remove this contact from CRM? It will go back to WhatsApp Marketing / Meta leads. This cannot be undone.")) return;
     setUnlinking(true);
-    const res = await fetch(`/api/account-contacts/${contact.id}/unlink`, { method: "POST" });
+    const res = await safeFetch(`/api/account-contacts/${contact.id}/unlink`, { method: "POST" });
     setUnlinking(false);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -486,7 +487,7 @@ export default function ContactDetailClient({
     if (!c.contactPhone) { toast.error("No phone on this design"); return; }
     const pendingTab = window.open("about:blank", "_blank");
     setResending(c.id);
-    const res = await fetch(`/api/court-images/${c.id}/send`, { method: "POST" });
+    const res = await safeFetch(`/api/court-images/${c.id}/send`, { method: "POST" });
     setResending(null);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { pendingTab?.close(); toast.error(data.message ?? data.error ?? "Send failed"); return; }
@@ -524,7 +525,7 @@ export default function ContactDetailClient({
 
   async function completeReminder(id: string) {
     setCompletingBusy(true);
-    const res = await fetch(`/api/reminders/${id}`, {
+    const res = await safeFetch(`/api/reminders/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ completed: true, completionNote: completionNoteDraft.trim() || null }),
@@ -542,7 +543,7 @@ export default function ContactDetailClient({
 
   async function deleteReminder(id: string) {
     if (!confirm("Delete this activity? This cannot be undone.")) return;
-    const res = await fetch(`/api/reminders/${id}`, { method: "DELETE" });
+    const res = await safeFetch(`/api/reminders/${id}`, { method: "DELETE" });
     if (res.ok) { toast.success("Activity deleted"); router.refresh(); }
     else toast.error("Could not delete activity");
   }
@@ -558,7 +559,7 @@ export default function ContactDetailClient({
 
   async function convertToLead() {
     setConvertingLead(true);
-    const res = await fetch(`/api/account-contacts/${contact.id}`, {
+    const res = await safeFetch(`/api/account-contacts/${contact.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pipelineStage: "LEAD" }),
@@ -764,7 +765,7 @@ export default function ContactDetailClient({
       files.map(async (file) => {
         const form = new FormData();
         form.append("file", file);
-        const res = await fetch(`/api/account-contacts/${contact.id}/attachments`, { method: "POST", body: form });
+        const res = await safeFetch(`/api/account-contacts/${contact.id}/attachments`, { method: "POST", body: form });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error ?? `Upload failed: ${file.name}`);
@@ -786,7 +787,7 @@ export default function ContactDetailClient({
 
   async function deleteAttachment(id: string) {
     if (!confirm("Delete this file? This cannot be undone.")) return;
-    const res = await fetch(`/api/account-contacts/${contact.id}/attachments/${id}`, { method: "DELETE" });
+    const res = await safeFetch(`/api/account-contacts/${contact.id}/attachments/${id}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("File deleted");
       router.refresh();
@@ -1837,7 +1838,7 @@ function ScheduleReminderModal({
     const dueAt = new Date(`${date}T${time}:00`);
     const activityTypeId =
       mode === "call" ? findType("Outbound Call") : venueType === "online" ? findType("Google Meet") : findType("In-Person Meeting");
-    const res = await fetch("/api/reminders", {
+    const res = await safeFetch("/api/reminders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1931,7 +1932,7 @@ function InlineEditForm({
     if (!message.trim()) return;
     setSaving(true);
     const dueAt = new Date(`${date}T${time}:00`);
-    const res = await fetch(`/api/reminders/${reminder.id}`, {
+    const res = await safeFetch(`/api/reminders/${reminder.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2026,7 +2027,7 @@ function TaskModal({
   async function submit() {
     if (!subject.trim() || !date) return;
     setSaving(true);
-    const res = await fetch("/api/reminders", {
+    const res = await safeFetch("/api/reminders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2106,7 +2107,7 @@ function LogActivityModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const res = await fetch("/api/crm/activities", {
+    const res = await safeFetch("/api/crm/activities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2234,7 +2235,7 @@ function ProductInterestModal({
   async function submit() {
     if (!canSubmit) return;
     setSaving(true);
-    const res = await fetch(`/api/account-contacts/${contactId}/product-interests`, {
+    const res = await safeFetch(`/api/account-contacts/${contactId}/product-interests`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2336,7 +2337,7 @@ function AttachQuotationModal({
     setBusy(q.id);
     const patch: Record<string, unknown> = { accountContactId: contactId };
     if (contactPhone) patch.contactPhone = contactPhone;
-    const res = await fetch(`/api/quotations/${q.id}`, {
+    const res = await safeFetch(`/api/quotations/${q.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
@@ -2355,7 +2356,7 @@ function AttachQuotationModal({
     if (!contactPhone) { toast.error("This contact has no phone number"); return; }
     setBusy(q.id);
     const patch: Record<string, unknown> = { contactPhone, accountContactId: contactId };
-    await fetch(`/api/quotations/${q.id}`, {
+    await safeFetch(`/api/quotations/${q.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
@@ -2384,7 +2385,7 @@ function AttachQuotationModal({
     setUploading(true);
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch(`/api/account-contacts/${contactId}/attachments`, { method: "POST", body: form }).catch(() => null);
+    const res = await safeFetch(`/api/account-contacts/${contactId}/attachments`, { method: "POST", body: form }).catch(() => null);
     setUploading(false);
     if (res?.ok) {
       toast.success(`${file.name} uploaded to ${contactName}'s attachments`);

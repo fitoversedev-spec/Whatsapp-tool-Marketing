@@ -1,12 +1,15 @@
+import { safeFetch } from "@/lib/safe-fetch";
+
 // Browser-side "send this quote to the customer". The server refuses a second
 // send of the same quote within 10 minutes unless it's confirmed (409
 // "recently_sent"), so a double click, a second tab or a retried request can't
 // send the customer a duplicate. This asks the user and re-sends only on "OK".
 //
 // Returns the final response, or null when the user chose not to re-send.
+// Never throws on a network drop (safeFetch), so callers' error paths run.
 export async function postQuoteSend(id: string, body: Record<string, unknown> = {}): Promise<Response | null> {
   const post = (extra: Record<string, unknown> = {}) =>
-    fetch(`/api/quotations/${id}/send`, {
+    safeFetch(`/api/quotations/${id}/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...body, ...extra }),

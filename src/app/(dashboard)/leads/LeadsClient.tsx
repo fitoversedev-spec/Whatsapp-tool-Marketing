@@ -7,9 +7,11 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import { lazyImport } from "@/lib/chunk-reload";
+import { fmtDateTimeIST } from "@/lib/time";
 
 type Lead = {
   id: string;
@@ -123,7 +125,7 @@ export default function LeadsClient({
     // The Excel library (~135 kB) loads only when someone exports.
     const XLSX = await lazyImport(() => import("xlsx"));
     const rows = filtered.map((l) => ({
-      "Created": new Date(l.createdAt).toLocaleString("en-IN"),
+      "Created": fmtDateTimeIST(l.createdAt),
       "Name": l.contactName ?? "",
       "Phone": l.contactPhone,
       "Path": PATH_LABEL[l.path] ?? l.path,
@@ -291,7 +293,7 @@ export default function LeadsClient({
                       {l.productCategory && <span className="chip text-xs">📦 {l.productCategory}</span>}
                       {l.preferredDateTime && (
                         <span className="chip text-xs">
-                          📞 {new Date(l.preferredDateTime).toLocaleString("en-IN")}
+                          📞 {fmtDateTimeIST(l.preferredDateTime)}
                         </span>
                       )}
                       {l.notes && <span className="chip text-xs text-amber-700">⚠ {l.notes}</span>}
@@ -322,6 +324,7 @@ export default function LeadsClient({
                       Created
                       <span className="block font-mono text-slate-700 mt-0.5">
                         {new Date(l.createdAt).toLocaleString("en-IN", {
+                          timeZone: "Asia/Kolkata",
                           day: "numeric",
                           month: "short",
                           hour: "numeric",
@@ -331,12 +334,12 @@ export default function LeadsClient({
                     </div>
                   </div>
 
-                  <a
+                  <Link
                     href={`/inbox?conversation=${l.conversationId}`}
                     className="inline-block mt-3 text-xs font-medium text-wa-green hover:underline"
                   >
                     Open chat →
-                  </a>
+                  </Link>
                 </div>
               ))}
             </div>
@@ -360,6 +363,7 @@ export default function LeadsClient({
                     <tr key={l.id} className="hover:bg-slate-50" data-guide="wa-leads-row">
                       <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
                         {new Date(l.createdAt).toLocaleString("en-IN", {
+                          timeZone: "Asia/Kolkata",
                           day: "numeric",
                           month: "short",
                           hour: "numeric",
@@ -385,7 +389,7 @@ export default function LeadsClient({
                           {l.maintenanceType && <div>🔧 {l.maintenanceType}</div>}
                           {l.productCategory && <div>📦 {l.productCategory}</div>}
                           {l.preferredDateTime && (
-                            <div>📞 {new Date(l.preferredDateTime).toLocaleString("en-IN")}</div>
+                            <div>📞 {fmtDateTimeIST(l.preferredDateTime)}</div>
                           )}
                           {l.notes && (
                             <div className="text-amber-700">⚠ {l.notes}</div>
@@ -426,13 +430,13 @@ export default function LeadsClient({
                         </select>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <a
+                        <Link
                           href={`/inbox?conversation=${l.conversationId}`}
                           className="text-xs font-medium text-wa-green hover:underline"
                           data-guide="wa-leads-open-chat"
                         >
                           Open chat →
-                        </a>
+                        </Link>
                       </td>
                     </tr>
                   ))}

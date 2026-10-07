@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import RecipientsTable from "./RecipientsTable";
 import BroadcastControls from "./BroadcastControls";
 import RefreshWhileRunning from "./RefreshWhileRunning";
+import { fmtDateTimeIST } from "@/lib/time";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700",
@@ -106,13 +107,13 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
             </div>
             <div className="text-xs text-slate-500 text-right">
               {broadcast.scheduledAt && broadcast.status === "scheduled" && (
-                <div>Scheduled: <span className="font-mono">{new Date(broadcast.scheduledAt).toLocaleString("en-IN")}</span></div>
+                <div>Scheduled: <span className="font-mono">{fmtDateTimeIST(broadcast.scheduledAt)}</span></div>
               )}
               {broadcast.launchedAt && (
-                <div>Launched: <span className="font-mono">{new Date(broadcast.launchedAt).toLocaleString()}</span></div>
+                <div>Launched: <span className="font-mono">{fmtDateTimeIST(broadcast.launchedAt)}</span></div>
               )}
               {broadcast.completedAt && (
-                <div>Completed: <span className="font-mono">{new Date(broadcast.completedAt).toLocaleString()}</span></div>
+                <div>Completed: <span className="font-mono">{fmtDateTimeIST(broadcast.completedAt)}</span></div>
               )}
             </div>
           </div>

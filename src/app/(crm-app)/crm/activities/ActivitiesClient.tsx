@@ -30,7 +30,7 @@ export type ActivityRow = {
 type TypeFilter = "all" | "calls" | "meetings" | "other";
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 // Per-type glyph: phone for calls, calendar for meetings, dot otherwise.

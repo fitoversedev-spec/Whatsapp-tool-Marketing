@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { safeFetch } from "@/lib/safe-fetch";
 
 export default function BroadcastControls({
   broadcastId,
@@ -22,7 +23,7 @@ export default function BroadcastControls({
     setBusy(label);
     setErr(null);
     try {
-      const res = await fetch(`/api/broadcasts/${broadcastId}/${path}`, { method: path === "schedule" ? "DELETE" : "POST" });
+      const res = await safeFetch(`/api/broadcasts/${broadcastId}/${path}`, { method: path === "schedule" ? "DELETE" : "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setErr(data.error ?? `${label} failed`);

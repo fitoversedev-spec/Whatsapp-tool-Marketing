@@ -349,6 +349,48 @@ function RepBreakdown({ title, description, segments }: { title: string; descrip
   );
 }
 
+// Load one analytics view. A failed request (expired login, server error,
+// connection drop) gives `error` — shown with a Try again button — instead of a
+// white screen or an endless "Loading…", and a slow answer for an old date
+// range can't overwrite the newer one. A null url = not fetched (yet).
+function useAnalyticsData<T>(url: string | null) {
+  const [state, setState] = useState<{ data: T | null; loading: boolean; error: string | null }>({
+    data: null,
+    loading: url !== null,
+    error: null,
+  });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!url) return;
+    const ctrl = new AbortController();
+    setState((s) => ({ ...s, loading: true, error: null }));
+    fetch(url, { signal: ctrl.signal })
+      .then(async (res) => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok || !body) throw new Error(body?.error ?? `error ${res.status}`);
+        return body as T;
+      })
+      .then((body) => setState({ data: body, loading: false, error: null }))
+      .catch((err) => {
+        if (ctrl.signal.aborted) return;
+        setState((s) => ({ ...s, loading: false, error: err instanceof Error ? err.message : "request failed" }));
+      });
+    return () => ctrl.abort();
+  }, [url, attempt]);
+  return { ...state, retry: () => setAttempt((a) => a + 1) };
+}
+
+function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="text-sm text-center py-8">
+      <p className="text-red-600 mb-3">Couldn&apos;t load this view ({message}).</p>
+      <button type="button" onClick={onRetry} className="btn btn-secondary">
+        Try again
+      </button>
+    </div>
+  );
+}
+
 export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean; role: Role }) {
   const visibleGroups: Group[] = isAdmin
     ? ["performance", "patterns", "quadrants", "insights", "digest", "usage", "invoices", "askai"]
@@ -359,100 +401,30 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
   const [range, setRange] = useState<DateRange>({ from: "", to: "" });
   const [group, setGroup] = useState<Group>("performance");
   const [tab, setTab] = useState<Tab>("overview");
-  const [data, setData] = useState<AnalyticsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [patternsData, setPatternsData] = useState<PatternsResponse | null>(null);
-  const [patternsLoading, setPatternsLoading] = useState(false);
-  const [quadrantsData, setQuadrantsData] = useState<QuadrantsResponse | null>(null);
-  const [quadrantsLoading, setQuadrantsLoading] = useState(false);
-  const [insightsData, setInsightsData] = useState<InsightsResponse | null>(null);
-  const [insightsLoading, setInsightsLoading] = useState(false);
-  const [insightFeedData, setInsightFeedData] = useState<InsightFeedResponse | null>(null);
-  const [insightFeedLoading, setInsightFeedLoading] = useState(false);
-  const [usageData, setUsageData] = useState<UsageResponse | null>(null);
-  const [usageLoading, setUsageLoading] = useState(false);
-  const [invoicesData, setInvoicesData] = useState<InvoiceAnalyticsData | null>(null);
-  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const q = `from=${range.from}&to=${range.to}`;
 
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/crm/analytics/performance?from=${range.from}&to=${range.to}`)
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .finally(() => setLoading(false));
-  }, [range]);
+  const perf = useAnalyticsData<AnalyticsResponse>(`/api/crm/analytics/performance?${q}`);
+  const { data, loading } = perf;
 
-  // Fetched lazily, only once an admin actually opens the group — a
-  // non-admin can never reach this branch since "patterns" never appears in
-  // visibleGroups for them, and the route itself 403s them regardless.
-  useEffect(() => {
-    if (!isAdmin || group !== "patterns") return;
-    setPatternsLoading(true);
-    fetch(`/api/crm/analytics/patterns?from=${range.from}&to=${range.to}`)
-      .then((r) => r.json())
-      .then((d) => setPatternsData(d))
-      .finally(() => setPatternsLoading(false));
-  }, [range, group, isAdmin]);
-
-  // Same lazy-fetch-only-once-opened pattern as patterns above — a
-  // non-admin can never reach this branch since "quadrants" never appears in
-  // visibleGroups for them, and the route itself 403s them regardless.
-  useEffect(() => {
-    if (!isAdmin || group !== "quadrants") return;
-    setQuadrantsLoading(true);
-    fetch(`/api/crm/analytics/quadrants?from=${range.from}&to=${range.to}`)
-      .then((r) => r.json())
-      .then((d) => setQuadrantsData(d))
-      .finally(() => setQuadrantsLoading(false));
-  }, [range, group, isAdmin]);
-
-  // Same lazy-fetch-only-once-opened pattern as patterns/quadrants above — a
-  // non-admin can never reach this branch since "insights" never appears in
-  // visibleGroups for them, and the route itself 403s them regardless.
-  useEffect(() => {
-    if (!isAdmin || group !== "insights") return;
-    setInsightsLoading(true);
-    fetch(`/api/crm/analytics/insights?from=${range.from}&to=${range.to}`)
-      .then((r) => r.json())
-      .then((d) => setInsightsData(d))
-      .finally(() => setInsightsLoading(false));
-  }, [range, group, isAdmin]);
-
-  // Same lazy-fetch-only-once-opened pattern as the admin groups above — a
-  // non-admin can never reach this branch since "digest" never appears in
-  // visibleGroups for them. The insightfeed ROUTE itself is intentionally not
-  // 403-gated (the non-admin Overview card consumes it too), so this admin gate
-  // is the client-side half of the group's admin-only visibility.
-  useEffect(() => {
-    if (!isAdmin || group !== "digest") return;
-    setInsightFeedLoading(true);
-    fetch(`/api/crm/analytics/insightfeed?from=${range.from}&to=${range.to}`)
-      .then((r) => r.json())
-      .then((d) => setInsightFeedData(d))
-      .finally(() => setInsightFeedLoading(false));
-  }, [range, group, isAdmin]);
-
-  // Same lazy-fetch-only-once-opened pattern as the admin groups above — a
-  // non-admin can never reach this branch ("usage" never appears in
-  // visibleGroups for them), and /api/crm/analytics/usage 403s them regardless.
-  useEffect(() => {
-    if (!isAdmin || group !== "usage") return;
-    setUsageLoading(true);
-    fetch(`/api/crm/analytics/usage?from=${range.from}&to=${range.to}`)
-      .then((r) => r.json())
-      .then((d) => setUsageData(d))
-      .finally(() => setUsageLoading(false));
-  }, [range, group, isAdmin]);
-
-  // Invoices group — same lazy-load-once-opened, admin-only pattern.
-  useEffect(() => {
-    if (!isAdmin || group !== "invoices") return;
-    setInvoicesLoading(true);
-    fetch(`/api/crm/analytics/invoices?from=${range.from}&to=${range.to}`)
-      .then((r) => r.json())
-      .then((d) => setInvoicesData(d))
-      .finally(() => setInvoicesLoading(false));
-  }, [range, group, isAdmin]);
+  // The admin groups below are fetched lazily, only once an admin actually
+  // opens the group (a null url = not fetched). A non-admin can never reach
+  // them — none appear in visibleGroups for them — and the routes 403 them
+  // regardless. The insightfeed ROUTE itself is intentionally not 403-gated
+  // (the non-admin Overview card consumes it too), so the admin check here is
+  // the client-side half of the Digest group's admin-only visibility.
+  const lazy = (g: Group, route: string) => (isAdmin && group === g ? `/api/crm/analytics/${route}?${q}` : null);
+  const patterns = useAnalyticsData<PatternsResponse>(lazy("patterns", "patterns"));
+  const { data: patternsData, loading: patternsLoading } = patterns;
+  const quadrants = useAnalyticsData<QuadrantsResponse>(lazy("quadrants", "quadrants"));
+  const { data: quadrantsData, loading: quadrantsLoading } = quadrants;
+  const insights = useAnalyticsData<InsightsResponse>(lazy("insights", "insights"));
+  const { data: insightsData, loading: insightsLoading } = insights;
+  const insightFeed = useAnalyticsData<InsightFeedResponse>(lazy("digest", "insightfeed"));
+  const { data: insightFeedData, loading: insightFeedLoading } = insightFeed;
+  const usage = useAnalyticsData<UsageResponse>(lazy("usage", "usage"));
+  const { data: usageData, loading: usageLoading } = usage;
+  const invoices = useAnalyticsData<InvoiceAnalyticsData>(lazy("invoices", "invoices"));
+  const { data: invoicesData, loading: invoicesLoading } = invoices;
 
   function selectGroup(g: Group) {
     setGroup(g);
@@ -544,7 +516,9 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
       {!isAdmin && (
         <div className="mt-4 space-y-4">
           <OverviewTab isAdmin={false} />
-          {loading || !data ? (
+          {perf.error ? (
+            <LoadError message={perf.error} onRetry={perf.retry} />
+          ) : loading || !data ? (
             <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
           ) : (
             <IndividualTab rows={data.salesActivity} range={range} isAdmin={false} />
@@ -554,7 +528,9 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
 
       {isAdmin && group === "performance" && tab === "overview" && <OverviewTab isAdmin={isAdmin} />}
 
-      {isAdmin && group === "performance" && tab !== "overview" && (loading || !data ? (
+      {isAdmin && group === "performance" && tab !== "overview" && (perf.error ? (
+        <LoadError message={perf.error} onRetry={perf.retry} />
+      ) : loading || !data ? (
         <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
       ) : (
         <>
@@ -566,7 +542,9 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
         </>
       ))}
 
-      {group === "usage" && (usageLoading || !usageData ? (
+      {group === "usage" && (usage.error ? (
+        <LoadError message={usage.error} onRetry={usage.retry} />
+      ) : usageLoading || !usageData ? (
         <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
       ) : (
         <UsageTab
@@ -577,7 +555,9 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
         />
       ))}
 
-      {group === "invoices" && (invoicesLoading || !invoicesData ? (
+      {group === "invoices" && (invoices.error ? (
+        <LoadError message={invoices.error} onRetry={invoices.retry} />
+      ) : invoicesLoading || !invoicesData ? (
         <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
       ) : (
         <InvoicesTab data={invoicesData} />
@@ -587,7 +567,9 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
           loading, PDF export, error states) lives inside AiReportTab. */}
       {group === "askai" && <AiReportTab />}
 
-      {group === "patterns" && (patternsLoading || !patternsData ? (
+      {group === "patterns" && (patterns.error ? (
+        <LoadError message={patterns.error} onRetry={patterns.retry} />
+      ) : patternsLoading || !patternsData ? (
         <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
       ) : (
         <>
@@ -604,7 +586,9 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
         </>
       ))}
 
-      {group === "quadrants" && (quadrantsLoading || !quadrantsData ? (
+      {group === "quadrants" && (quadrants.error ? (
+        <LoadError message={quadrants.error} onRetry={quadrants.retry} />
+      ) : quadrantsLoading || !quadrantsData ? (
         <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
       ) : (
         <>
@@ -613,7 +597,9 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
         </>
       ))}
 
-      {group === "insights" && (insightsLoading || !insightsData ? (
+      {group === "insights" && (insights.error ? (
+        <LoadError message={insights.error} onRetry={insights.retry} />
+      ) : insightsLoading || !insightsData ? (
         <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
       ) : (
         <>
@@ -625,7 +611,9 @@ export default function CrmAnalyticsClient({ isAdmin, role }: { isAdmin: boolean
         </>
       ))}
 
-      {group === "digest" && (insightFeedLoading || !insightFeedData ? (
+      {group === "digest" && (insightFeed.error ? (
+        <LoadError message={insightFeed.error} onRetry={insightFeed.retry} />
+      ) : insightFeedLoading || !insightFeedData ? (
         <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
       ) : (
         <>
@@ -906,11 +894,11 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
   // Default all-time: no Target keys on an all-time boundary, so
   // targetProgress is null and the pace/target UI shows its "no target" state.
   const [period, setPeriod] = useState<Period>(() => allTimePeriod());
-  const [data, setData] = useState<OverviewResponse | null>(null);
-  const [loading, setLoading] = useState(true);
 
   const from = period.start.toISOString().slice(0, 10);
   const to = period.end.toISOString().slice(0, 10);
+  const overview = useAnalyticsData<OverviewResponse>(`/api/crm/analytics/overview?from=${from}&to=${to}`);
+  const { data, loading } = overview;
 
   // Non-admin only: their own personal-scope insights, embedded here per the
   // plan's nav table ("A personal-scope insight card embeds in their
@@ -920,15 +908,6 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
   // insights, never another rep's. Admin skips this fetch (they get the full
   // Insight Feed tab under Insights & Digest).
   const [personalInsights, setPersonalInsights] = useState<InsightRow[] | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/crm/analytics/overview?from=${from}&to=${to}`)
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to]);
 
   useEffect(() => {
     if (isAdmin) return;
@@ -964,7 +943,9 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
         <PeriodPicker value={period} onChange={setPeriod} />
       </div>
 
-      {loading || !data ? (
+      {overview.error ? (
+        <LoadError message={overview.error} onRetry={overview.retry} />
+      ) : loading || !data ? (
         <div className="text-sm text-slate-400 py-8 text-center">Loading...</div>
       ) : (
         <div className="space-y-4">

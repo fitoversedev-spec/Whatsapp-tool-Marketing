@@ -11,6 +11,8 @@ import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import MediaPreview from "@/components/MediaPreview";
 import type { Role } from "@/lib/rbac";
 import { postCrossTab } from "@/lib/cross-tab";
+import { safeFetch } from "@/lib/safe-fetch";
+import { fmtShortDateTimeIST } from "@/lib/time";
 
 // These three wizards are heavy (the court designer alone pulls in the Konva
 // 2D + 3D canvas and a large court-image lib). They open only when the user
@@ -63,10 +65,13 @@ export default function InboxClient({
   currentUser,
   initialConversations,
   initialSelectedId,
+  deepLinkUnavailable = false,
 }: {
   currentUser: { id: string; name: string; role: Role };
   initialConversations: Conversation[];
   initialSelectedId?: string | null;
+  // The ?conversation= link points at a chat this user can't see.
+  deepLinkUnavailable?: boolean;
 }) {
   const toast = useToast();
   const router = useRouter();
@@ -77,6 +82,24 @@ export default function InboxClient({
   // target conversation is present in initialConversations even if it
   // wasn't among the default 100 most-recently-active ones.
   const [selected, setSelected] = useState<string | null>(initialSelectedId ?? null);
+  // Why the open chat has no messages on screen yet.
+  const [threadState, setThreadState] = useState<"loading" | "ready" | "error" | "forbidden">("loading");
+
+  // An "Open chat" link while the Inbox is already open: the page re-renders
+  // with the new id but this component stays mounted, so follow it (once per
+  // new id — a later refresh must not pull the user back from another chat).
+  useEffect(() => {
+    if (!initialSelectedId) return;
+    const linked = initialConversations.find((c) => c.id === initialSelectedId);
+    if (linked) setConversations((prev) => (prev.some((c) => c.id === linked.id) ? prev : [linked, ...prev]));
+    setSelected(initialSelectedId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSelectedId]);
+
+  useEffect(() => {
+    if (deepLinkUnavailable) toast.error("That chat isn't available to you — it may be assigned to someone else.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkUnavailable]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
@@ -151,11 +174,24 @@ export default function InboxClient({
   useEffect(() => {
     if (!selected) return;
     let cancelled = false;
+    // A different chat: never show the previous chat's messages, older-page
+    // state or 24-hour window under the new name while this one loads.
+    setMessages([]);
+    setHasMoreOlder(false);
+    setWithinWindow(false);
+    setThreadState("loading");
     const fetchLatest = async (isInitial: boolean) => {
-      const r = await fetch(`/api/conversations/${selected}/messages`);
-      if (!r.ok || cancelled) return;
-      const data = await r.json();
+      const r = await fetch(`/api/conversations/${selected}/messages`).catch(() => null);
       if (cancelled) return;
+      if (!r || !r.ok) {
+        // Polling carries on and recovers by itself; say why it's empty.
+        if (r && (r.status === 403 || r.status === 404)) setThreadState("forbidden");
+        else if (isInitial) setThreadState("error");
+        return;
+      }
+      const data = await r.json().catch(() => null);
+      if (cancelled || !data) return;
+      setThreadState("ready");
       const next: Message[] = data.messages ?? [];
       if (isInitial) {
         setMessages(next);
@@ -247,7 +283,7 @@ export default function InboxClient({
       // Step 1: upload to Vercel Blob via /api/media/upload
       const fd = new FormData();
       fd.append("file", file);
-      const up = await fetch("/api/media/upload", { method: "POST", body: fd });
+      const up = await safeFetch("/api/media/upload", { method: "POST", body: fd });
       if (!up.ok) {
         const e = await up.json().catch(() => ({}));
         toast.error(e.error ?? "Upload failed");
@@ -256,7 +292,7 @@ export default function InboxClient({
       const { media } = await up.json();
 
       // Step 2: send message with mediaId
-      const res = await fetch(`/api/conversations/${selected}/messages`, {
+      const res = await safeFetch(`/api/conversations/${selected}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mediaId: media.id, caption: caption.trim() || undefined }),
@@ -282,7 +318,7 @@ export default function InboxClient({
     if (!selected || !reply.trim()) return;
     setSending(true);
     try {
-      const res = await fetch(`/api/conversations/${selected}/messages`, {
+      const res = await safeFetch(`/api/conversations/${selected}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: reply.trim() }),
@@ -308,7 +344,7 @@ export default function InboxClient({
 
   async function patchConversation(body: Record<string, unknown>, successMsg: string) {
     if (!selected) return;
-    const res = await fetch(`/api/conversations/${selected}`, {
+    const res = await safeFetch(`/api/conversations/${selected}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -334,7 +370,7 @@ export default function InboxClient({
       return;
     }
     setMovingToCrm(true);
-    const res = await fetch(`/api/conversations/${current.id}/move-to-crm`, { method: "POST" });
+    const res = await safeFetch(`/api/conversations/${current.id}/move-to-crm`, { method: "POST" });
     setMovingToCrm(false);
     if (!res.ok) {
       toast.error("Could not move to CRM");
@@ -657,7 +693,7 @@ export default function InboxClient({
                       <div className="text-sm text-slate-900 whitespace-pre-wrap break-words">{m.body}</div>
                     )}
                     <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-                      <span className="font-mono">{new Date(m.createdAt).toLocaleString()}</span>
+                      <span className="font-mono">{fmtShortDateTimeIST(m.createdAt)}</span>
                       {m.direction === "outbound" && (
                         <span className="heading tracking-wide">{m.status}</span>
                       )}
@@ -666,7 +702,15 @@ export default function InboxClient({
                 </div>
               ))}
               {messages.length === 0 && (
-                <div className="text-center text-sm text-slate-400 py-12">No messages yet.</div>
+                <div className="text-center text-sm text-slate-400 py-12">
+                  {threadState === "loading"
+                    ? "Loading messages…"
+                    : threadState === "forbidden"
+                      ? "You don't have access to this chat — it may be assigned to someone else."
+                      : threadState === "error"
+                        ? "Couldn't load messages — trying again…"
+                        : "No messages yet."}
+                </div>
               )}
             </div>
 
@@ -731,8 +775,16 @@ export default function InboxClient({
             </form>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-slate-400 text-sm p-8 text-center">
-            Select a conversation to view messages
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400 text-sm p-8 text-center">
+            {selected
+              ? "This chat isn't in your list — it may be closed or assigned to someone else."
+              : "Select a conversation to view messages"}
+            {selected && (
+              // On a phone the chat list is hidden while a chat is selected.
+              <button type="button" onClick={() => setSelected(null)} className="btn btn-secondary md:hidden">
+                ← Back to chats
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
   session.email = user.email;
   session.name = user.name;
   session.role = user.role as Role;
+  session.refreshedAt = Date.now();
   await session.save();
 
   // Usage tracking: close any dangling open session at its real last-seen time,

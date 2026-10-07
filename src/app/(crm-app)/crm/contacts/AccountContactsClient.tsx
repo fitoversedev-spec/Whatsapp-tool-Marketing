@@ -9,6 +9,7 @@ import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import { matchesContactFilter } from "@/lib/contacts";
 import { postCrossTab } from "@/lib/cross-tab";
+import { safeFetch } from "@/lib/safe-fetch";
 
 type Contact = {
   id: string;
@@ -115,7 +116,7 @@ export default function AccountContactsClient({
 
   async function syncSelected() {
     setBulkSyncing(true);
-    const res = await fetch("/api/account-contacts/sync-to-marketing", {
+    const res = await safeFetch("/api/account-contacts/sync-to-marketing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contactIds: Array.from(selected) }),
@@ -165,7 +166,7 @@ export default function AccountContactsClient({
   async function deleteOne(id: string, name: string) {
     if (!confirm(`Delete ${name}? This removes them from every list — recoverable by an admin if needed, but not from here.`)) return;
     setDeletingId(id);
-    const res = await fetch(`/api/account-contacts/${id}`, { method: "DELETE" });
+    const res = await safeFetch(`/api/account-contacts/${id}`, { method: "DELETE" });
     setDeletingId(null);
     if (!res.ok) {
       toast.error("Could not delete");
@@ -186,7 +187,7 @@ export default function AccountContactsClient({
     // Owner-scoping is enforced server-side: /api/account-contacts/bulk-pipeline
     // updates only contacts the caller owns (or admin), skipping the rest —
     // mirrors bulk-delete's ownership loop.
-    const res = await fetch("/api/account-contacts/bulk-pipeline", {
+    const res = await safeFetch("/api/account-contacts/bulk-pipeline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contactIds: Array.from(selected), pipelineStage: "LEAD" }),
@@ -210,7 +211,7 @@ export default function AccountContactsClient({
     const count = selected.size;
     if (!confirm(`Delete ${count} contact${count === 1 ? "" : "s"}? This removes them from every list — recoverable by an admin if needed, but not from here.`)) return;
     setBulkDeleting(true);
-    const res = await fetch("/api/account-contacts/bulk-delete", {
+    const res = await safeFetch("/api/account-contacts/bulk-delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contactIds: Array.from(selected) }),
@@ -509,7 +510,7 @@ function NewContactModal({
     // contact's own name rather than asking "which company" for a solo
     // individual customer. POST /api/account-contacts already supports this
     // exact inline-creation path via accountName.
-    const res = await fetch("/api/account-contacts", {
+    const res = await safeFetch("/api/account-contacts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

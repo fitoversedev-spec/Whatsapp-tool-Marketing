@@ -70,3 +70,31 @@ export function startOfWeekIST(at: Date = new Date()): Date {
   const daysSinceMonday = (weekday + 6) % 7;
   return new Date(dayStart.getTime() - daysSinceMonday * 24 * 60 * 60 * 1000);
 }
+
+// Display formats — always India time in the en-IN style, so a page rendered
+// on the server (UTC on Vercel) and in the browser shows the same text (no
+// hydration mismatch) and times are never shown 5.5 h behind.
+const IST_ZONE = "Asia/Kolkata";
+
+/** "7 Oct 2026, 1:37 pm" */
+export function fmtDateTimeIST(at: Date | string | number): string {
+  return new Date(at).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: IST_ZONE,
+  });
+}
+
+/** "7 Oct, 1:37 pm" — for chat bubbles and other compact spots. */
+export function fmtShortDateTimeIST(at: Date | string | number): string {
+  return new Date(at).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: IST_ZONE,
+  });
+}

@@ -70,6 +70,9 @@ export default function SwRegister({ userId, pushEnabled }: { userId: string; pu
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
     navigator.serviceWorker
       .register("/sw.js")
+      // Subscribing needs an ACTIVE worker — on a first visit the new one is
+      // still installing when register() resolves, and subscribe() would fail.
+      .then(() => navigator.serviceWorker.ready)
       .then((reg) => (pushEnabled ? syncPushSubscription(reg, userId) : undefined))
       .catch(() => null);
   }, [userId, pushEnabled]);

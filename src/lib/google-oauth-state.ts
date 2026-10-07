@@ -4,6 +4,9 @@ import crypto from "crypto";
 // cookie, and the callback only accepts a code whose `state` matches the cookie — so nobody can finish a sign-in
 // in your browser with a code from a flow they started themselves.
 export const GOOGLE_STATE_COOKIE = "g_oauth_state";
+// Where to go after a successful Google sign-in (the login page's ?next=).
+// Same short-lived, path-scoped cookie options as the state.
+export const GOOGLE_NEXT_COOKIE = "g_oauth_next";
 
 export const googleStateCookieOptions = {
   httpOnly: true,

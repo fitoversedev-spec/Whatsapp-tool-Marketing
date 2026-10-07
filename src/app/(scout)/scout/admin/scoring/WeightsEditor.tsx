@@ -124,6 +124,7 @@ function SliderRow({ label, description, value, onChange, disabled }: SliderRowP
 const INITIAL: ScoringActionState = {};
 
 const dateFmt = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Kolkata",
   day: "2-digit",
   month: "short",
   year: "numeric",

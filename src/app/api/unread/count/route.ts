@@ -8,12 +8,17 @@ import { prisma } from "@/lib/prisma";
 import { endOfDayIST } from "@/lib/time";
 import { recordHeartbeat } from "@/lib/usage/heartbeat";
 import { metaTokenValid } from "@/lib/meta-token-status";
+import { keepSessionAlive } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  // Someone is using the app: keep their sign-in going (cookie re-written at
+  // most once a day — see keepSessionAlive).
+  await keepSessionAlive().catch(() => {});
 
   // Active-time heartbeat — this visibility-gated 30s poll doubles as the "rep
   // is on the tool right now" signal. Kick it off in parallel with the count

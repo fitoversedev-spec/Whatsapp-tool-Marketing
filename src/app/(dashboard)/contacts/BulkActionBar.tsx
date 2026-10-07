@@ -9,6 +9,7 @@ import { useState, type ReactNode } from "react";
 import TagPicker from "@/components/TagPicker";
 import { useToast } from "@/components/Toast";
 import AddToGroupDialog from "@/components/meta/AddToGroupDialog";
+import { safeFetch } from "@/lib/safe-fetch";
 
 type Tag = { id: string; name: string; color: string };
 
@@ -37,7 +38,7 @@ export default function BulkActionBar({
   async function call(action: string, payload: Record<string, unknown> = {}) {
     setBusy(true);
     try {
-      const res = await fetch("/api/contacts/bulk", {
+      const res = await safeFetch("/api/contacts/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: selectedIds, action, payload }),
@@ -56,20 +57,26 @@ export default function BulkActionBar({
     }
   }
 
-  // A form post rather than a link: "Select all N matching" can tick hundreds
-  // of contacts, too many ids for a URL. The CSV comes back as a download.
-  function exportCsv() {
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = "/api/contacts/bulk/export";
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = "ids";
-    input.value = selectedIds.join(",");
-    form.appendChild(input);
-    document.body.appendChild(form);
-    form.submit();
-    form.remove();
+  // Posted rather than a link: "Select all N matching" can tick hundreds of
+  // contacts, too many ids for a URL. Fetched (not a form submit) so an expired
+  // login or a server error shows a message instead of a raw error page.
+  async function exportCsv() {
+    const body = new FormData();
+    body.set("ids", selectedIds.join(","));
+    const res = await safeFetch("/api/contacts/bulk/export", { method: "POST", body });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error ?? "Export failed");
+      return;
+    }
+    const blob = await res.blob();
+    const name = /filename="?([^";]+)"?/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "contacts.csv";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   return (

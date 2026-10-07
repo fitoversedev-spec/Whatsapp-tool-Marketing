@@ -11,6 +11,7 @@ import { analyzeFile, Detection } from "@/lib/file-analysis";
 import { lazyImport } from "@/lib/chunk-reload";
 import BulkActionBar from "./BulkActionBar";
 import { postCrossTab } from "@/lib/cross-tab";
+import { safeFetch } from "@/lib/safe-fetch";
 
 const ROLE_META: Record<Detection["role"], { label: string; icon: string }> = {
   phone: { label: "Phone", icon: "📞" },
@@ -198,7 +199,7 @@ export default function ContactsClient({
 
   async function moveToCrm(c: Contact) {
     setCrmBusyId(c.id);
-    const res = await fetch(`/api/contacts/${c.id}/move-to-crm`, { method: "POST" });
+    const res = await safeFetch(`/api/contacts/${c.id}/move-to-crm`, { method: "POST" });
     setCrmBusyId(null);
     if (!res.ok) { toast.error("Could not move to CRM"); return; }
     const data = await res.json();
@@ -644,7 +645,7 @@ function UploadModal({
     }
     setLoadingSheet(true);
     try {
-      const res = await fetch("/api/contacts/read-sheet", {
+      const res = await safeFetch("/api/contacts/read-sheet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -682,7 +683,7 @@ function UploadModal({
     setBusy(true);
     const fieldColumns: Record<string, string> = {};
     for (const h of fieldCols) fieldColumns[h] = h;
-    const res = await fetch("/api/contacts/import", {
+    const res = await safeFetch("/api/contacts/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -964,7 +965,7 @@ function ContactFormModal({
     e.preventDefault();
     setBusy(true);
     if (mode === "add") {
-      const res = await fetch("/api/contacts", {
+      const res = await safeFetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, name: name || null, allowCampaign, fields }),
@@ -974,7 +975,7 @@ function ContactFormModal({
       if (!res.ok) return toast.error(data.error ?? "Failed to add");
       onDone();
     } else {
-      const res = await fetch(`/api/contacts/${contact!.id}`, {
+      const res = await safeFetch(`/api/contacts/${contact!.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name || null, allowCampaign, fields }),
@@ -989,7 +990,7 @@ function ContactFormModal({
   async function remove() {
     if (!contact) return;
     setBusy(true);
-    const res = await fetch(`/api/contacts/${contact.id}`, { method: "DELETE" });
+    const res = await safeFetch(`/api/contacts/${contact.id}`, { method: "DELETE" });
     setBusy(false);
     if (res.ok) onDone(true);
     else toast.error("Delete failed");

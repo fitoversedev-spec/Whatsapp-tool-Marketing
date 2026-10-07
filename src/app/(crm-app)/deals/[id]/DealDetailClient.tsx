@@ -8,6 +8,7 @@ import { useToast } from "@/components/Toast";
 import UnifiedTimeline from "@/components/crm/UnifiedTimeline";
 import type { TimelineEntry } from "@/lib/crm/timeline";
 import { postCrossTab } from "@/lib/cross-tab";
+import { safeFetch } from "@/lib/safe-fetch";
 
 type Deal = {
   id: string;
@@ -128,7 +129,7 @@ export default function DealDetailClient({
   // the same fetch-PATCH-then-refresh shape rather than a new modal.
   async function handleSetExecutionStatus(status: "IN_EXECUTION" | "COMPLETED") {
     setExecutionSaving(true);
-    const res = await fetch(`/api/deals/${deal.id}`, {
+    const res = await safeFetch(`/api/deals/${deal.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ executionStatus: status }),
@@ -147,7 +148,7 @@ export default function DealDetailClient({
   async function handleDelete() {
     if (!confirm(`Delete deal ${deal.code}? This removes it from every list and analytics view — its quotations and designs stay on record, just no longer attached to a visible deal.`)) return;
     setDeleting(true);
-    const res = await fetch(`/api/deals/${deal.id}`, {
+    const res = await safeFetch(`/api/deals/${deal.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ deleted: true }),
@@ -498,7 +499,7 @@ function EditDealDetailsModal({
     const amount = Number(wonValue);
     if (isWon && !(Number.isFinite(amount) && amount > 0)) { toast.error("Enter the final value"); return; }
     setSaving(true);
-    const res = await fetch(`/api/deals/${deal.id}`, {
+    const res = await safeFetch(`/api/deals/${deal.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -717,7 +718,7 @@ function LogActivityModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const res = await fetch(`/api/deals/${dealId}/activities`, {
+    const res = await safeFetch(`/api/deals/${dealId}/activities`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

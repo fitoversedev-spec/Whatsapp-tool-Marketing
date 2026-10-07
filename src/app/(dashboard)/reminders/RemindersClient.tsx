@@ -142,7 +142,7 @@ export default function RemindersClient({
         title="Reminders"
         description={
           dateFilter
-            ? `Showing reminders for ${new Date(dateFilter + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`
+            ? `Showing reminders for ${new Date(dateFilter + "T00:00:00").toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "long", year: "numeric" })}`
             : `${totalActive} active · ${totalCompleted} recently completed`
         }
         action={
@@ -300,6 +300,7 @@ function Row({
           <span className="text-slate-300">·</span>
           <span className="font-mono">
             {due.toLocaleString("en-IN", {
+              timeZone: "Asia/Kolkata",
               day: "numeric",
               month: "short",
               hour: "numeric",

@@ -10,6 +10,7 @@ import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 import dynamic from "next/dynamic";
+import { safeFetch } from "@/lib/safe-fetch";
 
 // The designer (thousands of lines) is only downloaded when it's opened.
 const CourtImageWizard = dynamic(() => import("./CourtImageWizard"), { ssr: false });
@@ -114,7 +115,7 @@ export default function CourtImagesClient({
       ? `Delete design ${row?.number}? It was already SENT to ${row?.contactPhone ?? "the customer"} — the record will be permanently removed. This cannot be undone.`
       : "Delete this design? This cannot be undone.";
     if (!confirm(message)) return;
-    const res = await fetch(`/api/court-images/${id}`, { method: "DELETE" });
+    const res = await safeFetch(`/api/court-images/${id}`, { method: "DELETE" });
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
       toast.error(e.message ?? e.error ?? "Delete failed");
@@ -144,7 +145,7 @@ export default function CourtImagesClient({
     const n = selected.size;
     if (!confirm(`Delete ${n} design${n === 1 ? "" : "s"}? This cannot be undone.`)) return;
     const ids = Array.from(selected);
-    const res = await fetch("/api/court-images", {
+    const res = await safeFetch("/api/court-images", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids }),
@@ -172,7 +173,7 @@ export default function CourtImagesClient({
     // location is set once we know the WhatsApp Web URL (only used for
     // CRM-channel deals; see /api/court-images/[id]/send).
     const pendingTab = window.open("about:blank", "_blank");
-    const res = await fetch(`/api/court-images/${id}/send`, { method: "POST" });
+    const res = await safeFetch(`/api/court-images/${id}/send`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       pendingTab?.close();

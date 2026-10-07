@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import type { ConnectionStatus } from "@/lib/meta-connection";
 import type { TokenStatus } from "@/lib/token-manager";
+import { fmtDateTimeIST } from "@/lib/time";
 
 const QUALITY_COLORS: Record<string, string> = {
   GREEN: "bg-green-100 text-green-800",
@@ -386,7 +387,7 @@ export default function ConnectionClient({
                 <div className="text-slate-700 mt-0.5">
                   <span className="text-slate-500">Expires:</span>{" "}
                   <span className="font-semibold">
-                    {new Date(tokenStatus.expiresAtIso).toLocaleString()}
+                    {fmtDateTimeIST(tokenStatus.expiresAtIso)}
                   </span>{" "}
                   <span
                     className={`ml-1 inline-block px-1.5 py-0.5 text-[10px] rounded-full font-semibold uppercase tracking-wide ${
@@ -405,7 +406,7 @@ export default function ConnectionClient({
               )}
               {tokenStatus.refreshedAt && (
                 <div className="text-xs text-slate-500 mt-0.5">
-                  Last refreshed: {new Date(tokenStatus.refreshedAt).toLocaleString()}
+                  Last refreshed: {fmtDateTimeIST(tokenStatus.refreshedAt)}
                 </div>
               )}
             </div>
@@ -516,7 +517,7 @@ export default function ConnectionClient({
                 label="Expires"
                 value={
                   status.tokenInfo.expiresAt
-                    ? new Date(status.tokenInfo.expiresAt * 1000).toLocaleString()
+                    ? fmtDateTimeIST(status.tokenInfo.expiresAt * 1000)
                     : "Never"
                 }
               />

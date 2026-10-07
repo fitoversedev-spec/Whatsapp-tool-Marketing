@@ -9,6 +9,7 @@ import CrossTabRefresh from "@/components/CrossTabRefresh";
 import PendingNotesFlusher from "@/components/PendingNotesFlusher";
 import BottomNav from "@/components/BottomNav";
 import SwRegister from "@/components/SwRegister";
+import SessionGuard from "@/components/SessionGuard";
 import { metaTokenValid } from "@/lib/meta-token-status";
 import { endOfDayIST } from "@/lib/time";
 import type { Role } from "@/lib/rbac";
@@ -115,6 +116,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <PendingNotesFlusher userId={user.id} />
       <BottomNav reminderCount={reminderCount} />
       <SwRegister userId={user.id} pushEnabled={user.pushEnabled} />
+      <SessionGuard />
     </div>
   );
 }

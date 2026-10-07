@@ -8,6 +8,7 @@ import { useToast } from "@/components/Toast";
 import type { WorkBook } from "xlsx";
 import { lazyImport } from "@/lib/chunk-reload";
 import GroupsPanel, { type GroupRow } from "./GroupsPanel";
+import { safeFetch } from "@/lib/safe-fetch";
 
 type Broadcast = {
   id: string;
@@ -103,7 +104,7 @@ export default function BroadcastsClient({
     if (syncing) return;
     setSyncing(true);
     try {
-      const res = await fetch("/api/broadcasts/sync", { method: "POST" });
+      const res = await safeFetch("/api/broadcasts/sync", { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error(data?.error || "Broadcast sync failed. Please try again.");
@@ -222,6 +223,7 @@ export default function BroadcastsClient({
                       {b.status === "scheduled" && b.scheduledAt && (
                         <div className="text-[10px] text-amber-700 mt-1 font-mono">
                           {new Date(b.scheduledAt).toLocaleString("en-IN", {
+                            timeZone: "Asia/Kolkata",
                             day: "numeric",
                             month: "short",
                             hour: "numeric",
@@ -266,7 +268,12 @@ export default function BroadcastsClient({
                         className="cursor-pointer"
                       >
                         <td className="font-medium text-slate-900">
-                          <Link href={`/broadcasts/${b.id}`} className="hover:underline">
+                          <Link
+                            href={`/broadcasts/${b.id}`}
+                            // The row navigates on click too — don't do it twice.
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:underline"
+                          >
                             {b.name}
                           </Link>
                         </td>
@@ -282,6 +289,7 @@ export default function BroadcastsClient({
                           {b.status === "scheduled" && b.scheduledAt && (
                             <div className="text-[10px] text-amber-700 mt-1 font-mono">
                               {new Date(b.scheduledAt).toLocaleString("en-IN", {
+                                timeZone: "Asia/Kolkata",
                                 day: "numeric",
                                 month: "short",
                                 hour: "numeric",
@@ -526,7 +534,7 @@ function BroadcastComposer({
         toast.error("Choose a group");
         return;
       }
-      const res = await fetch("/api/contacts/filter-preview", {
+      const res = await safeFetch("/api/contacts/filter-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ groupId, variableMapping: { "1": contactVar1 } }),
@@ -546,7 +554,7 @@ function BroadcastComposer({
         toast.error("Pick at least one contact");
         return;
       }
-      const res = await fetch("/api/contacts/filter-preview", {
+      const res = await safeFetch("/api/contacts/filter-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -576,7 +584,7 @@ function BroadcastComposer({
       payload.sheetUrl = sheetUrl;
       payload.sheetRange = sheetRange;
     }
-    const res = await fetch("/api/broadcasts/preview", {
+    const res = await safeFetch("/api/broadcasts/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -640,7 +648,7 @@ function BroadcastComposer({
     // unlock as soon as the draft was saved, so a second click during the slow
     // launch call created — and sent — a second broadcast.
     try {
-      const res = await fetch("/api/broadcasts", {
+      const res = await safeFetch("/api/broadcasts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -650,6 +658,7 @@ function BroadcastComposer({
 
       if (sendMode === "later") {
         const when = new Date(scheduledAt).toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata",
           day: "numeric",
           month: "short",
           hour: "numeric",
@@ -657,7 +666,7 @@ function BroadcastComposer({
         });
         toast.success(`Scheduled for ${when} · ${preview.willSend} contacts`);
       } else {
-        const launchRes = await fetch(`/api/broadcasts/${data.broadcast.id}/launch`, { method: "POST" });
+        const launchRes = await safeFetch(`/api/broadcasts/${data.broadcast.id}/launch`, { method: "POST" });
         if (!launchRes.ok) { toast.error("Broadcast saved but launch failed"); return; }
         toast.success(`Broadcast launched to ${preview.willSend} contacts`);
       }

@@ -2,6 +2,7 @@ import { Suspense, type ReactNode } from "react";
 import { requireUser } from "@/lib/auth";
 import NavigationTracker from "@/components/NavigationTracker";
 import HelpSidebar from "@/components/HelpSidebar";
+import SessionGuard from "@/components/SessionGuard";
 import type { Role } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export default async function HelpLayout({ children }: { children: ReactNode }) 
         {children}
       </main>
       <NavigationTracker />
+      <SessionGuard />
     </div>
   );
 }

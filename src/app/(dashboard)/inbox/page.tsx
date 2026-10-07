@@ -58,6 +58,10 @@ export default async function InboxPage({
   });
   const accountContactIdByPhone = new Map(linkedContacts.map((c) => [c.phone, c.accountContactId]));
 
+  // Only open a linked chat this user can actually see — otherwise the chat
+  // pane stayed blank (on a phone, with no way back to the list).
+  const deepLinkVisible = !!searchParams.conversation && conversations.some((c) => c.id === searchParams.conversation);
+
   return (
     <InboxClient
       currentUser={{ id: user.id, name: user.name, role: user.role as Role }}
@@ -79,7 +83,8 @@ export default async function InboxPage({
         })),
         accountContactId: accountContactIdByPhone.get(c.contactPhone) ?? null,
       }))}
-      initialSelectedId={searchParams.conversation ?? null}
+      initialSelectedId={deepLinkVisible ? searchParams.conversation : null}
+      deepLinkUnavailable={!!searchParams.conversation && !deepLinkVisible}
     />
   );
 }

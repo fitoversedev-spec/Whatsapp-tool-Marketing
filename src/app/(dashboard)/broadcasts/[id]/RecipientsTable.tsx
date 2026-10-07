@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { fmtDateTimeIST } from "@/lib/time";
 
 type Recipient = {
   id: string;
@@ -107,9 +108,9 @@ export default function RecipientsTable({ recipients }: { recipients: Recipient[
             )}
             {(r.sentAt || r.deliveredAt || r.readAt) && (
               <div className="text-[10px] text-slate-400 mt-2 space-y-0.5 font-mono">
-                {r.sentAt && <div>Sent: {new Date(r.sentAt).toLocaleString()}</div>}
-                {r.deliveredAt && <div>Delivered: {new Date(r.deliveredAt).toLocaleString()}</div>}
-                {r.readAt && <div>Read: {new Date(r.readAt).toLocaleString()}</div>}
+                {r.sentAt && <div>Sent: {fmtDateTimeIST(r.sentAt)}</div>}
+                {r.deliveredAt && <div>Delivered: {fmtDateTimeIST(r.deliveredAt)}</div>}
+                {r.readAt && <div>Read: {fmtDateTimeIST(r.readAt)}</div>}
               </div>
             )}
           </div>
@@ -145,13 +146,13 @@ export default function RecipientsTable({ recipients }: { recipients: Recipient[
                   </span>
                 </td>
                 <td className="text-xs text-slate-500 font-mono">
-                  {r.sentAt ? new Date(r.sentAt).toLocaleString() : "—"}
+                  {r.sentAt ? fmtDateTimeIST(r.sentAt) : "—"}
                 </td>
                 <td className="text-xs text-slate-500 font-mono">
-                  {r.deliveredAt ? new Date(r.deliveredAt).toLocaleString() : "—"}
+                  {r.deliveredAt ? fmtDateTimeIST(r.deliveredAt) : "—"}
                 </td>
                 <td className="text-xs text-slate-500 font-mono">
-                  {r.readAt ? new Date(r.readAt).toLocaleString() : "—"}
+                  {r.readAt ? fmtDateTimeIST(r.readAt) : "—"}
                 </td>
                 <td className="text-xs">
                   {r.errorMessage ? (

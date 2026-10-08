@@ -97,7 +97,8 @@ export type BlobPurpose =
   | "product-image"
   | "product-video"
   | "tds" // product TDS PDFs
-  | "sport-tds"; // admin per-sport TDS PDFs
+  | "sport-tds" // admin per-sport TDS PDFs
+  | "court-render"; // court designer pictures (spin frames, 2D/3D stills) sent on to the PDF / spin-file builders
 
 export const BLOB_PURPOSES: readonly BlobPurpose[] = [
   "media",
@@ -109,6 +110,7 @@ export const BLOB_PURPOSES: readonly BlobPurpose[] = [
   "product-video",
   "tds",
   "sport-tds",
+  "court-render",
 ];
 
 // The token is only valid for a path under this folder; the server re-checks
@@ -123,7 +125,13 @@ export const BLOB_FOLDER: Record<BlobPurpose, string> = {
   "product-video": "products",
   tds: "tds",
   "sport-tds": "sport-tds",
+  "court-render": "court-render",
 };
+
+// Court designer pictures: JPEG spin frames, PNG 2D/3D stills (kept at full
+// quality, so the cap is generous). Wider than any real picture, not a quality knob.
+export const COURT_RENDER_MIME: readonly string[] = ["image/jpeg", "image/png", "image/webp"];
+export const COURT_RENDER_MAX_BYTES = 25 * 1024 * 1024;
 
 export type BlobUploadPayload = {
   purpose: BlobPurpose;

@@ -72,6 +72,7 @@ import { predictCapacity } from "@/lib/court-image/packing";
 import { useUserUnit } from "@/lib/units/useUserUnit";
 import { toFeet, toUnit, FT_TO_M } from "@/lib/units";
 import { uploadFile } from "@/lib/blob-client";
+import { uploadRenders } from "@/lib/court-image/upload-renders";
 import {
   sectionForItem,
   orderedSectionsFor,
@@ -5335,6 +5336,10 @@ function CombinedPdfBlock({
   // P2-03: separate busy/progress for the interactive drag-to-rotate 3D file.
   const [spinBusy, setSpinBusy] = useState(false);
   const [spinProgress, setSpinProgress] = useState(0);
+  // Pictures uploaded so far (the frames/stills go straight to Blob first,
+  // then the route builds the file from their URLs).
+  const [spinUpload, setSpinUpload] = useState<{ done: number; total: number } | null>(null);
+  const [upload, setUpload] = useState<{ done: number; total: number } | null>(null);
 
   // P2-03: capture a full 360° spin, build the self-contained drag-to-rotate
   // HTML via /api/court-images/spin-file, and send it to the customer as a
@@ -5349,13 +5354,18 @@ function CombinedPdfBlock({
     try {
       const frames = (await onCaptureSpin((f) => setSpinProgress(f))) ?? [];
       if (frames.length < 2) throw new Error("Could not capture the 3D spin");
+      // Straight to Blob (a request body over 4.5 MB is refused); the route
+      // gets only the URLs.
+      const frameUrls = await uploadRenders(frames, "spin", (done, total) =>
+        setSpinUpload({ done, total }),
+      );
       const r = await fetch("/api/court-images/spin-file", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerName,
           plotLabel: `${layout.plot.lengthFt} × ${layout.plot.widthFt} ft`,
-          frames,
+          frameUrls,
           send: true,
           contactPhone,
           conversationId: conversationId ?? undefined,
@@ -5373,6 +5383,7 @@ function CombinedPdfBlock({
     } finally {
       setSpinBusy(false);
       setSpinProgress(0);
+      setSpinUpload(null);
     }
   }
 
@@ -5384,6 +5395,7 @@ function CombinedPdfBlock({
   const attachCount =
     att.productIds.length + att.equipmentIds.length + att.tdsIds.length;
 
+  const uploadCount = upload ? ` ${upload.done}/${upload.total}` : "";
   const includedCount = quoteItems.filter((i) => i.included).length;
   const quoteActive = quoteEnabled && includedCount > 0;
   const quoteTotals = computeQuoteTotals(quoteItems);
@@ -5420,6 +5432,26 @@ function CombinedPdfBlock({
       if (mode === "send" && alsoSendVideo && hasVideo) {
         videoUrl = (await onUploadVideo()) ?? undefined;
       }
+      // Send the pictures straight to Blob (a request body over 4.5 MB is
+      // refused) and pass the route only their URLs. Same bytes as before; the
+      // single 3D still is only used by the route when there are no angles.
+      const useAngles = image3dAngles.length > 0;
+      const toUpload = [
+        ...(image2d ? [image2d] : []),
+        ...(useAngles ? image3dAngles : image3d ? [image3d] : []),
+      ];
+      const uploaded = await uploadRenders(toUpload, "design", (done, total) =>
+        setUpload({ done, total }),
+      );
+      const imageUrls: {
+        image2d?: string;
+        image3d?: string;
+        image3dAngles: string[];
+      } = { image3dAngles: [] };
+      let at = 0;
+      if (image2d) imageUrls.image2d = uploaded[at++];
+      if (useAngles) imageUrls.image3dAngles = uploaded.slice(at);
+      else if (image3d) imageUrls.image3d = uploaded[at];
       const payload = {
         customerName,
         plotLabel: `${layout.plot.lengthFt} × ${layout.plot.widthFt} ft`,
@@ -5430,9 +5462,7 @@ function CombinedPdfBlock({
         baseWork: layout.style.baseWork ?? null,
         flooringName: layout.style.flooringProductName ?? null,
         sports: layout.sports,
-        image2d,
-        image3d,
-        image3dAngles,
+        imageUrls,
         attachments: att,
         includeQuote: quoteActive,
         quote: quoteActive
@@ -5495,6 +5525,7 @@ function CombinedPdfBlock({
     } finally {
       setBusy("");
       setProgress(0);
+      setUpload(null);
     }
   }
 
@@ -5597,7 +5628,7 @@ function CombinedPdfBlock({
           disabled={!!busy || !pngDataUrl2D}
           className="btn btn-secondary flex-1 min-w-0 !px-2 !py-2 !text-xs"
         >
-          {busy === "view" ? "Building…" : "👁 View PDF"}
+          {busy === "view" ? `Building…${uploadCount}` : "👁 View PDF"}
         </button>
         <button
           type="button"
@@ -5605,7 +5636,7 @@ function CombinedPdfBlock({
           disabled={!!busy || !pngDataUrl2D}
           className="btn btn-secondary flex-1 min-w-0 !px-2 !py-2 !text-xs"
         >
-          {busy === "download" ? "Building…" : "⬇ Download"}
+          {busy === "download" ? `Building…${uploadCount}` : "⬇ Download"}
         </button>
       </div>
       <button
@@ -5614,7 +5645,7 @@ function CombinedPdfBlock({
         disabled={!!busy || spinBusy || !pngDataUrl2D || !contactPhone}
         className="btn btn-primary w-full"
       >
-        {busy === "send" ? "Sending…" : "📤 Send on WhatsApp"}
+        {busy === "send" ? `Sending…${uploadCount}` : "📤 Send on WhatsApp"}
       </button>
       {/* P2-03: interactive drag-to-rotate 3D file — captured live from the 3D
           scene, built server-side, and sent as a WhatsApp document that spins
@@ -5626,7 +5657,9 @@ function CombinedPdfBlock({
         className="w-full text-xs font-medium border border-wa-green/40 text-wa-dark hover:bg-wa-green/10 rounded-md px-3 py-2 disabled:opacity-50"
       >
         {spinBusy
-          ? `Building 3D spin… ${Math.round(spinProgress * 100)}%`
+          ? spinUpload
+            ? `Building 3D spin… ${spinUpload.done}/${spinUpload.total}`
+            : `Building 3D spin… ${Math.round(spinProgress * 100)}%`
           : "🔄 Send interactive 3D (drag-to-rotate)"}
       </button>
       {spinBusy && (
@@ -5652,7 +5685,7 @@ function CombinedPdfBlock({
           disabled={!!busy || !pngDataUrl2D || !email.trim()}
           className="shrink-0 text-xs font-medium border border-wa-green/40 text-wa-dark hover:bg-wa-green/10 rounded-md px-3 py-1.5 disabled:opacity-50 whitespace-nowrap"
         >
-          {busy === "email" ? "Emailing…" : "Send by email"}
+          {busy === "email" ? `Emailing…${uploadCount}` : "Send by email"}
         </button>
       </div>
       {!pngDataUrl2D && (

@@ -26,21 +26,35 @@ export async function uploadToBlob(args: {
   const pathname = `${folder}/${stamp}-${slug || "media"}.${ext}`;
 
   // Give up after 25 s so a stalled upload fails with a message instead of
-  // running into the platform's silent 60 s kill.
-  const signal = AbortSignal.timeout(25_000);
+  // running into the platform's silent 60 s kill. A plain abort (the Blob SDK
+  // keeps retrying a TimeoutError but stops on an AbortError), plus a hard race
+  // so the caller gets control back even while the SDK is backing off.
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error("Blob storage didn't respond. Upload took too long (25 s)."));
+    }, 25_000);
+  });
   try {
-    const blob = await put(pathname, args.bytes, {
-      access: "public",
-      contentType: args.mimeType,
-      addRandomSuffix: false,
-      abortSignal: signal,
-    });
+    const blob = await Promise.race([
+      put(pathname, args.bytes, {
+        access: "public",
+        contentType: args.mimeType,
+        addRandomSuffix: false,
+        abortSignal: controller.signal,
+      }),
+      timedOut,
+    ]);
     return { url: blob.url, pathname: blob.pathname };
   } catch (err) {
-    if (signal.aborted) {
+    if (controller.signal.aborted) {
       const msg = (err as { message?: string } | null)?.message ?? "upload failed";
-      throw new Error(`${msg} Upload took too long (25 s).`);
+      throw new Error(msg.includes("Upload took too long") ? msg : `${msg} Upload took too long (25 s).`);
     }
     throw err;
+  } finally {
+    clearTimeout(timer);
   }
 }

@@ -6,7 +6,12 @@
 // fetches the file from at send time).
 //
 // POST JSON:
-//   customerName, plotLabel, frames: string[] (JPEG data URLs)
+//   customerName, plotLabel,
+//   frameUrls: string[]  (Blob URLs the browser uploaded with purpose
+//                         "court-render" — the current form; Hobby caps a
+//                         request body at 4.5 MB, so frames can't travel here)
+//   frames: string[]     (JPEG data URLs — old form, kept for tabs that were
+//                         already open before the change)
 //   send?, contactPhone?, conversationId?, email?
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,6 +21,12 @@ import { prisma } from "@/lib/prisma";
 import { sendText, sendMedia } from "@/lib/whatsapp";
 import { renderSpinViewerHtml } from "@/lib/court-image/spin-viewer";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
+import {
+  RenderInputError,
+  dropRenderImages,
+  loadRenderImages,
+  stringList,
+} from "@/lib/court-image/render-inputs";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -27,11 +38,33 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "invalid_json" }, { status: 400 });
 
-  const frames: string[] = Array.isArray(body.frames)
-    ? body.frames.filter(
-        (f: unknown) => typeof f === "string" && f.startsWith("data:image/"),
-      )
-    : [];
+  let frames: string[] = [];
+  // Temporary Blob pictures to delete once the file is built.
+  let tempUrls: string[] = [];
+  const frameUrls = stringList(body.frameUrls);
+  if (frameUrls && frameUrls.length > 0) {
+    if (frameUrls.length < 2) {
+      return NextResponse.json({ error: "no_frames" }, { status: 400 });
+    }
+    try {
+      const images = await loadRenderImages(frameUrls);
+      tempUrls = images.map((im) => im.url);
+      frames = images.map(
+        (im) => `data:${im.contentType};base64,${Buffer.from(im.bytes).toString("base64")}`,
+      );
+    } catch (err) {
+      if (err instanceof RenderInputError) {
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      throw err;
+    }
+  } else {
+    frames = Array.isArray(body.frames)
+      ? body.frames.filter(
+          (f: unknown) => typeof f === "string" && f.startsWith("data:image/"),
+        )
+      : [];
+  }
   if (frames.length < 2) {
     return NextResponse.json({ error: "no_frames" }, { status: 400 });
   }
@@ -44,13 +77,19 @@ export async function POST(req: NextRequest) {
     subtitle: plotLabel,
     frames,
   });
-
-  const uploaded = await uploadToBlob({
-    bytes: Buffer.from(html, "utf8"),
-    fileName: `fitoverse-3d-rotate-${Date.now()}.html`,
-    mimeType: "text/html",
-    folder: "spin-file",
-  });
+  let uploaded: Awaited<ReturnType<typeof uploadToBlob>>;
+  try {
+    uploaded = await uploadToBlob({
+      bytes: Buffer.from(html, "utf8"),
+      fileName: `fitoverse-3d-rotate-${Date.now()}.html`,
+      mimeType: "text/html",
+      folder: "spin-file",
+    });
+  } finally {
+    // The spin file carries its own copy of every frame, and a failed build is
+    // retried with a fresh upload — either way the temporary frames are done with.
+    await dropRenderImages(tempUrls);
+  }
 
   // Optional WhatsApp send as a Document.
   let sent = false;

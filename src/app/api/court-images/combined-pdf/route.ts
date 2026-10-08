@@ -4,7 +4,11 @@
 //
 // POST JSON:
 //   customerName, plotLabel, baseWork, flooringName, sports[]
-//   image2d (dataURL), image3d? (dataURL)
+//   imageUrls: { image2d?, image3d?, image3dAngles?: string[] } — Blob URLs the
+//     browser uploaded with purpose "court-render" (current form; Hobby caps a
+//     request body at 4.5 MB, so the pictures can't travel here)
+//   image2d, image3d?, image3dAngles? (data URLs) — old form, kept for tabs
+//     that were already open before the change
 //   attachments: { productIds, equipmentIds, tdsIds }
 //   quote?: { number, items:[{name,total}], subtotal, gst, grandTotal }
 
@@ -38,6 +42,12 @@ import { renderQuotationPdf } from "@/lib/quotation/pdf";
 import { inferSection } from "@/lib/quotation/sections";
 import { extractHtmlTables } from "@/lib/products/format";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
+import {
+  RenderInputError,
+  dropRenderImages,
+  loadRenderImages,
+  stringList,
+} from "@/lib/court-image/render-inputs";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -134,25 +144,51 @@ export async function POST(req: NextRequest) {
   if (!body) return NextResponse.json({ error: "invalid_json" }, { status: 400 });
 
   const designImages: CombinedPdfInput["designImages"] = [];
-  if (typeof body.image2d === "string") {
-    const bytes = dataUrlToBytes(body.image2d);
-    if (bytes) designImages.push({ label: "2D court plan", bytes });
-  }
   // All-angle 3D turntable — a set of stills so the customer sees the
   // court from every side in the static PDF. Falls back to the single 3D
   // snapshot when no angle set was captured.
   const angleImages: Uint8Array[] = [];
-  if (Array.isArray(body.image3dAngles)) {
-    for (const a of body.image3dAngles) {
-      if (typeof a === "string") {
-        const b = dataUrlToBytes(a);
-        if (b) angleImages.push(b);
+
+  // URL form: the pictures are already in Blob. Start downloading them now so
+  // it overlaps with the product / TDS / quote work below; awaited before the
+  // PDF is built. (The `.catch` only stops an "unhandled rejection" warning if
+  // something else throws first — the real error is handled at the await.)
+  const iu =
+    body.imageUrls && typeof body.imageUrls === "object" && !Array.isArray(body.imageUrls)
+      ? (body.imageUrls as Record<string, unknown>)
+      : null;
+  let urlImages: ReturnType<typeof loadRenderImages> | null = null;
+  let urlHas2d = false;
+  if (iu) {
+    const url2d = typeof iu.image2d === "string" ? iu.image2d.trim() : "";
+    const urlAngles = stringList(iu.image3dAngles) ?? [];
+    const url3d = typeof iu.image3d === "string" ? iu.image3d.trim() : "";
+    urlHas2d = !!url2d;
+    const list = [
+      ...(url2d ? [url2d] : []),
+      ...urlAngles,
+      // Same rule as the data-URL form: the single 3D still is only used when there are no angles.
+      ...(urlAngles.length === 0 && url3d ? [url3d] : []),
+    ];
+    urlImages = loadRenderImages(list);
+    urlImages.catch(() => {});
+  } else {
+    if (typeof body.image2d === "string") {
+      const bytes = dataUrlToBytes(body.image2d);
+      if (bytes) designImages.push({ label: "2D court plan", bytes });
+    }
+    if (Array.isArray(body.image3dAngles)) {
+      for (const a of body.image3dAngles) {
+        if (typeof a === "string") {
+          const b = dataUrlToBytes(a);
+          if (b) angleImages.push(b);
+        }
       }
     }
-  }
-  if (angleImages.length === 0 && typeof body.image3d === "string") {
-    const b = dataUrlToBytes(body.image3d);
-    if (b) angleImages.push(b);
+    if (angleImages.length === 0 && typeof body.image3d === "string") {
+      const b = dataUrlToBytes(body.image3d);
+      if (b) angleImages.push(b);
+    }
   }
 
   const attachments = body.attachments ?? {
@@ -346,6 +382,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Temporary Blob pictures to delete once the PDF is built.
+  let tempUrls: string[] = [];
+  if (urlImages) {
+    try {
+      const images = await urlImages;
+      tempUrls = images.map((im) => im.url);
+      let k = 0;
+      if (urlHas2d) designImages.push({ label: "2D court plan", bytes: images[k++].bytes });
+      for (; k < images.length; k++) angleImages.push(images[k].bytes);
+    } catch (err) {
+      if (err instanceof RenderInputError) {
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      throw err;
+    }
+  }
+
   const input: CombinedPdfInput = {
     customerName: String(body.customerName ?? ""),
     plotLabel: String(body.plotLabel ?? ""),
@@ -368,15 +421,23 @@ export async function POST(req: NextRequest) {
     pdfBytes = await renderCombinedPdf(input);
   } catch (err) {
     console.error("[combined-pdf] render failed", err);
+    await dropRenderImages(tempUrls);
     return NextResponse.json({ error: "render_failed" }, { status: 500 });
   }
 
-  const uploaded = await uploadToBlob({
-    bytes: Buffer.from(pdfBytes),
-    fileName: `fitoverse-design-${Date.now()}.pdf`,
-    mimeType: "application/pdf",
-    folder: "combined-pdf",
-  });
+  let uploaded: Awaited<ReturnType<typeof uploadToBlob>>;
+  try {
+    uploaded = await uploadToBlob({
+      bytes: Buffer.from(pdfBytes),
+      fileName: `fitoverse-design-${Date.now()}.pdf`,
+      mimeType: "application/pdf",
+      folder: "combined-pdf",
+    });
+  } finally {
+    // The PDF carries its own copy of every picture, and a failed save is
+    // retried with a fresh upload — either way the temporary pictures are done with.
+    await dropRenderImages(tempUrls);
+  }
 
   // Optional send over WhatsApp as a document, then the spinning 3D video.
   let sent = false;

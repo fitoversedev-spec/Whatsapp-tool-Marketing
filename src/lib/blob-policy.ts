@@ -10,6 +10,8 @@ import { del, head } from "@vercel/blob";
 import {
   BLOB_FOLDER,
   BLOB_PURPOSES,
+  COURT_RENDER_MAX_BYTES,
+  COURT_RENDER_MIME,
   MAX_SIZE,
   TEMPLATE_ALLOWED_MIME,
   TEMPLATE_MAX_BYTES,
@@ -114,6 +116,15 @@ export async function checkRules(
         return { ok: false, status: 413, error: `File too large. Max ${mb(max)}MB for ${isImage ? "image" : "video"} files.` };
       }
       return { ok: true, limits: { allowedContentTypes: [type], maximumSizeInBytes: max } };
+    }
+    case "court-render": {
+      if (!COURT_RENDER_MIME.includes(type)) {
+        return { ok: false, status: 400, error: "Court pictures must be JPEG, PNG or WebP." };
+      }
+      if (size > COURT_RENDER_MAX_BYTES) {
+        return { ok: false, status: 413, error: `File too large. Max ${mb(COURT_RENDER_MAX_BYTES)}MB per court picture.` };
+      }
+      return { ok: true, limits: { allowedContentTypes: [type], maximumSizeInBytes: COURT_RENDER_MAX_BYTES } };
     }
   }
 }

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { normalizePhone, combinePhone, parseBool } from "@/lib/phone";
 import { colIndex } from "@/lib/sheets";
 import { parseFields } from "@/lib/contacts";
+
+export const maxDuration = 60;
+
+const CREATE_CHUNK = 500;
+const UPDATE_CHUNK = 200;
 
 // Bulk import. Client parses the xlsx/csv and posts rows + a column mapping.
 const schema = z.object({
@@ -71,6 +77,18 @@ export async function POST(req: NextRequest) {
   let invalid = 0;
   let blocked = 0; // imported but AllowCampaign=false
 
+  // One entry per phone, in file order. Rows are folded in memory first (same
+  // result as writing row by row), then saved in batches — one DB call per row
+  // is too slow for thousands of rows and ran past the 60 s limit.
+  type Pending = {
+    id: string | null; // null = a new contact
+    base: Record<string, string>; // what the merge starts from (old fields / first row)
+    fields: Record<string, string>; // latest row's fields, applied over base
+    name: string; // latest non-empty name ("" = none)
+    allowCampaign: boolean; // latest row wins
+  };
+  const pending = new Map<string, Pending>();
+
   for (const row of dataRows) {
     let rawPhone = String(row[phoneIdx] ?? "").trim();
     if (ccIdx >= 0) {
@@ -91,23 +109,53 @@ export async function POST(req: NextRequest) {
       fields[fm.label] = String(row[fm.idx] ?? "").trim();
     }
 
+    const seen = pending.get(phone);
+    if (seen) {
+      // Same phone again in this file: it updates the earlier row.
+      updated++;
+      seen.fields = fields;
+      if (name) seen.name = name;
+      seen.allowCampaign = allowCampaign;
+      continue;
+    }
     const found = existingByPhone.get(phone);
     if (found) {
-      const merged = { ...parseFields(found.fields), ...fields };
-      await prisma.contact.update({
-        where: { id: found.id },
-        data: { name: name || undefined, allowCampaign, fields: JSON.stringify(merged) },
-      });
       updated++;
+      pending.set(phone, { id: found.id, base: parseFields(found.fields), fields, name, allowCampaign });
     } else {
-      const created = await prisma.contact.create({
-        data: { phone, name: name || null, allowCampaign, fields: JSON.stringify(fields) },
-      });
-      // Cache with the REAL id so subsequent rows with the same phone update
-      // (rather than failing P2025 on a literal "new" id).
-      existingByPhone.set(phone, { id: created.id, phone, fields: JSON.stringify(fields) });
       added++;
+      pending.set(phone, { id: null, base: fields, fields, name, allowCampaign });
     }
+  }
+
+  const toCreate: Prisma.ContactCreateManyInput[] = [];
+  const toUpdate: Prisma.ContactUpdateArgs[] = [];
+  // Increasing createdAt in file order, so the newest-first Contacts list
+  // orders an import the way row-by-row inserts did.
+  const t0 = Date.now();
+  for (const [phone, p] of pending) {
+    const fieldsJson = JSON.stringify({ ...p.base, ...p.fields });
+    if (p.id) {
+      toUpdate.push({
+        where: { id: p.id },
+        data: { name: p.name || undefined, allowCampaign: p.allowCampaign, fields: fieldsJson },
+      });
+    } else {
+      toCreate.push({
+        phone,
+        name: p.name || null,
+        allowCampaign: p.allowCampaign,
+        fields: fieldsJson,
+        createdAt: new Date(t0 + toCreate.length),
+      });
+    }
+  }
+
+  for (let i = 0; i < toCreate.length; i += CREATE_CHUNK) {
+    await prisma.contact.createMany({ data: toCreate.slice(i, i + CREATE_CHUNK), skipDuplicates: true });
+  }
+  for (let i = 0; i < toUpdate.length; i += UPDATE_CHUNK) {
+    await prisma.$transaction(toUpdate.slice(i, i + UPDATE_CHUNK).map((args) => prisma.contact.update(args)));
   }
 
   const total = await prisma.contact.count();

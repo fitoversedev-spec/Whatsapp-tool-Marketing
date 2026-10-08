@@ -3,9 +3,10 @@
 // looping until it produces a final text answer. Used by the analytics
 // feature so numbers only ever come from real DB queries (never invented).
 import Anthropic from "@anthropic-ai/sdk";
-import { AI_MODEL, getAnthropic } from "./client";
+import { AI_LOOP_TOTAL_MS, AI_MODEL, aiBudgetMs, getAnthropic } from "./client";
 import { AI_MAX_TOKENS_DEFAULT, assertWithinDailyCap, logAiUsage } from "./guardrails";
 import { mapAnthropicError } from "./errors";
+import { deadline } from "@/lib/http";
 
 export type AiTool = {
   name: string;
@@ -24,6 +25,9 @@ export type ToolLoopOptions = {
   cacheSystem?: boolean;
   maxRounds?: number;
   maxTokens?: number;
+  // Overall time budget for the whole loop (default ~50 s, or the route's
+  // withAiBudget). Keeps the loop inside the platform's 60 s function cap.
+  totalMs?: number;
 };
 
 export type ToolLoopResult = {
@@ -36,6 +40,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   const client = getAnthropic();
   const maxRounds = opts.maxRounds ?? 6;
   const maxTokens = opts.maxTokens ?? AI_MAX_TOKENS_DEFAULT;
+  const clock = deadline(opts.totalMs ?? aiBudgetMs() ?? AI_LOOP_TOTAL_MS);
 
   const system = opts.cacheSystem
     ? [{ type: "text" as const, text: opts.system, cache_control: { type: "ephemeral" as const } }]
@@ -55,8 +60,9 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   let outputTokens = 0;
 
   for (let round = 0; round < maxRounds; round++) {
-    // On the final round drop the tools so the model must produce prose.
-    const lastRound = round === maxRounds - 1;
+    // On the final round drop the tools so the model must produce prose. Do the
+    // same when little time is left, so we still return an answer in time.
+    const lastRound = round === maxRounds - 1 || clock.remaining() < 12_000;
     let res: Anthropic.Message;
     try {
       res = await client.messages.create({
@@ -65,6 +71,9 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         system,
         messages,
         ...(lastRound ? {} : { tools: toolDefs }),
+      }, {
+        timeout: Math.max(2_000, Math.min(30_000, clock.remaining() - 3_000)),
+        maxRetries: 0,
       });
     } catch (e) {
       throw mapAnthropicError(e);

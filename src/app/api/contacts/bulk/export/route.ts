@@ -6,9 +6,11 @@
 //        hundreds, which would be too long for a URL)
 
 import { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseFields } from "@/lib/contacts";
+import { chunkIds } from "@/lib/broadcast-groups";
 
 function parseIds(raw: string | null): string[] | null {
   return raw ? raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : null;
@@ -31,12 +33,22 @@ export async function POST(req: NextRequest) {
 }
 
 async function csvResponse(ids: string[] | null): Promise<Response> {
-  const contacts = await prisma.contact.findMany({
-    where: ids ? { id: { in: ids } } : {},
-    include: { tags: { include: { tag: true } } },
-    orderBy: { createdAt: "desc" },
-    take: 10000,
-  });
+  const load = (where: Prisma.ContactWhereInput, take?: number) =>
+    prisma.contact.findMany({
+      where,
+      include: { tags: { include: { tag: true } } },
+      orderBy: { createdAt: "desc" },
+      take,
+    });
+  let contacts: Awaited<ReturnType<typeof load>> = [];
+  if (ids) {
+    // Named contacts: 1,000 ids per query (no row cap — they asked for these),
+    // then back into newest-first order.
+    for (const part of chunkIds(ids)) contacts.push(...(await load({ id: { in: part } })));
+    contacts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  } else {
+    contacts = await load({}, 10000);
+  }
 
   // Determine all field keys actually present in the set, so the CSV has
   // a column for each. Sorted for stable ordering.

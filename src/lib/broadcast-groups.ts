@@ -11,6 +11,18 @@ export const GROUP_NAME_MAX = 80;
 // Upper bound for one add/assign request — comfortably above the largest lead
 // list (every campaign's leads on the Ad campaigns page).
 export const MAX_LEADS_PER_REQUEST = 5000;
+// Upper bound of contact ids in one request — "select all matching" on a pool
+// that has grown past 5,000 contacts (bulk actions, group create / add / remove).
+export const MAX_CONTACTS_PER_REQUEST = 20000;
+// Ids per DB statement, so a 20,000-id request never becomes one giant query.
+const ID_CHUNK = 1000;
+
+/** Split a long id list into slices of `size` for `where: { id: { in } }` queries. */
+export function chunkIds<T>(ids: T[], size = ID_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+}
 
 /** Who may rename or delete a group, or remove its members: its maker or an admin. */
 export function canEditGroup(user: { id: string; role: string }, group: { createdByUserId: string }): boolean {
@@ -133,21 +145,31 @@ export async function addContactsToGroup(
   contactIds: string[],
   userId: string,
 ): Promise<AddLeadsResult> {
-  const found = await prisma.contact.findMany({ where: { id: { in: contactIds } }, select: { id: true } });
-  const { added, alreadyIn } = await joinGroup(groupId, found.map((c) => c.id), userId);
+  const foundIds: string[] = [];
+  for (const part of chunkIds(contactIds)) {
+    const rows = await prisma.contact.findMany({ where: { id: { in: part } }, select: { id: true } });
+    for (const c of rows) foundIds.push(c.id);
+  }
+  const { added, alreadyIn } = await joinGroup(groupId, foundIds, userId);
   return { added, alreadyIn, noPhone: 0 };
 }
 
 async function joinGroup(groupId: string, contactIds: string[], userId: string) {
   if (contactIds.length === 0) return { added: 0, alreadyIn: 0 };
-  const created = await prisma.broadcastGroupMember.createMany({
-    data: contactIds.map((contactId) => ({ groupId, contactId, addedByUserId: userId })),
-    skipDuplicates: true,
-  });
-  if (created.count > 0) {
+  // One insert per 1,000 people, all in one transaction (all-or-nothing as before).
+  const results = await prisma.$transaction(
+    chunkIds(contactIds).map((part) =>
+      prisma.broadcastGroupMember.createMany({
+        data: part.map((contactId) => ({ groupId, contactId, addedByUserId: userId })),
+        skipDuplicates: true,
+      }),
+    ),
+  );
+  const count = results.reduce((n, r) => n + r.count, 0);
+  if (count > 0) {
     await prisma.broadcastGroup.update({ where: { id: groupId }, data: { updatedAt: new Date() } });
   }
-  return { added: created.count, alreadyIn: contactIds.length - created.count };
+  return { added: count, alreadyIn: contactIds.length - count };
 }
 
 /** Add whichever of leads / contacts a request carries, and total the counts. */

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { GOOGLE_NEXT_COOKIE, GOOGLE_STATE_COOKIE, googleStateCookieOptions, googleStateMatches } from "@/lib/google-oauth-state";
 import { safeNextPath } from "@/lib/next-path";
+import { fetchT } from "@/lib/http";
 import type { Role } from "@/lib/rbac";
 
 const BASE_URL =
@@ -38,18 +39,24 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Exchange authorization code for tokens
-    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        code,
-        client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        redirect_uri: `${BASE_URL}/api/auth/google/callback`,
-        grant_type: "authorization_code",
-      }),
-    });
+    // Exchange authorization code for tokens. 10 s per Google call; a timeout
+    // lands in the catch below ("Google login failed. Please try again.").
+    const tokenRes = await fetchT(
+      "Google",
+      "https://oauth2.googleapis.com/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: process.env.GOOGLE_CLIENT_ID!,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+          redirect_uri: `${BASE_URL}/api/auth/google/callback`,
+          grant_type: "authorization_code",
+        }),
+      },
+      10_000,
+    );
 
     if (!tokenRes.ok) {
       console.error("Google token exchange failed:", await tokenRes.text());
@@ -61,9 +68,11 @@ export async function GET(req: NextRequest) {
     const tokens = (await tokenRes.json()) as { access_token: string };
 
     // Get user info from Google
-    const userInfoRes = await fetch(
+    const userInfoRes = await fetchT(
+      "Google",
       "https://www.googleapis.com/oauth2/v2/userinfo",
-      { headers: { Authorization: `Bearer ${tokens.access_token}` } }
+      { headers: { Authorization: `Bearer ${tokens.access_token}` } },
+      10_000,
     );
 
     if (!userInfoRes.ok) {

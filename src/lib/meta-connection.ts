@@ -15,11 +15,21 @@ async function auth() {
   return { headers: { Authorization: `Bearer ${token}` } };
 }
 
-async function safeGet<T>(url: string): Promise<{ data?: T; error?: string }> {
+// 10 s per call: the checks below run in parallel, so the whole page is bounded
+// by the slowest one rather than the sum of five.
+const CALL_TIMEOUT_MS = 10_000;
+
+async function safeGet<T>(
+  url: string,
+  authConfig?: { headers: { Authorization: string } },
+): Promise<{ data?: T; error?: string }> {
   try {
-    const r = await axios.get(url, { ...(await auth()), timeout: 30_000 });
+    const r = await axios.get(url, { ...(authConfig ?? (await auth())), timeout: CALL_TIMEOUT_MS });
     return { data: r.data as T };
   } catch (err: any) {
+    if (!err.response && (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT")) {
+      return { error: "Meta didn't respond within 10 s" };
+    }
     const m = err.response?.data?.error?.message ?? err.message;
     return { error: m };
   }
@@ -98,27 +108,48 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
     return status;
   }
 
-  // ── Token introspection (uses app token; needs APP_SECRET) ─────────────
-  if (APP_SECRET) {
-    const appToken = `1460614352002830|${APP_SECRET}`;
-    const tok = await safeGet<{ data: any }>(
-      `https://graph.facebook.com/${API}/debug_token?input_token=${token}&access_token=${appToken}`
-    );
-    if (tok.data?.data) {
-      status.tokenInfo = {
-        valid: !!tok.data.data.is_valid,
-        appId: tok.data.data.app_id,
-        type: tok.data.data.type,
-        expiresAt: tok.data.data.expires_at ?? null,
-        scopes: tok.data.data.scopes ?? [],
-      };
-    }
+  // Fire all five Meta calls at once, then fill the status in the same order
+  // as before (so the errors list keeps its order).
+  const authConfig = await auth();
+  const appToken = `1460614352002830|${APP_SECRET}`;
+  const [tok, phoneRes, wabaRes, profileRes, tplRes] = await Promise.all([
+    // Token introspection (uses app token; needs APP_SECRET)
+    APP_SECRET
+      ? safeGet<{ data: any }>(
+          `https://graph.facebook.com/${API}/debug_token?input_token=${token}&access_token=${appToken}`,
+          authConfig,
+        )
+      : Promise.resolve(null),
+    safeGet<any>(
+      `https://graph.facebook.com/${API}/${PHONE_ID}?fields=id,display_phone_number,verified_name,quality_rating,messaging_limit_tier,name_status,code_verification_status,platform_type`,
+      authConfig,
+    ),
+    safeGet<any>(
+      `https://graph.facebook.com/${API}/${WABA_ID}?fields=id,name,timezone_id,message_template_namespace`,
+      authConfig,
+    ),
+    safeGet<any>(
+      `https://graph.facebook.com/${API}/${PHONE_ID}/whatsapp_business_profile?fields=about,description,address,email,websites,profile_picture_url,vertical`,
+      authConfig,
+    ),
+    safeGet<any>(
+      `https://graph.facebook.com/${API}/${WABA_ID}/message_templates?limit=50&fields=id,name,language,status,category,components`,
+      authConfig,
+    ),
+  ]);
+
+  // ── Token introspection ────────────────────────────────────────────────
+  if (tok?.data?.data) {
+    status.tokenInfo = {
+      valid: !!tok.data.data.is_valid,
+      appId: tok.data.data.app_id,
+      type: tok.data.data.type,
+      expiresAt: tok.data.data.expires_at ?? null,
+      scopes: tok.data.data.scopes ?? [],
+    };
   }
 
   // ── Phone number details ───────────────────────────────────────────────
-  const phoneRes = await safeGet<any>(
-    `https://graph.facebook.com/${API}/${PHONE_ID}?fields=id,display_phone_number,verified_name,quality_rating,messaging_limit_tier,name_status,code_verification_status,platform_type`
-  );
   if (phoneRes.data) {
     const p = phoneRes.data;
     status.phone = {
@@ -140,9 +171,6 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
   // Business Solution Provider permission — restricted by Meta. We fall back to
   // the always-readable fields here. Payment status is shown as "check dashboard"
   // since non-BSP apps can't query it via API.
-  const wabaRes = await safeGet<any>(
-    `https://graph.facebook.com/${API}/${WABA_ID}?fields=id,name,timezone_id,message_template_namespace`
-  );
   if (wabaRes.data) {
     const w = wabaRes.data;
     status.waba = {
@@ -163,9 +191,6 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
   }
 
   // ── Business profile (about, websites, etc.) ───────────────────────────
-  const profileRes = await safeGet<any>(
-    `https://graph.facebook.com/${API}/${PHONE_ID}/whatsapp_business_profile?fields=about,description,address,email,websites,profile_picture_url,vertical`
-  );
   if (profileRes.data?.data?.[0]) {
     const p = profileRes.data.data[0];
     status.profile = {
@@ -180,9 +205,6 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
   }
 
   // ── Templates ──────────────────────────────────────────────────────────
-  const tplRes = await safeGet<any>(
-    `https://graph.facebook.com/${API}/${WABA_ID}/message_templates?limit=50&fields=id,name,language,status,category,components`
-  );
   if (tplRes.data?.data) {
     status.templates = tplRes.data.data.map((t: any) => {
       const body = (t.components ?? []).find((c: any) => c.type === "BODY")?.text;

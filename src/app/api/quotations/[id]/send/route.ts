@@ -2,14 +2,14 @@
 // via WhatsApp as a document message. Saves pdfUrl + flips status to
 // "sent" + records sentAt.
 //
-// Idempotency: if the quotation already has pdfUrl + status "sent", we
-// re-send the existing blob rather than regenerating.
+// The PDF is the same one the preview and the customer's /q link show: a saved
+// copy is reused while the quote is unchanged and rebuilt after an edit (see
+// lib/quotation/pdf-cache.ts).
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { renderQuotationPdf } from "@/lib/quotation/pdf";
-import { uploadToBlob } from "@/lib/media";
+import { ensureQuotationPdf, quotationFileName } from "@/lib/quotation/pdf-cache";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { resolveWhatsAppDelivery } from "@/lib/whatsapp-delivery";
 import { scheduleQuoteFollowUp } from "@/lib/crm/contactLinks";
@@ -34,7 +34,6 @@ const bodySchema = z.object({
 // explicit confirm — a double click, a second tab or a retried request must
 // not send the customer a duplicate (src/lib/quotation/send-client.ts asks).
 const RESEND_CONFIRM_MS = 10 * 60 * 1000;
-import type { QuoteLineItem } from "@/lib/quotation/calculator";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -85,44 +84,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "recently_sent", sentAt: q.sentAt.toISOString() }, { status: 409 });
   }
 
-  // 1. Render PDF (or reuse cached)
-  let pdfUrl = q.pdfUrl;
-  let fileName = `${q.number}-${q.customerName.replace(/[^a-zA-Z0-9]+/g, "-")}.pdf`;
-  if (!pdfUrl) {
-    try {
-      const driveLinkPromise = prisma.setting
-        .findUnique({ where: { key: `project_drive_link_${q.sport}` } })
-        .then((s) => s?.value ?? null);
-      const lineItems = JSON.parse(q.lineItems) as QuoteLineItem[];
-      const pdfBuffer = await renderQuotationPdf({
-        number: q.number,
-        customerName: q.customerName,
-        sport: q.sport,
-        lengthFt: q.lengthFt,
-        widthFt: q.widthFt,
-        lineItems,
-        subtotal: Number(q.subtotal),
-        gstAmount: Number(q.gstAmount),
-        grandTotal: Number(q.grandTotal),
-        notes: q.notes,
-        quoteDate: q.quoteDate,
-        validityDays: q.validityDays,
-        driveLink: await driveLinkPromise,
-      });
-      const uploaded = await uploadToBlob({
-        bytes: Buffer.from(pdfBuffer),
-        fileName,
-        mimeType: "application/pdf",
-        folder: "quotations",
-      });
-      pdfUrl = uploaded.url;
-    } catch (err) {
-      console.error("[quotation/send] pdf render/upload failed", err);
-      return NextResponse.json(
-        { error: "Failed to render PDF: " + (err instanceof Error ? err.message : String(err)) },
-        { status: 500 }
-      );
-    }
+  // 1. The saved PDF for the quote exactly as it is now — same inputs as the
+  //    preview and the customer's /q link; rebuilt if it was edited since.
+  const fileName = quotationFileName(q);
+  let pdfUrl: string;
+  try {
+    pdfUrl = (await ensureQuotationPdf(q)).url;
+  } catch (err) {
+    console.error("[quotation/send] pdf render/upload failed", err);
+    return NextResponse.json(
+      { error: "Failed to render PDF: " + (err instanceof Error ? err.message : String(err)) },
+      { status: 500 }
+    );
   }
 
   // Route by whether the customer has an OPEN 24h WhatsApp session (located

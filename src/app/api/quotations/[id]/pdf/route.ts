@@ -1,16 +1,33 @@
 // Render a quotation as PDF. Returns the PDF bytes inline so the wizard's
-// preview iframe can render it directly. Cached at pdfUrl on first send to
-// avoid re-rendering on every preview load.
+// preview iframe can render it directly. The rendered PDF is saved to Blob under
+// a fingerprint of everything drawn on it (see lib/quotation/pdf-cache.ts), so a
+// reload reuses it and an edit to the quote rebuilds it.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { renderQuotationPdf } from "@/lib/quotation/pdf";
-import type { QuoteLineItem } from "@/lib/quotation/calculator";
-import { uploadToBlob } from "@/lib/media";
+import { after } from "@/lib/scout/after";
+import type { QuotationPdfData } from "@/lib/quotation/pdf";
+import {
+  buildQuotationPdfInputs,
+  pdfKey,
+  quotationFileName,
+  renderQuotationPdfBytes,
+  saveQuotationPdf,
+  urlHasKey,
+} from "@/lib/quotation/pdf-cache";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+/** Does an If-None-Match header (a list, possibly weak "W/" tags, or "*") name this key? */
+function etagMatches(header: string | null, key: string): boolean {
+  if (!header) return false;
+  return header
+    .split(",")
+    .map((t) => t.trim().replace(/^W\//, ""))
+    .some((t) => t === "*" || t === `"${key}"`);
+}
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -25,53 +42,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return new NextResponse("forbidden", { status: 403 });
   }
 
-  const safeName = `${q.number}-${(q.customerName ?? "quote").replace(/[^a-zA-Z0-9]+/g, "-")}.pdf`;
-  const pdfHeaders = {
-    "Content-Type": "application/pdf",
-    "Content-Disposition": `inline; filename="${safeName}"`,
-    // A quote is an immutable snapshot (editing creates a NEW draft id), so its
-    // PDF never changes — the browser can safely cache it for this id.
-    "Cache-Control": "private, max-age=300",
-  };
-
-  // Cache HIT: reuse the already-rendered PDF instead of re-rendering on every
-  // preview load / reload / send. Quotes are immutable so this is always valid.
-  if (q.pdfUrl) {
-    try {
-      const cached = await fetch(q.pdfUrl);
-      if (cached.ok) {
-        return new NextResponse(new Uint8Array(await cached.arrayBuffer()), { headers: pdfHeaders });
-      }
-    } catch {
-      // fall through and re-render
-    }
-  }
-
-  const driveLinkPromise = prisma.setting
-    .findUnique({ where: { key: `project_drive_link_${q.sport}` } })
-    .then((s) => s?.value ?? null);
-
-  let pdfBuffer: Buffer;
+  let inputs: QuotationPdfData;
+  let key: string;
   try {
-    const lineItems = JSON.parse(q.lineItems) as QuoteLineItem[];
-    pdfBuffer = await renderQuotationPdf({
-      number: q.number,
-      customerName: q.customerName,
-      siteCity: q.deal?.siteCity ?? null,
-      sport: q.sport,
-      lengthFt: q.lengthFt,
-      widthFt: q.widthFt,
-      lineItems,
-      subtotal: Number(q.subtotal),
-      gstAmount: Number(q.gstAmount),
-      grandTotal: Number(q.grandTotal),
-      notes: q.notes,
-      quoteDate: q.quoteDate,
-      validityDays: q.validityDays,
-      driveLink: await driveLinkPromise,
-      salespersonPhone: q.salespersonPhone ?? null,
-      sections: q.sections ? (() => { try { return JSON.parse(q.sections); } catch { return null; } })() : null,
-    });
+    inputs = await buildQuotationPdfInputs(q);
+    key = pdfKey(inputs);
   } catch (e) {
     // Surface the real error to the preview iframe instead of letting an
     // unhandled throw crash the Next.js worker ("Jest worker encountered child
@@ -83,19 +58,54 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       { status: 500 },
     );
   }
-  // Fire-and-forget: cache the PDF in blob storage for future loads but
-  // return the response immediately — the user sees the PDF ~500-1000ms
-  // sooner. Next reload hits the cached pdfUrl.
-  uploadToBlob({
-    bytes: Buffer.from(pdfBuffer),
-    fileName: safeName,
-    mimeType: "application/pdf",
-    folder: "quotations",
-  })
-    .then((uploaded) =>
-      prisma.quotation.update({ where: { id: q.id }, data: { pdfUrl: uploaded.url } })
-    )
-    .catch((e) => console.error("[quotation pdf] cache upload failed for", q.number, e));
+
+  // The key names the exact content, so it is the ETag: a reload revalidates
+  // cheaply (304) and an edit changes the key, so it never shows an old PDF.
+  const cacheHeaders = { ETag: `"${key}"`, "Cache-Control": "private, no-cache" };
+  if (etagMatches(req.headers.get("if-none-match"), key)) {
+    return new NextResponse(null, { status: 304, headers: cacheHeaders });
+  }
+
+  const safeName = quotationFileName(q);
+  const pdfHeaders = {
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `inline; filename="${safeName}"`,
+    ...cacheHeaders,
+  };
+
+  // Cache HIT: the saved PDF was made from exactly these inputs.
+  if (urlHasKey(q.pdfUrl, key)) {
+    try {
+      const cached = await fetch(q.pdfUrl!, { signal: AbortSignal.timeout(8000) });
+      if (cached.ok) {
+        return new NextResponse(new Uint8Array(await cached.arrayBuffer()), { headers: pdfHeaders });
+      }
+    } catch {
+      // fall through and re-render
+    }
+  }
+
+  let pdfBuffer: Buffer;
+  try {
+    pdfBuffer = await renderQuotationPdfBytes(inputs);
+  } catch (e) {
+    console.error("[quotation pdf] render failed for", q.number, e);
+    return new NextResponse(
+      "Failed to render quotation PDF: " +
+        (e instanceof Error ? e.message : String(e)),
+      { status: 500 },
+    );
+  }
+
+  // Respond now; the upload + pdfUrl save run after the response (kept alive on
+  // Vercel), so the next load, the send and the customer's /q link reuse it.
+  after(async () => {
+    try {
+      await saveQuotationPdf(q, key, pdfBuffer);
+    } catch (e) {
+      console.error("[quotation pdf] cache upload failed for", q.number, e);
+    }
+  });
 
   return new NextResponse(new Uint8Array(pdfBuffer), { headers: pdfHeaders });
 }

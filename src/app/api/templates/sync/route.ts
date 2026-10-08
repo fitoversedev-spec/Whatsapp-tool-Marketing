@@ -19,6 +19,12 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMetaAccessToken } from "@/lib/token-manager";
+import { deadline, fetchT, toTimeoutError } from "@/lib/http";
+
+// 15 s per page, at most 20 pages / 45 s in total (Vercel kills at 60 s).
+const PAGE_TIMEOUT_MS = 15_000;
+const MAX_PAGES = 20;
+const TOTAL_MS = 45_000;
 
 const WABA = process.env.META_WABA_ID || "";
 const API = process.env.META_GRAPH_API_VERSION || "v21.0";
@@ -42,10 +48,29 @@ export async function POST() {
   let next: string | null =
     `https://graph.facebook.com/${API}/${WABA}/message_templates?fields=name,status,language,id,rejected_reason&limit=100`;
 
+  const clock = deadline(TOTAL_MS);
+  let pages = 0;
+
   try {
     while (next) {
-      const r = await fetch(next, { headers: { Authorization: `Bearer ${token}` } });
-      const data: any = await r.json();
+      // A half-read list must never reach the "missing on Meta" step below, or
+      // real templates would be marked deleted — so stop with an error instead.
+      if (pages >= MAX_PAGES || clock.remaining() <= 0) {
+        return NextResponse.json(
+          { error: "Couldn't read all templates from Meta in time. Nothing was changed — try again." },
+          { status: 502 }
+        );
+      }
+      pages++;
+      const pageMs = Math.min(PAGE_TIMEOUT_MS, Math.max(1_000, clock.remaining()));
+      let r: Response;
+      let data: any;
+      try {
+        r = await fetchT("Meta", next, { headers: { Authorization: `Bearer ${token}` } }, pageMs);
+        data = await r.json();
+      } catch (e) {
+        throw toTimeoutError(e, "Meta", pageMs);
+      }
       if (!r.ok) {
         return NextResponse.json(
           { error: `Meta API error: ${data?.error?.message ?? r.statusText}` },

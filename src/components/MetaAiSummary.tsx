@@ -31,6 +31,7 @@ function messageForStatus(status: number): string {
   if (status === 401 || status === 403) return "You need to be signed in to use this.";
   if (status === 429) return "You've hit the daily AI limit (or it's rate-limited) — try again shortly.";
   if (status === 503) return "The AI service is temporarily unavailable. Please try again shortly.";
+  if (status === 504) return "The AI took too long to answer. Please try again, or ask a narrower question (one campaign or a shorter date range).";
   if (status === 500) return "Something went wrong generating the summary. Please try again.";
   return `Request failed (${status}). Please try again.`;
 }

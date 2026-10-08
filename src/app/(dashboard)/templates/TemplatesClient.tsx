@@ -394,6 +394,7 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
         if (res.status === 402) setAiError("AI credit has run out — top up your Anthropic balance.");
         else if (res.status === 429) setAiError("Daily limit reached.");
         else if (res.status === 503) setAiError("AI not configured yet.");
+        else if (res.status === 504) setAiError("The AI took too long to draft. Try again.");
         else setAiError("Couldn't draft right now. Try again.");
         return;
       }

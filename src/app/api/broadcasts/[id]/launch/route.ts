@@ -18,7 +18,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const b = await prisma.broadcast.findUnique({ where: { id: params.id } });
+  // Only what the checks need — not the whole row (fileData is the uploaded sheet).
+  const b = await prisma.broadcast.findUnique({
+    where: { id: params.id },
+    select: { status: true, createdByUserId: true },
+  });
   if (!b) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (user.role !== "admin" && b.createdByUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -44,6 +48,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     await prisma.broadcast.update({
       where: { id: params.id },
       data: { status: "failed" },
+      select: { id: true },
     });
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: "broadcast_failed", message }, { status: 500 });

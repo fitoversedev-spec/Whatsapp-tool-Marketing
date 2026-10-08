@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getScoutIdentity } from "@/lib/scout/identity";
 import { env } from "@/lib/scout/env";
 import { GOOGLE_PLACES_BASE_URL } from "@/lib/scout/places/config";
+import { fetchT } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,14 +41,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const res = await fetch(`${GOOGLE_PLACES_BASE_URL}/places:autocomplete`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": env.requireGoogleMapsServerKey(),
+    // 4 s: this runs as the user types, so a slow answer is worse than none
+    // (the catch below returns no suggestions).
+    const res = await fetchT(
+      "Google",
+      `${GOOGLE_PLACES_BASE_URL}/places:autocomplete`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": env.requireGoogleMapsServerKey(),
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
+      4_000,
+    );
 
     if (!res.ok) {
       console.error(JSON.stringify({ tag: "autocomplete.failed", status: res.status }));

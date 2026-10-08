@@ -13,7 +13,8 @@ import { StatusBadge } from "@/components/meta/StatusBadge";
 import MetaAiSummary from "@/components/MetaAiSummary";
 import LeadsTable from "@/components/meta/LeadsTable";
 import type { Rep } from "@/components/meta/MoveToCrmDialog";
-import type { AdCampaignOverview, CampaignListRow, MetaLeadRow, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
+import type { AdCampaignOverview, CampaignListRow, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
+import type { LeadListInitial } from "@/lib/meta-ads/lead-list";
 import type { MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
 
 // Cost per lead is plain rupees — there is no fmtCpl, so it's formatted with
@@ -38,7 +39,7 @@ function KpiTile({ label, value, sub }: { label: string; value: string; sub?: st
 
 export default function AdCampaignsClient({
   overview,
-  leads,
+  initialLeads,
   campaigns,
   reps,
   labelCatalog,
@@ -49,7 +50,7 @@ export default function AdCampaignsClient({
   range,
 }: {
   overview: AdCampaignOverview;
-  leads: MetaLeadRow[];
+  initialLeads: LeadListInitial;
   campaigns: CampaignListRow[];
   reps: Rep[];
   labelCatalog: MetaLeadLabelChip[];
@@ -63,6 +64,8 @@ export default function AdCampaignsClient({
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [syncing, setSyncing] = useState(false);
+  // Bumped after a sync so the lead table quietly reloads its page.
+  const [leadsRefresh, setLeadsRefresh] = useState(0);
 
   // Pull the latest lead-gen submissions from Meta and ingest any we're missing,
   // so the "Captured leads" column catches up to Meta's own "Insight leads"
@@ -79,12 +82,21 @@ export default function AdCampaignsClient({
       }
       const created: number = data.created ?? 0;
       const fetched: number = data.fetched ?? 0;
-      if (created > 0) {
+      const failedForms: number = Array.isArray(data.errors) ? data.errors.length : 0;
+      if (data.partial) {
+        // Ran out of time: what was found so far is saved, the rest needs another click.
+        toast.info(`Synced ${created} so far — click Sync leads again to finish.`);
+      } else if (created > 0) {
         toast.success(`Synced ${created} new lead${created === 1 ? "" : "s"} from Meta.`);
-      } else {
+      } else if (failedForms === 0) {
         toast.info(`Up to date — checked ${fetched} lead${fetched === 1 ? "" : "s"}, none missing.`);
       }
-      // Reload server data so the captured counts reflect the new leads.
+      if (failedForms > 0) {
+        toast.error(`Couldn't check ${failedForms} of ${data.forms ?? failedForms} lead forms — try again.`);
+      }
+      // Reload server data so the captured counts reflect the new leads, and
+      // the lead table (which pages itself) reloads its current page.
+      setLeadsRefresh((n) => n + 1);
       startTransition(() => router.refresh());
     } catch {
       toast.error("Lead sync failed. Check your connection and try again.");
@@ -122,7 +134,7 @@ export default function AdCampaignsClient({
     fmtCpl(c.cpl),
   ]);
 
-  const hasAnyData = campaigns.length > 0 || overview.campaigns.length > 0 || leads.length > 0;
+  const hasAnyData = campaigns.length > 0 || overview.campaigns.length > 0 || initialLeads.total > 0;
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
@@ -269,7 +281,8 @@ export default function AdCampaignsClient({
           guide="wa-ad-leads-heading"
           description="Every Instant-Form submission captured from your ads. Filter by city or sport, click a breakdown value to drill in, or open a lead for the full form answers."
         >
-          <LeadsTable leads={leads} reps={reps} showCampaignColumn exportFilename="ad-leads" labelCatalog={labelCatalog} stageCatalog={stageCatalog} currentUserId={currentUserId} isAdmin={isAdmin} canBulkAssign={canBulkAssign} />
+          {/* Keyed by range: a new date range brings a new first page. */}
+          <LeadsTable key={`${range.from}|${range.to}`} initial={initialLeads} range={range} reps={reps} showCampaignColumn exportFilename="ad-leads" labelCatalog={labelCatalog} stageCatalog={stageCatalog} currentUserId={currentUserId} isAdmin={isAdmin} canBulkAssign={canBulkAssign} refreshToken={leadsRefresh} />
         </AnalyticsCard>
       </div>
     </div>

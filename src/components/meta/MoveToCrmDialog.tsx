@@ -9,16 +9,16 @@ export type Rep = { id: string; name: string };
 
 // Pick an owner (rep) and move a captured lead into the CRM. POSTs to the
 // move route which creates the Account + AccountContact and back-links
-// MetaLead.accountContactId; on success the caller refreshes so the row
-// re-renders as "In CRM ✓". Shared by the Ad Campaigns list and the campaign
-// detail leads table.
+// MetaLead.accountContactId; on success the caller marks the row "In CRM ✓" and
+// reloads the page. Shared by the Ad Campaigns list and the campaign detail
+// leads table.
 export default function MoveToCrmDialog({
   lead,
   reps,
   onClose,
   onDone,
 }: {
-  lead: MetaLeadRow;
+  lead: Pick<MetaLeadRow, "id" | "fullName" | "phone">;
   reps: Rep[];
   onClose: () => void;
   onDone: () => void;

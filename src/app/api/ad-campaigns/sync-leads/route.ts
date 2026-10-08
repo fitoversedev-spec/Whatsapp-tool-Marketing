@@ -2,13 +2,16 @@
 // to any signed-in user from the Ad Campaigns page. Meta doesn't replay leadgen
 // webhooks, so when real-time capture misses submissions the tool's captured
 // count falls behind Meta's insight count. This pulls every lead-gen form's
-// submissions and upserts the missing ones (idempotent), closing the gap. It is
+// submissions and inserts the missing ones (idempotent), closing the gap. It is
 // the user-facing sibling of the admin-only /api/admin/meta-ads/backfill.
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { metaAdsConfigured } from "@/lib/meta-ads/config";
 import { syncMetaLeads, backfillLeadAreas } from "@/lib/meta-ads/leads";
+
+// syncMetaLeads stops itself after ~45 s (partial: true); this is the Hobby ceiling.
+export const maxDuration = 60;
 
 export async function POST() {
   const user = await getCurrentUser();
@@ -23,7 +26,7 @@ export async function POST() {
   try {
     const [result, areaBackfill] = await Promise.all([
       syncMetaLeads({ limit: 200 }),
-      backfillLeadAreas(),
+      backfillLeadAreas({ budgetMs: 40_000 }),
     ]);
     return NextResponse.json({ ok: true, ...result, areasBackfilled: areaBackfill.updated });
   } catch (err) {

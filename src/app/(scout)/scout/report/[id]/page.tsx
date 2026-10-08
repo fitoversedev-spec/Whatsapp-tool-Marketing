@@ -5,7 +5,7 @@ import { getScoutProfile } from "@/lib/scout/identity";
 import { defaultBlockState } from "@/lib/scout/reports/blocks";
 import { latestGeneratedReport, reportLink } from "@/lib/scout/reports/generate";
 import { getReportDraft } from "@/lib/scout/reports/repository";
-import { getScanScreenData } from "@/lib/scout/scans/screenData";
+import { getScanScreenDataOnce } from "@/lib/scout/scans/screenData";
 import { getSweep } from "@/lib/scout/sweep/repository";
 import { ReportStudio } from "./ReportStudio";
 
@@ -19,7 +19,7 @@ export async function generateMetadata({
   const author = await getScoutProfile();
   if (!author?.canRunScans) return { title: "Report studio — Site Scout" };
   const { id } = params;
-  const scan = await getScanScreenData(author, id);
+  const scan = await getScanScreenDataOnce(author, id);
   return { title: scan ? `${scan.areaLabel} report — Site Scout` : "Report studio — Site Scout" };
 }
 
@@ -39,7 +39,7 @@ export default async function ReportPage({ params }: { params: { id: string } })
   if (!author.canRunScans) notFound();
 
   const { id } = params;
-  const scan = await getScanScreenData(author, id);
+  const scan = await getScanScreenDataOnce(author, id);
   if (!scan) notFound();
 
   const [draft, sweep, generated] = await Promise.all([

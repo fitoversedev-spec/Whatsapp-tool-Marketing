@@ -107,9 +107,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (parsed.data.status !== undefined) data.status = parsed.data.status;
   if (parsed.data.contactPhone !== undefined) data.contactPhone = parsed.data.contactPhone;
   if (parsed.data.dealId !== undefined) data.dealId = parsed.data.dealId;
+  // Any edit that changes what the PDF shows (name, size, notes, validity,
+  // sections, line items, deal) changes its key in lib/quotation/pdf-cache.ts,
+  // so /q, the preview and the send rebuild a stale PDF by themselves. Clearing
+  // pdfUrl below on sections / line-item edits just saves them a key comparison.
   if (parsed.data.sections !== undefined) {
     data.sections = parsed.data.sections;
-    // Clear cached PDF — must regenerate after section edits
     data.pdfUrl = null;
   }
   if (parsed.data.lineItems) {
@@ -118,7 +121,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     data.subtotal = totals.subtotal;
     data.gstAmount = totals.gstAmount;
     data.grandTotal = totals.grandTotal;
-    // Clear cached PDF — must regenerate after edits
     data.pdfUrl = null;
   }
 

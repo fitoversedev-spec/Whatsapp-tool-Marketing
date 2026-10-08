@@ -1,6 +1,16 @@
 // Typed error for the AI layer so API routes can map failures to friendly
 // HTTP responses instead of leaking raw SDK errors to the client.
-export type AiErrorCode = "not_configured" | "no_credit" | "limit" | "rate_limit" | "refusal" | "failed";
+import { APIConnectionTimeoutError, APIUserAbortError } from "@anthropic-ai/sdk";
+import { UpstreamTimeoutError } from "@/lib/http";
+
+export type AiErrorCode =
+  | "not_configured"
+  | "no_credit"
+  | "limit"
+  | "rate_limit"
+  | "refusal"
+  | "timeout"
+  | "failed";
 
 export class AiError extends Error {
   code: AiErrorCode;
@@ -21,6 +31,8 @@ export function aiErrorStatus(code: AiErrorCode): number {
     case "limit":
     case "rate_limit":
       return 429;
+    case "timeout":
+      return 504;
     default:
       return 500;
   }
@@ -31,6 +43,14 @@ export function aiErrorStatus(code: AiErrorCode): number {
 // instead of a generic 500. Anything unrecognised falls through to "failed".
 export function mapAnthropicError(e: unknown): AiError {
   if (e instanceof AiError) return e;
+  // The SDK aborts with these when our per-call time limit passes.
+  if (
+    e instanceof APIConnectionTimeoutError ||
+    e instanceof APIUserAbortError ||
+    e instanceof UpstreamTimeoutError
+  ) {
+    return new AiError("The AI took too long to respond — please try again.", "timeout");
+  }
   const status = (e as { status?: number })?.status;
   const message = ((e as { message?: string })?.message || "").toLowerCase();
   if (

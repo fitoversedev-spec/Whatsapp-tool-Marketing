@@ -48,12 +48,24 @@ export async function uploadToBlob(args: {
   const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const pathname = `${folder}/${stamp}-${slug || "media"}.${ext}`;
 
-  const blob = await put(pathname, args.bytes, {
-    access: "public",
-    contentType: args.mimeType,
-    addRandomSuffix: false,
-  });
-  return { url: blob.url, pathname: blob.pathname };
+  // Give up after 25 s so a stalled upload fails with a message instead of
+  // running into the platform's silent 60 s kill.
+  const signal = AbortSignal.timeout(25_000);
+  try {
+    const blob = await put(pathname, args.bytes, {
+      access: "public",
+      contentType: args.mimeType,
+      addRandomSuffix: false,
+      abortSignal: signal,
+    });
+    return { url: blob.url, pathname: blob.pathname };
+  } catch (err) {
+    if (signal.aborted) {
+      const msg = (err as { message?: string } | null)?.message ?? "upload failed";
+      throw new Error(`${msg} Upload took too long (25 s).`);
+    }
+    throw err;
+  }
 }
 
 // Friendly extension → mime fallback for files whose mime browsers don't

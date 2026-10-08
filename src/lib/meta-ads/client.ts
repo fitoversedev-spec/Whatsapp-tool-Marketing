@@ -1,16 +1,23 @@
-// Meta Marketing API (ads) Graph client. Mirrors the axios call shape, 30s
+// Meta Marketing API (ads) Graph client. Mirrors the axios call shape, 15s
 // timeout, and error normalization of src/lib/whatsapp.ts — but uses the ADS
 // token/ids (getMetaAdsConfig), NOT getMetaAccessToken() (that is the WABA
 // token). Keep this file free of any WhatsApp/WABA credential access.
 
 import axios, { AxiosError, AxiosResponse } from "axios";
 import { getMetaAdsConfig } from "./config";
+import { deadline } from "@/lib/http";
 
 const API_VERSION = process.env.META_GRAPH_API_VERSION || "v21.0";
 
 // axios has no default timeout — bound every ads call so a hung Graph endpoint
-// can't stall the cron sweep or the webhook handler indefinitely.
-const META_TIMEOUT_MS = 30_000;
+// can't stall the cron sweep or the webhook handler indefinitely. 15s per call;
+// paginated reads also stop after 20 pages or 45s in total (under Vercel's 60s).
+const META_TIMEOUT_MS = 15_000;
+const PAGINATE_MAX_PAGES = 20;
+const PAGINATE_TOTAL_MS = 45_000;
+// "Sync leads" can legitimately pull thousands of rows, so it gets more pages
+// (the 45s total still applies).
+const LEADS_MAX_PAGES = 50;
 
 const graphUrl = (node: string) => `https://graph.facebook.com/${API_VERSION}/${node}`;
 
@@ -18,6 +25,13 @@ const graphUrl = (node: string) => `https://graph.facebook.com/${API_VERSION}/${
 // (describeMetaError) or meta-connection.ts (safeGet), both of which are tied
 // to the WABA credential path. Same { code, message } shape.
 export function metaAdsErr(err: unknown): { code: string; message: string } {
+  if (
+    err instanceof AxiosError &&
+    !err.response &&
+    (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT")
+  ) {
+    return { code: "timeout", message: "Meta didn't respond within 15 s" };
+  }
   if (err instanceof AxiosError && err.response?.data?.error) {
     const e = err.response.data.error;
     return { code: String(e.code ?? "unknown"), message: e.message ?? "Meta ads error" };
@@ -144,22 +158,33 @@ function toNum(v: unknown): number {
 
 // Follow data.paging.next cursors, accumulating every page's data[]. Uses the
 // absolute `next` URL Graph returns (already carries token + cursor), so we
-// only re-attach the timeout.
+// only re-attach the timeout. Stops at maxPages or the 45s total and returns
+// what it has (logged), rather than running into the platform's hard kill.
 async function paginate<T>(
   firstUrl: string,
   params: Record<string, string | number>,
-  token: string
+  token: string,
+  maxPages: number = PAGINATE_MAX_PAGES
 ): Promise<T[]> {
   const out: T[] = [];
   let url: string | undefined = firstUrl;
   let firstParams: Record<string, string | number> | undefined = params;
+  const clock = deadline(PAGINATE_TOTAL_MS);
+  let pages = 0;
 
   while (url) {
+    if (pages >= maxPages || clock.remaining() <= 0) {
+      console.warn(
+        JSON.stringify({ event: "meta_ads_paginate_capped", pages, rows: out.length, maxPages })
+      );
+      break;
+    }
     const res: AxiosResponse = await axios.get(url, {
       headers: authHeaders(token),
       params: firstParams,
-      timeout: META_TIMEOUT_MS,
+      timeout: Math.min(META_TIMEOUT_MS, Math.max(1_000, clock.remaining())),
     });
+    pages++;
     const rows: T[] = res.data?.data ?? [];
     out.push(...rows);
     url = res.data?.paging?.next;
@@ -265,7 +290,8 @@ export async function fetchFormLeads(formId: string, limit = 100): Promise<MetaL
         fields: "id,created_time,field_data,ad_id,form_id,campaign_id,campaign_name",
         limit,
       },
-      pageToken
+      pageToken,
+      LEADS_MAX_PAGES
     );
   } catch (err) {
     pageTokenCache = null;

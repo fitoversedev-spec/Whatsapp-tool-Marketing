@@ -1,31 +1,19 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { parseFields } from "@/lib/contacts";
+import { distinctFieldKeys } from "@/lib/contacts-query";
 
-// Returns the distinct field keys across all contacts, plus distinct values per key.
-// Powers the filter UI on the Contacts page and the broadcast composer.
+// Returns the distinct field keys across all contacts and the pool size.
+// Powers the filter UI on the Contacts page and the broadcast composer; both
+// callers only read `fields[].key` and `totalContacts` (the per-key `values`
+// list that used to be here was never used, and cost a scan of every contact).
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const contacts = await prisma.contact.findMany({ select: { fields: true } });
+  const [keys, totalContacts] = await Promise.all([distinctFieldKeys(), prisma.contact.count()]);
 
-  const valuesByKey = new Map<string, Set<string>>();
-  for (const c of contacts) {
-    const fields = parseFields(c.fields);
-    for (const [k, v] of Object.entries(fields)) {
-      if (!valuesByKey.has(k)) valuesByKey.set(k, new Set());
-      if (v && String(v).trim()) valuesByKey.get(k)!.add(String(v).trim());
-    }
-  }
+  const fields = keys.sort((a, b) => a.localeCompare(b)).map((key) => ({ key }));
 
-  const fields = Array.from(valuesByKey.entries())
-    .map(([key, values]) => ({
-      key,
-      values: Array.from(values).sort().slice(0, 200), // cap for UI
-    }))
-    .sort((a, b) => a.key.localeCompare(b.key));
-
-  return NextResponse.json({ fields, totalContacts: contacts.length });
+  return NextResponse.json({ fields, totalContacts });
 }

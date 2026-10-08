@@ -1,23 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { verifyMetaSignature, isOptOutMessage } from "@/lib/webhook";
-import { fetchInboundMedia } from "@/lib/whatsapp";
-import { categorize, uploadToBlob } from "@/lib/media";
-import { dispatchAutoReply } from "@/lib/auto-replies/dispatch";
-import { dispatchAfterHoursGate } from "@/lib/auto-replies/after-hours-gate";
-import { dispatchChatbot } from "@/lib/chatbot/dispatch";
-import { handleStaffMessage } from "@/lib/chatbot/staffCommands";
-import { handleLeadgen } from "@/lib/meta-ads/leads";
-import { notifyInboundMessage } from "@/lib/push";
+import { verifyMetaSignature } from "@/lib/webhook";
+import { after } from "@/lib/scout/after";
+import { planWebhook, saveInboundMessages, runDeferred } from "@/lib/whatsapp-webhook";
 
-// A big broadcast produces thousands of sent/delivered/read events, and
-// recounting every recipient of the broadcast on each one was the heaviest
-// part of this webhook. Recount at most once per RECOUNT_EVERY_MS per
-// broadcast (per server instance). The sender recounts after every chunk and
-// when it finishes, and the Broadcasts page re-syncs counts when opened, so the
-// numbers never stay behind for long.
-const RECOUNT_EVERY_MS = 10_000;
-const lastRecountAt = new Map<string, number>();
+// Node runtime, never cached; the deferred work (media, replies, statuses)
+// runs after the response but inside the same 60 s Vercel function.
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Meta requires GET for verification handshake
 export async function GET(req: NextRequest) {
@@ -34,6 +24,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now();
   // Use arrayBuffer for byte-exact body capture — req.text() can normalize
   // newlines on some platforms, breaking HMAC signature verification.
   const rawBuf = Buffer.from(await req.arrayBuffer());
@@ -61,317 +52,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  // Process every change in every entry
-  for (const entry of payload.entry ?? []) {
-    for (const change of entry.changes ?? []) {
-      const value = change.value ?? {};
-      const field = change.field ?? "";
+  const plan = planWebhook(payload);
 
-      // Status updates (sent / delivered / read / failed)
-      for (const status of value.statuses ?? []) {
-        await handleStatusUpdate(status);
-      }
-
-      // Inbound messages
-      for (const msg of value.messages ?? []) {
-        const contact = (value.contacts ?? []).find((c: any) => c.wa_id === msg.from);
-        await handleInboundMessage(msg, contact?.profile?.name);
-      }
-
-      // Template approval status callbacks
-      if (field === "message_template_status_update") {
-        await handleTemplateStatusUpdate(value);
-      }
-
-      // Lead-gen Instant-Form submissions (Meta Marketing API)
-      if (field === "leadgen") {
-        await handleLeadgen(value);
-      }
-    }
+  // Save the inbound messages BEFORE replying (no media download), so a message
+  // is never lost: if this fails, answer 500 and Meta sends it again.
+  let saved;
+  try {
+    saved = await saveInboundMessages(plan.inbound);
+  } catch (err) {
+    console.error("[webhook] saving inbound messages failed", err);
+    return NextResponse.json({ error: "save_failed" }, { status: 500 });
   }
+
+  // Everything else — media, opt-out / chatbot / auto-replies, push, status
+  // updates, templates, leads — runs after the 200 goes back to Meta.
+  after(() => runDeferred(plan, saved, startedAt));
 
   return NextResponse.json({ ok: true });
-}
-
-async function handleStatusUpdate(status: any) {
-  const waMessageId = status.id as string;
-  const newStatus = status.status as "sent" | "delivered" | "read" | "failed";
-  if (!waMessageId || !newStatus) return;
-
-  const now = new Date();
-
-  // Update message row if present
-  await prisma.message
-    .updateMany({
-      where: { waMessageId },
-      data: {
-        status: newStatus,
-        ...(status.errors?.[0] && {
-          errorCode: String(status.errors[0].code ?? ""),
-          errorMessage: status.errors[0].message ?? "",
-        }),
-      },
-    })
-    .catch(() => null);
-
-  // Update broadcast_recipients if present
-  const recipient = await prisma.broadcastRecipient.findUnique({ where: { waMessageId } }).catch(() => null);
-  if (recipient) {
-    const patch: any = { status: newStatus };
-    if (newStatus === "sent") patch.sentAt = now;
-    if (newStatus === "delivered") patch.deliveredAt = now;
-    if (newStatus === "read") patch.readAt = now;
-    if (newStatus === "failed" && status.errors?.[0]) {
-      patch.errorCode = String(status.errors[0].code ?? "");
-      patch.errorMessage = status.errors[0].message ?? "";
-    }
-    await prisma.broadcastRecipient.update({ where: { waMessageId }, data: patch });
-
-    // Recompute broadcast counters (throttled — see RECOUNT_EVERY_MS)
-    if (Date.now() - (lastRecountAt.get(recipient.broadcastId) ?? 0) < RECOUNT_EVERY_MS) return;
-    lastRecountAt.set(recipient.broadcastId, Date.now());
-    const groups = await prisma.broadcastRecipient.groupBy({
-      by: ["status"],
-      where: { broadcastId: recipient.broadcastId },
-      _count: { _all: true },
-    });
-    const counters: Record<string, number> = {};
-    for (const g of groups) counters[g.status] = g._count._all;
-    await prisma.broadcast.update({
-      where: { id: recipient.broadcastId },
-      data: {
-        sent: counters.sent ?? 0,
-        delivered: counters.delivered ?? 0,
-        read: counters.read ?? 0,
-        failed: counters.failed ?? 0,
-      },
-    });
-  }
-}
-
-async function handleInboundMessage(msg: any, profileName?: string) {
-  const from = msg.from as string;
-  const waMessageId = msg.id as string;
-  const type = msg.type as string;
-  // Interactive replies (button tap or list pick) come through as
-  // type=interactive with the picked option's id + title nested inside
-  // msg.interactive.{button_reply|list_reply}. We surface the id
-  // separately so the chatbot flow dispatcher can route on it, and mirror
-  // the human-readable title as the message body for the inbox view.
-  let interactiveReplyId: string | null = null;
-  if (type === "interactive") {
-    const br = msg.interactive?.button_reply;
-    const lr = msg.interactive?.list_reply;
-    if (br) interactiveReplyId = br.id ?? null;
-    else if (lr) interactiveReplyId = lr.id ?? null;
-  }
-  const body =
-    type === "text"
-      ? msg.text?.body
-      : type === "button"
-      ? msg.button?.text
-      : type === "interactive"
-      ? (msg.interactive?.button_reply?.title ??
-        msg.interactive?.list_reply?.title ??
-        "")
-      : (msg[type]?.caption ?? "");
-
-  if (!from || !waMessageId) return;
-
-  // Idempotency: skip if already stored
-  const existing = await prisma.message.findUnique({ where: { waMessageId } }).catch(() => null);
-  if (existing) return;
-
-  // Upsert conversation
-  const convo = await prisma.conversation.upsert({
-    where: { contactPhone: from },
-    create: {
-      contactPhone: from,
-      contactName: profileName ?? null,
-      lastInboundAt: new Date(),
-      unreadCount: 1,
-    },
-    update: {
-      contactName: profileName ?? undefined,
-      lastInboundAt: new Date(),
-      unreadCount: { increment: 1 },
-    },
-  });
-
-  // Media handling. For each media type Meta sends the media_id in the
-  // type-named object (e.g. msg.image.id). We download bytes, push to
-  // Vercel Blob, and persist the resulting URL + metadata so the inbox
-  // can render the preview without round-tripping to Meta on every load.
-  const mediaTypes = ["image", "video", "audio", "document", "sticker"] as const;
-  let mediaFields: {
-    mediaUrl?: string;
-    mediaMimeType?: string;
-    mediaFileName?: string;
-    mediaSize?: number;
-  } = {};
-  let normalizedType = type;
-  if (mediaTypes.includes(type as any)) {
-    const mediaId = msg[type]?.id;
-    const claimedFileName = msg[type]?.filename;
-    if (mediaId) {
-      try {
-        const fetched = await fetchInboundMedia(mediaId);
-        const uploaded = await uploadToBlob({
-          bytes: fetched.bytes,
-          fileName: claimedFileName ?? fetched.fileName,
-          mimeType: fetched.mimeType,
-          folder: "inbound",
-        });
-        mediaFields = {
-          mediaUrl: uploaded.url,
-          mediaMimeType: fetched.mimeType,
-          mediaFileName: claimedFileName ?? fetched.fileName,
-          mediaSize: fetched.bytes.length,
-        };
-      } catch (err) {
-        console.error("[webhook] inbound media fetch failed", mediaId, err);
-        // Don't drop the message — store it without media so the user at
-        // least sees "received a file" with the caption.
-      }
-    }
-    // Map sticker → image so the UI's image preview path handles it.
-    if (type === "sticker") normalizedType = "image";
-  }
-
-  // Map normalizedType to one of our supported enum values.
-  const storedType = (
-    ["text", "image", "document", "video", "audio"].includes(normalizedType)
-      ? normalizedType
-      : "text"
-  ) as "text" | "image" | "document" | "video" | "audio";
-
-  await prisma.message.create({
-    data: {
-      conversationId: convo.id,
-      direction: "inbound",
-      type: storedType,
-      body: body ?? null,
-      waMessageId,
-      status: "delivered",
-      ...mediaFields,
-    },
-  });
-
-  // Push notification for the inbound message (fire-and-forget — must not
-  // delay the webhook response to Meta).
-  notifyInboundMessage(
-    { id: convo.id, assignedToUserId: convo.assignedToUserId, contactName: convo.contactName, contactPhone: from },
-    body ?? null,
-    storedType
-  ).catch(() => null);
-
-  // Opt-out detection
-  if (type === "text" && isOptOutMessage(body ?? "")) {
-    await prisma.optOut.upsert({
-      where: { phoneE164: from },
-      create: { phoneE164: from, reason: "stop_reply" },
-      update: { optedOutAt: new Date(), reason: "stop_reply" },
-    });
-    // Don't auto-reply on the same message that opts them out — that
-    // would be perverse. Return early.
-    return;
-  }
-
-  // Rate limit — spec §14. The real gate against forged traffic is the HMAC
-  // signature check at the top of POST; this is defense-in-depth against a
-  // single contact flooding us (broken client, or a bug causing a reply
-  // loop). Reuses the Message rows we already store — no new table/service.
-  // Meta's own webhook-delivery traffic isn't itself the threat here (it's
-  // just carrying whatever a real WhatsApp user's client sent), so limiting
-  // per contactPhone is what actually matters, not per-request-source.
-  const recentInboundCount = await prisma.message.count({
-    where: { conversationId: convo.id, direction: "inbound", createdAt: { gte: new Date(Date.now() - 60_000) } },
-  });
-  if (recentInboundCount > 20) {
-    console.warn(`[webhook] rate limit: ${from} sent ${recentInboundCount} messages in the last 60s — dropping further processing`);
-    return;
-  }
-
-  // Staff command check — spec §10: identify the sender by User.phone
-  // *before* anything customer-facing runs. Known staff numbers get routed
-  // to the bot-command handler exclusively (no after-hours gate, no
-  // customer flow, no auto-replies); unknown numbers fall through to the
-  // existing behavior completely unchanged. Never executes a command for a
-  // number that isn't a known, active staff user.
-  if (type === "text" && body) {
-    const staffUser = await prisma.user
-      .findFirst({ where: { phone: from, isActive: true, deletedAt: null }, select: { id: true, name: true } })
-      .catch(() => null);
-    if (staffUser) {
-      await handleStaffMessage({
-        user: staffUser,
-        conversationId: convo.id,
-        contactPhone: from,
-        inboundBody: body,
-      }).catch((err) => console.error("[webhook] staff command handling threw", err));
-      return;
-    }
-  }
-
-  // After-hours gate — outside 9am-8pm IST, on a fresh conversation,
-  // send a polite acknowledgement and short-circuit so we don't start
-  // a chatbot menu at 3am. Mid-flow taps and mid-conversation free text
-  // pass straight through (the gate returns false in those cases).
-  const gated = await dispatchAfterHoursGate({
-    conversationId: convo.id,
-    contactPhone: from,
-    hasInteractiveReply: !!interactiveReplyId,
-  }).catch((err) => {
-    console.error("[webhook] after-hours gate threw", err);
-    return false;
-  });
-  if (gated) return;
-
-  // Chatbot flow first — if a flow is active OR the inbound looks like
-  // a flow-starting greeting, the flow engine takes over exclusively.
-  // Only if the flow decides "not my message" do we fall through to the
-  // legacy auto-reply rules. Silent-fail so a bug can't crash the
-  // webhook contract with Meta.
-  const flowHandled = await dispatchChatbot({
-    conversationId: convo.id,
-    contactPhone: from,
-    inboundBody: body ?? "",
-    interactiveReplyId,
-  }).catch((err) => {
-    console.error("[webhook] chatbot dispatch threw", err);
-    return false;
-  });
-
-  // Legacy auto-reply dispatcher (L1 location, C1 catalogue, S1 sport,
-  // G1 greeting). Skipped when the chatbot flow handled the message
-  // so we don't double-reply. After-hours has its own gate above.
-  if (!flowHandled && type === "text" && body) {
-    dispatchAutoReply({
-      conversationId: convo.id,
-      contactPhone: from,
-      inboundBody: body,
-    }).catch((err) => console.error("[webhook] auto-reply dispatch threw", err));
-  }
-}
-
-async function handleTemplateStatusUpdate(value: any) {
-  const metaTemplateId = value.message_template_id as string | undefined;
-  const event = (value.event ?? "").toString().toLowerCase();
-  if (!metaTemplateId) return;
-
-  let status: "approved" | "rejected" | "paused" | "submitted" | null = null;
-  if (event.includes("approved")) status = "approved";
-  else if (event.includes("rejected")) status = "rejected";
-  else if (event.includes("paused")) status = "paused";
-  if (!status) return;
-
-  await prisma.template
-    .updateMany({
-      where: { metaTemplateId },
-      data: {
-        status,
-        rejectionReason: status === "rejected" ? value.reason ?? null : null,
-      },
-    })
-    .catch(() => null);
 }

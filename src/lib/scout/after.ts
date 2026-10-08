@@ -75,6 +75,12 @@ export function after(work: (() => Promise<unknown> | unknown) | Promise<unknown
     return;
   }
 
+  // On Vercel with no request context the work is NOT kept alive and can be
+  // frozen once the response is sent — make that visible in the logs.
+  if (process.env.VERCEL) {
+    console.warn("[after] VERCEL is set but no request context was found — deferred work may be cut off");
+  }
+
   // Off-platform: keep the promise alive ourselves. `void` is deliberate — the
   // rejection is already handled above, so this cannot become an unhandled one.
   void guarded;

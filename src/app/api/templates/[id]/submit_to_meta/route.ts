@@ -19,6 +19,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { submitTemplate, describeMetaError } from "@/lib/whatsapp";
 import { getMetaAccessToken } from "@/lib/token-manager";
+import { fetchT, toTimeoutError } from "@/lib/http";
 
 // Resumable Upload API requires our App ID. Same env-driven pattern as
 // token-manager.ts — defaults to original "Fito Marketing tool" for
@@ -26,20 +27,44 @@ import { getMetaAccessToken } from "@/lib/token-manager";
 const APP_ID = process.env.META_APP_ID || "1460614352002830";
 const API = process.env.META_GRAPH_API_VERSION || "v21.0";
 
+// fetchT + the body read under one time limit (the body read counts too).
+async function timedCall<T>(
+  service: string,
+  ms: number,
+  url: string,
+  init: RequestInit | undefined,
+  read: (r: Response) => Promise<T>
+): Promise<{ res: Response; body: T }> {
+  try {
+    const res = await fetchT(service, url, init, ms);
+    return { res, body: await read(res) };
+  } catch (e) {
+    throw toTimeoutError(e, service, ms);
+  }
+}
+
+// Time limits: source file fetch 15 s, upload-session init 10 s, binary upload
+// 30 s — inside Vercel's 60 s cap even back to back.
 async function uploadResumable(
   fileUrl: string,
   token: string
 ): Promise<{ handle: string }> {
   // 1. Fetch the source file from Vercel Blob (or wherever it's hosted)
-  const fetched = await fetch(fileUrl);
-  if (!fetched.ok) {
+  const { res: fetched, body: sourceBytes } = await timedCall(
+    "Media storage",
+    15_000,
+    fileUrl,
+    undefined,
+    (r) => (r.ok ? r.arrayBuffer() : Promise.resolve(null))
+  );
+  if (!fetched.ok || !sourceBytes) {
     throw new Error(
       `Failed to fetch source media from ${fileUrl}: ${fetched.status} ${fetched.statusText}`
     );
   }
   const contentType =
     fetched.headers.get("content-type") || "application/octet-stream";
-  const buffer = Buffer.from(await fetched.arrayBuffer());
+  const buffer = Buffer.from(sourceBytes);
   const fileLength = buffer.length;
   const fileName = decodeURIComponent(fileUrl.split("/").pop() ?? "media");
 
@@ -50,11 +75,13 @@ async function uploadResumable(
     file_name: fileName,
     access_token: token,
   });
-  const initRes = await fetch(
+  const { res: initRes, body: initJson } = await timedCall<any>(
+    "Meta",
+    10_000,
     `https://graph.facebook.com/${API}/${APP_ID}/uploads?${initParams.toString()}`,
-    { method: "POST" }
+    { method: "POST" },
+    (r) => r.json()
   );
-  const initJson: any = await initRes.json();
   if (!initRes.ok || !initJson?.id) {
     throw new Error(
       `Resumable upload init failed: ${JSON.stringify(initJson)}`
@@ -64,7 +91,9 @@ async function uploadResumable(
 
   // 3. Upload the binary content. Meta wants OAuth-prefix auth (NOT Bearer)
   //    and `file_offset: 0` header for a single-shot upload.
-  const uploadRes = await fetch(
+  const { res: uploadRes, body: uploadJson } = await timedCall<any>(
+    "Meta",
+    30_000,
     `https://graph.facebook.com/${API}/${sessionId}`,
     {
       method: "POST",
@@ -73,9 +102,9 @@ async function uploadResumable(
         file_offset: "0",
       },
       body: buffer as any,
-    }
+    },
+    (r) => r.json()
   );
-  const uploadJson: any = await uploadRes.json();
   if (!uploadRes.ok || !uploadJson?.h) {
     throw new Error(
       `Resumable upload binary failed: ${JSON.stringify(uploadJson)}`

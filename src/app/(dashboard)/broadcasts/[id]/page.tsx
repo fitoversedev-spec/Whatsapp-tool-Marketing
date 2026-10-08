@@ -17,16 +17,66 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "bg-red-100 text-red-800",
 };
 
-export default async function BroadcastDetailPage({ params }: { params: { id: string } }) {
+const PAGE_SIZE = 100;
+const FILTERS = ["queued", "sent", "delivered", "read", "failed"];
+
+export default async function BroadcastDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { status?: string; q?: string; page?: string };
+}) {
   const user = await requireUser();
 
-  const broadcast = await prisma.broadcast.findUnique({
-    where: { id: params.id },
-    include: {
-      template: { select: { name: true, language: true, body: true } },
-      createdBy: { select: { name: true } },
-    },
-  });
+  // Recipients are server-paged from the URL: ?status=&q=&page=
+  const statusParam = typeof searchParams.status === "string" ? searchParams.status : "all";
+  const statusFilter = FILTERS.includes(statusParam) ? statusParam : "all";
+  const q = (typeof searchParams.q === "string" ? searchParams.q : "").trim().slice(0, 100);
+  const requestedPage = Math.max(1, parseInt(typeof searchParams.page === "string" ? searchParams.page : "1", 10) || 1);
+
+  // Same fields the old client-side search looked at: phone, name, error message.
+  const recipientWhere = {
+    broadcastId: params.id,
+    ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+    ...(q
+      ? {
+          OR: [
+            { phoneE164: { contains: q, mode: "insensitive" as const } },
+            { name: { contains: q, mode: "insensitive" as const } },
+            { errorMessage: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  // Not the whole row: fileData (the uploaded sheet) is huge and never shown here.
+  const [broadcast, statusGroups, searchCount] = await Promise.all([
+    prisma.broadcast.findUnique({
+      where: { id: params.id },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        total: true,
+        createdByUserId: true,
+        scheduledAt: true,
+        launchedAt: true,
+        completedAt: true,
+        template: { select: { name: true, language: true, body: true } },
+        createdBy: { select: { name: true } },
+      },
+    }),
+    // Live counts straight from the recipients — the stored counters are only
+    // refreshed every few seconds while delivery updates stream in.
+    prisma.broadcastRecipient.groupBy({
+      by: ["status"],
+      where: { broadcastId: params.id },
+      _count: { _all: true },
+    }),
+    // Only a search needs its own count; plain filters read it off the groupBy.
+    q ? prisma.broadcastRecipient.count({ where: recipientWhere }) : Promise.resolve(null),
+  ]);
   if (!broadcast) notFound();
 
   // Sales sees only own
@@ -34,20 +84,6 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
     redirect("/broadcasts");
   }
 
-  const [recipients, statusGroups] = await Promise.all([
-    prisma.broadcastRecipient.findMany({
-      where: { broadcastId: broadcast.id },
-      orderBy: [{ status: "asc" }, { phoneE164: "asc" }],
-      take: 500,
-    }),
-    // Live counts straight from the recipients — the stored counters are only
-    // refreshed every few seconds while delivery updates stream in.
-    prisma.broadcastRecipient.groupBy({
-      by: ["status"],
-      where: { broadcastId: broadcast.id },
-      _count: { _all: true },
-    }),
-  ]);
   const byStatus: Record<string, number> = {};
   for (const g of statusGroups) byStatus[g.status] = g._count._all;
   const counts = {
@@ -56,6 +92,40 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
     read: byStatus.read ?? 0,
     failed: byStatus.failed ?? 0,
   };
+  const allRecipients = statusGroups.reduce((n, g) => n + g._count._all, 0);
+  const chipCounts: Record<string, number> = { all: allRecipients, ...byStatus };
+  // Sent, delivered and read are all "sent" as far as progress goes — a message
+  // moves on from "sent" to "delivered" to "read", so counting only "sent"
+  // made the bar fall back toward 0 as people received it.
+  const progressSent = counts.sent + counts.delivered + counts.read;
+
+  const matching =
+    searchCount !== null ? searchCount : statusFilter === "all" ? allRecipients : byStatus[statusFilter] ?? 0;
+  const pageCount = Math.max(1, Math.ceil(matching / PAGE_SIZE));
+  const page = Math.min(requestedPage, pageCount);
+  const recipients =
+    matching === 0
+      ? []
+      : await prisma.broadcastRecipient.findMany({
+          where: recipientWhere,
+          orderBy: [{ status: "asc" }, { phoneE164: "asc" }],
+          skip: (page - 1) * PAGE_SIZE,
+          take: PAGE_SIZE,
+          select: {
+            id: true,
+            phoneE164: true,
+            name: true,
+            status: true,
+            errorCode: true,
+            errorMessage: true,
+            sentAt: true,
+            deliveredAt: true,
+            readAt: true,
+          },
+        });
+  const from = matching === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = (page - 1) * PAGE_SIZE + recipients.length;
+  const filtered = statusFilter !== "all" || q !== "";
 
   return (
     <>
@@ -130,12 +200,12 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-wa-green transition-all"
-                  style={{ width: `${Math.min(100, (counts.sent / broadcast.total) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (progressSent / broadcast.total) * 100)}%` }}
                 />
               </div>
               <div className="flex justify-between text-xs text-slate-500 mt-1">
-                <span><span className="font-mono">{counts.sent}</span> of <span className="font-mono">{broadcast.total}</span> sent</span>
-                <span className="font-mono">{Math.round((counts.sent / broadcast.total) * 100)}%</span>
+                <span><span className="font-mono">{progressSent}</span> of <span className="font-mono">{broadcast.total}</span> sent</span>
+                <span className="font-mono">{Math.round((progressSent / broadcast.total) * 100)}%</span>
               </div>
             </div>
           )}
@@ -154,12 +224,17 @@ export default async function BroadcastDetailPage({ params }: { params: { id: st
           <div className="p-5 border-b border-slate-200">
             <div className="heading text-sm text-slate-900">Recipients</div>
             <p className="text-xs text-slate-500 mt-0.5">
-              {recipients.length === 0
+              {allRecipients === 0
                 ? "No recipients yet (broadcast hasn't enqueued any)."
-                : `${recipients.length} recipient${recipients.length === 1 ? "" : "s"} · filter and search below`}
+                : `Showing ${from}–${to} of ${matching} recipient${matching === 1 ? "" : "s"}${filtered ? " matching" : ""}`}
             </p>
           </div>
           <RecipientsTable
+            counts={chipCounts}
+            status={statusFilter}
+            q={q}
+            page={page}
+            pageCount={pageCount}
             recipients={recipients.map((r) => ({
               id: r.id,
               phoneE164: r.phoneE164,

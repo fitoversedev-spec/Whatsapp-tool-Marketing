@@ -8,12 +8,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { MAX_LEADS_PER_REQUEST, addPeopleToGroup, canEditGroup } from "@/lib/broadcast-groups";
+import {
+  MAX_CONTACTS_PER_REQUEST,
+  MAX_LEADS_PER_REQUEST,
+  addPeopleToGroup,
+  canEditGroup,
+  chunkIds,
+} from "@/lib/broadcast-groups";
 
 const addSchema = z
   .object({
     metaLeadIds: z.array(z.string().uuid()).max(MAX_LEADS_PER_REQUEST).optional(),
-    contactIds: z.array(z.string().uuid()).max(MAX_LEADS_PER_REQUEST).optional(),
+    contactIds: z.array(z.string().uuid()).max(MAX_CONTACTS_PER_REQUEST).optional(),
   })
   .refine((b) => (b.metaLeadIds?.length ?? 0) + (b.contactIds?.length ?? 0) > 0, { message: "nobody to add" });
 
@@ -32,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 const removeSchema = z.object({
-  contactIds: z.array(z.string().uuid()).min(1).max(MAX_LEADS_PER_REQUEST),
+  contactIds: z.array(z.string().uuid()).min(1).max(MAX_CONTACTS_PER_REQUEST),
 });
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
@@ -54,11 +60,14 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     );
   }
 
-  const removed = await prisma.broadcastGroupMember.deleteMany({
-    where: { groupId: group.id, contactId: { in: parsed.data.contactIds } },
-  });
-  if (removed.count > 0) {
+  const results = await prisma.$transaction(
+    chunkIds(parsed.data.contactIds).map((part) =>
+      prisma.broadcastGroupMember.deleteMany({ where: { groupId: group.id, contactId: { in: part } } }),
+    ),
+  );
+  const removed = results.reduce((n, r) => n + r.count, 0);
+  if (removed > 0) {
     await prisma.broadcastGroup.update({ where: { id: group.id }, data: { updatedAt: new Date() } });
   }
-  return NextResponse.json({ ok: true, removed: removed.count });
+  return NextResponse.json({ ok: true, removed });
 }

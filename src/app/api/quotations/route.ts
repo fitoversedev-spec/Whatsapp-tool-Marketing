@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { QUOTATION_LIST_SELECT } from "@/lib/quotation/list-select";
+import { after } from "@/lib/scout/after";
 import { buildQuotationNumber, recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
 import { reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
 import { applyDocumentClassification, logDocumentDeleted, resolveContactForDocument } from "@/lib/crm/contactLinks";
@@ -95,24 +97,7 @@ export async function GET(req: NextRequest) {
     where,
     orderBy: { createdAt: "desc" },
     take: 200,
-    select: {
-      id: true,
-      number: true,
-      customerName: true,
-      sport: true,
-      lengthFt: true,
-      widthFt: true,
-      grandTotal: true,
-      status: true,
-      pdfUrl: true,
-      quoteDate: true,
-      validityDays: true,
-      sentAt: true,
-      contactPhone: true,
-      conversationId: true,
-      createdAt: true,
-      createdBy: { select: { name: true } },
-    },
+    select: QUOTATION_LIST_SELECT,
   });
 
   return NextResponse.json({
@@ -223,8 +208,9 @@ export async function POST(req: NextRequest) {
         ),
     );
   }
-  // Fire-and-forget — these syncs don't affect the quote itself.
-  if (sideEffects.length) Promise.all(sideEffects).catch(() => {});
+  // Best-effort and not needed by the quote itself; kept alive after the
+  // response (a bare floating promise can be cut off once the function returns).
+  if (sideEffects.length) after(Promise.all(sideEffects));
 
   let quotation;
   let lastError: unknown = null;
@@ -279,10 +265,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Fire-and-forget — DealLineItem rows for analytics. The quote's own JSON
-  // snapshot is already saved; this best-effort write must never delay the response.
+  // DealLineItem rows for analytics. The quote's own JSON snapshot is already
+  // saved; this best-effort write runs after the response so it never delays it.
   if (dealId) {
-    (async () => {
+    after(async () => {
       try {
         const sport = await prisma.sport.findUnique({ where: { slug: parsed.data.sport } });
         const included = parsed.data.lineItems.filter((li) => li.included);
@@ -305,7 +291,7 @@ export async function POST(req: NextRequest) {
       } catch (err) {
         console.error("[quotations] DealLineItem write failed", err);
       }
-    })();
+    });
   }
 
   return NextResponse.json({

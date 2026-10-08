@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { readSheet, colIndex } from "@/lib/sheets";
+import { UpstreamTimeoutError } from "@/lib/http";
 import { normalizePhone } from "@/lib/phone";
 
 const filterRuleSchema = z.object({
@@ -51,7 +52,8 @@ export async function POST(req: NextRequest) {
     try {
       dataRows = await readSheet({ sheetUrlOrId: parsed.data.sheetUrl, range: parsed.data.sheetRange });
     } catch (err: any) {
-      return NextResponse.json({ error: `Sheet read failed: ${err.message ?? "unknown"}` }, { status: 502 });
+      const detail = err instanceof UpstreamTimeoutError ? `${err.message}. Try again.` : (err.message ?? "unknown");
+      return NextResponse.json({ error: `Sheet read failed: ${detail}` }, { status: 502 });
     }
   } else {
     return NextResponse.json({ error: "missing_data_source" }, { status: 400 });

@@ -20,8 +20,19 @@ export default async function BroadcastsPage({
     prisma.broadcast.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: {
-        template: { select: { name: true, language: true } },
+      // Not the whole row: fileData (the uploaded sheet) is huge and the list never shows it.
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        total: true,
+        sent: true,
+        delivered: true,
+        read: true,
+        failed: true,
+        createdAt: true,
+        scheduledAt: true,
+        template: { select: { name: true } },
         createdBy: { select: { name: true } },
       },
       take: 50,

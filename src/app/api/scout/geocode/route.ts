@@ -18,6 +18,32 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getScoutIdentity } from "@/lib/scout/identity";
 import { env } from "@/lib/scout/env";
 import { createGoogleClient } from "@/lib/scout/places/googleClient";
+import { fetchT, withTimeout } from "@/lib/http";
+
+const GEOCODE_TIMEOUT_MS = 6_000;
+
+// Google country suffixes: com, two-letter (de, in), co.xx / com.xx (co.in, com.au).
+const MAPS_SUBDOMAIN_HOST = /^maps\.google\.(?:com|[a-z]{2}|(?:co|com)\.[a-z]{2})$/;
+const GOOGLE_HOST = /^(?:www\.)?google\.(?:com|[a-z]{2}|(?:co|com)\.[a-z]{2})$/;
+
+// We fetch the pasted link server-side, so only Google Maps links are allowed
+// (otherwise this route could be pointed at any URL).
+function isGoogleMapsUrl(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+  const host = u.hostname.toLowerCase().replace(/\.$/, "");
+  const onMapsPath = u.pathname === "/maps" || u.pathname.startsWith("/maps/");
+  if (host === "maps.app.goo.gl") return true;
+  if (MAPS_SUBDOMAIN_HOST.test(host)) return true;
+  if (host === "goo.gl") return onMapsPath;
+  if (GOOGLE_HOST.test(host)) return onMapsPath;
+  return false;
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,7 +74,7 @@ export async function GET(request: NextRequest) {
 
   if (mapsUrl) {
     try {
-      const resolved = await resolveGoogleMapsUrl(mapsUrl);
+      const resolved = isGoogleMapsUrl(mapsUrl) ? await resolveGoogleMapsUrl(mapsUrl) : null;
       if (!resolved) {
         return NextResponse.json(
           { results: [], error: "Could not extract a location from that link. Try pasting the address instead." },
@@ -56,7 +82,7 @@ export async function GET(request: NextRequest) {
         );
       }
       const client = createGoogleClient();
-      const revResponse = await client.reverseGeocode(resolved);
+      const revResponse = await withTimeout(client.reverseGeocode(resolved), GEOCODE_TIMEOUT_MS, "Google");
       const addr = revResponse.results?.[0]?.formatted_address ?? null;
       return NextResponse.json(
         { results: [{ formattedAddress: addr ?? `${resolved.lat.toFixed(6)}, ${resolved.lng.toFixed(6)}`, location: resolved, placeId: revResponse.results?.[0]?.place_id ?? null }] },
@@ -79,9 +105,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const client = createGoogleClient();
-    const response = query
-      ? await client.geocode(query)
-      : await client.reverseGeocode({ lat, lng });
+    const response = await withTimeout(
+      query ? client.geocode(query) : client.reverseGeocode({ lat, lng }),
+      GEOCODE_TIMEOUT_MS,
+      "Google",
+    );
 
     const results = (response.results ?? []).slice(0, 5).map((r) => ({
       formattedAddress: r.formatted_address,
@@ -128,11 +156,16 @@ export async function GET(request: NextRequest) {
 async function resolveGoogleMapsUrl(url: string): Promise<{ lat: number; lng: number } | null> {
   const UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
-  const res = await fetch(url, {
-    method: "GET",
-    redirect: "follow",
-    headers: { "User-Agent": UA, Accept: "text/html" },
-  });
+  const res = await fetchT(
+    "Google Maps",
+    url,
+    {
+      method: "GET",
+      redirect: "follow",
+      headers: { "User-Agent": UA, Accept: "text/html" },
+    },
+    GEOCODE_TIMEOUT_MS,
+  );
   const finalUrl = res.url;
 
   const tryExtract = (s: string): { lat: number; lng: number } | null => {

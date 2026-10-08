@@ -9,6 +9,8 @@
 // Adding another provider (SMTP / SendGrid) later = another branch here;
 // the callers don't change.
 
+import { fetchT } from "@/lib/http";
+
 export type EmailAttachment = {
   filename: string;
   // Base64-encoded file content.
@@ -43,24 +45,29 @@ export async function sendEmail(
     return { sent: false, reason: "not_configured" };
   }
   try {
-    const r = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${RESEND_KEY}`,
-        "Content-Type": "application/json",
+    const r = await fetchT(
+      "Resend",
+      "https://api.resend.com/emails",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${RESEND_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: EMAIL_FROM,
+          to: [input.to],
+          subject: input.subject,
+          html: input.html,
+          text: input.text,
+          attachments: input.attachments?.map((a) => ({
+            filename: a.filename,
+            content: a.content,
+          })),
+        }),
       },
-      body: JSON.stringify({
-        from: EMAIL_FROM,
-        to: [input.to],
-        subject: input.subject,
-        html: input.html,
-        text: input.text,
-        attachments: input.attachments?.map((a) => ({
-          filename: a.filename,
-          content: a.content,
-        })),
-      }),
-    });
+      10_000,
+    );
     if (!r.ok) {
       const body = await r.text().catch(() => "");
       return { sent: false, reason: `resend_${r.status}: ${body.slice(0, 200)}` };

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { canAccessAllScans, type ScoutIdentity } from "@/lib/scout/identity";
 import { getExclusionsForOwner } from "@/lib/scout/places/exclusionRepository";
@@ -206,4 +207,27 @@ export async function getScanScreenData(
     })),
     excludedPlaceDetails,
   };
+}
+
+// `generateMetadata` and the page component both need this payload for the
+// same request. React `cache()` shares ONE read between them for the duration
+// of that single render only — nothing is kept afterwards, so the next request
+// always reads fresh data. Keyed on primitives (identity objects are rebuilt on
+// every call, so they can't be cache keys). Server pages only: route handlers
+// and writes keep calling `getScanScreenData` directly.
+const screenDataOnce = cache(
+  (userId: string, canRunScans: boolean, canEditScoringWeights: boolean, scanId: string) =>
+    getScanScreenData({ userId, canRunScans, canEditScoringWeights }, scanId),
+);
+
+export function getScanScreenDataOnce(
+  identity: ScoutIdentity,
+  scanId: string,
+): Promise<ScanScreenData | null> {
+  return screenDataOnce(
+    identity.userId,
+    identity.canRunScans,
+    identity.canEditScoringWeights,
+    scanId,
+  );
 }

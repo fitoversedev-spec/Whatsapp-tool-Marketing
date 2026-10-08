@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import AnalyticsClient from "./AnalyticsClient";
 
@@ -40,8 +41,19 @@ export default async function AnalyticsPage({
   const broadcasts = await prisma.broadcast.findMany({
     where: { ...baseFilter, ...dateFilter },
     orderBy: { createdAt: "desc" },
-    include: {
-      template: { select: { name: true, language: true, category: true } },
+    // Only the fields used below — not the whole row (fileData is the uploaded sheet).
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      total: true,
+      sent: true,
+      delivered: true,
+      read: true,
+      failed: true,
+      createdAt: true,
+      templateId: true,
+      template: { select: { name: true, category: true } },
       createdBy: { select: { name: true } },
     },
     take: 200,
@@ -62,46 +74,36 @@ export default async function AnalyticsPage({
     { total: 0, sent: 0, delivered: 0, read: 0, failed: 0, costEstimate: 0 }
   );
 
-  // Daily timeline — query recipients in range, group by sent date.
+  // Daily timeline + failure breakdown. Aggregated in the database instead of
+  // loading every recipient row of up to 200 broadcasts into memory.
   const broadcastIds = broadcasts.map((b) => b.id);
-  const recipients = broadcastIds.length
-    ? await prisma.broadcastRecipient.findMany({
-        where: {
-          broadcastId: { in: broadcastIds },
-          sentAt: since ? { gte: since } : { not: null },
-        },
-        select: {
-          broadcastId: true,
-          status: true,
-          errorCode: true,
-          errorMessage: true,
-          sentAt: true,
-          deliveredAt: true,
-          readAt: true,
-        },
-      })
-    : [];
+  const sentAtFilter = since ? { gte: since } : { not: null };
 
-  // Build daily series. We bin by YYYY-MM-DD in IST.
-  const dayMap = new Map<
-    string,
-    { date: string; sent: number; delivered: number; read: number; failed: number }
-  >();
-  for (const r of recipients) {
-    if (!r.sentAt) continue;
-    const day = istDateKey(r.sentAt);
-    if (!dayMap.has(day)) {
-      dayMap.set(day, { date: day, sent: 0, delivered: 0, read: 0, failed: 0 });
-    }
-    const bucket = dayMap.get(day)!;
-    bucket.sent += 1;
-    if (r.deliveredAt) bucket.delivered += 1;
-    if (r.readAt) bucket.read += 1;
-    if (r.status === "failed") bucket.failed += 1;
-  }
-  const timeline = Array.from(dayMap.values()).sort((a, b) =>
-    a.date.localeCompare(b.date)
-  );
+  // Bin by YYYY-MM-DD in IST (UTC+5:30 = +330 min; sent_at is stored as UTC).
+  const dayRows = broadcastIds.length
+    ? await prisma.$queryRaw<
+        { day: string; sent: bigint; delivered: bigint; read_n: bigint; failed: bigint }[]
+      >(Prisma.sql`
+        SELECT to_char(sent_at + interval '330 minutes', 'YYYY-MM-DD') AS day,
+               COUNT(*) AS sent,
+               COUNT(delivered_at) AS delivered,
+               COUNT(read_at) AS read_n,
+               COUNT(*) FILTER (WHERE status = 'failed') AS failed
+        FROM broadcast_recipients
+        WHERE broadcast_id IN (${Prisma.join(broadcastIds)})
+          AND sent_at IS NOT NULL
+          ${since ? Prisma.sql`AND sent_at >= ${since}` : Prisma.empty}
+        GROUP BY 1
+        ORDER BY 1
+      `)
+    : [];
+  const timeline = dayRows.map((r) => ({
+    date: r.day,
+    sent: Number(r.sent),
+    delivered: Number(r.delivered),
+    read: Number(r.read_n),
+    failed: Number(r.failed),
+  }));
 
   // Per-template performance
   const tmplMap = new Map<
@@ -138,20 +140,30 @@ export default async function AnalyticsPage({
   }
   const templates = Array.from(tmplMap.values()).sort((a, b) => b.sent - a.sent);
 
-  // Failure breakdown — group recipients by errorCode
-  const failureMap = new Map<string, { code: string; sample: string; count: number }>();
-  for (const r of recipients) {
-    if (r.status !== "failed" || !r.errorCode) continue;
-    if (!failureMap.has(r.errorCode)) {
-      failureMap.set(r.errorCode, {
-        code: r.errorCode,
-        sample: r.errorMessage ?? "",
-        count: 0,
-      });
-    }
-    failureMap.get(r.errorCode)!.count += 1;
-  }
-  const failures = Array.from(failureMap.values()).sort((a, b) => b.count - a.count);
+  // Failure breakdown — failed recipients grouped by errorCode (empty codes skipped).
+  // `sample` is one message for the code (the alphabetically last; before, it was
+  // whichever failed row the database happened to return first).
+  const failureGroups = broadcastIds.length
+    ? await prisma.broadcastRecipient.groupBy({
+        by: ["errorCode"],
+        where: {
+          broadcastId: { in: broadcastIds },
+          sentAt: sentAtFilter,
+          status: "failed",
+          errorCode: { not: null },
+        },
+        _count: { _all: true },
+        _max: { errorMessage: true },
+      })
+    : [];
+  const failures = failureGroups
+    .filter((g) => !!g.errorCode)
+    .map((g) => ({
+      code: g.errorCode as string,
+      sample: g._max.errorMessage ?? "",
+      count: g._count._all,
+    }))
+    .sort((a, b) => b.count - a.count);
 
   return (
     <AnalyticsClient
@@ -187,14 +199,4 @@ export default async function AnalyticsPage({
       }))}
     />
   );
-}
-
-function istDateKey(d: Date): string {
-  const utc = d.getTime();
-  // IST is UTC+5:30
-  const ist = new Date(utc + 5.5 * 60 * 60 * 1000);
-  const yyyy = ist.getUTCFullYear();
-  const mm = String(ist.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(ist.getUTCDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
 }

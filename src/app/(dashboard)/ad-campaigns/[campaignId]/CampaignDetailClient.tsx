@@ -18,7 +18,8 @@ import { StatusBadge } from "@/components/meta/StatusBadge";
 import LeadsTable from "@/components/meta/LeadsTable";
 import CampaignDocuments from "@/components/meta/CampaignDocuments";
 import type { Rep } from "@/components/meta/MoveToCrmDialog";
-import type { CampaignDetail, MetaLeadRow, AdLeadBreakdownRow, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
+import type { CampaignDetail, AdLeadBreakdownRow, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
+import type { LeadListInitial } from "@/lib/meta-ads/lead-list";
 import type { MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
 
 const SPORT_PRESETS = ["Basketball", "Tennis", "Pickleball", "Badminton", "Volleyball"];
@@ -102,7 +103,7 @@ export type CampaignTab = "leads" | "analytics";
 
 export default function CampaignDetailClient({
   detail,
-  leads,
+  initialLeads,
   reps,
   adBreakdown,
   labelCatalog,
@@ -114,7 +115,7 @@ export default function CampaignDetailClient({
   range,
 }: {
   detail: CampaignDetail;
-  leads: MetaLeadRow[];
+  initialLeads: LeadListInitial;
   reps: Rep[];
   adBreakdown: AdLeadBreakdownRow[];
   labelCatalog: MetaLeadLabelChip[];
@@ -247,7 +248,7 @@ export default function CampaignDetailClient({
         <div role="tablist" aria-label="Campaign sections" className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
           {(
             [
-              { key: "leads", label: "Campaign leads", count: leads.length },
+              { key: "leads", label: "Campaign leads", count: initialLeads.total },
               { key: "analytics", label: "Campaign analytics", count: null },
             ] as const
           ).map((t) => (
@@ -289,7 +290,10 @@ export default function CampaignDetailClient({
             description="Every Instant-Form submission captured from this campaign. Filter by city or sport, click a breakdown value to drill in, tick leads to assign them or add them to a broadcast group, or open a lead for the full form answers."
           >
             <LeadsTable
-              leads={leads}
+              key={`${range.from}|${range.to}`}
+              initial={initialLeads}
+              range={range}
+              campaignId={detail.metaId}
               reps={reps}
               showCampaignColumn={false}
               exportFilename={`campaign-${detail.metaId}-leads`}

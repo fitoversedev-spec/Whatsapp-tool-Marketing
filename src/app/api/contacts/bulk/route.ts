@@ -5,9 +5,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { MAX_CONTACTS_PER_REQUEST, chunkIds } from "@/lib/broadcast-groups";
 
 const schema = z.object({
-  ids: z.array(z.string().uuid()).min(1).max(5000),
+  ids: z.array(z.string().uuid()).min(1).max(MAX_CONTACTS_PER_REQUEST),
   action: z.enum(["set_tags", "set_consent", "delete"]),
   payload: z.record(z.string(), z.any()).optional().default({}),
 });
@@ -30,29 +31,38 @@ export async function POST(req: NextRequest) {
     case "set_tags": {
       const tagIds = z.array(z.string().uuid()).safeParse(payload.tagIds);
       if (!tagIds.success) return NextResponse.json({ error: "tagIds required" }, { status: 400 });
-      await prisma.$transaction([
-        prisma.contactTag.deleteMany({ where: { contactId: { in: ids } } }),
-        prisma.contactTag.createMany({
-          data: ids.flatMap((cid) =>
-            tagIds.data.map((tid) => ({ contactId: cid, tagId: tid }))
-          ),
-          skipDuplicates: true,
-        }),
-      ]);
+      // 1,000 contacts per statement, all in one transaction (all-or-nothing as before).
+      await prisma.$transaction(
+        chunkIds(ids).flatMap((part) => [
+          prisma.contactTag.deleteMany({ where: { contactId: { in: part } } }),
+          prisma.contactTag.createMany({
+            data: part.flatMap((cid) =>
+              tagIds.data.map((tid) => ({ contactId: cid, tagId: tid }))
+            ),
+            skipDuplicates: true,
+          }),
+        ])
+      );
       return NextResponse.json({ ok: true, affected: ids.length });
     }
     case "set_consent": {
       const allow = z.boolean().safeParse(payload.allowCampaign);
       if (!allow.success) return NextResponse.json({ error: "allowCampaign required" }, { status: 400 });
-      const result = await prisma.contact.updateMany({
-        where: { id: { in: ids } },
-        data: { allowCampaign: allow.data },
-      });
-      return NextResponse.json({ ok: true, affected: result.count });
+      const results = await prisma.$transaction(
+        chunkIds(ids).map((part) =>
+          prisma.contact.updateMany({
+            where: { id: { in: part } },
+            data: { allowCampaign: allow.data },
+          })
+        )
+      );
+      return NextResponse.json({ ok: true, affected: results.reduce((n, r) => n + r.count, 0) });
     }
     case "delete": {
-      const result = await prisma.contact.deleteMany({ where: { id: { in: ids } } });
-      return NextResponse.json({ ok: true, affected: result.count });
+      const results = await prisma.$transaction(
+        chunkIds(ids).map((part) => prisma.contact.deleteMany({ where: { id: { in: part } } }))
+      );
+      return NextResponse.json({ ok: true, affected: results.reduce((n, r) => n + r.count, 0) });
     }
   }
 }

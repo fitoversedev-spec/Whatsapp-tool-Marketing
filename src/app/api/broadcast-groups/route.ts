@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   GROUP_NAME_MAX,
+  MAX_CONTACTS_PER_REQUEST,
   MAX_LEADS_PER_REQUEST,
   addPeopleToGroup,
   findGroupByName,
@@ -47,7 +48,7 @@ export async function GET() {
 const createSchema = z.object({
   name: z.string().min(1).max(200),
   metaLeadIds: z.array(z.string().uuid()).max(MAX_LEADS_PER_REQUEST).optional(),
-  contactIds: z.array(z.string().uuid()).max(MAX_LEADS_PER_REQUEST).optional(),
+  contactIds: z.array(z.string().uuid()).max(MAX_CONTACTS_PER_REQUEST).optional(),
 });
 
 export async function POST(req: NextRequest) {

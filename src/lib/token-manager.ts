@@ -97,7 +97,7 @@ export async function exchangeForLongToken(
     },
     // This runs on the critical path of every Meta send (lazy refresh inside
     // getMetaAccessToken) — bound it so a hung token exchange can't stall sends.
-    timeout: 30_000,
+    timeout: 15_000,
   });
 
   const newToken: string = res.data?.access_token || "";

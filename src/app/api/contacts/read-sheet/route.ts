@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { readSheet } from "@/lib/sheets";
+import { UpstreamTimeoutError } from "@/lib/http";
 
 const schema = z.object({
   sheetUrl: z.string().min(10),
@@ -31,7 +32,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ rows, rowCount: rows.length - 1 });
   } catch (err: any) {
     return NextResponse.json(
-      { error: `Could not read sheet: ${err?.message ?? "unknown error"}` },
+      {
+        error: `Could not read sheet: ${
+          err instanceof UpstreamTimeoutError ? `${err.message}. Try again.` : (err?.message ?? "unknown error")
+        }`,
+      },
       { status: 502 }
     );
   }

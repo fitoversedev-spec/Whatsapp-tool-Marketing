@@ -29,7 +29,9 @@ export async function sendPushToUser(
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dhKey, auth: sub.authKey } },
-          JSON.stringify(payload)
+          JSON.stringify(payload),
+          // A slow push service must not hold up the request that triggered it.
+          { timeout: 8000 }
         );
       } catch (err: unknown) {
         const status = (err as { statusCode?: number }).statusCode;

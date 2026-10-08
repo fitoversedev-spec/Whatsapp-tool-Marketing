@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { QUOTATION_LIST_SELECT } from "@/lib/quotation/list-select";
 import QuotationsClient from "./QuotationsClient";
 
 export default async function QuotationsPage() {
@@ -14,7 +15,7 @@ export default async function QuotationsPage() {
       where,
       orderBy: { createdAt: "desc" },
       take: 200,
-      include: { createdBy: { select: { name: true } } },
+      select: QUOTATION_LIST_SELECT,
     }),
     user.role === "admin"
       ? prisma.user.findMany({

@@ -1,6 +1,11 @@
-import { google } from "googleapis";
+import { UpstreamTimeoutError, isTimeoutError, withTimeout } from "@/lib/http";
 
-function getAuth() {
+const SHEETS_TIMEOUT_MS = 15_000;
+
+// googleapis is huge; it is imported inside the functions that need it so
+// routes that only use parseSheetId / colIndex don't load it.
+async function getAuth() {
+  const { google } = await import("googleapis");
   const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64;
   if (!b64) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 not set");
   const json = JSON.parse(Buffer.from(b64, "base64").toString("utf-8"));
@@ -21,15 +26,32 @@ export async function readSheet(args: {
   sheetUrlOrId: string;
   range: string; // e.g. "Sheet1!A2:D"
 }): Promise<string[][]> {
-  const auth = getAuth();
-  const sheets = google.sheets({ version: "v4", auth });
   const spreadsheetId = parseSheetId(args.sheetUrlOrId);
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: args.range,
-    valueRenderOption: "UNFORMATTED_VALUE",
-  });
-  return (res.data.values as string[][]) ?? [];
+  try {
+    // 15 s for the whole call (auth + read). The per-request timeout also
+    // cancels the HTTP request; withTimeout covers the token fetch.
+    const res = await withTimeout(
+      (async () => {
+        const { google } = await import("googleapis");
+        const auth = await getAuth();
+        const sheets = google.sheets({ version: "v4", auth });
+        return sheets.spreadsheets.values.get(
+          {
+            spreadsheetId,
+            range: args.range,
+            valueRenderOption: "UNFORMATTED_VALUE",
+          },
+          { timeout: SHEETS_TIMEOUT_MS },
+        );
+      })(),
+      SHEETS_TIMEOUT_MS,
+      "Google Sheets",
+    );
+    return (res.data.values as string[][]) ?? [];
+  } catch (e) {
+    if (isTimeoutError(e)) throw new UpstreamTimeoutError("Google Sheets", SHEETS_TIMEOUT_MS);
+    throw e;
+  }
 }
 
 // Column letter (A, B, ..., AA) -> zero-based index

@@ -1,32 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ExportButtons } from "@/components/analytics/ExportButtons";
+import { downloadCsv, downloadXlsx } from "@/lib/analytics/export";
 import { useToast } from "@/components/Toast";
 import MoveToCrmDialog, { type Rep } from "@/components/meta/MoveToCrmDialog";
 import LeadManagementPanel from "@/components/meta/LeadManagementPanel";
 import AddToGroupDialog from "@/components/meta/AddToGroupDialog";
 import type { MetaLeadRow, MetaLeadDetail, MetaLeadLabelChip } from "@/lib/meta-ads/queries";
+import type { LeadBreakdown, LeadExportRow, LeadListInitial, LeadTally } from "@/lib/meta-ads/lead-list";
 import { labelChip, labelDot, stageLabelFromRow, stageChipFromRow, type MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
-import { DropdownFilter, type DropdownOption } from "@/components/DropdownFilter";
-import { START_TIME_ORDER } from "@/lib/meta-ads/fieldMap";
-
-type Tally = { key: string; label: string; count: number };
-
-function tally(leads: MetaLeadRow[], pick: (l: MetaLeadRow) => string | null): Tally[] {
-  const m = new Map<string, Tally>();
-  for (const l of leads) {
-    const raw = (pick(l) ?? "").trim();
-    const key = raw.toLowerCase() || "—";
-    const label = raw || "—";
-    const cur = m.get(key);
-    if (cur) cur.count += 1;
-    else m.set(key, { key, label, count: 1 });
-  }
-  return [...m.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-}
+import { DropdownFilter } from "@/components/DropdownFilter";
 
 function BreakdownList({
   title,
@@ -35,7 +19,7 @@ function BreakdownList({
   onPick,
 }: {
   title: string;
-  items: Tally[];
+  items: LeadTally[];
   activeKey: string;
   onPick: (label: string) => void;
 }) {
@@ -76,12 +60,30 @@ function BreakdownList({
 
 const FILTER_STORAGE_PREFIX = "leads-filter-";
 
+type Filters = {
+  city: string;
+  sport: string;
+  area: string;
+  start: string;
+  stage: string;
+  assigned: string;
+  label: string;
+};
+const NO_FILTERS: Filters = { city: "", sport: "", area: "", start: "", stage: "", assigned: "", label: "" };
+const NO_FILTERS_KEY = JSON.stringify(NO_FILTERS);
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+
 function leadCount(n: number): string {
   return `${n} lead${n === 1 ? "" : "s"}`;
 }
 
+const exportBtnCls =
+  "inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-60";
+
 export default function LeadsTable({
-  leads: serverLeads,
+  initial,
+  range,
+  campaignId,
   reps,
   showCampaignColumn,
   exportFilename,
@@ -90,8 +92,14 @@ export default function LeadsTable({
   currentUserId = "",
   isAdmin = false,
   canBulkAssign = false,
+  refreshToken = 0,
 }: {
-  leads: MetaLeadRow[];
+  // First page + dropdown options, rendered by the server; every later page,
+  // filter and breakdown comes from /api/ad-campaigns/leads.
+  initial: LeadListInitial;
+  range: { from: string; to: string };
+  // Raw Meta campaign id when this table is one campaign's leads tab.
+  campaignId?: string;
   reps: Rep[];
   showCampaignColumn: boolean;
   exportFilename: string;
@@ -101,28 +109,191 @@ export default function LeadsTable({
   isAdmin?: boolean;
   // Admins and managers: show "Assign to rep" for ticked leads.
   canBulkAssign?: boolean;
+  // Bump to quietly reload the current page (the parent does this after "Sync leads").
+  refreshToken?: number;
 }) {
-  const router = useRouter();
   const toast = useToast();
-  const uid = useId();
   const [movingLead, setMovingLead] = useState<MetaLeadRow | null>(null);
   const [marketingBusyId, setMarketingBusyId] = useState<string | null>(null);
 
-  // Local leads state: starts from server data, updated when sidebar changes stage/labels.
-  // localChanges tracks per-lead field overrides so router.refresh() can't overwrite them.
+  // --- The list: one server-backed page at a time ---------------------------
+  const [rows, setRows] = useState<MetaLeadRow[]>(initial.rows);
+  const [total, setTotal] = useState(initial.total); // leads matching the filters, all pages
+  const [pageCount, setPageCount] = useState(initial.pageCount);
+  const [page, setPage] = useState(1);
+  const [options, setOptions] = useState(initial.options); // dropdown choices (whole window / campaign)
+  // With no filter set, the breakdown is the same numbers as the options.
+  const [breakdown, setBreakdown] = useState<LeadBreakdown>({
+    city: initial.options.city,
+    sport: initial.options.sport,
+    area: initial.options.area,
+    assigned: initial.options.assigned,
+  });
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const maxSelectable = initial.maxSelectable;
+  const tableTopRef = useRef<HTMLDivElement>(null);
+
+  // Per-lead field overrides for changes made here (sidebar stage / labels, bulk
+  // assign, move to CRM) so the row shows them straight away; the next page load
+  // brings the server's version and clears them.
   const [localChanges, setLocalChanges] = useState<Record<string, Partial<MetaLeadRow>>>({});
-  const localLeads = useMemo(
-    () => serverLeads.map((l) => (localChanges[l.id] ? { ...l, ...localChanges[l.id] } : l)),
-    [serverLeads, localChanges],
+  const changeSeqRef = useRef(0);
+  const patchLocal = useCallback((ids: string[], patch: Partial<MetaLeadRow>) => {
+    changeSeqRef.current += 1;
+    setLocalChanges((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = { ...next[id], ...patch };
+      return next;
+    });
+  }, []);
+  const leads = useMemo(
+    () => rows.map((l) => (localChanges[l.id] ? { ...l, ...localChanges[l.id] } : l)),
+    [rows, localChanges],
   );
 
-  // Refresh server data when the page becomes visible again (picks up
-  // stage/label changes made on the detail page). Uses visibilitychange
-  // (hidden→visible) instead of focus to avoid firing on every click — and
-  // only when the data is over a minute old: each refresh re-renders the whole
-  // page on the server, which used to happen on every quick alt-tab.
-  const wasHiddenRef = useRef(false);
+  // --- Filters (kept in sessionStorage, restored after mount, then fetched) ---
+  const storageKey = FILTER_STORAGE_PREFIX + exportFilename;
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [ready, setReady] = useState(false);
+  const skipDebounceRef = useRef(false);
+
+  useEffect(() => {
+    let saved: Record<string, unknown> = {};
+    try {
+      const raw = sessionStorage.getItem(storageKey);
+      if (raw) saved = JSON.parse(raw) ?? {};
+    } catch { /* ignore */ }
+    const restored: Filters = {
+      city: str(saved.city),
+      sport: str(saved.sport),
+      area: str(saved.area),
+      start: str(saved.start),
+      stage: str(saved.stage),
+      assigned: str(saved.assigned),
+      label: str(saved.label),
+    };
+    if (JSON.stringify(restored) !== NO_FILTERS_KEY) {
+      skipDebounceRef.current = true;
+      setFilters(restored);
+      setLoading(true);
+    }
+    setReady(true);
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify(filters));
+    } catch { /* ignore */ }
+  }, [filters, ready, storageKey]);
+
+  // --- Loading pages ---------------------------------------------------------
+  const fetchSeqRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   const refreshedAtRef = useRef(Date.now());
+  const loadedRef = useRef({ filterKey: NO_FILTERS_KEY, page: 1, nonce: 0 });
+  const [nonce, setNonce] = useState(0);
+  const quietNonceRef = useRef(true);
+  // Reload the current page again (and the breakdown + dropdown options).
+  const refetch = useCallback((quiet: boolean) => {
+    quietNonceRef.current = quiet;
+    setNonce((n) => n + 1);
+  }, []);
+
+  const query = useCallback(
+    (f: Filters, extra: Record<string, string> = {}) => {
+      const p = new URLSearchParams();
+      if (range.from) p.set("from", range.from);
+      if (range.to) p.set("to", range.to);
+      if (campaignId) p.set("campaign", campaignId);
+      for (const k of Object.keys(f) as (keyof Filters)[]) if (f[k]) p.set(k, f[k]);
+      for (const [k, v] of Object.entries(extra)) p.set(k, v);
+      return p.toString();
+    },
+    [range.from, range.to, campaignId],
+  );
+
+  const loadPage = useCallback(
+    async (target: { page: number; filters: Filters; withBreakdown: boolean; withOptions: boolean; quiet: boolean }) => {
+      abortRef.current?.abort();
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      const seq = ++fetchSeqRef.current;
+      const changesAtStart = changeSeqRef.current;
+      if (!target.quiet) {
+        setLoading(true);
+        setLoadError(false);
+      }
+      try {
+        const extra: Record<string, string> = { page: String(target.page) };
+        if (target.withBreakdown) extra.facets = "1";
+        if (target.withOptions) extra.options = "1";
+        const res = await fetch(`/api/ad-campaigns/leads?${query(target.filters, extra)}`, { signal: ctrl.signal });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        if (seq !== fetchSeqRef.current) return; // a newer request has taken over
+        setRows(data.rows);
+        setTotal(data.total);
+        setPageCount(data.pageCount);
+        if (data.page !== target.page) {
+          loadedRef.current = { ...loadedRef.current, page: data.page };
+          setPage(data.page);
+        }
+        if (data.breakdown) setBreakdown(data.breakdown);
+        if (data.options) setOptions(data.options);
+        // The server's version is current — drop the local overrides unless one was made meanwhile.
+        if (changeSeqRef.current === changesAtStart) setLocalChanges({});
+        refreshedAtRef.current = Date.now();
+        setLoadError(false);
+      } catch (err) {
+        if (seq !== fetchSeqRef.current || (err instanceof DOMException && err.name === "AbortError")) return;
+        if (!target.quiet) setLoadError(true);
+      } finally {
+        if (seq === fetchSeqRef.current) setLoading(false);
+      }
+    },
+    [query],
+  );
+
+  const filterKey = JSON.stringify(filters);
+  useEffect(() => {
+    if (!ready) return;
+    const last = loadedRef.current;
+    const filtersChanged = filterKey !== last.filterKey;
+    const forced = nonce !== last.nonce;
+    if (!filtersChanged && !forced && page === last.page) return; // the screen already shows this
+    // Typing / picking filters waits a moment; paging and reloads go straight out.
+    const delay = filtersChanged && !skipDebounceRef.current ? 300 : 0;
+    const t = setTimeout(() => {
+      skipDebounceRef.current = false;
+      loadedRef.current = { filterKey, page, nonce };
+      void loadPage({
+        page,
+        filters,
+        withBreakdown: filtersChanged || forced,
+        withOptions: forced,
+        quiet: forced && !filtersChanged && quietNonceRef.current,
+      });
+    }, delay);
+    return () => clearTimeout(t);
+  }, [ready, filterKey, page, nonce, filters, loadPage]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  // The parent bumps refreshToken after "Sync leads".
+  const firstTokenRef = useRef(refreshToken);
+  useEffect(() => {
+    if (refreshToken === firstTokenRef.current) return;
+    firstTokenRef.current = refreshToken;
+    refetch(true);
+  }, [refreshToken, refetch]);
+
+  // Reload quietly when the tab becomes visible again (picks up stage/label
+  // changes made on the detail page). Uses visibilitychange (hidden→visible)
+  // instead of focus to avoid firing on every click — and only when the data is
+  // over a minute old.
+  const wasHiddenRef = useRef(false);
   useEffect(() => {
     function onVisChange() {
       if (document.visibilityState === "hidden") {
@@ -131,44 +302,17 @@ export default function LeadsTable({
         wasHiddenRef.current = false;
         if (Date.now() - refreshedAtRef.current < 60_000) return;
         refreshedAtRef.current = Date.now();
-        setLocalChanges({});
-        router.refresh();
+        refetch(true);
       }
     }
     document.addEventListener("visibilitychange", onVisChange);
     return () => document.removeEventListener("visibilitychange", onVisChange);
-  }, [router]);
+  }, [refetch]);
 
   // Sidebar state
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [sidebarDetail, setSidebarDetail] = useState<MetaLeadDetail | null>(null);
   const [sidebarLoading, setSidebarLoading] = useState(false);
-
-  // Filter persistence via sessionStorage
-  const storageKey = FILTER_STORAGE_PREFIX + exportFilename;
-  function readSavedFilters(): { city: string; sport: string; area: string; stage: string; assigned?: string; label?: string; start?: string } {
-    try {
-      const raw = sessionStorage.getItem(storageKey);
-      if (raw) return JSON.parse(raw);
-    } catch { /* ignore */ }
-    return { city: "", sport: "", area: "", stage: "" };
-  }
-
-  const saved = readSavedFilters();
-  const [cityQuery, setCityQuery] = useState(saved.city);
-  const [sportQuery, setSportQuery] = useState(saved.sport);
-  const [areaQuery, setAreaQuery] = useState(saved.area);
-  const [stageFilter, setStageFilter] = useState(saved.stage);
-  const [assignedQuery, setAssignedQuery] = useState(saved.assigned ?? "");
-  const [labelFilter, setLabelFilter] = useState(saved.label ?? "");
-  const [startFilter, setStartFilter] = useState(saved.start ?? "");
-
-  // Persist filters to sessionStorage on change
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(storageKey, JSON.stringify({ city: cityQuery, sport: sportQuery, area: areaQuery, stage: stageFilter, assigned: assignedQuery, label: labelFilter, start: startFilter }));
-    } catch { /* ignore */ }
-  }, [cityQuery, sportQuery, areaQuery, stageFilter, assignedQuery, labelFilter, startFilter, storageKey]);
 
   // Fetch sidebar detail when a lead is selected
   const fetchSidebarDetail = useCallback(async (leadId: string) => {
@@ -202,15 +346,20 @@ export default function LeadsTable({
   }
 
   function handleStageUpdated(leadId: string, newStage: string) {
-    setLocalChanges((prev) => ({ ...prev, [leadId]: { ...prev[leadId], stage: newStage } }));
+    patchLocal([leadId], { stage: newStage });
+    if (filters.stage) refetch(true); // the lead may no longer match the stage filter
   }
 
   function handleLabelsUpdated(leadId: string, labels: MetaLeadLabelChip[]) {
-    setLocalChanges((prev) => ({ ...prev, [leadId]: { ...prev[leadId], labels } }));
+    patchLocal([leadId], { labels });
+    if (filters.label) refetch(true);
   }
 
   // --- Ticked leads (bulk assign / add to group) ---------------------------
+  // Ticks live across pages; a filter change clears them.
   const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
+  const [allMatching, setAllMatching] = useState(false); // "Select all N matching" was used
+  const [selectingAll, setSelectingAll] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignTo, setAssignTo] = useState("");
   const [assigning, setAssigning] = useState(false);
@@ -221,9 +370,24 @@ export default function LeadsTable({
 
   function clearPicked() {
     setPickedIds(new Set());
+    setAllMatching(false);
     setAssignOpen(false);
     setAssignTo("");
     lastPickedIndexRef.current = null;
+  }
+
+  // Every filter change starts again from page 1 with nothing ticked, so a bulk
+  // action never reaches a lead the filters no longer show.
+  function changeFilters(patch: Partial<Filters>) {
+    setFilters((f) => ({ ...f, ...patch }));
+    setPage(1);
+    clearPicked();
+  }
+
+  function goToPage(next: number) {
+    lastPickedIndexRef.current = null;
+    setPage(next);
+    tableTopRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
   async function applyBulkAssign() {
@@ -243,11 +407,7 @@ export default function LeadsTable({
         return;
       }
       const name: string | null = data.assignedToName ?? null;
-      setLocalChanges((prev) => {
-        const next = { ...prev };
-        for (const id of ids) next[id] = { ...next[id], assignedToName: name };
-        return next;
-      });
+      patchLocal(ids, { assignedToName: name });
       toast.success(name ? `${leadCount(ids.length)} assigned to ${name}` : `Rep removed from ${leadCount(ids.length)}`);
       setAssignOpen(false);
       setAssignTo("");
@@ -260,7 +420,7 @@ export default function LeadsTable({
           })
           .catch(() => {});
       }
-      router.refresh();
+      refetch(true);
     } catch {
       toast.error("Could not assign the leads");
     } finally {
@@ -285,102 +445,88 @@ export default function LeadsTable({
     }
   }
 
-  const cq = cityQuery.trim().toLowerCase();
-  const sq = sportQuery.trim().toLowerCase();
-  const aq = areaQuery.trim().toLowerCase();
-  const asq = assignedQuery.trim().toLowerCase();
+  const cq = filters.city.trim().toLowerCase();
+  const sq = filters.sport.trim().toLowerCase();
+  const aq = filters.area.trim().toLowerCase();
+  const asq = filters.assigned.trim().toLowerCase();
+  const hasFilter = Object.values(filters).some(Boolean);
 
-  const filtered = useMemo(
-    () =>
-      localLeads.filter((l) => {
-        const cityOk = !cq || (l.city ?? "").toLowerCase().includes(cq);
-        const sportOk = !sq || (l.sport ?? "").toLowerCase().includes(sq);
-        const areaOk = !aq || (l.area ?? "").toLowerCase().includes(aq);
-        const stageOk = !stageFilter || l.stage === stageFilter;
-        const assignedName = l.assignedToName ?? "Unassigned";
-        const assignedOk = !asq || assignedName.toLowerCase().includes(asq);
-        const labelOk = !labelFilter || l.labels.some((lb) => lb.name === labelFilter);
-        // Exact match — "1–3 months" must not also catch "Within 3 months".
-        const startOk = !startFilter || l.startTime === startFilter;
-        return cityOk && sportOk && areaOk && stageOk && assignedOk && labelOk && startOk;
-      }),
-    [localLeads, cq, sq, aq, stageFilter, asq, labelFilter, startFilter],
-  );
+  const allPicked = leads.length > 0 && leads.every((l) => pickedIds.has(l.id));
+  const somePicked = !allPicked && leads.some((l) => pickedIds.has(l.id));
 
-  const allCities = useMemo(() => tally(localLeads, (l) => l.city), [localLeads]);
-  const allSports = useMemo(() => tally(localLeads, (l) => l.sport), [localLeads]);
-  const allAreas = useMemo(() => tally(localLeads, (l) => l.area), [localLeads]);
-  const allAssigned = useMemo(() => tally(localLeads, (l) => l.assignedToName ?? "Unassigned"), [localLeads]);
-  const allLabels: DropdownOption[] = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const l of localLeads) {
-      for (const lb of l.labels) {
-        m.set(lb.name, (m.get(lb.name) ?? 0) + 1);
-      }
-    }
-    return [...m.entries()]
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  }, [localLeads]);
-  // Start-time answers, soonest first (any unfamiliar answer goes last).
-  const allStartTimes: DropdownOption[] = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const l of localLeads) if (l.startTime) m.set(l.startTime, (m.get(l.startTime) ?? 0) + 1);
-    const rank = (s: string) => {
-      const i = START_TIME_ORDER.indexOf(s);
-      return i < 0 ? START_TIME_ORDER.length : i;
-    };
-    return [...m.entries()]
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => rank(a.label) - rank(b.label) || b.count - a.count);
-  }, [localLeads]);
-  const cityBreakdown = useMemo(() => tally(filtered, (l) => l.city), [filtered]);
-  const sportBreakdown = useMemo(() => tally(filtered, (l) => l.sport), [filtered]);
-  const areaBreakdown = useMemo(() => tally(filtered, (l) => l.area), [filtered]);
-  const assignedBreakdown = useMemo(() => tally(filtered, (l) => l.assignedToName ?? "Unassigned"), [filtered]);
-
-  const hasFilter = !!(cityQuery || sportQuery || areaQuery || stageFilter || assignedQuery || labelFilter || startFilter);
-
-  // Ticks only ever cover rows on screen: a filter change drops ticked leads it
-  // hides, so a bulk action never reaches a lead the user can't see.
-  useEffect(() => {
-    setPickedIds((prev) => {
-      if (prev.size === 0) return prev;
-      const visible = new Set(filtered.map((l) => l.id));
-      const next = new Set([...prev].filter((id) => visible.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-    lastPickedIndexRef.current = null;
-  }, [filtered]);
-
-  const allPicked = filtered.length > 0 && filtered.every((l) => pickedIds.has(l.id));
-  const somePicked = pickedIds.size > 0 && !allPicked;
-
+  // The header box ticks / unticks the rows on this page; ticks on other pages stay.
   function toggleAllPicked() {
-    setPickedIds(allPicked ? new Set() : new Set(filtered.map((l) => l.id)));
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      for (const l of leads) {
+        if (allPicked) next.delete(l.id);
+        else next.add(l.id);
+      }
+      return next;
+    });
+    setAllMatching(false);
     lastPickedIndexRef.current = null;
   }
 
   function togglePicked(index: number) {
-    const lead = filtered[index];
+    const lead = leads[index];
     if (!lead) return;
     const select = !pickedIds.has(lead.id);
     const last = lastPickedIndexRef.current;
-    const range = shiftHeldRef.current && last !== null && last !== index;
+    const isRun = shiftHeldRef.current && last !== null && last !== index;
     setPickedIds((prev) => {
       const next = new Set(prev);
-      const [from, to] = range ? [Math.min(last!, index), Math.max(last!, index)] : [index, index];
+      const [from, to] = isRun ? [Math.min(last!, index), Math.max(last!, index)] : [index, index];
       for (let i = from; i <= to; i++) {
-        const id = filtered[i]?.id;
+        const id = leads[i]?.id;
         if (!id) continue;
         if (select) next.add(id);
         else next.delete(id);
       }
       return next;
     });
+    setAllMatching(false);
     lastPickedIndexRef.current = index;
     shiftHeldRef.current = false;
   }
+
+  // "Select all N matching": ticks every lead the filters find, beyond this page.
+  async function selectAllMatching() {
+    setSelectingAll(true);
+    try {
+      const res = await fetch(`/api/ad-campaigns/leads?${query(filters, { idsOnly: "1" })}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setPickedIds(new Set(data.ids as string[]));
+      setAllMatching(true);
+    } catch {
+      toast.error("Could not select them all — try again");
+    } finally {
+      setSelectingAll(false);
+    }
+  }
+
+  const selectionNote =
+    total > leads.length ? (
+      allMatching && pickedIds.size >= total ? (
+        <span className="text-xs opacity-90">All {total.toLocaleString()} matching are selected</span>
+      ) : allPicked ? (
+        total > maxSelectable ? (
+          <span className="text-xs opacity-90">
+            Too many to select at once — narrow the filters to {maxSelectable.toLocaleString()} or fewer.
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void selectAllMatching()}
+            disabled={selectingAll}
+            className="text-xs font-semibold underline hover:opacity-90 disabled:opacity-60"
+          >
+            {selectingAll ? "Selecting…" : `Select all ${total.toLocaleString()} matching`}
+          </button>
+        )
+      ) : null
+    ) : null;
 
   const checkboxCls = "h-4 w-4 rounded border-slate-300 text-court-600 focus:ring-court-500 cursor-pointer";
 
@@ -394,21 +540,43 @@ export default function LeadsTable({
     ...(showCampaignColumn ? ["Campaign"] : []),
     "Stage", "Captured", "CRM",
   ];
-  const exportRows: (string | number)[][] = filtered.map((l) => [
-    l.fullName ?? "—",
-    l.phone ?? "—",
-    l.email ?? "—",
-    l.city ?? "—",
-    l.sport ?? "—",
-    l.area ?? "—",
-    l.formName ?? "—",
-    ...(showCampaignColumn ? [l.campaignName ?? "—"] : []),
-    stageLabelFromRow(l.stage, stageCatalog),
-    new Date(l.capturedAt).toLocaleDateString("en-IN"),
-    l.inCrm ? "In CRM" : "—",
-  ]);
 
-  if (localLeads.length === 0) {
+  // Export covers every lead the filters find (not just this page): the rows are
+  // fetched on click, then handed to the shared CSV / XLSX download helpers.
+  const [exporting, setExporting] = useState<"csv" | "xlsx" | null>(null);
+  async function runExport(kind: "csv" | "xlsx") {
+    if (exporting) return;
+    setExporting(kind);
+    try {
+      const res = await fetch(`/api/ad-campaigns/leads?${query(filters, { export: "1" })}`);
+      if (!res.ok) throw new Error();
+      const data = (await res.json()) as { rows: LeadExportRow[]; total: number; capped: boolean };
+      const exportRows: (string | number)[][] = data.rows.map((l) => [
+        l.fullName ?? "—",
+        l.phone ?? "—",
+        l.email ?? "—",
+        l.city ?? "—",
+        l.sport ?? "—",
+        l.area ?? "—",
+        l.formName ?? "—",
+        ...(showCampaignColumn ? [l.campaignName ?? "—"] : []),
+        stageLabelFromRow(l.stage, stageCatalog),
+        new Date(l.capturedAt).toLocaleDateString("en-IN"),
+        l.inCrm ? "In CRM" : "—",
+      ]);
+      if (kind === "csv") downloadCsv(exportFilename, exportHeaders, exportRows);
+      else await downloadXlsx(exportFilename, exportHeaders, exportRows);
+      if (data.capped) {
+        toast.info(`Exported the first ${data.rows.length.toLocaleString()} of ${data.total.toLocaleString()} leads.`);
+      }
+    } catch {
+      toast.error("Could not export the leads");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  if (options.total === 0 && total === 0 && leads.length === 0) {
     return <p className="text-sm text-slate-400">No leads captured in this range.</p>;
   }
 
@@ -420,17 +588,17 @@ export default function LeadsTable({
       <div className="space-y-3">
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3" data-guide="wa-ad-filters">
-          <DropdownFilter guide="wa-ad-city" label="City" value={cityQuery} onChange={setCityQuery} options={allCities.filter((c) => c.label !== "—")} />
-          <DropdownFilter guide="wa-ad-sport" label="Sport" value={sportQuery} onChange={setSportQuery} options={allSports.filter((s) => s.label !== "—")} />
-          <DropdownFilter label="Area" value={areaQuery} onChange={setAreaQuery} options={allAreas.filter((a) => a.label !== "—")} />
-          {allStartTimes.length > 0 && (
-            <DropdownFilter guide="wa-ad-start" label="Start time" value={startFilter} onChange={setStartFilter} options={allStartTimes} />
+          <DropdownFilter guide="wa-ad-city" label="City" value={filters.city} onChange={(v) => changeFilters({ city: v })} options={options.city.filter((c) => c.label !== "—")} />
+          <DropdownFilter guide="wa-ad-sport" label="Sport" value={filters.sport} onChange={(v) => changeFilters({ sport: v })} options={options.sport.filter((s) => s.label !== "—")} />
+          <DropdownFilter label="Area" value={filters.area} onChange={(v) => changeFilters({ area: v })} options={options.area.filter((a) => a.label !== "—")} />
+          {options.startTimes.length > 0 && (
+            <DropdownFilter guide="wa-ad-start" label="Start time" value={filters.start} onChange={(v) => changeFilters({ start: v })} options={options.startTimes} />
           )}
           <div data-guide="wa-ad-stage">
             <label className="block text-[11px] font-medium text-slate-600 mb-1">Stage</label>
             <select
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value)}
+              value={filters.stage}
+              onChange={(e) => changeFilters({ stage: e.target.value })}
               className="input w-40 text-sm"
             >
               <option value="">All stages</option>
@@ -441,33 +609,30 @@ export default function LeadsTable({
               ))}
             </select>
           </div>
-          <DropdownFilter guide="wa-ad-assigned" label="Assigned To" value={assignedQuery} onChange={setAssignedQuery} options={allAssigned} />
-          {allLabels.length > 0 && (
-            <DropdownFilter label="Label" value={labelFilter} onChange={setLabelFilter} options={allLabels} />
+          <DropdownFilter guide="wa-ad-assigned" label="Assigned To" value={filters.assigned} onChange={(v) => changeFilters({ assigned: v })} options={options.assigned} />
+          {options.labels.length > 0 && (
+            <DropdownFilter label="Label" value={filters.label} onChange={(v) => changeFilters({ label: v })} options={options.labels} />
           )}
           <div className="text-xs text-slate-500 pb-1.5">
-            Showing <b className="text-slate-800 font-mono">{filtered.length}</b> of <span className="font-mono">{localLeads.length}</span>
+            Showing <b className="text-slate-800 font-mono">{total}</b> of <span className="font-mono">{options.total}</span>
             {hasFilter && <span className="text-slate-400"> (filtered)</span>}
           </div>
           {hasFilter && (
             <button
               type="button"
-              onClick={() => {
-                setCityQuery("");
-                setSportQuery("");
-                setAreaQuery("");
-                setStageFilter("");
-                setAssignedQuery("");
-                setLabelFilter("");
-                setStartFilter("");
-              }}
+              onClick={() => changeFilters(NO_FILTERS)}
               className="text-xs font-medium text-slate-500 hover:text-slate-800 underline pb-1.5"
             >
               Clear
             </button>
           )}
-          <div className="ml-auto">
-            <ExportButtons filename={exportFilename} headers={exportHeaders} rows={exportRows} />
+          <div className="ml-auto flex gap-2 text-xs">
+            <button type="button" onClick={() => void runExport("csv")} disabled={!!exporting} className={exportBtnCls}>
+              {exporting === "csv" ? "Exporting…" : "Export CSV"}
+            </button>
+            <button type="button" onClick={() => void runExport("xlsx")} disabled={!!exporting} className={exportBtnCls}>
+              {exporting === "xlsx" ? "Exporting…" : "Export XLSX"}
+            </button>
           </div>
         </div>
 
@@ -475,27 +640,27 @@ export default function LeadsTable({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <BreakdownList
             title="Leads by city"
-            items={cityBreakdown}
+            items={breakdown.city}
             activeKey={cq}
-            onPick={(label) => setCityQuery((v) => (v.trim().toLowerCase() === label.toLowerCase() ? "" : label))}
+            onPick={(label) => changeFilters({ city: filters.city.trim().toLowerCase() === label.toLowerCase() ? "" : label })}
           />
           <BreakdownList
             title="Leads by sport"
-            items={sportBreakdown}
+            items={breakdown.sport}
             activeKey={sq}
-            onPick={(label) => setSportQuery((v) => (v.trim().toLowerCase() === label.toLowerCase() ? "" : label))}
+            onPick={(label) => changeFilters({ sport: filters.sport.trim().toLowerCase() === label.toLowerCase() ? "" : label })}
           />
           <BreakdownList
             title="Leads by area"
-            items={areaBreakdown}
+            items={breakdown.area}
             activeKey={aq}
-            onPick={(label) => setAreaQuery((v) => (v.trim().toLowerCase() === label.toLowerCase() ? "" : label))}
+            onPick={(label) => changeFilters({ area: filters.area.trim().toLowerCase() === label.toLowerCase() ? "" : label })}
           />
           <BreakdownList
             title="Leads by assigned to"
-            items={assignedBreakdown}
+            items={breakdown.assigned}
             activeKey={asq}
-            onPick={(label) => setAssignedQuery((v) => (v.trim().toLowerCase() === label.toLowerCase() ? "" : label))}
+            onPick={(label) => changeFilters({ assigned: filters.assigned.trim().toLowerCase() === label.toLowerCase() ? "" : label })}
           />
         </div>
 
@@ -509,6 +674,7 @@ export default function LeadsTable({
             <button type="button" onClick={clearPicked} className="text-xs underline opacity-80 hover:opacity-100">
               Clear
             </button>
+            {selectionNote}
             <div className="flex-1" />
             <div className="flex items-center gap-2 flex-wrap">
               {canBulkAssign &&
@@ -572,7 +738,15 @@ export default function LeadsTable({
         )}
 
         {/* Table */}
-        {filtered.length === 0 ? (
+        <div ref={tableTopRef} className={loading ? "opacity-60 transition-opacity" : ""}>
+        {loadError ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <span>Couldn&apos;t load these leads. Try again</span>
+            <button type="button" onClick={() => refetch(false)} className="btn btn-secondary !px-2.5 !py-1 !text-xs">
+              Try again
+            </button>
+          </div>
+        ) : total === 0 ? (
           <p className="text-sm text-slate-400">No leads match the current filters.</p>
         ) : (
           <>
@@ -587,12 +761,12 @@ export default function LeadsTable({
               onChange={toggleAllPicked}
               className={checkboxCls}
             />
-            Select all {filtered.length}
+            Select all {leads.length} on this page
           </label>
 
           {/* Mobile cards */}
           <div className="md:hidden border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100">
-            {filtered.map((l, i) => (
+            {leads.map((l, i) => (
               <div
                 key={l.id}
                 onClick={() => handleRowClick(l)}
@@ -664,8 +838,8 @@ export default function LeadsTable({
                         if (el) el.indeterminate = somePicked;
                       }}
                       onChange={toggleAllPicked}
-                      aria-label={allPicked ? "Unselect all leads" : `Select all ${filtered.length} leads`}
-                      title={allPicked ? "Unselect all" : `Select all ${filtered.length} leads shown`}
+                      aria-label={allPicked ? "Unselect all leads" : `Select all ${leads.length} leads`}
+                      title={allPicked ? "Unselect all" : `Select all ${leads.length} on this page`}
                       data-guide="wa-ad-select-all"
                       className={checkboxCls}
                     />
@@ -678,7 +852,7 @@ export default function LeadsTable({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((l, i) => (
+                {leads.map((l, i) => (
                   <tr
                     key={l.id}
                     onClick={() => handleRowClick(l)}
@@ -781,8 +955,37 @@ export default function LeadsTable({
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {pageCount > 1 && (
+            <div className="flex items-center justify-center gap-3 mt-4">
+              <button
+                type="button"
+                onClick={() => goToPage(page - 1)}
+                disabled={page <= 1 || loading}
+                className="btn btn-secondary"
+              >
+                Previous
+              </button>
+              <span aria-hidden className="text-slate-300">·</span>
+              <span className="text-sm text-slate-500">
+                Page <span className="font-mono">{page}</span> of{" "}
+                <span className="font-mono">{pageCount}</span>
+              </span>
+              <span aria-hidden className="text-slate-300">·</span>
+              <button
+                type="button"
+                onClick={() => goToPage(page + 1)}
+                disabled={page >= pageCount || loading}
+                className="btn btn-secondary"
+              >
+                Next
+              </button>
+            </div>
+          )}
           </>
         )}
+        </div>
       </div>
 
       {/* Full-height right sidebar panel (fixed, like Meta Leads Centre) */}
@@ -797,7 +1000,7 @@ export default function LeadsTable({
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 shrink-0">
               <h3 className="text-sm font-semibold text-slate-900 truncate">
-                {localLeads.find((l) => l.id === selectedLeadId)?.fullName ?? "Lead"}
+                {sidebarDetail?.fullName ?? leads.find((l) => l.id === selectedLeadId)?.fullName ?? "Lead"}
               </h3>
               <div className="flex items-center gap-2 shrink-0">
                 <Link
@@ -855,8 +1058,9 @@ export default function LeadsTable({
           reps={reps}
           onClose={() => setMovingLead(null)}
           onDone={() => {
+            patchLocal([movingLead.id], { inCrm: true });
             setMovingLead(null);
-            router.refresh();
+            refetch(true);
           }}
         />
       )}

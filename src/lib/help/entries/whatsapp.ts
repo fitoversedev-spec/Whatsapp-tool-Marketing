@@ -719,7 +719,7 @@ export const WHATSAPP_ENTRIES: GuideEntry[] = [
       { text: "Click **Ad campaigns** in the sidebar", target: "wa-sidebar-ad-campaigns" },
       { text: "Open a campaign — or stay on this page to work with leads from every campaign" },
       { text: "Use the filters to narrow the list (e.g., City, Start time)", target: "wa-ad-filters" },
-      { text: "Tick the leads you want, or tick the box at the top of the table to select every lead shown. Hold **Shift** to tick a run of rows", target: "wa-ad-select-all" },
+      { text: "Tick the leads you want, or tick the box at the top of the table to select every lead on this page, then click **Select all N matching** to include the other pages. Hold **Shift** to tick a run of rows", target: "wa-ad-select-all" },
       { text: "Click **Assign to rep**, choose the rep and click **Assign** — or choose **Unassigned** to take the rep off", target: "wa-ad-bulk-bar" },
       { text: "The rep finds their leads with the **Assigned To** filter", target: "wa-ad-assigned" },
     ],

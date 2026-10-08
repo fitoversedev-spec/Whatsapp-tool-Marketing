@@ -83,6 +83,7 @@ export async function prepareBroadcast(broadcastId: string): Promise<{ total: nu
   await prisma.broadcast.update({
     where: { id: broadcastId },
     data: { total: insertData.length },
+    select: { id: true },
   });
   return { total: insertData.length };
 }
@@ -119,9 +120,10 @@ export async function runSlice(
       },
     });
 
+    // Not the whole row: fileData / variableMapping are big and not needed to send.
     const broadcast = await prisma.broadcast.findUnique({
       where: { id: broadcastId },
-      include: { template: true },
+      select: { createdByUserId: true, template: true },
     });
     if (!broadcast) return { ran: true, more: false };
 
@@ -294,6 +296,7 @@ async function dispatchQueued(
       await prisma.broadcast.update({
         where: { id: broadcastId },
         data: { status: "paused", pausedAt: new Date() },
+        select: { id: true },
       });
       return "paused";
     }
@@ -436,12 +439,14 @@ async function dispatchQueued(
         read: counters.read ?? 0,
         failed: counters.failed ?? 0,
       },
+      select: { id: true },
     });
   }
 
   await prisma.broadcast.update({
     where: { id: broadcastId },
     data: { status: "completed", completedAt: new Date() },
+    select: { id: true },
   });
   return "done";
 }

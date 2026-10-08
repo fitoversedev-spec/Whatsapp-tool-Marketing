@@ -43,7 +43,21 @@ export async function GET(req: NextRequest) {
     where,
     orderBy: { createdAt: "desc" },
     take: 200,
-    include: { createdBy: { select: { name: true } } },
+    select: {
+      id: true,
+      number: true,
+      customerName: true,
+      sport: true,
+      grandTotal: true,
+      amountPaid: true,
+      status: true,
+      invoiceDate: true,
+      dueDate: true,
+      contactPhone: true,
+      pdfUrl: true,
+      createdAt: true,
+      createdBy: { select: { name: true } },
+    },
   });
 
   return NextResponse.json({

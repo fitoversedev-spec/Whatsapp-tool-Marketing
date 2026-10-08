@@ -28,6 +28,7 @@ import { NextResponse } from "next/server";
 import { getScoutIdentity } from "@/lib/scout/identity";
 import { env } from "@/lib/scout/env";
 import type { SatelliteLayerResponse } from "@/components/scout/map/siteMapConfig";
+import { fetchT, isTimeoutError } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,18 +55,23 @@ let cached: CachedSession | null = null;
 const SESSION_SAFETY_MS = 60_000;
 
 async function mintSession(key: string): Promise<CachedSession> {
-  const response = await fetch(`${CREATE_SESSION_URL}?key=${encodeURIComponent(key)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      mapType: "satellite",
-      language: "en-GB",
-      region: "IN",
-      // High-DPI tiles: a surveyor is looking for a wall line, not a landmark.
-      scale: "scaleFactor2x",
-    }),
-    cache: "no-store",
-  });
+  const response = await fetchT(
+    "Google",
+    `${CREATE_SESSION_URL}?key=${encodeURIComponent(key)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mapType: "satellite",
+        language: "en-GB",
+        region: "IN",
+        // High-DPI tiles: a surveyor is looking for a wall line, not a landmark.
+        scale: "scaleFactor2x",
+      }),
+      cache: "no-store",
+    },
+    8_000,
+  );
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -127,9 +133,10 @@ export async function GET() {
     );
     const body: SatelliteLayerResponse = {
       available: false,
-      reason:
-        "Google refused a satellite tile session, so this is a street map. Check that the Map " +
-        "Tiles API is enabled on the project and that the browser key allows this origin.",
+      reason: isTimeoutError(error)
+        ? "Google's satellite service didn't respond in time, so this is a street map. Try again."
+        : "Google refused a satellite tile session, so this is a street map. Check that the Map " +
+          "Tiles API is enabled on the project and that the browser key allows this origin.",
     };
     return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
   }

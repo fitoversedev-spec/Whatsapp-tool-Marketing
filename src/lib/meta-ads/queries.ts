@@ -7,8 +7,8 @@
 //
 // CTR is returned as a FRACTION (0..1) so it feeds fmtPct() directly. Cost
 // per lead is plain rupees (there is no fmtCpl — the UI formats it with
-// fmtInr). All aggregation is done in JS (findMany + reduce), the same
-// pattern invoices.ts uses, rather than prisma groupBy.
+// fmtInr). The per-campaign roll-ups use prisma groupBy/_sum so the database
+// does the adding instead of loading every insight / lead row into memory.
 
 import { prisma } from "@/lib/prisma";
 import { fetchAdNames } from "./client";
@@ -49,32 +49,20 @@ export type AdCampaignOverview = {
 // The window is inclusive on both ends (the page's parseDateParam sets the
 // upper bound to 23:59:59, matching the analytics routes' convention).
 export async function getAdCampaignOverview({ from, to }: { from: Date; to: Date }): Promise<AdCampaignOverview> {
-  const insights = await prisma.adInsight.findMany({
-    where: { date: { gte: from, lte: to } },
-    select: {
-      campaignId: true,
-      spend: true,
-      impressions: true,
-      reach: true,
-      clicks: true,
-      leads: true,
-      campaign: { select: { metaId: true, name: true, objective: true, status: true } },
-    },
-  });
-
-  type Acc = {
-    campaignId: string;
-    metaId: string;
-    name: string;
-    objective: string | null;
-    status: string | null;
-    spend: number;
-    impressions: number;
-    reach: number;
-    clicks: number;
-    leads: number;
-  };
-  const byCampaign = new Map<string, Acc>();
+  const where = { date: { gte: from, lte: to } };
+  // One grouped sum per campaign instead of loading every daily insight row.
+  const [sums, campaignRows] = await Promise.all([
+    prisma.adInsight.groupBy({
+      by: ["campaignId"],
+      where,
+      _sum: { spend: true, impressions: true, reach: true, clicks: true, leads: true },
+    }),
+    prisma.metaCampaign.findMany({
+      where: { insights: { some: where } },
+      select: { id: true, metaId: true, name: true, objective: true, status: true },
+    }),
+  ]);
+  const campaignById = new Map(campaignRows.map((c) => [c.id, c]));
 
   let totalSpend = 0;
   let totalImpressions = 0;
@@ -85,51 +73,36 @@ export async function getAdCampaignOverview({ from, to }: { from: Date; to: Date
   // fine for a headline figure, and the only reach we have per-day.
   let totalReach = 0;
 
-  for (const row of insights) {
-    const spend = Number(row.spend);
+  const campaigns: AdCampaignRow[] = [];
+  for (const g of sums) {
+    const c = campaignById.get(g.campaignId);
+    if (!c) continue;
+    const spend = Number(g._sum.spend ?? 0);
+    const impressions = g._sum.impressions ?? 0;
+    const reach = g._sum.reach ?? 0;
+    const clicks = g._sum.clicks ?? 0;
+    const leads = g._sum.leads ?? 0;
     totalSpend += spend;
-    totalImpressions += row.impressions;
-    totalClicks += row.clicks;
-    totalLeads += row.leads;
-    totalReach += row.reach;
-
-    const acc =
-      byCampaign.get(row.campaignId) ?? {
-        campaignId: row.campaignId,
-        metaId: row.campaign.metaId,
-        name: row.campaign.name,
-        objective: row.campaign.objective,
-        status: row.campaign.status,
-        spend: 0,
-        impressions: 0,
-        reach: 0,
-        clicks: 0,
-        leads: 0,
-      };
-    acc.spend += spend;
-    acc.impressions += row.impressions;
-    acc.reach += row.reach;
-    acc.clicks += row.clicks;
-    acc.leads += row.leads;
-    byCampaign.set(row.campaignId, acc);
-  }
-
-  const campaigns: AdCampaignRow[] = [...byCampaign.values()]
-    .map((c) => ({
-      campaignId: c.campaignId,
+    totalImpressions += impressions;
+    totalClicks += clicks;
+    totalLeads += leads;
+    totalReach += reach;
+    campaigns.push({
+      campaignId: c.id,
       metaId: c.metaId,
       name: c.name,
       objective: c.objective,
       status: c.status,
-      spend: Math.round(c.spend),
-      impressions: c.impressions,
-      reach: c.reach,
-      clicks: c.clicks,
-      leads: c.leads,
-      cpl: c.leads > 0 ? c.spend / c.leads : null,
-      ctr: c.impressions > 0 ? c.clicks / c.impressions : null,
-    }))
-    .sort((a, b) => b.spend - a.spend);
+      spend: Math.round(spend),
+      impressions,
+      reach,
+      clicks,
+      leads,
+      cpl: leads > 0 ? spend / leads : null,
+      ctr: impressions > 0 ? clicks / impressions : null,
+    });
+  }
+  campaigns.sort((a, b) => b.spend - a.spend);
 
   return {
     kpis: {
@@ -140,7 +113,7 @@ export async function getAdCampaignOverview({ from, to }: { from: Date; to: Date
       totalImpressions,
       totalClicks,
       totalReach,
-      campaignCount: byCampaign.size,
+      campaignCount: campaigns.length,
     },
     campaigns,
   };
@@ -156,8 +129,7 @@ export type MetaLeadRow = {
   city: string | null; // extracted at ingest from the form's city question
   sport: string | null; // extracted at ingest from the form's sport question
   area: string | null; // extracted at ingest from the form's area/dimensions question
-  startTime: string | null; // "When are you planning to start?" answer as a tidy label (read from fieldData)
-  fieldData: string; // raw JSON string of all form answers — client parses defensively
+  startTime: string | null; // "When are you planning to start?" answer as a tidy label (derived server-side from fieldData)
   stage: string; // lead pipeline stage (NEW|CONTACTED|QUALIFIED|CONVERTED|LOST); shown + filtered in the list
   labels: { id: string; name: string; color: string }[]; // applied label chips (for the list view)
   assignedToName: string | null;
@@ -168,7 +140,9 @@ export type MetaLeadRow = {
 // Columns selected for a MetaLeadRow, shared by every lead-list query so the
 // serialization stays identical (Decimal/Date never leak; inCrm derives from
 // accountContactId — the live CRM link — not the deprecated leadId mirror).
-const META_LEAD_SELECT = {
+// fieldData is read only to derive startTime / the area fallback; it never
+// reaches a MetaLeadRow (the detail view adds it back explicitly).
+export const META_LEAD_SELECT = {
   id: true,
   fullName: true,
   phone: true,
@@ -190,7 +164,7 @@ const META_LEAD_SELECT = {
   },
 } as const;
 
-type MetaLeadSelected = {
+export type MetaLeadSelected = {
   id: string;
   fullName: string | null;
   phone: string | null;
@@ -209,14 +183,18 @@ type MetaLeadSelected = {
   labels: { label: { id: string; name: string; color: string } }[];
 };
 
-function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
-  let area = l.area;
-  if (!area && l.fieldData) {
-    try {
-      const fd = JSON.parse(l.fieldData);
-      if (Array.isArray(fd)) area = extractArea(fd);
-    } catch {}
-  }
+// Area as shown in the list: the stored column, else (older rows ingested before
+// the column existed) the answer found in the form data.
+export function deriveArea(area: string | null, fieldData: string | null | undefined): string | null {
+  if (area || !fieldData) return area;
+  try {
+    const fd = JSON.parse(fieldData);
+    if (Array.isArray(fd)) return extractArea(fd);
+  } catch {}
+  return area;
+}
+
+export function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
   return {
     id: l.id,
     fullName: l.fullName,
@@ -226,9 +204,8 @@ function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
     campaignName: l.campaignName,
     city: l.city,
     sport: l.sport,
-    area,
+    area: deriveArea(l.area, l.fieldData),
     startTime: extractStartTime(l.fieldData),
-    fieldData: l.fieldData,
     stage: l.stage,
     labels: l.labels.map((j) => j.label),
     assignedToName: l.assignedTo?.name ?? null,
@@ -240,24 +217,13 @@ function toMetaLeadRow(l: MetaLeadSelected): MetaLeadRow {
 // A lead falls in [from, to] by its Meta submit time (createdAtMeta) when
 // present, else its ingest time (createdAt) — so a lead that arrived without a
 // Meta timestamp is still windowed rather than silently dropped.
-function leadWindowWhere({ from, to }: { from: Date; to: Date }) {
+export function leadWindowWhere({ from, to }: { from: Date; to: Date }) {
   return {
     OR: [
       { createdAtMeta: { gte: from, lte: to } },
       { createdAtMeta: null, createdAt: { gte: from, lte: to } },
     ],
   };
-}
-
-// MetaLead list over [from, to].
-export async function getMetaLeads({ from, to }: { from: Date; to: Date }): Promise<MetaLeadRow[]> {
-  const leads = await prisma.metaLead.findMany({
-    where: leadWindowWhere({ from, to }),
-    orderBy: [{ createdAtMeta: "desc" }, { createdAt: "desc" }],
-    select: META_LEAD_SELECT,
-  });
-
-  return leads.map(toMetaLeadRow);
 }
 
 // One captured MetaLead by its internal id (MetaLead.id, NOT the raw Meta
@@ -289,6 +255,7 @@ export type MetaLeadReminderRow = {
 };
 
 export type MetaLeadDetail = MetaLeadRow & {
+  fieldData: string; // raw JSON string of all form answers — the detail view parses it defensively
   // stage is inherited from MetaLeadRow.
   reminderAt: string | null; // ISO, or null = "No reminder" (legacy scalar)
   assignedToUserId: string | null;
@@ -340,6 +307,7 @@ export async function getMetaLeadDetail(id: string): Promise<MetaLeadDetail | nu
 
   return {
     ...toMetaLeadRow(lead),
+    fieldData: lead.fieldData,
     reminderAt: lead.reminderAt ? lead.reminderAt.toISOString() : null,
     assignedToUserId: lead.assignedToUserId,
     assignedToName: lead.assignedTo?.name ?? null,
@@ -414,38 +382,32 @@ export async function getCampaignList(range?: { from: Date; to: Date }): Promise
   const leadWhere = range
     ? { campaignId: { not: null }, ...leadWindowWhere(range) }
     : { campaignId: { not: null as any } };
-  const [campaigns, leads] = await Promise.all([
+  // Grouped sums / counts instead of loading every insight and lead row.
+  const [campaigns, insightSums, leadCounts] = await Promise.all([
     prisma.metaCampaign.findMany({
-      select: {
-        metaId: true,
-        name: true,
-        status: true,
-        objective: true,
-        sport: true,
-        insights: { where: insightWhere, select: { spend: true, impressions: true, clicks: true, leads: true } },
-      },
+      select: { id: true, metaId: true, name: true, status: true, objective: true, sport: true },
     }),
-    prisma.metaLead.findMany({ where: leadWhere, select: { campaignId: true } }),
+    prisma.adInsight.groupBy({
+      by: ["campaignId"],
+      where: insightWhere,
+      _sum: { spend: true, impressions: true, clicks: true, leads: true },
+    }),
+    prisma.metaLead.groupBy({ by: ["campaignId"], where: leadWhere, _count: { _all: true } }),
   ]);
 
+  const sumsById = new Map(insightSums.map((g) => [g.campaignId, g._sum]));
   const capturedByMetaId = new Map<string, number>();
-  for (const l of leads) {
-    if (!l.campaignId) continue;
-    capturedByMetaId.set(l.campaignId, (capturedByMetaId.get(l.campaignId) ?? 0) + 1);
+  for (const g of leadCounts) {
+    if (g.campaignId) capturedByMetaId.set(g.campaignId, g._count._all);
   }
 
   return campaigns
     .map((c) => {
-      let spend = 0;
-      let impressions = 0;
-      let clicks = 0;
-      let insightLeads = 0;
-      for (const i of c.insights) {
-        spend += Number(i.spend);
-        impressions += i.impressions;
-        clicks += i.clicks;
-        insightLeads += i.leads;
-      }
+      const sums = sumsById.get(c.id);
+      const spend = Number(sums?.spend ?? 0);
+      const impressions = sums?.impressions ?? 0;
+      const clicks = sums?.clicks ?? 0;
+      const insightLeads = sums?.leads ?? 0;
       return {
         metaId: c.metaId,
         name: c.name,
@@ -558,20 +520,6 @@ export async function getCampaignById(
     ctr: impressions > 0 ? clicks / impressions : null,
     series,
   };
-}
-
-// The captured MetaLeads for one campaign (RAW Meta id join), newest first,
-// optionally windowed. Same MetaLeadRow shape as getMetaLeads.
-export async function getLeadsForCampaign(
-  metaId: string,
-  range?: { from: Date; to: Date }
-): Promise<MetaLeadRow[]> {
-  const leads = await prisma.metaLead.findMany({
-    where: { campaignId: metaId, ...(range ? leadWindowWhere(range) : {}) },
-    orderBy: [{ createdAtMeta: "desc" }, { createdAt: "desc" }],
-    select: META_LEAD_SELECT,
-  });
-  return leads.map(toMetaLeadRow);
 }
 
 // Active/approved users for the move-to-CRM owner picker. Same active/approved/

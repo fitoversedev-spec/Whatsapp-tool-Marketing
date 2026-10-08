@@ -144,7 +144,12 @@ export function createAnthropicExtractor(
 
   const messages =
     options.client ??
-    new Anthropic(options.apiKey ? { apiKey: options.apiKey } : {}).messages;
+    // Single call: 25 s limit, one retry (keeps the job inside the 60 s cap).
+    new Anthropic({
+      ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+      timeout: 25_000,
+      maxRetries: 1,
+    }).messages;
 
   return {
     modelVersion: model,

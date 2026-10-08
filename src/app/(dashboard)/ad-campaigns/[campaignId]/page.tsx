@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { isManagerOrAbove } from "@/lib/rbac";
-import { getCampaignById, getLeadsForCampaign, getAssignableReps, getAdLeadBreakdown, getMetaLeadLabels, getMetaLeadStages } from "@/lib/meta-ads/queries";
+import { getCampaignById, getAssignableReps, getAdLeadBreakdown, getMetaLeadLabels, getMetaLeadStages } from "@/lib/meta-ads/queries";
+import { getInitialLeadList, parseLeadRange } from "@/lib/meta-ads/lead-list";
 import CampaignDetailClient from "./CampaignDetailClient";
 
 // Detail view for one Meta ad campaign, addressed by its RAW Meta campaign id:
@@ -10,25 +11,11 @@ import CampaignDetailClient from "./CampaignDetailClient";
 // redirects a logged-out visitor who reaches the URL directly.
 //
 // Same ?from/?to convention as the CRM analytics rep drill-down and the Ad
-// Campaigns list: a blank picker means all-time (2000-01-01..now); a picked
-// range narrows to exactly that window, with the upper bound pushed to
-// end-of-day so the "to" day is fully included. Both ends are guarded against a
-// malformed param (an Invalid Date would throw when Prisma serializes the
-// filter and 500 the page). ?tab=analytics opens the Campaign analytics tab;
-// anything else opens Campaign leads.
-
-function parseFrom(raw: string | undefined): Date {
-  const fallback = new Date("2000-01-01T00:00:00Z");
-  if (!raw) return fallback;
-  const d = new Date(raw + "T00:00:00");
-  return Number.isNaN(d.getTime()) ? fallback : d;
-}
-
-function parseTo(raw: string | undefined): Date {
-  if (!raw) return new Date();
-  const d = new Date(raw + "T23:59:59");
-  return Number.isNaN(d.getTime()) ? new Date() : d;
-}
+// Campaigns list (see parseLeadRange): a blank picker means all-time
+// (2000-01-01..now); a picked range narrows to exactly that window, with the
+// upper bound pushed to end-of-day. Both ends are guarded against a malformed
+// param. ?tab=analytics opens the Campaign analytics tab; anything else opens
+// Campaign leads.
 
 export default async function CampaignDetailPage({
   params,
@@ -39,11 +26,11 @@ export default async function CampaignDetailPage({
 }) {
   const user = await requireUser();
 
-  const range = { from: parseFrom(searchParams.from), to: parseTo(searchParams.to) };
+  const range = parseLeadRange(searchParams.from, searchParams.to);
 
-  const [detail, leads, reps, adBreakdown, labelCatalog, stageCatalog] = await Promise.all([
+  const [detail, initialLeads, reps, adBreakdown, labelCatalog, stageCatalog] = await Promise.all([
     getCampaignById(params.campaignId, range),
-    getLeadsForCampaign(params.campaignId, range),
+    getInitialLeadList({ ...range, campaignId: params.campaignId }),
     getAssignableReps(),
     getAdLeadBreakdown(params.campaignId, range),
     getMetaLeadLabels(),
@@ -55,7 +42,7 @@ export default async function CampaignDetailPage({
   return (
     <CampaignDetailClient
       detail={detail}
-      leads={leads}
+      initialLeads={initialLeads}
       reps={reps}
       adBreakdown={adBreakdown}
       labelCatalog={labelCatalog}

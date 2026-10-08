@@ -382,6 +382,8 @@ function BroadcastComposer({
   const [pickerSearch, setPickerSearch] = useState("");
   const [pickerContacts, setPickerContacts] = useState<PickerContact[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
+  // How many contacts match the search (the list below shows at most 50).
+  const [pickerTotal, setPickerTotal] = useState(0);
 
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -430,16 +432,32 @@ function BroadcastComposer({
   useEffect(() => {
     if (source !== "contacts" || contactMode !== "pick") return;
     setPickerLoading(true);
+    // Set by the cleanup when the search changes, so a slow older reply can't
+    // overwrite a newer one.
+    let stale = false;
     const t = setTimeout(() => {
       const q = pickerSearch.trim();
       const url = `/api/contacts?page=1${q ? `&search=${encodeURIComponent(q)}` : ""}`;
       fetch(url)
-        .then((r) => (r.ok ? r.json() : { contacts: [] }))
-        .then((d) => setPickerContacts(d.contacts ?? []))
-        .catch(() => setPickerContacts([]))
-        .finally(() => setPickerLoading(false));
+        .then((r) => (r.ok ? r.json() : { contacts: [], total: 0 }))
+        .then((d) => {
+          if (stale) return;
+          setPickerContacts(d.contacts ?? []);
+          setPickerTotal(d.total ?? 0);
+        })
+        .catch(() => {
+          if (stale) return;
+          setPickerContacts([]);
+          setPickerTotal(0);
+        })
+        .finally(() => {
+          if (!stale) setPickerLoading(false);
+        });
     }, 200);
-    return () => clearTimeout(t);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
   }, [source, contactMode, pickerSearch]);
 
   function togglePicked(id: string) {
@@ -1149,6 +1167,11 @@ function BroadcastComposer({
                   );
                 })}
               </div>
+              {!pickerLoading && pickerTotal > pickerContacts.length && (
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Showing the first {pickerContacts.length} of {pickerTotal}. Search to narrow it down.
+                </p>
+              )}
               {!pickerLoading && pickerContacts.length > 0 && (
                 <button
                   type="button"

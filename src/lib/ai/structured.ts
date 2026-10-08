@@ -3,7 +3,7 @@
 // "respond" tool whose input_schema IS our JSON schema guarantees valid,
 // typed JSON on any recent SDK. Used by the template-drafting feature.
 import Anthropic from "@anthropic-ai/sdk";
-import { AI_MODEL, getAnthropic } from "./client";
+import { AI_MODEL, getAnthropic, singleCallOptions } from "./client";
 import { AiError, mapAnthropicError } from "./errors";
 import { assertWithinDailyCap, logAiUsage } from "./guardrails";
 
@@ -49,7 +49,7 @@ export async function generateStructured<T>(opts: StructuredOptions): Promise<St
       ],
       tool_choice: { type: "tool", name: "respond" },
       messages: [{ role: "user", content: opts.user }],
-    });
+    }, singleCallOptions());
   } catch (e) {
     throw mapAnthropicError(e);
   }

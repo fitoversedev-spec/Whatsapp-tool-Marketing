@@ -92,20 +92,38 @@ export default function ContactsClient({
   const [editing, setEditing] = useState<Contact | null>(null);
   const [crmBusyId, setCrmBusyId] = useState<string | null>(null);
 
+  // Each load gets a number; only the newest one may update the list, so a slow
+  // older reply (typing fast, paging) can't overwrite a newer one.
+  const loadSeq = useRef(0);
   const load = useCallback(
     async (opts?: { page?: number }) => {
+      const seq = ++loadSeq.current;
       setLoading(true);
-      const p = opts?.page ?? 1;
+      let p = opts?.page ?? 1;
       const params = filterParams();
-      params.set("page", String(p));
-      const res = await fetch(`/api/contacts?${params}`);
-      setLoading(false);
-      if (res.ok) {
-        const data = await res.json();
-        setContacts(data.contacts);
-        setFilteredCount(data.total);
-        setTotalPages(data.totalPages);
-        setPage(data.page);
+      try {
+        for (;;) {
+          params.set("page", String(p));
+          const res = await fetch(`/api/contacts?${params}`);
+          if (!res.ok) throw new Error("load failed");
+          const data = await res.json();
+          if (seq !== loadSeq.current) return;
+          // The page vanished (e.g. its last contacts were just deleted): show the last one.
+          if (data.contacts.length === 0 && p > 1 && data.totalPages < p) {
+            p = data.totalPages;
+            continue;
+          }
+          setContacts(data.contacts);
+          setFilteredCount(data.total);
+          setTotalPages(data.totalPages);
+          setPage(data.page);
+          return;
+        }
+      } catch {
+        if (seq !== loadSeq.current) return;
+        toast.error("Couldn't load contacts. Try again");
+      } finally {
+        if (seq === loadSeq.current) setLoading(false);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -188,6 +206,11 @@ export default function ContactsClient({
 
   function refreshAll() {
     load({ page: 1 });
+    refreshMeta();
+  }
+
+  // Field keys (column headers / filter) and the pool size, after contacts changed.
+  function refreshMeta() {
     fetch("/api/contacts/meta")
       .then((r) => r.json())
       .then((d) => {
@@ -324,6 +347,10 @@ export default function ContactsClient({
             onApplied={() => {
               setSelectedIds(new Set());
               setAllMatchingFor(null);
+              // Reload the page being viewed (tags / consent / deletes changed
+              // its rows); router.refresh() alone doesn't update this list.
+              void load({ page });
+              refreshMeta();
               router.refresh();
             }}
           />

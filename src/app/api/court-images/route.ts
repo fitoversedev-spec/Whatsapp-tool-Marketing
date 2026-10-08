@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { COURT_IMAGE_LIST_SELECT, sportsByCourtImageId } from "@/lib/court-image/list";
 import { buildCourtImageNumber } from "@/lib/court-image/schema";
 import { applyDocumentClassification, logDocumentDeleted, resolveContactForDocument } from "@/lib/crm/contactLinks";
 
@@ -75,8 +76,9 @@ export async function GET(req: NextRequest) {
     where,
     orderBy: { createdAt: "desc" },
     take: 200,
-    include: { createdBy: { select: { name: true } } },
+    select: COURT_IMAGE_LIST_SELECT,
   });
+  const sportsById = await sportsByCourtImageId(items.map((c) => c.id));
 
   return NextResponse.json({
     courtImages: items.map((c) => ({
@@ -92,8 +94,8 @@ export async function GET(req: NextRequest) {
       createdByName: c.createdBy.name,
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
-      // Sports chips in the list view — pull from the cached layout.sports.
-      sports: safeSports(c.layout),
+      // Sports chips in the list view — layout.sports, read in SQL.
+      sports: sportsById.get(c.id) ?? [],
     })),
   });
 }
@@ -234,15 +236,6 @@ export async function DELETE(req: NextRequest) {
   });
   await Promise.all(affected.map((c) => logDocumentDeleted({ kind: "design", ...c, contactPhone: null }, user.id)));
   return NextResponse.json({ ok: true, count: result.count });
-}
-
-function safeSports(layoutJson: string): string[] {
-  try {
-    const parsed = JSON.parse(layoutJson);
-    return Array.isArray(parsed?.sports) ? parsed.sports : [];
-  } catch {
-    return [];
-  }
 }
 
 // Find the next sequential number for a given calendar year by parsing

@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { parseFields } from "@/lib/contacts";
+import { listContacts, distinctFieldKeys } from "@/lib/contacts-query";
 import ContactsClient from "./ContactsClient";
 
 export default async function ContactsPage({
@@ -14,46 +14,23 @@ export default async function ContactsPage({
   // selecting a tag in the in-page filter. Empty value = no filter.
   const tagFilter = searchParams.tag?.trim() || null;
 
-  const where = tagFilter
-    ? { tags: { some: { tagId: tagFilter } } }
-    : {};
-
-  // These four queries are mutually independent, so run them concurrently
-  // instead of in a sequential waterfall (was 4 serial round-trips → now 1).
-  const [contacts, total, allForMeta, allTags] = await Promise.all([
-    prisma.contact.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      include: { tags: { include: { tag: true } } },
-    }),
-    prisma.contact.count({ where }),
-    // Collect distinct field keys for the column headers + filter UI
-    prisma.contact.findMany({ select: { fields: true } }),
+  // Independent queries, run together. Page 1 carries its own total; the whole
+  // pool is only counted separately when a tag narrows the list.
+  const [list, tagPoolTotal, fieldKeys, allTags] = await Promise.all([
+    listContacts({ tag: tagFilter }, 1),
+    tagFilter ? prisma.contact.count() : Promise.resolve(null),
+    // Distinct field keys for the column headers + filter UI; the page still
+    // renders without them if this fails.
+    distinctFieldKeys().catch((): string[] => []),
     prisma.tag.findMany({ orderBy: { name: "asc" } }),
   ]);
 
-  const fieldKeys = new Set<string>();
-  for (const c of allForMeta) {
-    for (const k of Object.keys(parseFields(c.fields))) fieldKeys.add(k);
-  }
-
   return (
     <ContactsClient
-      initialContacts={contacts.map((c) => ({
-        id: c.id,
-        phone: c.phone,
-        name: c.name,
-        allowCampaign: c.allowCampaign,
-        fields: parseFields(c.fields),
-        createdAt: c.createdAt.toISOString(),
-        tagIds: c.tags.map((ct) => ct.tag.id),
-        tags: c.tags.map((ct) => ({ id: ct.tag.id, name: ct.tag.name, color: ct.tag.color })),
-        accountContactId: c.accountContactId,
-      }))}
-      total={total}
-      poolTotal={allForMeta.length}
-      fieldKeys={Array.from(fieldKeys).sort()}
+      initialContacts={list.contacts}
+      total={list.total}
+      poolTotal={tagPoolTotal ?? list.total}
+      fieldKeys={fieldKeys}
       allTags={allTags.map((t) => ({ id: t.id, name: t.name, color: t.color }))}
       activeTagFilter={tagFilter}
       isAdmin={user.role === "admin"}

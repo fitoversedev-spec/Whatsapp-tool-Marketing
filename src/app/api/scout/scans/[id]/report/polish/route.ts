@@ -4,6 +4,7 @@ import { getScoutProfile, canAccessAllScans } from "@/lib/scout/identity";
 import { getScan } from "@/lib/scout/places/scanRepository";
 import { canGenerateAiSummary, polishSuggestions } from "@/lib/scout/reports/ai-summary";
 import { AiError, aiErrorStatus } from "@/lib/ai/errors";
+import { withAiBudget } from "@/lib/ai/client";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -43,10 +44,13 @@ export async function POST(request: Request, context: { params: { id: string } }
   }
 
   try {
-    const polished = await polishSuggestions(author.userId, rawText.trim(), {
-      areaLabel: scan.areaLabel ?? "Unknown area",
-      radiusM: scan.radiusM ?? 2000,
-    });
+    // maxDuration is 30 s here, so the AI call gets ~22 s and no retry.
+    const polished = await withAiBudget(22_000, () =>
+      polishSuggestions(author.userId, rawText.trim(), {
+        areaLabel: scan.areaLabel ?? "Unknown area",
+        radiusM: scan.radiusM ?? 2000,
+      }),
+    );
     return NextResponse.json({ polished });
   } catch (err) {
     console.error(JSON.stringify({ tag: "report.polish.api-error", scanId: id, error: err instanceof Error ? err.message : "unknown" }));

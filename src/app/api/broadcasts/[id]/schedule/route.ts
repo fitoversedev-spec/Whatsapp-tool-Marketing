@@ -11,7 +11,11 @@ const schema = z.object({
 });
 
 async function loadAndAuthorize(id: string, userId: string, role: string) {
-  const b = await prisma.broadcast.findUnique({ where: { id } });
+  // Only what the checks need — not the whole row (fileData is the uploaded sheet).
+  const b = await prisma.broadcast.findUnique({
+    where: { id },
+    select: { status: true, createdByUserId: true },
+  });
   if (!b) return { error: "not_found" as const, status: 404 };
   if (role !== "admin" && b.createdByUserId !== userId) {
     return { error: "forbidden" as const, status: 403 };
@@ -52,6 +56,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const updated = await prisma.broadcast.update({
     where: { id: params.id },
     data: { scheduledAt: candidate },
+    select: { scheduledAt: true },
   });
   return NextResponse.json({
     ok: true,
@@ -69,6 +74,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   await prisma.broadcast.update({
     where: { id: params.id },
     data: { status: "draft", scheduledAt: null },
+    select: { id: true },
   });
   return NextResponse.json({ ok: true });
 }

@@ -3,75 +3,39 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { normalizePhone } from "@/lib/phone";
-import { parseFields, contactPassesFilters, ContactFilterRule } from "@/lib/contacts";
+import { listContacts, listContactIds, CONTACTS_PAGE_SIZE } from "@/lib/contacts-query";
 
 // GET /api/contacts?search=&page=&field=&value=&tag=[&idsOnly=1]
+// Filtering and paging happen in the database (see contacts-query.ts), which
+// also trims/lower-cases the search and caps it at 200 characters.
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const sp = new URL(req.url).searchParams;
-  const search = (sp.get("search") ?? "").trim().toLowerCase();
-  const field = (sp.get("field") ?? "").trim();
-  const value = (sp.get("value") ?? "").trim();
-  const page = Math.max(1, parseInt(sp.get("page") ?? "1", 10));
-  const pageSize = 50;
-
-  const tagFilter = (sp.get("tag") ?? "").trim() || null;
-
-  // Pull all contacts (pool is small for an internal tool) and filter in memory —
-  // keeps JSON field filtering simple and consistent with the broadcast composer.
-  // Tag filter is applied at the DB level (cheaper than fetching everything).
-  const all = await prisma.contact.findMany({
-    orderBy: { createdAt: "desc" },
-    where: tagFilter ? { tags: { some: { tagId: tagFilter } } } : {},
-    include: { tags: { include: { tag: true } } },
-  });
-
-  let filtered = all.map((c) => ({
-    id: c.id,
-    phone: c.phone,
-    name: c.name,
-    allowCampaign: c.allowCampaign,
-    fields: parseFields(c.fields),
-    createdAt: c.createdAt.toISOString(),
-    tagIds: c.tags.map((ct) => ct.tag.id),
-    tags: c.tags.map((ct) => ({ id: ct.tag.id, name: ct.tag.name, color: ct.tag.color })),
-    accountContactId: c.accountContactId,
-  }));
-
-  if (search) {
-    filtered = filtered.filter((c) => {
-      if (c.phone.toLowerCase().includes(search)) return true;
-      if ((c.name ?? "").toLowerCase().includes(search)) return true;
-      // Also match any field value (Attribute 1, Location, etc.) so users can
-      // type "Salem" and find contacts where Salem appears in Attribute 1 — not
-      // just in the name. Use the precise field filter for exact-equals lookups.
-      for (const v of Object.values(c.fields)) {
-        if (String(v ?? "").toLowerCase().includes(search)) return true;
-      }
-      return false;
-    });
-  }
-
-  if (field && value) {
-    const rule: ContactFilterRule = { field, condition: "equals", value };
-    filtered = filtered.filter((c) => contactPassesFilters(c, [rule]));
-  }
-
-  const total = filtered.length;
+  const filter = {
+    search: sp.get("search"),
+    field: sp.get("field"),
+    value: sp.get("value"),
+    tag: sp.get("tag"),
+  };
 
   // ?idsOnly=1 — every matching id, unpaged: "Select all N matching" on the
   // Contacts page and in a group's "Add people" picker.
   if (sp.get("idsOnly") === "1") {
-    return NextResponse.json({ ids: filtered.map((c) => c.id), total });
+    const ids = await listContactIds(filter);
+    return NextResponse.json({ ids, total: ids.length });
   }
 
-  const start = (page - 1) * pageSize;
-  const pageItems = filtered.slice(start, start + pageSize);
+  // parseInt gives NaN for junk like ?page=abc; fall back to page 1.
+  const rawPage = Number.parseInt(sp.get("page") ?? "1", 10);
+  const page = Number.isFinite(rawPage) && rawPage >= 1 ? Math.min(rawPage, 100_000) : 1;
+  const pageSize = CONTACTS_PAGE_SIZE;
+
+  const { contacts, total } = await listContacts(filter, page);
 
   return NextResponse.json({
-    contacts: pageItems,
+    contacts,
     total,
     page,
     pageSize,

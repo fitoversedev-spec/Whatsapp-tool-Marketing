@@ -8,7 +8,7 @@
 // product (with its ProductMedia gallery, already sorted by sortOrder) via
 // getProduct(); unknown ids 404 through notFound().
 
-import { Fragment } from "react";
+import { Fragment, cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProduct } from "@/lib/products/store";
@@ -17,6 +17,11 @@ import { htmlToWhatsappText } from "@/lib/products/format";
 // Product content is DB-backed and edited live from the Products page, so
 // never statically cache this route — always render the current record.
 export const dynamic = "force-dynamic";
+
+// generateMetadata and the page both need the product; cache() shares one DB
+// read between them within the same request only (nothing is kept across
+// requests, so edits show instantly).
+const getProductOnce = cache((id: string) => getProduct(id));
 
 const TYPE_LABELS: Record<string, string> = {
   flooring: "Flooring",
@@ -38,7 +43,7 @@ export async function generateMetadata({
 }: {
   params: { id: string };
 }): Promise<Metadata> {
-  const product = await getProduct(params.id).catch(() => null);
+  const product = await getProductOnce(params.id).catch(() => null);
   if (!product) return { title: "Product — Fitoverse" };
   const desc = htmlToWhatsappText(product.description)
     .replace(/[*_]/g, "")
@@ -121,7 +126,7 @@ export default async function ProductPage({
 }: {
   params: { id: string };
 }) {
-  const product = await getProduct(params.id);
+  const product = await getProductOnce(params.id);
   if (!product) notFound();
 
   const description = htmlToWhatsappText(product.description);

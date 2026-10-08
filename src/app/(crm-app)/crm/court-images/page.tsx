@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { COURT_IMAGE_LIST_SELECT, sportsByCourtImageId } from "@/lib/court-image/list";
 import CourtImagesClient from "@/app/(dashboard)/court-images/CourtImagesClient";
 
 export default async function CrmCourtImagesPage() {
@@ -10,8 +11,9 @@ export default async function CrmCourtImagesPage() {
     where,
     orderBy: { createdAt: "desc" },
     take: 200,
-    include: { createdBy: { select: { name: true } } },
+    select: COURT_IMAGE_LIST_SELECT,
   });
+  const sportsById = await sportsByCourtImageId(rows.map((c) => c.id));
 
   return (
     <CourtImagesClient
@@ -28,17 +30,8 @@ export default async function CrmCourtImagesPage() {
         sentAt: c.sentAt?.toISOString() ?? null,
         createdByName: c.createdBy.name,
         createdAt: c.createdAt.toISOString(),
-        sports: safeSports(c.layout),
+        sports: sportsById.get(c.id) ?? [],
       }))}
     />
   );
-}
-
-function safeSports(layoutJson: string): string[] {
-  try {
-    const parsed = JSON.parse(layoutJson);
-    return Array.isArray(parsed?.sports) ? parsed.sports : [];
-  } catch {
-    return [];
-  }
 }

@@ -8,10 +8,12 @@ const WABA_ID = process.env.META_WABA_ID || "";
 // axios has NO default timeout — a hung/slow Meta Graph endpoint would block
 // forever. That stalls the interactive-reply route, and (worse) freezes the
 // whole paced broadcast loop indefinitely on a single dead send. Bound every
-// call: 30s for JSON message calls, 60s for the (potentially large) inbound
-// media byte download.
-const META_TIMEOUT_MS = 30_000;
-const META_MEDIA_TIMEOUT_MS = 60_000;
+// call: 20s for message sends, 15s for small lookups (media metadata, template
+// list), 30s for the (potentially large) inbound media byte download. All stay
+// well under Vercel's 60s function cap.
+const META_TIMEOUT_MS = 20_000;
+const META_LOOKUP_TIMEOUT_MS = 15_000;
+const META_MEDIA_TIMEOUT_MS = 30_000;
 
 const messagesUrl = () => `https://graph.facebook.com/${API_VERSION}/${PHONE_NUMBER_ID}/messages`;
 const wabaTemplatesUrl = () => `https://graph.facebook.com/${API_VERSION}/${WABA_ID}/message_templates`;
@@ -193,7 +195,7 @@ export async function fetchInboundMedia(mediaId: string): Promise<{
   const token = await getMetaAccessToken();
   const metaRes = await axios.get(
     `https://graph.facebook.com/${API_VERSION}/${mediaId}`,
-    { headers: { Authorization: `Bearer ${token}` }, timeout: META_TIMEOUT_MS }
+    { headers: { Authorization: `Bearer ${token}` }, timeout: META_LOOKUP_TIMEOUT_MS }
   );
   const url: string = metaRes.data?.url;
   const mimeType: string = metaRes.data?.mime_type ?? "application/octet-stream";
@@ -219,7 +221,7 @@ export async function listTemplates() {
   const res = await axios.get(wabaTemplatesUrl(), {
     headers: await authHeaders(),
     params: { limit: 200 },
-    timeout: META_TIMEOUT_MS,
+    timeout: META_LOOKUP_TIMEOUT_MS,
   });
   return res.data?.data ?? [];
 }
@@ -293,6 +295,18 @@ export async function isMetaConfigured() {
 }
 
 export function describeMetaError(err: unknown): { code: string; message: string } {
+  // No response at all + a timeout code: the request may still have gone through.
+  if (
+    err instanceof AxiosError &&
+    !err.response &&
+    (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT" || /timeout/i.test(err.message))
+  ) {
+    return {
+      code: "timeout",
+      message:
+        "WhatsApp didn't respond in time. The message may still have been delivered — check the chat before sending again.",
+    };
+  }
   if (err instanceof AxiosError && err.response?.data?.error) {
     const e = err.response.data.error;
     return { code: String(e.code ?? "unknown"), message: e.message ?? "Meta error" };

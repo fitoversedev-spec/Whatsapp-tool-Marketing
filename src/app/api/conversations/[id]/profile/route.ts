@@ -51,7 +51,17 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         where: { conversationId: convo.id },
         orderBy: { createdAt: "desc" },
         take: 20,
-        include: { createdBy: { select: { name: true } } },
+        select: {
+          id: true,
+          number: true,
+          grandTotal: true,
+          status: true,
+          pdfUrl: true,
+          quoteDate: true,
+          sentAt: true,
+          createdAt: true,
+          createdBy: { select: { name: true } },
+        },
       }),
       prisma.reminder.findMany({
         where: {

@@ -8,7 +8,7 @@ import { publicTaxonomy, type CustomCategoryRow } from "@/lib/scout/places/taxon
 import { defaultBlockState } from "@/lib/scout/reports/blocks";
 import { latestGeneratedReport, reportLink } from "@/lib/scout/reports/generate";
 import { getReportDraft } from "@/lib/scout/reports/repository";
-import { getScanScreenData } from "@/lib/scout/scans/screenData";
+import { getScanScreenDataOnce } from "@/lib/scout/scans/screenData";
 import { ScanPageClient } from "../ScanPageClient";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export async function generateMetadata({
   const identity = await getScoutIdentity();
   if (!identity?.canRunScans) return { title: "Scan — Site Scout" };
   const { id } = params;
-  const data = await getScanScreenData(identity, id);
+  const data = await getScanScreenDataOnce(identity, id);
   return { title: data ? `${data.areaLabel} — Site Scout` : "Scan — Site Scout" };
 }
 
@@ -32,7 +32,7 @@ export default async function ScanDetailPage({ params }: { params: { id: string 
 
   const { id } = params;
   const [data, author, customs] = await Promise.all([
-    getScanScreenData(identity, id),
+    getScanScreenDataOnce(identity, id),
     getScoutProfile(),
     prisma.customCategory.findMany({
       select: { id: true, label: true, side: true, searchQuery: true, googleType: true },

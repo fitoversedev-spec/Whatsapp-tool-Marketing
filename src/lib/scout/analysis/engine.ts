@@ -1,7 +1,8 @@
 import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
-import { AI_MODEL, getAnthropic } from "@/lib/ai/client";
+import { AI_LOOP_TOTAL_MS, AI_MODEL, getAnthropic } from "@/lib/ai/client";
+import { deadline } from "@/lib/http";
 import { mapAnthropicError } from "@/lib/ai/errors";
 import { logAiUsage } from "@/lib/ai/guardrails";
 import { generateStructured } from "@/lib/ai/structured";
@@ -101,21 +102,32 @@ async function runWebSearch(
   let totalInput = 0;
   let totalOutput = 0;
   const accumulatedText: string[] = [];
+  // Overall time budget so the whole search stays inside the function cap.
+  const clock = deadline(AI_LOOP_TOTAL_MS);
 
   try {
     let response: Anthropic.Message;
     let rounds = 0;
 
     while (rounds < MAX_SEARCH_ROUNDS) {
+      // Not enough time for another round: stop here and return what we have
+      // (flagged as limited, same as running out of rounds).
+      if (rounds > 0 && clock.remaining() < 12_000) break;
       rounds++;
-      response = await client.messages.create({
-        model: AI_MODEL,
-        max_tokens: 4000,
-        thinking: { type: "disabled" },
-        system: SEARCH_SYSTEM_PROMPT,
-        tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }],
-        messages,
-      });
+      response = await client.messages.create(
+        {
+          model: AI_MODEL,
+          max_tokens: 4000,
+          thinking: { type: "disabled" },
+          system: SEARCH_SYSTEM_PROMPT,
+          tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }],
+          messages,
+        },
+        {
+          timeout: Math.max(2_000, Math.min(30_000, clock.remaining() - 3_000)),
+          maxRetries: 0,
+        },
+      );
 
       totalInput += response.usage.input_tokens;
       totalOutput += response.usage.output_tokens;
@@ -151,6 +163,16 @@ async function runWebSearch(
       searchLimited: true,
     };
   } catch (e) {
-    throw mapAnthropicError(e);
+    const mapped = mapAnthropicError(e);
+    // A slow later round shouldn't throw away what earlier rounds found.
+    if (mapped.code === "timeout" && accumulatedText.length > 0) {
+      return {
+        text: accumulatedText.join("\n\n"),
+        inputTokens: totalInput,
+        outputTokens: totalOutput,
+        searchLimited: true,
+      };
+    }
+    throw mapped;
   }
 }

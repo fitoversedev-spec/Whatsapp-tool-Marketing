@@ -14,6 +14,7 @@
 
 import { useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
+import { uploadFile } from "@/lib/blob-client";
 
 export type CatalogueRow = {
   sport: string;
@@ -53,11 +54,19 @@ export default function CatalogueUploadsPanel({
     }
     setBusySport(sport);
     try {
-      const form = new FormData();
-      form.append("file", file);
+      // Straight to Blob (a function body is capped at 4.5 MB); the server then
+      // curates the deck and records it.
+      let blob;
+      try {
+        blob = await uploadFile(file, "catalogue");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Upload failed");
+        return;
+      }
       const res = await fetch(`/api/catalogues/${sport}/upload`, {
         method: "POST",
-        body: form,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
       });
       const data = await res.json();
       if (!res.ok) {

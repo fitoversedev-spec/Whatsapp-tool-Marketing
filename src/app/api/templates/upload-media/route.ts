@@ -17,31 +17,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { getCurrentUser } from "@/lib/auth";
-
-type HeaderType = "IMAGE" | "VIDEO" | "DOCUMENT";
-
-// Meta's WhatsApp Cloud API supported media types for templates.
-// Source: developers.facebook.com/docs/whatsapp/cloud-api/reference/media
-const ALLOWED_MIME: Record<HeaderType, readonly string[]> = {
-  IMAGE: ["image/jpeg", "image/png"],
-  VIDEO: ["video/mp4", "video/3gpp"],
-  DOCUMENT: [
-    "application/pdf",
-    "application/vnd.ms-powerpoint",
-    "application/msword",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "text/plain",
-  ],
-};
-
-const MAX_SIZE_BYTES: Record<HeaderType, number> = {
-  IMAGE: 5 * 1024 * 1024,
-  VIDEO: 16 * 1024 * 1024,
-  DOCUMENT: 100 * 1024 * 1024,
-};
+import {
+  TEMPLATE_ALLOWED_MIME as ALLOWED_MIME,
+  TEMPLATE_MAX_BYTES as MAX_SIZE_BYTES,
+  type TemplateHeaderType as HeaderType,
+} from "@/lib/blob-rules";
+import { blobFileName, readUploadForm, takeBlobField } from "@/lib/blob-policy";
 
 export const runtime = "nodejs"; // needed for formData() and @vercel/blob
 
@@ -51,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   let formData: FormData;
   try {
-    formData = await req.formData();
+    formData = await readUploadForm(req);
   } catch {
     return NextResponse.json({ error: "expected multipart/form-data" }, { status: 400 });
   }
@@ -59,6 +40,22 @@ export async function POST(req: NextRequest) {
   const file = formData.get("file");
   const headerTypeRaw = String(formData.get("headerType") ?? "").toUpperCase();
   const headerType = headerTypeRaw as HeaderType;
+
+  // Large files arrive as a Blob URL (browser uploaded them straight to Blob);
+  // the multipart `file` path stays for tabs opened before this change.
+  const ref = await takeBlobField(formData, "blobUrl", "template", headerTypeRaw);
+  if (ref) {
+    if (!ref.ok) return NextResponse.json({ error: ref.error }, { status: ref.status });
+    return NextResponse.json({
+      ok: true,
+      url: ref.blob.url,
+      pathname: ref.blob.pathname,
+      format: headerType,
+      contentType: ref.blob.contentType,
+      size: ref.blob.size,
+      filename: blobFileName(formData, ref.blob),
+    });
+  }
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Missing 'file' field" }, { status: 400 });

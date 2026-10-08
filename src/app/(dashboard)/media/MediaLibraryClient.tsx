@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import MediaPreview from "@/components/MediaPreview";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 import { useToast } from "@/components/Toast";
+import { uploadFile } from "@/lib/blob-client";
 
 type Media = {
   id: string;
@@ -44,6 +45,7 @@ export default function MediaLibraryClient({
   const [media, setMedia] = useState<Media[]>(initialMedia);
   const [category, setCategory] = useState<string>("all");
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(
@@ -62,10 +64,15 @@ export default function MediaLibraryClient({
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadPct(0);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/media/upload", { method: "POST", body: fd });
+      // Straight to Blob (a function body is capped at 4.5 MB), then record it.
+      const blob = await uploadFile(file, "media", setUploadPct);
+      const res = await fetch("/api/media/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+      });
       if (res.ok) {
         const data = await res.json();
         setMedia((prev) => [
@@ -77,7 +84,12 @@ export default function MediaLibraryClient({
           },
           ...prev,
         ]);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Upload failed");
       }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -142,7 +154,7 @@ export default function MediaLibraryClient({
         description={`${media.length} file${media.length === 1 ? "" : "s"} · ${humanSize(totalBytes)} total`}
         action={
           <label className="btn btn-primary cursor-pointer" data-guide="wa-media-upload">
-            {uploading ? "Uploading…" : "+ Upload"}
+            {uploading ? `Uploading… ${uploadPct}%` : "+ Upload"}
             <input type="file" className="hidden" onChange={handleFile} disabled={uploading} />
           </label>
         }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, FormEvent } from "react";
+import { useState, useRef, startTransition, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast } from "@/components/Toast";
@@ -27,6 +27,8 @@ const ContactInsightSection = dynamic(() => import("./ContactInsightSection"), {
 import WonDealModal from "@/components/crm/WonDealModal";
 import { postQuoteSend } from "@/lib/quotation/send-client";
 import { safeFetch } from "@/lib/safe-fetch";
+import { uploadFile } from "@/lib/blob-client";
+import { useSyncedState } from "@/lib/use-synced-state";
 
 type Contact = {
   id: string; name: string; phone: string | null; email: string | null;
@@ -116,6 +118,35 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+// Rows built from API responses, in the same shape page.tsx hands the component.
+function toNoteRow(n: any): ContactNoteRow | null {
+  if (!n?.id) return null;
+  return {
+    id: n.id, title: n.title ?? null, body: n.body, createdAt: new Date(n.createdAt).toISOString(),
+    authorName: n.author?.name ?? "", authorUserId: n.authorUserId,
+    editedAt: n.editedAt ? new Date(n.editedAt).toISOString() : null,
+  };
+}
+function toAttachmentRow(a: any): AttachmentRow | null {
+  if (!a?.id) return null;
+  return {
+    id: a.id, fileName: a.fileName, fileUrl: a.fileUrl, fileSize: a.fileSize, mimeType: a.mimeType,
+    createdAt: new Date(a.createdAt).toISOString(), uploadedByName: a.uploadedBy?.name ?? "",
+  };
+}
+// The PATCH response holds the raw row, where fields is a JSON string.
+function toFieldsObject(raw: unknown, fallback: Record<string, string>): Record<string, string> {
+  let v = raw;
+  if (typeof v === "string") { try { v = JSON.parse(v); } catch { return fallback; } }
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, string>) : fallback;
+}
+// Stage / Leads state after a PATCH: the response's values win over what was sent.
+async function readLeadFields(res: Response, sent: Partial<Contact>): Promise<Partial<Contact>> {
+  const saved = (await res.json().catch(() => null))?.contact;
+  if (!saved) return sent;
+  return { ...sent, leadStageId: saved.leadStageId ?? null, pipelineStage: saved.pipelineStage ?? null };
+}
+
 const SECTIONS = [
   { id: "details", label: "Details" },
   { id: "next-actions", label: "Next actions" },
@@ -131,7 +162,7 @@ const SECTIONS = [
 ];
 
 export default function ContactDetailClient({
-  contact, viewer, leadStages, assignableUsers, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, customerProfiles, contactNotes, reminders, attachments, leadSources, nextActions, insights,
+  contact: contactProp, viewer, leadStages, assignableUsers, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, customerProfiles, contactNotes: contactNotesProp, reminders: remindersProp, attachments: attachmentsProp, leadSources, nextActions, insights,
 }: {
   contact: Contact; viewer: Viewer; leadStages: LeadStageOption[]; assignableUsers: UserOption[];
   deals: Deal[]; activities: ActivityRow[]; quotations: QuotationRow[]; courtImages: CourtImageRow[];
@@ -144,7 +175,30 @@ export default function ContactDetailClient({
 }) {
   const router = useRouter();
   const toast = useToast();
+  // Small edits patch these copies at once instead of re-running the whole
+  // page on the server; a later router.refresh() replaces them with fresh data.
+  const [contact, setContact] = useSyncedState(contactProp);
+  const [contactNotes, setContactNotes] = useSyncedState(contactNotesProp);
+  const [reminders, setReminders] = useSyncedState(remindersProp);
+  const [attachments, setAttachments] = useSyncedState(attachmentsProp);
   const [tab, setTab] = useState<"overview" | "calls-meetings" | "timeline">("overview");
+  // The Timeline renders only on its tab, so a patched edit just flags it stale;
+  // it is refetched when the tab opens (or right away if already open).
+  const tabRef = useRef(tab);
+  const timelineStale = useRef(false);
+  const softRefresh = () => startTransition(() => router.refresh());
+  function changeTab(t: "overview" | "calls-meetings" | "timeline") {
+    tabRef.current = t;
+    setTab(t);
+    if (t === "timeline" && timelineStale.current) {
+      timelineStale.current = false;
+      router.refresh();
+    }
+  }
+  function markTimelineStale() {
+    if (tabRef.current === "timeline") softRefresh();
+    else timelineStale.current = true;
+  }
   const [showProductPicker, setShowProductPicker] = useState(false);
   // "Link existing" on the Quotations section — search across every
   // quotation (not just this contact's own deals) and send one straight to
@@ -173,6 +227,7 @@ export default function ContactDetailClient({
   const [completionNoteDraft, setCompletionNoteDraft] = useState("");
   const [completingBusy, setCompletingBusy] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [syncing, setSyncing] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
@@ -194,11 +249,13 @@ export default function ContactDetailClient({
     });
     setSavingNote(false);
     if (res.ok) {
+      const added = toNoteRow((await res.json().catch(() => null))?.note);
       setNoteTitle("");
       setNoteBody("");
       setShowAddNote(false);
       toast.success("Note added");
-      router.refresh();
+      if (added) { setContactNotes((list) => [added, ...list]); markTimelineStale(); }
+      else softRefresh(); // response unreadable, so fall back to fresh server data
     } else {
       toast.error("Could not save note");
     }
@@ -227,9 +284,11 @@ export default function ContactDetailClient({
     });
     setSavingNoteEdit(false);
     if (res.ok) {
+      const updated = toNoteRow((await res.json().catch(() => null))?.note);
       setEditingNoteId(null);
       toast.success("Note updated");
-      router.refresh();
+      if (updated) { setContactNotes((list) => list.map((x) => (x.id === updated.id ? updated : x))); markTimelineStale(); }
+      else softRefresh();
     } else {
       toast.error("Could not update note");
     }
@@ -238,7 +297,11 @@ export default function ContactDetailClient({
   async function deleteNote(n: ContactNoteRow) {
     if (!confirm("Delete this note? The Timeline will still show it was added and deleted.")) return;
     const res = await safeFetch(`/api/account-contacts/${contact.id}/notes/${n.id}`, { method: "DELETE" });
-    if (res.ok) { toast.success("Note deleted"); router.refresh(); }
+    if (res.ok) {
+      toast.success("Note deleted");
+      setContactNotes((list) => list.filter((x) => x.id !== n.id));
+      markTimelineStale();
+    }
     else toast.error("Could not delete note");
   }
 
@@ -247,7 +310,7 @@ export default function ContactDetailClient({
   const [nextActionAddSignal, setNextActionAddSignal] = useState(0);
   const [insightAddSignal, setInsightAddSignal] = useState(0);
   function openAdd(section: "next-actions" | "insight") {
-    setTab("overview");
+    changeTab("overview");
     if (section === "next-actions") setNextActionAddSignal((n) => n + 1);
     else setInsightAddSignal((n) => n + 1);
     // After the Overview (and its section) has rendered.
@@ -268,7 +331,9 @@ export default function ContactDetailClient({
     setSavingStage(false);
     if (res.ok) {
       toast.success(stageId ? `Stage set to ${leadStages.find((s) => s.id === stageId)?.name ?? "new stage"}` : "Stage cleared");
-      router.refresh();
+      const lead = await readLeadFields(res, { leadStageId: stageId || null });
+      setContact((c) => ({ ...c, ...lead }));
+      markTimelineStale();
     } else {
       const err = await res.json().catch(() => ({}));
       toast.error(err.error ?? "Could not change stage");
@@ -289,7 +354,8 @@ export default function ContactDetailClient({
     setAssigning(false);
     if (res.ok) {
       toast.success(userId ? `Now handled by ${toName}` : "Rep removed");
-      router.refresh();
+      setContact((c) => ({ ...c, ownerUserId: userId || null, ownerName: userId ? toName : null }));
+      markTimelineStale();
     } else {
       const err = await res.json().catch(() => ({}));
       toast.error(err.error ?? "Could not assign rep");
@@ -305,7 +371,12 @@ export default function ContactDetailClient({
       body: JSON.stringify({ pipelineStage: null }),
     });
     setRemovingLead(false);
-    if (res.ok) { toast.success("Removed from Leads"); router.refresh(); }
+    if (res.ok) {
+      toast.success("Removed from Leads");
+      const lead = await readLeadFields(res, { pipelineStage: null });
+      setContact((c) => ({ ...c, ...lead }));
+      markTimelineStale();
+    }
     else toast.error("Could not remove from Leads");
   }
 
@@ -403,9 +474,32 @@ export default function ContactDetailClient({
     });
     setSaving(false);
     if (res.ok) {
+      const saved = (await res.json().catch(() => null))?.contact;
+      const source = leadSources.find((s) => s.id === leadSourceId);
+      // What was sent, overridden by what the server returned. City, segment and
+      // business type live on the account and may not come back in the response.
+      setContact((c) => ({
+        ...c,
+        name: saved?.name ?? name.trim(),
+        phone: saved ? saved.phone ?? null : phone.trim() || null,
+        email: saved ? saved.email ?? null : email.trim() || null,
+        designation: saved ? saved.designation ?? null : resolvedDesignation,
+        notes: saved ? saved.notes ?? null : composedNotes,
+        isPrimary: saved?.isPrimary ?? isPrimary,
+        fields: toFieldsObject(saved?.fields, fields),
+        leadSourceId: saved ? saved.leadSourceId ?? null : leadSourceId || null,
+        leadSourceName: source?.name ?? null,
+        leadSourceColor: source?.colorHex ?? null,
+        accountCity: siteCity.trim() || null,
+        accountCustomerProfileId: customerProfileId || null,
+        accountBusinessType: resolvedBusinessType,
+      }));
       setEditing(false);
       toast.success("Contact updated");
-      router.refresh();
+      // Quotations and chats are matched by phone, so a new number needs the
+      // server's lists; anything else is already patched above.
+      if ((saved?.phone ?? (phone.trim() || null)) !== contact.phone) softRefresh();
+      else markTimelineStale();
     } else {
       toast.error("Could not save changes");
     }
@@ -426,7 +520,6 @@ export default function ContactDetailClient({
       postCrossTab("marketing:contact-added");
     } else if (data.skippedNoPhone > 0) toast.error("This contact has no phone number to sync");
     else toast.error("Could not sync");
-    router.refresh();
   }
 
   async function unlinkFromCrm() {
@@ -442,7 +535,6 @@ export default function ContactDetailClient({
     toast.success("Removed from CRM");
     postCrossTab("marketing:data-changed");
     router.push("/crm/contacts");
-    router.refresh();
   }
 
   // Reuses the same /send endpoints the standalone Quotations/Court Designs
@@ -532,19 +624,32 @@ export default function ContactDetailClient({
     });
     setCompletingBusy(false);
     if (res.ok) {
+      const completedAt: string = (await res.json().catch(() => null))?.reminder?.completedAt ?? new Date().toISOString();
+      const note = completionNoteDraft.trim() || null;
+      setReminders((list) => list.map((r) => (r.id === id ? { ...r, completedAt, completionNote: note } : r)));
       setCompletingReminderId(null);
       setCompletionNoteDraft("");
       toast.success("Marked complete");
-      router.refresh();
+      softRefresh(); // the server also ticks a linked Next action
     } else {
       toast.error("Could not update reminder");
     }
   }
 
+  function onReminderSaved(id: string, patch: Partial<ReminderRow>) {
+    setReminders((list) => list.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setEditingReminderId(null);
+    softRefresh();
+  }
+
   async function deleteReminder(id: string) {
     if (!confirm("Delete this activity? This cannot be undone.")) return;
     const res = await safeFetch(`/api/reminders/${id}`, { method: "DELETE" });
-    if (res.ok) { toast.success("Activity deleted"); router.refresh(); }
+    if (res.ok) {
+      toast.success("Activity deleted");
+      setReminders((list) => list.filter((r) => r.id !== id));
+      markTimelineStale();
+    }
     else toast.error("Could not delete activity");
   }
 
@@ -565,7 +670,13 @@ export default function ContactDetailClient({
       body: JSON.stringify({ pipelineStage: "LEAD" }),
     });
     setConvertingLead(false);
-    if (res.ok) { toast.success("Moved to Leads"); router.refresh(); }
+    if (res.ok) {
+      toast.success("Moved to Leads");
+      // The server may also have given it the first stage, so take it from the response.
+      const lead = await readLeadFields(res, { pipelineStage: "LEAD" });
+      setContact((c) => ({ ...c, ...lead }));
+      markTimelineStale();
+    }
     else toast.error("Could not move to Leads");
   }
 
@@ -733,7 +844,7 @@ export default function ContactDetailClient({
             reminder={r}
             activityTypes={activityTypes}
             onCancel={() => setEditingReminderId(null)}
-            onSaved={() => { setEditingReminderId(null); router.refresh(); }}
+            onSaved={(patch) => onReminderSaved(r.id, patch)}
           />
         )}
         {completingReminderId === r.id && (
@@ -761,15 +872,25 @@ export default function ContactDetailClient({
   async function uploadAttachments(files: File[]) {
     if (!files.length) return;
     setUploadingFile(true);
+    setUploadPct(0);
+    const pcts = files.map(() => 0);
     const results = await Promise.allSettled(
-      files.map(async (file) => {
-        const form = new FormData();
-        form.append("file", file);
-        const res = await safeFetch(`/api/account-contacts/${contact.id}/attachments`, { method: "POST", body: form });
+      files.map(async (file, i) => {
+        // Straight to Blob (a function body is capped at 4.5 MB), then record it.
+        const blob = await uploadFile(file, "contact", (p) => {
+          pcts[i] = p;
+          setUploadPct(Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length));
+        });
+        const res = await safeFetch(`/api/account-contacts/${contact.id}/attachments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+        });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error ?? `Upload failed: ${file.name}`);
         }
+        return toAttachmentRow((await res.json().catch(() => null))?.attachment);
       }),
     );
     setUploadingFile(false);
@@ -782,7 +903,12 @@ export default function ContactDetailClient({
     } else {
       toast.error("Upload failed");
     }
-    router.refresh();
+    const uploaded = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+    if (uploaded.length === 0) return;
+    if (uploaded.some((a) => !a)) { softRefresh(); return; } // a response was unreadable
+    const added = uploaded as AttachmentRow[];
+    setAttachments((list) => [...added, ...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    markTimelineStale();
   }
 
   async function deleteAttachment(id: string) {
@@ -790,7 +916,8 @@ export default function ContactDetailClient({
     const res = await safeFetch(`/api/account-contacts/${contact.id}/attachments/${id}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("File deleted");
-      router.refresh();
+      setAttachments((list) => list.filter((a) => a.id !== id));
+      markTimelineStale();
     } else {
       toast.error("Could not delete file");
     }
@@ -986,7 +1113,7 @@ export default function ContactDetailClient({
         {(["overview", "calls-meetings", "timeline"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => changeTab(t)}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
               tab === t ? "border-court-600 text-court-700" : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
@@ -1547,7 +1674,7 @@ export default function ContactDetailClient({
                                   reminder={r}
                                   activityTypes={activityTypes}
                                   onCancel={() => setEditingReminderId(null)}
-                                  onSaved={() => { setEditingReminderId(null); router.refresh(); }}
+                                  onSaved={(patch) => onReminderSaved(r.id, patch)}
                                 />
                               );
                             })()}
@@ -1675,7 +1802,7 @@ export default function ContactDetailClient({
                   onChange={(e) => { const fl = e.target.files; if (fl?.length) uploadAttachments(Array.from(fl)); }}
                 />
               </div>
-              {uploadingFile && <p className="text-sm text-slate-400 mb-2">Uploading...</p>}
+              {uploadingFile && <p className="text-sm text-slate-400 mb-2">Uploading... {uploadPct}%</p>}
               {attachments.length === 0 ? (
                 <p className="text-sm text-slate-400">No files uploaded yet.</p>
               ) : (
@@ -1915,7 +2042,7 @@ function InlineEditForm({
   reminder, activityTypes, onCancel, onSaved,
 }: {
   reminder: ReminderRow; activityTypes: ActivityTypeOption[];
-  onCancel: () => void; onSaved: () => void;
+  onCancel: () => void; onSaved: (patch: Partial<ReminderRow>) => void;
 }) {
   const toast = useToast();
   const [message, setMessage] = useState(reminder.message);
@@ -1946,7 +2073,19 @@ function InlineEditForm({
       }),
     });
     setSaving(false);
-    if (res.ok) { toast.success("Activity updated"); onSaved(); }
+    if (res.ok) {
+      toast.success("Activity updated");
+      onSaved({
+        message: message.trim(),
+        dueAt: dueAt.toISOString(),
+        activityTypeId: activityTypeId || null,
+        activityTypeName: activityTypes.find((t) => t.id === activityTypeId)?.name ?? null,
+        priority: priority || null,
+        notes: notes.trim() || null,
+        meetingUrl: meetingUrl.trim() || null,
+        location: location.trim() || null,
+      });
+    }
     else toast.error("Could not update activity");
   }
 
@@ -2313,6 +2452,7 @@ function AttachQuotationModal({
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -2383,9 +2523,19 @@ function AttachQuotationModal({
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    const form = new FormData();
-    form.append("file", file);
-    const res = await safeFetch(`/api/account-contacts/${contactId}/attachments`, { method: "POST", body: form }).catch(() => null);
+    setUploadPct(0);
+    let res: Response | null = null;
+    try {
+      // Straight to Blob (a function body is capped at 4.5 MB), then record it.
+      const blob = await uploadFile(file, "contact", setUploadPct);
+      res = await safeFetch(`/api/account-contacts/${contactId}/attachments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+      });
+    } catch {
+      res = null;
+    }
     setUploading(false);
     if (res?.ok) {
       toast.success(`${file.name} uploaded to ${contactName}'s attachments`);
@@ -2457,7 +2607,7 @@ function AttachQuotationModal({
             disabled={uploading}
             className="btn btn-secondary text-sm"
           >
-            {uploading ? "Uploading..." : "Upload file"}
+            {uploading ? `Uploading... ${uploadPct}%` : "Upload file"}
           </button>
           <button onClick={onClose} className="flex-1 btn btn-secondary">Close</button>
         </div>

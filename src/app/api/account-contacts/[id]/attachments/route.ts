@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { categorize, MAX_SIZE, uploadToBlob } from "@/lib/media";
+import { blobFileName, readUploadForm, takeBlobField } from "@/lib/blob-policy";
 import { loadContactForUser } from "@/lib/crm/contactAccess";
 
 export const runtime = "nodejs";
@@ -36,43 +37,61 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   let form: FormData;
   try {
-    form = await req.formData();
+    form = await readUploadForm(req);
   } catch {
     return NextResponse.json({ error: "expected multipart/form-data" }, { status: 400 });
   }
 
-  const file = form.get("file");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Missing 'file' field" }, { status: 400 });
-  }
-
-  const cat = categorize(file.type);
-  if (file.size > MAX_SIZE[cat]) {
-    const limitMb = (MAX_SIZE[cat] / 1024 / 1024).toFixed(0);
-    return NextResponse.json({ error: `File too large. Max ${limitMb}MB for ${cat} files.` }, { status: 413 });
-  }
-
+  // Large files arrive as a Blob URL (browser uploaded them straight to Blob);
+  // the multipart `file` path stays for tabs opened before this change.
   let url: string;
-  try {
-    const uploaded = await uploadToBlob({
-      bytes: file,
-      fileName: file.name,
-      mimeType: file.type,
-      folder: "contact-attachments",
-    });
-    url = uploaded.url;
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? "upload failed" }, { status: 500 });
+  let fileName: string;
+  let fileSize: number;
+  let mimeType: string;
+
+  const ref = await takeBlobField(form, "blobUrl", "contact");
+  if (ref) {
+    if (!ref.ok) return NextResponse.json({ error: ref.error }, { status: ref.status });
+    url = ref.blob.url;
+    fileName = blobFileName(form, ref.blob);
+    fileSize = ref.blob.size;
+    mimeType = ref.blob.contentType;
+  } else {
+    const file = form.get("file");
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "Missing 'file' field" }, { status: 400 });
+    }
+
+    const cat = categorize(file.type);
+    if (file.size > MAX_SIZE[cat]) {
+      const limitMb = (MAX_SIZE[cat] / 1024 / 1024).toFixed(0);
+      return NextResponse.json({ error: `File too large. Max ${limitMb}MB for ${cat} files.` }, { status: 413 });
+    }
+
+    try {
+      const uploaded = await uploadToBlob({
+        bytes: file,
+        fileName: file.name,
+        mimeType: file.type,
+        folder: "contact-attachments",
+      });
+      url = uploaded.url;
+    } catch (err: any) {
+      return NextResponse.json({ error: err?.message ?? "upload failed" }, { status: 500 });
+    }
+    fileName = file.name;
+    fileSize = file.size;
+    mimeType = file.type;
   }
 
   const attachment = await prisma.accountContactAttachment.create({
     data: {
       accountContactId: params.id,
       uploadedByUserId: user.id,
-      fileName: file.name,
+      fileName,
       fileUrl: url,
-      fileSize: file.size,
-      mimeType: file.type,
+      fileSize,
+      mimeType,
     },
     include: { uploadedBy: { select: { name: true } } },
   });

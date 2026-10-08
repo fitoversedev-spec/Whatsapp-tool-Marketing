@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import type { Role } from "@/lib/rbac";
 import { categorize, MAX_SIZE, uploadToBlob } from "@/lib/media";
+import { blobFileName, readUploadForm, takeBlobField } from "@/lib/blob-policy";
 import { loadThreadAuthorized, type ChatAnchorType } from "@/lib/chat/access";
 
 export const runtime = "nodejs";
@@ -28,9 +29,25 @@ export async function POST(req: NextRequest, { params }: { params: { entityType:
 
   let form: FormData;
   try {
-    form = await req.formData();
+    form = await readUploadForm(req);
   } catch {
     return NextResponse.json({ error: "expected multipart/form-data" }, { status: 400 });
+  }
+
+  // Large files arrive as a Blob URL (browser uploaded them straight to Blob);
+  // the multipart `file` path stays for tabs opened before this change.
+  const ref = await takeBlobField(form, "blobUrl", "chat");
+  if (ref) {
+    if (!ref.ok) return NextResponse.json({ error: ref.error }, { status: ref.status });
+    return NextResponse.json({
+      ref: {
+        fileName: blobFileName(form, ref.blob),
+        fileUrl: ref.blob.url,
+        fileSize: ref.blob.size,
+        mimeType: ref.blob.contentType,
+        category: categorize(ref.blob.contentType),
+      },
+    });
   }
 
   const file = form.get("file");

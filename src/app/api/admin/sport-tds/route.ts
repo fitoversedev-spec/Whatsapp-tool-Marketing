@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { uploadToBlob } from "@/lib/media";
+import { takeBlobField } from "@/lib/blob-policy";
 import {
   getTdsFilesForSport,
   appendTdsFileForSport,
@@ -52,22 +53,34 @@ export async function POST(req: NextRequest) {
   if (!displayName) {
     return NextResponse.json({ error: "name_required" }, { status: 400 });
   }
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "file_required" }, { status: 400 });
+  // The browser uploads the PDF straight to Blob (blobUrl); the multipart
+  // `file` path stays for tabs opened before that change.
+  const ref = await takeBlobField(form, "blobUrl", "sport-tds");
+  if (ref && !ref.ok) {
+    return NextResponse.json({ error: ref.error }, { status: ref.status });
   }
-  if (file.type !== "application/pdf") {
-    return NextResponse.json({ error: "pdf_only" }, { status: 400 });
+  let fileUrl: string;
+  if (ref?.ok) {
+    fileUrl = ref.blob.url;
+  } else {
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "file_required" }, { status: 400 });
+    }
+    if (file.type !== "application/pdf") {
+      return NextResponse.json({ error: "pdf_only" }, { status: 400 });
+    }
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const uploaded = await uploadToBlob({
+      bytes,
+      fileName: file.name,
+      mimeType: "application/pdf",
+      folder: `sport-tds/${sport}`,
+    });
+    fileUrl = uploaded.url;
   }
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const uploaded = await uploadToBlob({
-    bytes,
-    fileName: file.name,
-    mimeType: "application/pdf",
-    folder: `sport-tds/${sport}`,
-  });
   const files = await appendTdsFileForSport(sport, {
     name: displayName,
-    url: uploaded.url,
+    url: fileUrl,
     uploadedAt: new Date().toISOString(),
   });
   return NextResponse.json({ sport, files });

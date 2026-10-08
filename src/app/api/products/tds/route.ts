@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { uploadToBlob } from "@/lib/media";
+import { takeBlobField } from "@/lib/blob-policy";
 import {
   listTdsForSport,
   createTds,
@@ -39,6 +40,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_sport" }, { status: 400 });
   }
   if (!name) return NextResponse.json({ error: "name_required" }, { status: 400 });
+  // The browser uploads the PDF straight to Blob (blobUrl); the multipart
+  // `file` path stays for tabs opened before that change.
+  const ref = await takeBlobField(form, "blobUrl", "tds");
+  if (ref) {
+    if (!ref.ok) return NextResponse.json({ error: ref.error }, { status: ref.status });
+    const tds = await createTds({
+      sport,
+      name,
+      url: ref.blob.url,
+      productId,
+      uploadedByUserId: user.id,
+    });
+    return NextResponse.json({ tds });
+  }
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json({ error: "file_required" }, { status: 400 });
   }
@@ -99,9 +114,15 @@ export async function PATCH(req: NextRequest) {
     input.productId = (form.get("productId") as string) || null;
   }
 
-  // Optional PDF replacement.
+  // Optional PDF replacement: already in Blob (blobUrl) or sent as a file.
+  const ref = await takeBlobField(form, "blobUrl", "tds");
+  if (ref && !ref.ok) {
+    return NextResponse.json({ error: ref.error }, { status: ref.status });
+  }
   const file = form.get("file");
-  if (file instanceof File && file.size > 0) {
+  if (ref?.ok) {
+    input.url = ref.blob.url;
+  } else if (file instanceof File && file.size > 0) {
     const looksPdf =
       file.type === "application/pdf" ||
       file.type === "application/x-pdf" ||

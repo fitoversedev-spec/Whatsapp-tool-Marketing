@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import { uploadFile } from "@/lib/blob-client";
 import type { Role } from "@/lib/rbac";
 
 type Template = {
@@ -323,6 +324,7 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const [headerMediaUrl, setHeaderMediaUrl] = useState<string | null>(null);
   const [headerFilename, setHeaderFilename] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -337,10 +339,22 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     }
 
     setUploading(true);
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("headerType", headerFormat);
-    const res = await fetch("/api/templates/upload-media", { method: "POST", body: fd });
+    setUploadPct(0);
+    let res: Response;
+    try {
+      // Straight to Blob (a function body is capped at 4.5 MB), then record it.
+      const blob = await uploadFile(file, "template", setUploadPct, { headerType: headerFormat });
+      res = await fetch("/api/templates/upload-media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url, fileName: file.name, headerType: headerFormat }),
+      });
+    } catch (err) {
+      setUploading(false);
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+      e.target.value = "";
+      return;
+    }
     setUploading(false);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -612,7 +626,7 @@ function DraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
                     className="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 disabled:opacity-50"
                   />
                   {uploading && (
-                    <div className="text-xs text-slate-500">Uploading to Vercel Blob…</div>
+                    <div className="text-xs text-slate-500">Uploading to Vercel Blob… {uploadPct}%</div>
                   )}
                 </div>
               ) : (

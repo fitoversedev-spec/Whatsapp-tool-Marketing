@@ -9,6 +9,7 @@
 import { useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import { uploadFile } from "@/lib/blob-client";
 import type { SportTdsFile } from "@/lib/court-image/sport-tds";
 
 const SPORT_LABELS: Record<string, string> = {
@@ -39,7 +40,10 @@ export default function SportTdsClient({
       const form = new FormData();
       form.set("sport", sport);
       form.set("name", name);
-      form.set("file", file);
+      // Straight to Blob (a function body is capped at 4.5 MB), then record it.
+      const b = await uploadFile(file, "sport-tds");
+      form.set("blobUrl", b.url);
+      form.set("fileName", file.name);
       const r = await fetch("/api/admin/sport-tds", {
         method: "POST",
         body: form,

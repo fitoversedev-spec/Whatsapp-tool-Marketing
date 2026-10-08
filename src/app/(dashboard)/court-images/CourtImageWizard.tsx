@@ -71,6 +71,7 @@ import {
 import { predictCapacity } from "@/lib/court-image/packing";
 import { useUserUnit } from "@/lib/units/useUserUnit";
 import { toFeet, toUnit, FT_TO_M } from "@/lib/units";
+import { uploadFile } from "@/lib/blob-client";
 import {
   sectionForItem,
   orderedSectionsFor,
@@ -2042,15 +2043,28 @@ export default function CourtImageWizard({
     };
   }, [step, previewMode]);
 
+  // Straight to Vercel Blob (a function body is capped at 4.5 MB), then record
+  // it via /api/media/upload. Upload errors are rethrown with their message.
+  async function postMediaBlob(file: File, failText: string): Promise<Response> {
+    let blob;
+    try {
+      blob = await uploadFile(file, "media");
+    } catch (err) {
+      const m = err instanceof Error ? err.message : "";
+      throw new Error(m && m !== "Upload failed" ? m : failText);
+    }
+    return fetch("/api/media/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+    });
+  }
+
   // Upload data-URL PNG to /api/media/upload (which writes to Vercel Blob).
   async function uploadPng(dataUrl: string): Promise<string> {
     const blob = await (await fetch(dataUrl)).blob();
-    const form = new FormData();
-    form.append(
-      "file",
-      new File([blob], `court-design-${Date.now()}.png`, { type: "image/png" })
-    );
-    const res = await fetch("/api/media/upload", { method: "POST", body: form });
+    const file = new File([blob], `court-design-${Date.now()}.png`, { type: "image/png" });
+    const res = await postMediaBlob(file, "Image upload failed");
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
       throw new Error(e.error ?? "Image upload failed");
@@ -2062,12 +2076,8 @@ export default function CourtImageWizard({
   // Upload an MP4 video blob to the same endpoint. The media API auto-
   // categorises by mimeType so video bookkeeping mirrors images.
   async function uploadVideo(blob: Blob): Promise<string> {
-    const form = new FormData();
-    form.append(
-      "file",
-      new File([blob], `court-design-orbit-${Date.now()}.mp4`, { type: "video/mp4" })
-    );
-    const res = await fetch("/api/media/upload", { method: "POST", body: form });
+    const file = new File([blob], `court-design-orbit-${Date.now()}.mp4`, { type: "video/mp4" });
+    const res = await postMediaBlob(file, "Video upload failed");
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
       throw new Error(e.error ?? "Video upload failed");

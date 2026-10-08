@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadToBlob } from "@/lib/media";
+import { dropBlob, readUploadForm, takeBlobField } from "@/lib/blob-policy";
 import { getSportMeta } from "@/lib/catalogue/sport-meta";
 import {
   MAX_OVERRIDE_BYTES,
@@ -41,9 +42,51 @@ export async function POST(req: NextRequest, { params }: { params: { sport: stri
 
   let form: FormData;
   try {
-    form = await req.formData();
+    form = await readUploadForm(req);
   } catch {
     return NextResponse.json({ error: "expected multipart/form-data" }, { status: 400 });
+  }
+
+  // The browser uploads the deck straight to Blob (Hobby's 4.5 MB body limit)
+  // and sends its URL; the multipart `file` path stays for tabs opened before
+  // this change.
+  const ref = await takeBlobField(form, "blobUrl", "catalogue");
+  if (ref) {
+    if (!ref.ok) return NextResponse.json({ error: ref.error }, { status: ref.status });
+    const raw = ref.blob;
+    let url = raw.url;
+    let sizeBytes = raw.size;
+    try {
+      // Only sports with a curated page list need the bytes; otherwise the
+      // uploaded blob already is the final file.
+      if (hasCuratedPages(params.sport)) {
+        const res = await fetch(raw.url, { signal: AbortSignal.timeout(40_000) });
+        if (!res.ok) throw new Error(`could not read the uploaded file (${res.status})`);
+        const bytes = await curateOverridePages(new Uint8Array(await res.arrayBuffer()), params.sport);
+        sizeBytes = bytes.length;
+        const uploaded = await uploadToBlob({
+          bytes: Buffer.from(bytes),
+          fileName: `${params.sport}-catalogue.pdf`,
+          mimeType: "application/pdf",
+          folder: "catalogues",
+        });
+        url = uploaded.url;
+        await dropBlob(raw.url);
+      }
+    } catch (err) {
+      await dropBlob(raw.url);
+      return NextResponse.json(
+        { error: "Upload failed: " + (err instanceof Error ? err.message : String(err)) },
+        { status: 500 },
+      );
+    }
+    const key = `catalogue_${params.sport}_url`;
+    await prisma.setting.upsert({
+      where: { key },
+      create: { key, value: url },
+      update: { value: url },
+    });
+    return NextResponse.json({ ok: true, url, sizeBytes, originalSizeBytes: raw.size });
   }
 
   const file = form.get("file");

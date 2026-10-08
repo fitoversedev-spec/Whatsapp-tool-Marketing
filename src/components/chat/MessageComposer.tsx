@@ -8,6 +8,7 @@
 import { useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 import { serializeChip, type ChatRefType } from "@/lib/chat/tokens";
+import { uploadFile } from "@/lib/blob-client";
 import MentionAutocomplete, { type MentionItem } from "./MentionAutocomplete";
 
 type AttachmentRef = { fileName: string; fileUrl: string; fileSize: number; mimeType: string; category?: string };
@@ -133,9 +134,19 @@ export default function MessageComposer({
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
-        const form = new FormData();
-        form.set("file", file);
-        const res = await fetch(`/api/chat/threads/${entityType}/${entityId}/attachments`, { method: "POST", body: form });
+        // Straight to Blob (a function body is capped at 4.5 MB), then record it.
+        let blob;
+        try {
+          blob = await uploadFile(file, "chat");
+        } catch (err) {
+          toast.error(err instanceof Error && err.message !== "Upload failed" ? err.message : `Could not upload ${file.name}`);
+          continue;
+        }
+        const res = await fetch(`/api/chat/threads/${entityType}/${entityId}/attachments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+        });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           toast.error(err.error ?? `Could not upload ${file.name}`);

@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { useToast } from "@/components/Toast";
+import { uploadFile } from "@/lib/blob-client";
 import type { PortfolioRow } from "./PortfolioClient";
 
 const SPORT_OPTIONS = [
@@ -55,6 +56,7 @@ export default function PortfolioProjectModal({
   const [heroPhotoUrl, setHeroPhotoUrl] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoPct, setPhotoPct] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -93,10 +95,15 @@ export default function PortfolioProjectModal({
 
   async function uploadPhoto(file: File) {
     setUploadingPhoto(true);
+    setPhotoPct(0);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/media/upload", { method: "POST", body: form });
+      // Straight to Blob (a function body is capped at 4.5 MB), then record it.
+      const blob = await uploadFile(file, "media", setPhotoPct);
+      const res = await fetch("/api/media/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+      });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error(e.error ?? "Upload failed");
@@ -304,7 +311,7 @@ export default function PortfolioProjectModal({
                 </div>
               </div>
               <label className="btn btn-primary !px-3 !py-1.5 !text-xs cursor-pointer">
-                {uploadingPhoto ? "Uploading…" : "+ Add photo"}
+                {uploadingPhoto ? `Uploading… ${photoPct}%` : "+ Add photo"}
                 <input
                   type="file"
                   accept="image/*"

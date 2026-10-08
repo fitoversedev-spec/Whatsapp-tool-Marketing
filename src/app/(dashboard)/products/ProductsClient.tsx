@@ -12,6 +12,7 @@ import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import type { ProductDTO, ProductType } from "@/lib/products/store";
 import { toEmbeddableImage } from "@/lib/products/image-embed";
+import { uploadFile } from "@/lib/blob-client";
 import { extractHtmlTables } from "@/lib/products/format";
 
 const SPORTS = [
@@ -507,8 +508,22 @@ function ProductForm({
       if (k) specsObj[k] = value.trim();
     }
     form.set("specs", JSON.stringify(specsObj));
-    if (hero) form.set("hero", await toEmbeddableImage(hero));
-    if (video) form.set("video", video);
+    // Photo + video go straight to Blob (a function body is capped at 4.5 MB);
+    // the form then carries only their URLs.
+    try {
+      if (hero) {
+        const b = await uploadFile(await toEmbeddableImage(hero), "product-image");
+        form.set("heroBlobUrl", b.url);
+      }
+      if (video) {
+        const b = await uploadFile(video, "product-video");
+        form.set("videoBlobUrl", b.url);
+      }
+    } catch (err) {
+      setBusy(false);
+      toast.error(err instanceof Error ? err.message : "Save failed");
+      return;
+    }
     const r = editing
       ? await fetch(`/api/products/${product!.id}`, { method: "PATCH", body: form })
       : await fetch("/api/products", { method: "POST", body: form });
@@ -525,16 +540,23 @@ function ProductForm({
       ? product!.id
       : saved.product?.id;
     if (tdsFile && productId) {
-      const tf = new FormData();
-      tf.set("sport", sports[0] ?? "football");
-      tf.set(
-        "name",
-        tdsFile.name.replace(/\.pdf$/i, "").trim() || `${name.trim()} — TDS`,
-      );
-      tf.set("productId", productId);
-      tf.set("file", tdsFile);
-      const tr = await fetch("/api/products/tds", { method: "POST", body: tf });
-      if (!tr.ok) toast.error("Product saved, but the TDS upload failed");
+      let tr: Response | null = null;
+      try {
+        const tb = await uploadFile(tdsFile, "tds");
+        const tf = new FormData();
+        tf.set("sport", sports[0] ?? "football");
+        tf.set(
+          "name",
+          tdsFile.name.replace(/\.pdf$/i, "").trim() || `${name.trim()} — TDS`,
+        );
+        tf.set("productId", productId);
+        tf.set("blobUrl", tb.url);
+        tf.set("fileName", tdsFile.name);
+        tr = await fetch("/api/products/tds", { method: "POST", body: tf });
+      } catch {
+        /* reported below */
+      }
+      if (!tr?.ok) toast.error("Product saved, but the TDS upload failed");
     }
     setBusy(false);
     toast.success(editing ? "Updated" : "Added");
@@ -884,7 +906,16 @@ function TdsSection({
     form.set("sport", sport);
     form.set("name", name.trim());
     if (productId) form.set("productId", productId);
-    form.set("file", file);
+    // Straight to Blob (a function body is capped at 4.5 MB), then record it.
+    try {
+      const b = await uploadFile(file, "tds");
+      form.set("blobUrl", b.url);
+      form.set("fileName", file.name);
+    } catch (err) {
+      setBusy(false);
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+      return;
+    }
     const r = await fetch("/api/products/tds", { method: "POST", body: form });
     setBusy(false);
     if (r.ok) {
@@ -921,7 +952,17 @@ function TdsSection({
     const form = new FormData();
     form.set("id", id);
     form.set("name", editName.trim());
-    if (editFile) form.set("file", editFile);
+    if (editFile) {
+      try {
+        const b = await uploadFile(editFile, "tds");
+        form.set("blobUrl", b.url);
+        form.set("fileName", editFile.name);
+      } catch (err) {
+        setBusy(false);
+        toast.error(err instanceof Error ? err.message : "Save failed");
+        return;
+      }
+    }
     const r = await fetch("/api/products/tds", { method: "PATCH", body: form });
     setBusy(false);
     if (r.ok) {

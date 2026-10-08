@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, FormEvent } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import NotesPanel from "./NotesPanel";
 import RemindersPanel from "./RemindersPanel";
+import ReplyComposer from "./ReplyComposer";
 import LabelPicker from "@/components/LabelPicker";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import MediaPreview from "@/components/MediaPreview";
 import type { Role } from "@/lib/rbac";
 import { postCrossTab } from "@/lib/cross-tab";
 import { safeFetch } from "@/lib/safe-fetch";
+import { uploadFile } from "@/lib/blob-client";
 import { fmtShortDateTimeIST } from "@/lib/time";
 
 // These three wizards are heavy (the court designer alone pulls in the Konva
@@ -101,7 +103,6 @@ export default function InboxClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkUnavailable]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [withinWindow, setWithinWindow] = useState<boolean>(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
@@ -276,18 +277,30 @@ export default function InboxClient({
       .then((data) => setAssignableUsers(data.users ?? []));
   }, [currentUser.role]);
 
-  async function sendMedia(file: File, caption: string) {
-    if (!selected) return;
+  // sendMedia / send resolve true on success so ReplyComposer (which owns the
+  // draft text) clears it only then — a failed send keeps the text.
+  async function sendMedia(file: File, caption: string): Promise<boolean> {
+    if (!selected) return false;
     setSending(true);
     try {
-      // Step 1: upload to Vercel Blob via /api/media/upload
-      const fd = new FormData();
-      fd.append("file", file);
-      const up = await safeFetch("/api/media/upload", { method: "POST", body: fd });
+      // Step 1: upload straight to Vercel Blob (a function body is capped at
+      // 4.5 MB), then record it via /api/media/upload
+      let blob;
+      try {
+        blob = await uploadFile(file, "media");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Upload failed");
+        return false;
+      }
+      const up = await safeFetch("/api/media/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+      });
       if (!up.ok) {
         const e = await up.json().catch(() => ({}));
         toast.error(e.error ?? "Upload failed");
-        return;
+        return false;
       }
       const { media } = await up.json();
 
@@ -300,33 +313,34 @@ export default function InboxClient({
       if (res.ok) {
         const data = await res.json();
         setMessages((prev) => [...prev, data.message]);
-        setReply("");
+        return true;
       } else {
         const e = await res.json().catch(() => ({}));
         if (res.status === 422) setWithinWindow(false);
         toast.error(e.error ?? "Send failed");
+        return false;
       }
     } catch {
       toast.error("Network error");
+      return false;
     } finally {
       setSending(false);
     }
   }
 
-  async function send(e: FormEvent) {
-    e.preventDefault();
-    if (!selected || !reply.trim()) return;
+  async function send(text: string): Promise<boolean> {
+    if (!selected || !text.trim()) return false;
     setSending(true);
     try {
       const res = await safeFetch(`/api/conversations/${selected}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: reply.trim() }),
+        body: JSON.stringify({ body: text.trim() }),
       });
       if (res.ok) {
         const data = await res.json();
         setMessages((prev) => [...prev, data.message]);
-        setReply("");
+        return true;
       } else {
         const err = await res.json().catch(() => ({}));
         // If 24h window expired, update local state so the UI disables correctly
@@ -334,9 +348,11 @@ export default function InboxClient({
           setWithinWindow(false);
         }
         toast.error(err.error ?? "Send failed");
+        return false;
       }
     } catch {
       toast.error("Network error");
+      return false;
     } finally {
       setSending(false);
     }
@@ -720,59 +736,13 @@ export default function InboxClient({
               </div>
             )}
 
-            <form onSubmit={send} className="border-t border-slate-200 bg-white p-3 sm:p-4 shrink-0">
-              <div className="flex gap-2">
-                <label
-                  className={`shrink-0 self-center w-10 h-10 rounded-lg border border-slate-300 flex items-center justify-center cursor-pointer transition ${
-                    withinWindow && !sending && !isClosed
-                      ? "hover:border-wa-green hover:bg-slate-50 text-slate-600"
-                      : "opacity-40 cursor-not-allowed text-slate-400"
-                  }`}
-                  title="Attach file"
-                  data-guide="wa-inbox-attach"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" />
-                  </svg>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/*"
-                    disabled={!withinWindow || sending || isClosed}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) {
-                        sendMedia(f, reply);
-                        // Reset input so the same file can be re-picked
-                        e.target.value = "";
-                      }
-                    }}
-                  />
-                </label>
-                <input
-                  value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                  placeholder={
-                    isClosed
-                      ? "Reopen to reply"
-                      : withinWindow
-                      ? "Type a reply… (or attach a file)"
-                      : "24h window closed"
-                  }
-                  disabled={!withinWindow || sending || isClosed}
-                  data-guide="wa-inbox-composer"
-                  className="flex-1 min-w-0 px-3 sm:px-4 py-2.5 rounded-lg border border-slate-300 focus:border-wa-green focus:ring-2 focus:ring-wa-green/20 outline-none disabled:bg-slate-50 disabled:text-slate-400 text-base sm:text-sm"
-                />
-                <button
-                  type="submit"
-                  disabled={!withinWindow || sending || !reply.trim() || isClosed}
-                  data-guide="wa-inbox-send"
-                  className="btn btn-primary shrink-0"
-                >
-                  {sending ? "…" : "Send"}
-                </button>
-              </div>
-            </form>
+            <ReplyComposer
+              withinWindow={withinWindow}
+              sending={sending}
+              isClosed={isClosed}
+              onSend={send}
+              onSendMedia={sendMedia}
+            />
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400 text-sm p-8 text-center">

@@ -17,7 +17,16 @@ function connectionUrl(): string | undefined {
       if (!u.searchParams.has(k)) u.searchParams.set(k, v);
     };
     // Only tell Prisma it's PgBouncer when we're actually on the pooled host.
-    if (u.host.includes("-pooler")) setIfAbsent("pgbouncer", "true");
+    if (u.host.includes("-pooler")) {
+      setIfAbsent("pgbouncer", "true");
+      // Prisma's default (~5) starves pages that fire 8-30 queries at once; the
+      // pooler multiplexes, so a bigger client pool is safe. Forced (not
+      // setIfAbsent) so it wins over a stale value already in the URL.
+      u.searchParams.set(
+        "connection_limit",
+        process.env.DB_CONNECTION_LIMIT ?? "10"
+      );
+    }
     setIfAbsent("connect_timeout", "15"); // fail fast instead of hanging forever
     setIfAbsent("pool_timeout", "20");
     return u.toString();

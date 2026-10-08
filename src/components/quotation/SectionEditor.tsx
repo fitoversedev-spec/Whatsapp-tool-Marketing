@@ -18,6 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { uploadFile } from "@/lib/blob-client";
 import {
   type PdfSection,
   type PdfSectionType,
@@ -1010,13 +1011,19 @@ function PhotoEditor({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
 
   async function handleFile(file: File) {
     setUploading(true);
+    setUploadPct(0);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/media/upload", { method: "POST", body: fd });
+      // Straight to Blob (a function body is capped at 4.5 MB), then record it.
+      const blob = await uploadFile(file, "media", setUploadPct);
+      const res = await fetch("/api/media/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+      });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
       onUpdate({ ...section, imageUrl: data.media?.url ?? data.url });
@@ -1046,7 +1053,7 @@ function PhotoEditor({
           disabled={uploading}
           className="w-full py-8 border-2 border-dashed border-slate-300 rounded-xl text-base text-slate-500 hover:border-court-400 hover:text-court-600 transition-colors"
         >
-          {uploading ? "Uploading..." : "Click to upload photo"}
+          {uploading ? `Uploading... ${uploadPct}%` : "Click to upload photo"}
         </button>
       )}
       <input

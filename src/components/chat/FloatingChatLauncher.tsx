@@ -8,6 +8,7 @@
 // request for both, no extra round-trip.
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import { refreshLiveCounts, subscribeLiveCounts } from "@/lib/live-counts";
 
 // The panel's code is only downloaded the first time someone opens chat.
@@ -38,6 +39,10 @@ export default function FloatingChatLauncher({
   const [unread, setUnread] = useState(initialUnread);
   const [mentions, setMentions] = useState(initialMentions);
   const [requests, setRequests] = useState(initialRequests);
+  // On the Inbox the reply box sits at the bottom right; on desktop lift the
+  // bubble above it (and above the Ask AI button at md:bottom-20) so it never
+  // covers the Send button.
+  const onInbox = usePathname()?.startsWith("/inbox") ?? false;
 
   useEffect(
     () =>
@@ -85,7 +90,7 @@ export default function FloatingChatLauncher({
           onClick={openPanel}
           aria-label="Open team chat"
           title="Team chat"
-          className="fixed bottom-20 md:bottom-4 right-4 z-40 w-14 h-14 rounded-full bg-wa-green hover:bg-wa-green/90 text-white shadow-lg flex items-center justify-center text-2xl transition"
+          className={`fixed bottom-20 ${onInbox ? "md:bottom-36" : "md:bottom-4"} right-4 z-40 w-14 h-14 rounded-full bg-wa-green hover:bg-wa-green/90 text-white shadow-lg flex items-center justify-center text-2xl transition`}
         >
           💬
           {badge > 0 && (

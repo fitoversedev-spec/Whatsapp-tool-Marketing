@@ -2,32 +2,9 @@
 
 import { put } from "@vercel/blob";
 
-export type MediaCategory = "image" | "video" | "audio" | "document" | "other";
-
-export function categorize(mimeType: string): MediaCategory {
-  if (mimeType.startsWith("image/")) return "image";
-  if (mimeType.startsWith("video/")) return "video";
-  if (mimeType.startsWith("audio/")) return "audio";
-  if (
-    mimeType === "application/pdf" ||
-    mimeType.startsWith("application/vnd.") ||
-    mimeType === "application/msword" ||
-    mimeType.startsWith("text/")
-  ) {
-    return "document";
-  }
-  return "other";
-}
-
-// Meta's WhatsApp Cloud API media size limits per category.
-// https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media#supported-media-types
-export const MAX_SIZE: Record<MediaCategory, number> = {
-  image: 5 * 1024 * 1024,
-  video: 16 * 1024 * 1024,
-  audio: 16 * 1024 * 1024,
-  document: 100 * 1024 * 1024,
-  other: 16 * 1024 * 1024,
-};
+// Category/size rules live in blob-rules.ts so the browser can share them.
+export { categorize, MAX_SIZE, COMMON_FILE_MIMES } from "./blob-rules";
+export type { MediaCategory } from "./blob-rules";
 
 export async function uploadToBlob(args: {
   bytes: Buffer | File;
@@ -67,17 +44,3 @@ export async function uploadToBlob(args: {
     throw err;
   }
 }
-
-// Friendly extension → mime fallback for files whose mime browsers don't
-// recognize. Used to make the file-picker accept attribute resilient.
-export const COMMON_FILE_MIMES: Record<string, string> = {
-  pdf: "application/pdf",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  xls: "application/vnd.ms-excel",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  ppt: "application/vnd.ms-powerpoint",
-  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  txt: "text/plain",
-  csv: "text/csv",
-};

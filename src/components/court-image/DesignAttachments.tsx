@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import type { ProductDTO, TdsDTO } from "@/lib/products/store";
 import { toEmbeddableImage } from "@/lib/products/image-embed";
+import { uploadFile } from "@/lib/blob-client";
 import type { Sport } from "@/lib/court-image/schema";
 
 export type AttachmentTab = "products" | "equipment" | "tds";
@@ -258,7 +259,10 @@ function InlineAddForm({
         }
         form.set("sport", sport);
         form.set("name", name.trim());
-        form.set("file", file);
+        // Straight to Blob (a function body is capped at 4.5 MB), then record it.
+        const b = await uploadFile(file, "tds");
+        form.set("blobUrl", b.url);
+        form.set("fileName", file.name);
         const r = await fetch("/api/products/tds", { method: "POST", body: form });
         if (!r.ok) throw new Error((await r.json()).error ?? "failed");
       } else {
@@ -266,7 +270,10 @@ function InlineAddForm({
         form.set("type", tab === "equipment" ? "equipment" : "flooring");
         form.set("description", description);
         form.set("sports", JSON.stringify([sport]));
-        if (file) form.set("hero", await toEmbeddableImage(file));
+        if (file) {
+          const b = await uploadFile(await toEmbeddableImage(file), "product-image");
+          form.set("heroBlobUrl", b.url);
+        }
         const r = await fetch("/api/products", { method: "POST", body: form });
         if (!r.ok) throw new Error((await r.json()).error ?? "failed");
       }

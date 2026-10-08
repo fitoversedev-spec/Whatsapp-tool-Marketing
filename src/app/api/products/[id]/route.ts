@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { uploadToBlob } from "@/lib/media";
+import { takeBlobField } from "@/lib/blob-policy";
 import {
   getProduct,
   updateProduct,
@@ -73,8 +74,16 @@ export async function PATCH(
       const n = raw === "" ? null : Number(raw);
       input.priceInr = n != null && isFinite(n) ? n : null;
     }
+    // Photo/video are either already in Blob (heroBlobUrl / videoBlobUrl) or
+    // sent as files (tabs opened before direct uploads).
+    const heroRef = await takeBlobField(form, "heroBlobUrl", "product-image");
+    if (heroRef && !heroRef.ok) {
+      return NextResponse.json({ error: heroRef.error }, { status: heroRef.status });
+    }
     const hero = form.get("hero");
-    if (hero instanceof File && hero.size > 0) {
+    if (heroRef?.ok) {
+      input.heroImageUrl = heroRef.blob.url;
+    } else if (hero instanceof File && hero.size > 0) {
       const bytes = Buffer.from(await hero.arrayBuffer());
       const uploaded = await uploadToBlob({
         bytes,
@@ -84,8 +93,14 @@ export async function PATCH(
       });
       input.heroImageUrl = uploaded.url;
     }
+    const videoRef = await takeBlobField(form, "videoBlobUrl", "product-video");
+    if (videoRef && !videoRef.ok) {
+      return NextResponse.json({ error: videoRef.error }, { status: videoRef.status });
+    }
     const video = form.get("video");
-    if (video instanceof File && video.size > 0) {
+    if (videoRef?.ok) {
+      input.videoUrl = videoRef.blob.url;
+    } else if (video instanceof File && video.size > 0) {
       const bytes = Buffer.from(await video.arrayBuffer());
       const uploaded = await uploadToBlob({
         bytes,

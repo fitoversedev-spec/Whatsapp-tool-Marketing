@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { uploadToBlob } from "@/lib/media";
+import { takeBlobField } from "@/lib/blob-policy";
 import {
   listProducts,
   createProduct,
@@ -80,10 +81,18 @@ export async function POST(req: NextRequest) {
       ? Number(priceRaw)
       : null;
 
-  // Upload hero image + video if present.
+  // Hero image + video: either already uploaded straight to Blob by the
+  // browser (heroBlobUrl / videoBlobUrl) or sent as files (tabs opened before
+  // that change).
   let heroImageUrl: string | null = null;
+  const heroRef = await takeBlobField(form, "heroBlobUrl", "product-image");
+  if (heroRef && !heroRef.ok) {
+    return NextResponse.json({ error: heroRef.error }, { status: heroRef.status });
+  }
   const hero = form.get("hero");
-  if (hero instanceof File && hero.size > 0) {
+  if (heroRef?.ok) {
+    heroImageUrl = heroRef.blob.url;
+  } else if (hero instanceof File && hero.size > 0) {
     const bytes = Buffer.from(await hero.arrayBuffer());
     const uploaded = await uploadToBlob({
       bytes,
@@ -95,8 +104,14 @@ export async function POST(req: NextRequest) {
   }
 
   let videoUrl: string | null = null;
+  const videoRef = await takeBlobField(form, "videoBlobUrl", "product-video");
+  if (videoRef && !videoRef.ok) {
+    return NextResponse.json({ error: videoRef.error }, { status: videoRef.status });
+  }
   const video = form.get("video");
-  if (video instanceof File && video.size > 0) {
+  if (videoRef?.ok) {
+    videoUrl = videoRef.blob.url;
+  } else if (video instanceof File && video.size > 0) {
     const bytes = Buffer.from(await video.arrayBuffer());
     const uploaded = await uploadToBlob({
       bytes,

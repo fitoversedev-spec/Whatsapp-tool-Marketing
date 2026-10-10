@@ -23,6 +23,13 @@ import type { MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
 function fmtCpl(n: number | null): string {
   return n == null ? "—" : fmtInr(Math.round(n));
 }
+type CampaignSortKey = "spend" | "insightLeads" | "capturedLeads" | "cpl";
+const SORT_KEYS: Record<string, CampaignSortKey> = {
+  Spend: "spend",
+  "Insight leads": "insightLeads",
+  "Captured leads": "capturedLeads",
+  "Cost / lead": "cpl",
+};
 function fmtInt(n: number): string {
   return n.toLocaleString("en-IN");
 }
@@ -64,6 +71,7 @@ export default function AdCampaignsClient({
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [syncing, setSyncing] = useState(false);
+  const [sort, setSort] = useState<{ key: CampaignSortKey; dir: "asc" | "desc" } | null>(null);
   // Bumped after a sync so the lead table quietly reloads its page.
   const [leadsRefresh, setLeadsRefresh] = useState(0);
 
@@ -134,6 +142,29 @@ export default function AdCampaignsClient({
     fmtCpl(c.cpl),
   ]);
 
+  // Click-to-sort on the numeric headers: 1st click high→low, 2nd low→high, 3rd back
+  // to the server's default "last ran" order. Cost / lead with no value sorts last
+  // in both directions.
+  const sortedCampaigns = (() => {
+    if (!sort) return campaigns;
+    const val = (c: CampaignListRow) =>
+      sort.key === "spend" ? c.spend
+      : sort.key === "insightLeads" ? c.insightLeads
+      : sort.key === "capturedLeads" ? c.capturedLeads
+      : c.cpl;
+    const dir = sort.dir === "desc" ? -1 : 1;
+    return [...campaigns].sort((a, b) => {
+      const av = val(a);
+      const bv = val(b);
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return (av - bv) * dir;
+    });
+  })();
+  const toggleSort = (key: CampaignSortKey) =>
+    setSort((s) => (!s || s.key !== key ? { key, dir: "desc" } : s.dir === "desc" ? { key, dir: "asc" } : null));
+
   const hasAnyData = campaigns.length > 0 || overview.campaigns.length > 0 || initialLeads.total > 0;
 
   return (
@@ -195,7 +226,7 @@ export default function AdCampaignsClient({
               </div>
               {/* Mobile cards */}
               <div className="md:hidden divide-y divide-slate-100">
-                {campaigns.map((c) => (
+                {sortedCampaigns.map((c) => (
                   <Link
                     key={c.metaId}
                     href={`/ad-campaigns/${c.metaId}`}
@@ -240,15 +271,30 @@ export default function AdCampaignsClient({
                 <table className="data-table">
                   <thead>
                     <tr data-guide="wa-campaigns-head">
-                      {["Campaign", "Status", "Spend", "Insight leads", "Captured leads", "Cost / lead"].map((h, i) => (
-                        <th key={i} className={`whitespace-nowrap ${i >= 2 ? "!text-right" : ""}`}>
-                          {h}
-                        </th>
-                      ))}
+                      {["Campaign", "Status", "Spend", "Insight leads", "Captured leads", "Cost / lead"].map((h, i) => {
+                        const key = SORT_KEYS[h];
+                        const active = key && sort?.key === key ? sort.dir : null;
+                        return (
+                          <th
+                            key={i}
+                            className={`whitespace-nowrap ${i >= 2 ? "!text-right" : ""}`}
+                            aria-sort={active ? (active === "desc" ? "descending" : "ascending") : undefined}
+                          >
+                            {key ? (
+                              <button type="button" onClick={() => toggleSort(key)} className="cursor-pointer hover:text-slate-900 whitespace-nowrap">
+                                {h}
+                                {active && <span className="ml-1 text-[10px]" aria-hidden>{active === "desc" ? "▼" : "▲"}</span>}
+                              </button>
+                            ) : (
+                              h
+                            )}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
-                    {campaigns.map((c) => (
+                    {sortedCampaigns.map((c) => (
                       <tr key={c.metaId}>
                         <td className="font-medium">
                           <Link href={`/ad-campaigns/${c.metaId}`} className="text-court-700 hover:underline" data-guide="wa-campaign-link">

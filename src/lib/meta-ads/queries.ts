@@ -370,9 +370,8 @@ export type CampaignListRow = {
   capturedLeads: number; // count(MetaLead where campaignId = metaId)
   cpl: number | null; // rupees per insight lead
   ctr: number | null; // FRACTION 0..1
+  lastRanAt: string | null; // YYYY-MM-DD of the latest day with spend > 0 in the window; null = never ran
 };
-
-const isActiveStatus = (s: string | null | undefined) => (s ?? "").toUpperCase() === "ACTIVE";
 
 // ALL campaigns (active, paused, archived, zero-spend). When a date range is
 // provided, insights and captured leads are windowed to that range and campaigns
@@ -383,19 +382,27 @@ export async function getCampaignList(range?: { from: Date; to: Date }): Promise
     ? { campaignId: { not: null }, ...leadWindowWhere(range) }
     : { campaignId: { not: null as any } };
   // Grouped sums / counts instead of loading every insight and lead row.
-  const [campaigns, insightSums, leadCounts] = await Promise.all([
+  const [campaigns, insightSums, lastRan, leadCounts] = await Promise.all([
     prisma.metaCampaign.findMany({
-      select: { id: true, metaId: true, name: true, status: true, objective: true, sport: true },
+      select: { id: true, metaId: true, name: true, status: true, objective: true, sport: true, createdAtMeta: true },
     }),
     prisma.adInsight.groupBy({
       by: ["campaignId"],
       where: insightWhere,
       _sum: { spend: true, impressions: true, clicks: true, leads: true },
     }),
+    // Latest day each campaign actually spent money (within the window).
+    prisma.adInsight.groupBy({
+      by: ["campaignId"],
+      where: { ...insightWhere, spend: { gt: 0 } },
+      _max: { date: true },
+    }),
     prisma.metaLead.groupBy({ by: ["campaignId"], where: leadWhere, _count: { _all: true } }),
   ]);
 
   const sumsById = new Map(insightSums.map((g) => [g.campaignId, g._sum]));
+  const lastRanById = new Map(lastRan.map((g) => [g.campaignId, g._max.date]));
+  const createdByMetaId = new Map(campaigns.map((c) => [c.metaId, c.createdAtMeta?.getTime() ?? 0]));
   const capturedByMetaId = new Map<string, number>();
   for (const g of leadCounts) {
     if (g.campaignId) capturedByMetaId.set(g.campaignId, g._count._all);
@@ -421,13 +428,19 @@ export async function getCampaignList(range?: { from: Date; to: Date }): Promise
         capturedLeads: capturedByMetaId.get(c.metaId) ?? 0,
         cpl: insightLeads > 0 ? spend / insightLeads : null,
         ctr: impressions > 0 ? clicks / impressions : null,
+        lastRanAt: lastRanById.get(c.id)?.toISOString().slice(0, 10) ?? null,
       };
     })
     .filter((c) => !range || c.spend > 0 || c.insightLeads > 0 || c.capturedLeads > 0)
+    // Default order: most recently ran first (ties: higher spend); campaigns that
+    // never ran go last, newest-created first.
     .sort((a, b) => {
-      const aa = isActiveStatus(a.status) ? 0 : 1;
-      const bb = isActiveStatus(b.status) ? 0 : 1;
-      return aa - bb || b.spend - a.spend;
+      if (a.lastRanAt && b.lastRanAt) {
+        return a.lastRanAt < b.lastRanAt ? 1 : a.lastRanAt > b.lastRanAt ? -1 : b.spend - a.spend;
+      }
+      if (a.lastRanAt) return -1;
+      if (b.lastRanAt) return 1;
+      return (createdByMetaId.get(b.metaId) ?? 0) - (createdByMetaId.get(a.metaId) ?? 0);
     });
 }
 

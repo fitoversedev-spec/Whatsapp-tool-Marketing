@@ -10,13 +10,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureQuotationPdf, quotationFileName } from "@/lib/quotation/pdf-cache";
-import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { resolveWhatsAppDelivery } from "@/lib/whatsapp-delivery";
-import { scheduleQuoteFollowUp } from "@/lib/crm/contactLinks";
+import {
+  isRecentlySent,
+  markQuotationSent,
+  mirrorQuotationToInbox,
+  sendQuotationOverCloudApi,
+  whatsAppWebHandoff,
+} from "@/lib/quotation/service";
 import { z } from "zod";
-
-// Same convention as staffCommands.ts's own APP_URL constant.
-const APP_URL = process.env.APP_URL ?? "https://whatsapp-tool-marketing.vercel.app";
 
 // Optional caption/contactPhone in the request body — override the row's
 // own values if provided. contactPhone lets a quote created with no phone
@@ -29,11 +31,6 @@ const bodySchema = z.object({
   // Set after the user confirmed "Send it again?" (see RESEND_CONFIRM_MS).
   confirmResend: z.boolean().optional(),
 });
-
-// A second send of the same quote within this window needs the user's
-// explicit confirm — a double click, a second tab or a retried request must
-// not send the customer a duplicate (src/lib/quotation/send-client.ts asks).
-const RESEND_CONFIRM_MS = 10 * 60 * 1000;
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -80,8 +77,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 422 }
     );
   }
-  if (q.sentAt && Date.now() - q.sentAt.getTime() < RESEND_CONFIRM_MS && !(parsed.success && parsed.data.confirmResend)) {
-    return NextResponse.json({ error: "recently_sent", sentAt: q.sentAt.toISOString() }, { status: 409 });
+  // The resend window (RESEND_CONFIRM_MS) lives in lib/quotation/service.ts.
+  if (isRecentlySent(q.sentAt) && !(parsed.success && parsed.data.confirmResend)) {
+    return NextResponse.json({ error: "recently_sent", sentAt: q.sentAt?.toISOString() }, { status: 409 });
   }
 
   // 1. The saved PDF for the quote exactly as it is now — same inputs as the
@@ -116,23 +114,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   });
   if (delivery.mode === "whatsapp-web") {
     // Only the request that actually turns the draft into "sent" schedules
-    // the follow-up (two quick sends must not create two reminders).
-    const firstSend = (await prisma.quotation.updateMany({ where: { id: params.id, status: "draft" }, data: { status: "sent" } })).count === 1;
-    await prisma.quotation.update({
-      where: { id: params.id },
-      data: { pdfUrl, status: "sent", sentAt: new Date() },
+    // the follow-up (two quick sends must not create two reminders). Deals are
+    // confirmed projects and never change stage on a send. The first send gets
+    // the 3-day follow-up (on the customer when known).
+    await markQuotationSent({
+      quotation: q,
+      pdfUrl,
+      actorUserId: user.id,
+      followUpConversationId: q.conversationId,
     });
-    // Deals are confirmed projects and never change stage on a send. The
-    // first send gets the 3-day follow-up (on the customer when known).
-    if (firstSend) {
-      await scheduleQuoteFollowUp({ quotationNumber: q.number, accountContactId: q.accountContactId, conversationId: q.conversationId, actorUserId: user.id });
-    }
-    const introText =
-      q.caption?.trim() ||
-      `Quotation ${q.number} from Fitoverse — total ₹${Number(q.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-    const message = `${introText}\n\nView/download: ${APP_URL}/q/${q.id}`;
-    const digits = delivery.normalizedPhone ?? q.contactPhone.replace(/[^0-9]/g, "");
-    const whatsappWebUrl = `https://api.whatsapp.com/send/?phone=${digits}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
+    const { whatsappWebUrl } = whatsAppWebHandoff({ ...q, contactPhone: q.contactPhone }, delivery);
     return NextResponse.json({ ok: true, pdfUrl, waMessageId: null, whatsappWebUrl });
   }
 
@@ -140,93 +131,36 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   //    PDF as a document. Splitting them fixes the "caption invisible"
   //    quirk WhatsApp has with document-type captions — customers see
   //    the intro text clearly, then the file below it.
-  const captionText =
-    q.caption?.trim() ||
-    `Quotation ${q.number} from Fitoverse — total ₹${Number(q.grandTotal).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-  let captionMessageId: string | null = null;
-  let waMessageId = "";
   const sendTo = delivery.normalizedPhone ?? q.contactPhone;
-  try {
-    if (captionText) {
-      const t = await sendText({ to: sendTo, body: captionText });
-      captionMessageId = t.waMessageId;
-    }
-    const r = await sendMedia({
-      to: sendTo,
-      mediaType: "document",
-      url: pdfUrl,
-      // No inline caption — the intro text message already delivered it.
-      filename: fileName,
-    });
-    waMessageId = r.waMessageId;
-  } catch (err) {
-    const e = describeMetaError(err);
+  const sent = await sendQuotationOverCloudApi({ quotation: q, sendTo, pdfUrl, fileName });
+  if (!sent.ok) {
     return NextResponse.json(
-      { error: `WhatsApp send failed: ${e.message}`, code: e.code },
+      { error: `WhatsApp send failed: ${sent.message}`, code: sent.code },
       { status: 502 }
     );
   }
+  const { captionText, captionMessageId, waMessageId } = sent;
 
-  // 3. Update quotation + mirror to inbox if conversation exists
-  const firstSend = (await prisma.quotation.updateMany({ where: { id: params.id, status: "draft" }, data: { status: "sent" } })).count === 1;
-  await prisma.quotation.update({
-    where: { id: params.id },
-    data: {
-      pdfUrl,
-      status: "sent",
-      sentAt: new Date(),
-    },
+  // 3. Update quotation + mirror to inbox if conversation exists. The first send
+  //    gets the 3-day follow-up (on the customer when known, else the chat).
+  await markQuotationSent({
+    quotation: q,
+    pdfUrl,
+    actorUserId: user.id,
+    followUpConversationId: q.conversationId ?? delivery.conversationId ?? null,
   });
-
-  // Deals are confirmed projects and never change stage on a send. The first
-  // send gets the 3-day follow-up (on the customer when known, else the chat).
-  if (firstSend) {
-    await scheduleQuoteFollowUp({
-      quotationNumber: q.number,
-      accountContactId: q.accountContactId,
-      conversationId: q.conversationId ?? delivery.conversationId ?? null,
-      actorUserId: user.id,
-    });
-  }
 
   const mirrorConversationId = delivery.conversationId;
   if (mirrorConversationId) {
-    // Mirror the caption text (if sent) + the PDF into the inbox thread
-    // so the conversation shows both, matching what the customer sees.
-    if (captionMessageId) {
-      await prisma.message
-        .create({
-          data: {
-            conversationId: mirrorConversationId,
-            direction: "outbound",
-            type: "text",
-            body: captionText,
-            waMessageId: captionMessageId,
-            status: "sent",
-            sentByUserId: user.id,
-          },
-        })
-        .catch(() => null);
-    }
-    await prisma.message
-      .create({
-        data: {
-          conversationId: mirrorConversationId,
-          direction: "outbound",
-          type: "document",
-          body: `📄 Quotation ${q.number} sent`,
-          mediaUrl: pdfUrl,
-          mediaMimeType: "application/pdf",
-          mediaFileName: fileName,
-          waMessageId,
-          status: "sent",
-          sentByUserId: user.id,
-        },
-      })
-      .catch(() => null);
-    await prisma.conversation.update({
-      where: { id: mirrorConversationId },
-      data: { lastOutboundAt: new Date() },
+    await mirrorQuotationToInbox({
+      conversationId: mirrorConversationId,
+      quotationNumber: q.number,
+      captionText,
+      captionMessageId,
+      pdfUrl,
+      fileName,
+      waMessageId,
+      actorUserId: user.id,
     });
   }
 

@@ -13,6 +13,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendMedia, sendText, describeMetaError } from "@/lib/whatsapp";
 import { resolveWhatsAppDelivery } from "@/lib/whatsapp-delivery";
+import { buildDesignSendItems, designCaption, designMirrorMedia, type DesignFormat } from "@/lib/court-image/send";
 
 // Same convention as staffCommands.ts's own APP_URL constant.
 const APP_URL = process.env.APP_URL ?? "https://whatsapp-tool-marketing.vercel.app";
@@ -27,12 +28,6 @@ const bodySchema = z.object({
     .max(3)
     .optional(),
 });
-
-const FORMAT_ORDER: Array<"2d" | "3d-image" | "3d-video"> = [
-  "2d",
-  "3d-image",
-  "3d-video",
-];
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -63,39 +58,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Build the list of items to send. If formats wasn't supplied (legacy
   // callers), fall back to the single imageUrl.
-  type Item = {
-    format: "2d" | "3d-image" | "3d-video";
-    url: string;
-    mediaType: "image" | "video";
-    fileExt: "png" | "mp4";
-  };
-  const requested = parsed.data.formats ??
+  const requested: readonly DesignFormat[] = parsed.data.formats ??
     (row.imageUrl ? (["2d"] as const) : []);
-  const items: Item[] = [];
-  for (const f of FORMAT_ORDER) {
-    if (!requested.includes(f)) continue;
-    const url =
-      f === "2d"
-        ? row.image2dUrl ?? row.imageUrl
-        : f === "3d-image"
-          ? row.image3dUrl
-          : row.video3dUrl;
-    if (!url) {
-      return NextResponse.json(
-        {
-          error: "missing_url",
-          message: `No ${f} media saved for this design — regenerate it in the wizard.`,
-        },
-        { status: 422 }
-      );
-    }
-    items.push({
-      format: f,
-      url,
-      mediaType: f === "3d-video" ? "video" : "image",
-      fileExt: f === "3d-video" ? "mp4" : "png",
-    });
+  const built = buildDesignSendItems(row, requested);
+  if (!built.ok) {
+    return NextResponse.json(
+      {
+        error: "missing_url",
+        message: `No ${built.missing} media saved for this design — regenerate it in the wizard.`,
+      },
+      { status: 422 }
+    );
   }
+  const items = built.items;
 
   if (items.length === 0) {
     return NextResponse.json(
@@ -104,9 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
   }
 
-  const baseCaption =
-    row.caption?.trim() ||
-    `Court design ${row.number} from Fitoverse — ${row.customerName}`;
+  const baseCaption = designCaption(row);
 
   // Route by whether the customer has an OPEN 24h WhatsApp session (located by
   // phone number — see resolveWhatsAppDelivery) — same reasoning as the
@@ -221,11 +194,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           data: {
             conversationId: mirrorConversationId,
             direction: "outbound",
-            type: isVideo ? "video" : "image",
-            body: `Court design ${row.number} sent (${s.format})`,
-            mediaUrl: s.url ?? undefined,
-            mediaMimeType: isVideo ? "video/mp4" : "image/png",
-            mediaFileName: `${row.number}-${s.format}.${isVideo ? "mp4" : "png"}`,
+            ...designMirrorMedia(row, { format: s.format, url: s.url, isVideo }),
             waMessageId: s.waMessageId,
             status: "sent",
             sentByUserId: user.id,

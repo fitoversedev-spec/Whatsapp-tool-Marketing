@@ -9,7 +9,16 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { QUOTATION_LIST_SELECT } from "@/lib/quotation/list-select";
 import { after } from "@/lib/scout/after";
-import { buildQuotationNumber, recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
+import { recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/calculator";
+import {
+  createQuotationWithNumber,
+  demotePrimaryQuotes,
+  nextSequenceForYear,
+  setDealQuotedValue,
+  syncConversationDealValue,
+  syncDealAccountClassification,
+  writeDealLineItems,
+} from "@/lib/quotation/service";
 import { reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
 import { applyDocumentClassification, logDocumentDeleted, resolveContactForDocument } from "@/lib/crm/contactLinks";
 
@@ -151,18 +160,14 @@ export async function POST(req: NextRequest) {
   // Run independent writes in parallel: deal update, isPrimary demotion, sequence number lookup.
   const [dealAfterQuote, , nextSeqResult] = await Promise.all([
     dealId
-      ? prisma.deal
-          .update({
-            where: { id: dealId },
-            data: {
-              quotedValue: totals.grandTotal,
-              ...(parsed.data.siteCity ? { siteCity: parsed.data.siteCity } : {}),
-              ...(parsed.data.leadSourceId ? { leadSourceId: parsed.data.leadSourceId } : {}),
-            },
-          })
-          .catch(() => null)
+      ? setDealQuotedValue({
+          dealId,
+          quotedValue: totals.grandTotal,
+          siteCity: parsed.data.siteCity,
+          leadSourceId: parsed.data.leadSourceId,
+        })
       : Promise.resolve(null),
-    dealId ? prisma.quotation.updateMany({ where: { dealId, isPrimary: true }, data: { isPrimary: false } }) : Promise.resolve(null),
+    dealId ? demotePrimaryQuotes(dealId) : Promise.resolve(null),
     nextSequenceForYear(year),
   ]);
   // What the wizard asked about the customer lands on the customer — only
@@ -179,83 +184,51 @@ export async function POST(req: NextRequest) {
 
   // Conversation + Account syncs (depend on dealAfterQuote, but independent of each other).
   const sideEffects: Promise<unknown>[] = [];
-  if (dealAfterQuote?.conversationId) {
-    sideEffects.push(
-      prisma.conversation
-        .update({
-          where: { id: dealAfterQuote.conversationId },
-          data: { dealValue: dealAfterQuote.wonValue ?? dealAfterQuote.quotedValue },
-        })
-        .catch(() => null),
-    );
-  }
-  if (dealId && (parsed.data.customerProfileId || parsed.data.businessType)) {
-    sideEffects.push(
-      prisma.deal
-        .findUnique({ where: { id: dealId }, select: { accountId: true } })
-        .then((d) =>
-          d
-            ? prisma.account
-                .update({
-                  where: { id: d.accountId },
-                  data: {
-                    ...(parsed.data.customerProfileId ? { customerProfileId: parsed.data.customerProfileId } : {}),
-                    ...(parsed.data.businessType ? { businessType: parsed.data.businessType } : {}),
-                  },
-                })
-                .catch(() => null)
-            : null,
-        ),
-    );
+  const conversationSync = syncConversationDealValue(dealAfterQuote);
+  if (conversationSync) sideEffects.push(conversationSync);
+  if (dealId) {
+    const accountSync = syncDealAccountClassification({
+      dealId,
+      customerProfileId: parsed.data.customerProfileId,
+      businessType: parsed.data.businessType,
+    });
+    if (accountSync) sideEffects.push(accountSync);
   }
   // Best-effort and not needed by the quote itself; kept alive after the
   // response (a bare floating promise can be cut off once the function returns).
   if (sideEffects.length) after(Promise.all(sideEffects));
 
-  let quotation;
-  let lastError: unknown = null;
-  let nextSeq = nextSeqResult;
-  for (let attempt = 0; attempt < 6; attempt++) {
-    try {
-      quotation = await prisma.quotation.create({
-        data: {
-          number: buildQuotationNumber(year, nextSeq - 1),
-          customerName: parsed.data.customerName,
-          sport: parsed.data.sport,
-          lengthFt: parsed.data.lengthFt,
-          widthFt: parsed.data.widthFt,
-          lineItems: JSON.stringify(parsed.data.lineItems),
-          subtotal: totals.subtotal,
-          gstAmount: totals.gstAmount,
-          grandTotal: totals.grandTotal,
-          notes: parsed.data.notes ?? null,
-          caption: parsed.data.caption ?? null,
-          quoteDate: new Date(parsed.data.quoteDate),
-          validityDays: parsed.data.validityDays,
-          conversationId: parsed.data.conversationId ?? null,
-          contactPhone: parsed.data.contactPhone ?? null,
-          salespersonPhone: parsed.data.salespersonPhone ?? null,
-          sections: parsed.data.sections ?? null,
-          createdByUserId: user.id,
-          status: "draft",
-          dealId,
-          accountContactId,
-          isPrimary: true,
-        },
-      });
-      break;
-    } catch (err) {
-      lastError = err;
-      // P2002 = unique constraint failure. Only retry that one; bubble
-      // everything else immediately so unrelated bugs aren't masked.
-      const code = (err as { code?: string })?.code;
-      if (code !== "P2002") throw err;
-      nextSeq += 1;
-    }
-  }
+  // Number assignment with the P2002 retry lives in lib/quotation/service.ts.
+  const quotation = await createQuotationWithNumber({
+    year,
+    nextSeq: nextSeqResult,
+    data: {
+      customerName: parsed.data.customerName,
+      sport: parsed.data.sport,
+      lengthFt: parsed.data.lengthFt,
+      widthFt: parsed.data.widthFt,
+      lineItems: JSON.stringify(parsed.data.lineItems),
+      subtotal: totals.subtotal,
+      gstAmount: totals.gstAmount,
+      grandTotal: totals.grandTotal,
+      notes: parsed.data.notes ?? null,
+      caption: parsed.data.caption ?? null,
+      quoteDate: new Date(parsed.data.quoteDate),
+      validityDays: parsed.data.validityDays,
+      conversationId: parsed.data.conversationId ?? null,
+      contactPhone: parsed.data.contactPhone ?? null,
+      salespersonPhone: parsed.data.salespersonPhone ?? null,
+      sections: parsed.data.sections ?? null,
+      createdByUserId: user.id,
+      status: "draft",
+      dealId,
+      accountContactId,
+      isPrimary: true,
+    },
+  });
 
   if (!quotation) {
-    console.error("[quotations] number collision after retries", lastError);
+    // createQuotationWithNumber already logged the collision.
     return NextResponse.json(
       {
         error:
@@ -268,30 +241,14 @@ export async function POST(req: NextRequest) {
   // DealLineItem rows for analytics. The quote's own JSON snapshot is already
   // saved; this best-effort write runs after the response so it never delays it.
   if (dealId) {
-    after(async () => {
-      try {
-        const sport = await prisma.sport.findUnique({ where: { slug: parsed.data.sport } });
-        const included = parsed.data.lineItems.filter((li) => li.included);
-        if (included.length) {
-          await prisma.dealLineItem.createMany({
-            data: included.map((li) => ({
-              dealId: dealId!,
-              quotationId: quotation!.id,
-              productId: li.productId ?? null,
-              sportId: sport?.id ?? null,
-              label: li.name,
-              quantity: li.areaSqFt,
-              unit: li.unit ?? null,
-              rate: li.ratePerSqFt,
-              amount: li.total,
-              isEnquiryOnly: false,
-            })),
-          });
-        }
-      } catch (err) {
-        console.error("[quotations] DealLineItem write failed", err);
-      }
-    });
+    after(() =>
+      writeDealLineItems({
+        dealId,
+        quotationId: quotation.id,
+        sport: parsed.data.sport,
+        lineItems: parsed.data.lineItems as QuoteLineItem[],
+      }),
+    );
   }
 
   return NextResponse.json({
@@ -334,21 +291,4 @@ export async function DELETE(req: NextRequest) {
   await Promise.all(dealIds.map((id) => reconcileDealAfterQuotationDelete(id)));
   await Promise.all(affected.map((q) => logDocumentDeleted({ kind: "quotation", ...q }, user.id)));
   return NextResponse.json({ ok: true, count: result.count });
-}
-
-// Find the next sequential number for a given calendar year by parsing
-// the highest existing FIT-QT-YYYY-NNN row. Returns 1 if no quotations
-// exist yet that year.
-async function nextSequenceForYear(year: number): Promise<number> {
-  const prefix = `FIT-QT-${year}-`;
-  const latest = await prisma.quotation.findFirst({
-    where: { number: { startsWith: prefix } },
-    orderBy: { number: "desc" },
-    select: { number: true },
-  });
-  if (!latest) return 1;
-  const seqStr = latest.number.slice(prefix.length);
-  const seq = parseInt(seqStr, 10);
-  if (!Number.isFinite(seq)) return 1;
-  return seq + 1;
 }

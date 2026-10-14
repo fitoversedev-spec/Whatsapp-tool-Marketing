@@ -23,7 +23,7 @@ export default async function LeadsPage() {
     }),
     // Assignee dropdown source
     prisma.user.findMany({
-      where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+      where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" } },
       select: { id: true, name: true, role: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     }),

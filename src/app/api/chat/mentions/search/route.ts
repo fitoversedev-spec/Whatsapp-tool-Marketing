@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
 
   const [people, customers, leads, deals, quotations, courtImages] = await Promise.all([
     prisma.user.findMany({
-      where: { deletedAt: null, isActive: true, approvalStatus: "approved", ...(like ? { name: like } : {}) },
+      where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" }, ...(like ? { name: like } : {}) },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
       take: TAKE,

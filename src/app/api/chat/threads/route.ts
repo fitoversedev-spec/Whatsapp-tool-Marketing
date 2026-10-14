@@ -42,7 +42,7 @@ export async function GET() {
       },
     }),
     prisma.user.findMany({
-      where: { deletedAt: null, isActive: true, approvalStatus: "approved", id: { not: user.id } },
+      where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" }, id: { not: user.id } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

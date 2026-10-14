@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       where: { id: data.userId },
     });
 
-    if (!user || user.deletedAt) {
+    if (!user || user.deletedAt || user.role === "ai_agent") {
       return NextResponse.json(
         { error: "Invalid reset link. Please request a new one." },
         { status: 400 }

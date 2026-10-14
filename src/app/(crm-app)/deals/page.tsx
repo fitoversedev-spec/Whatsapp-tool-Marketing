@@ -40,7 +40,7 @@ export default async function DealsPage({ searchParams }: { searchParams: { from
     prisma.deal.aggregate({ where: dealsWhere, _count: { _all: true }, _sum: { wonValue: true } }),
     seesAll
       ? prisma.user.findMany({
-          where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+          where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" } },
           select: { id: true, name: true },
           orderBy: { name: "asc" },
         })

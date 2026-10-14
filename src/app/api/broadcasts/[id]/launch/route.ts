@@ -9,8 +9,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { prepareBroadcast } from "@/lib/sender";
-import { sendInBackground } from "@/lib/broadcast-chain";
+import { startBroadcast } from "@/lib/broadcasts/control";
 
 export const maxDuration = 60;
 
@@ -31,26 +30,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // force-fire a scheduled broadcast without waiting for the cron sweep).
   // Claimed atomically, so a second Launch (double click, second tab) is
   // turned away instead of sending everyone the message twice.
-  const claimed = await prisma.broadcast.updateMany({
-    where: { id: params.id, status: { in: ["draft", "scheduled"] } },
-    data: { status: "running", launchedAt: new Date() },
-  });
-  if (claimed.count === 0) {
+  const started = await startBroadcast(params.id, new URL(req.url).origin);
+  if (started.kind === "not_launchable") {
     return NextResponse.json({ error: `Already ${b.status === "draft" || b.status === "scheduled" ? "launched" : b.status}` }, { status: 422 });
   }
-
-  try {
-    const { total } = await prepareBroadcast(params.id);
-    sendInBackground(new URL(req.url).origin, params.id);
-    return NextResponse.json({ ok: true, status: "running", total }, { status: 200 });
-  } catch (err) {
-    console.error("[broadcast]", params.id, err);
-    await prisma.broadcast.update({
-      where: { id: params.id },
-      data: { status: "failed" },
-      select: { id: true },
-    });
-    const message = err instanceof Error ? err.message : String(err);
+  if (started.kind === "failed") {
+    console.error("[broadcast]", params.id, started.error);
+    const message = started.error instanceof Error ? started.error.message : String(started.error);
     return NextResponse.json({ error: "broadcast_failed", message }, { status: 500 });
   }
+  return NextResponse.json({ ok: true, status: "running", total: started.total }, { status: 200 });
 }

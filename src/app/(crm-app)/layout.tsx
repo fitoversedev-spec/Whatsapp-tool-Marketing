@@ -11,6 +11,7 @@ import BottomNav from "@/components/BottomNav";
 import SwRegister from "@/components/SwRegister";
 import SessionGuard from "@/components/SessionGuard";
 import { endOfDayIST } from "@/lib/time";
+import { isApprover } from "@/lib/agent/approvals";
 import type { Role } from "@/lib/rbac";
 
 // A badge count that fails (DB hiccup, cold start) shows 0 instead of taking
@@ -25,7 +26,7 @@ export default async function CrmAppLayout({ children }: { children: React.React
 
   // Seeds every badge, so the shared badge poller (src/lib/live-counts.ts)
   // doesn't need to re-fetch them on page load.
-  const [pendingCount, crmReminderCount, chatUnread, chatMentions, chatRequests] = await Promise.all([
+  const [pendingCount, crmReminderCount, chatUnread, chatMentions, chatRequests, aiApprover] = await Promise.all([
     isAdminUser
       ? orZero(prisma.user.count({ where: { approvalStatus: "pending", deletedAt: null } }))
       : 0,
@@ -56,7 +57,12 @@ export default async function CrmAppLayout({ children }: { children: React.React
           : { toUserId: user.id, status: "REQUESTED" },
       })
     ),
+    // Who may decide the AI's requests (Setting agent_approvers, admins by default).
+    isApprover(user).catch(() => false),
   ]);
+  const aiApprovalCount = aiApprover
+    ? await orZero(prisma.agentApprovalRequest.count({ where: { status: "pending", expiresAt: { gt: new Date() } } }))
+    : 0;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-slate-50">
@@ -68,6 +74,8 @@ export default async function CrmAppLayout({ children }: { children: React.React
         }}
         pendingCount={pendingCount}
         reminderCount={crmReminderCount}
+        aiApprover={aiApprover}
+        aiApprovalCount={aiApprovalCount}
       />
       <main className="flex-1 min-w-0 overflow-x-hidden pb-14 md:pb-0">{children}</main>
       <NavigationTracker />

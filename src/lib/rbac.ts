@@ -10,7 +10,18 @@
 // existing ownership-scoped CRM-adjacent files as they're touched — not a
 // blanket retrofit of every admin-only gate in the app.
 
-export type Role = "admin" | "sales" | "manager" | "management";
+export type Role = "admin" | "sales" | "manager" | "management" | "ai_agent";
+
+// "ai_agent" is the non-human service identity behind the Fitoverse AI Sales
+// Agent. It exists so CRM rows can point at an owner; it is NEVER a login role:
+// getCurrentUser() returns null for it, the sign-in / reset routes refuse it, and
+// none of the helpers below grant it anything (they all compare against explicit
+// role names, so a new role gets no access by default). Keep it that way.
+export const AGENT_ROLE = "ai_agent" as const;
+
+export function isAgentRole(role: string | null | undefined): boolean {
+  return role === AGENT_ROLE;
+}
 
 export function isAdmin(role: string): boolean {
   return role === "admin";

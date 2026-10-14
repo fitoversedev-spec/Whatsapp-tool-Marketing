@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createMetaLeadNote } from "@/lib/meta-ads/leadWrites";
 
 const bodySchema = z.object({
   body: z.string().trim().min(1).max(4000),
@@ -20,16 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const lead = await prisma.metaLead.findUnique({ where: { id: params.id }, select: { id: true } });
   if (!lead) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  const note = await prisma.metaLeadNote.create({
-    data: { metaLeadId: params.id, authorUserId: user.id, body: parsed.data.body },
-    select: {
-      id: true,
-      body: true,
-      createdAt: true,
-      authorUserId: true,
-      author: { select: { name: true } },
-    },
-  });
+  const note = await createMetaLeadNote({ metaLeadId: params.id, authorUserId: user.id, body: parsed.data.body });
 
   return NextResponse.json({
     ok: true,

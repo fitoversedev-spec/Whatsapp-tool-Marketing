@@ -540,7 +540,7 @@ export async function getCampaignById(
 // src/app/api/users/assignable/route.ts).
 export async function getAssignableReps(): Promise<{ id: string; name: string }[]> {
   return prisma.user.findMany({
-    where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+    where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" } },
     orderBy: [{ role: "asc" }, { name: "asc" }],
     select: { id: true, name: true },
   });

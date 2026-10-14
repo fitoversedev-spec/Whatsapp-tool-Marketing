@@ -3,8 +3,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { loadContactForUser } from "@/lib/crm/contactAccess";
+import { addProductInterests, UnknownProductError } from "@/lib/crm/contactWrites";
 
 const schema = z.object({
   productIds: z.array(z.string().uuid()).max(30).default([]),
@@ -23,28 +23,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "Pick at least one product" }, { status: 400 });
   }
 
-  // Only real catalogue products, each once.
-  const requested = Array.from(new Set(parsed.data.productIds));
-  const known = requested.length
-    ? await prisma.product.findMany({ where: { id: { in: requested } }, select: { id: true } })
-    : [];
-  if (known.length !== requested.length) return NextResponse.json({ error: "One of those products no longer exists" }, { status: 400 });
-
-  // Skip what's already recorded for this contact (products, or the same "Other" text).
-  const label = parsed.data.otherLabel || null;
-  const existing = await prisma.contactProductInterest.findMany({
-    where: {
-      accountContactId: params.id,
-      OR: [{ productId: { in: requested } }, ...(label ? [{ productId: null, label: { equals: label, mode: "insensitive" as const } }] : [])],
-    },
-    select: { productId: true, label: true },
-  });
-  const have = new Set(existing.map((e) => e.productId).filter(Boolean));
-  const labelKnown = existing.some((e) => !e.productId);
-  const rows = [
-    ...requested.filter((id) => !have.has(id)).map((productId) => ({ accountContactId: params.id, productId, createdByUserId: user.id })),
-    ...(label && !labelKnown ? [{ accountContactId: params.id, label, createdByUserId: user.id }] : []),
-  ];
-  if (rows.length) await prisma.contactProductInterest.createMany({ data: rows });
-  return NextResponse.json({ added: rows.length });
+  try {
+    const { added } = await addProductInterests({
+      contactId: params.id,
+      productIds: parsed.data.productIds,
+      otherLabel: parsed.data.otherLabel,
+      createdByUserId: user.id,
+    });
+    return NextResponse.json({ added });
+  } catch (err) {
+    if (err instanceof UnknownProductError) return NextResponse.json({ error: err.message }, { status: 400 });
+    throw err;
+  }
 }

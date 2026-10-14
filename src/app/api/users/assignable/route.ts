@@ -15,6 +15,7 @@ export async function GET() {
       deletedAt: null,
       isActive: true,
       approvalStatus: "approved",
+      role: { not: "ai_agent" },
     },
     orderBy: [{ role: "asc" }, { name: "asc" }],
     select: { id: true, name: true, role: true, email: true },

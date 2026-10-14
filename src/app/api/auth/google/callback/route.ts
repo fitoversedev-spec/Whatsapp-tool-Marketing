@@ -94,6 +94,12 @@ export async function GET(req: NextRequest) {
     const user = await prisma.user.findUnique({ where: { email } });
 
     if (user) {
+      // The AI Sales Agent's service account can never sign in.
+      if (user.role === "ai_agent") {
+        return NextResponse.redirect(
+          `${BASE_URL}/login?error=${encodeURIComponent("Google login failed. Please try again.")}`
+        );
+      }
       // User exists -- check status
       if (user.deletedAt) {
         return NextResponse.redirect(

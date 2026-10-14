@@ -14,11 +14,16 @@ type Props = {
   user: { name: string; email: string; role: Role };
   pendingCount?: number;
   reminderCount?: number;
+  /** Shows the "AI approvals" link (people who may decide the AI's requests). */
+  aiApprover?: boolean;
+  aiApprovalCount?: number;
 };
 
 // --- CrmSidebar state + toggle event below ---
 
-const CRM_PRIMARY_NAV = [
+type NavItem = { href: string; label: string; icon: string; exact?: boolean; badgeKey?: "reminders" | "aiApprovals" };
+
+const CRM_PRIMARY_NAV: NavItem[] = [
   { href: "/crm", label: "Dashboard", icon: "\u{1F9ED}", exact: true },
   { href: "/crm/contacts", label: "Contacts", icon: "\u{1F9D1}" },
   { href: "/crm/leads", label: "Leads", icon: "\u{1F3AF}" },
@@ -30,6 +35,8 @@ const CRM_PRIMARY_NAV = [
   { href: "/crm/activities", label: "Activities", icon: "\u{1F5D2}️" },
   { href: "/crm/insights", label: "Insights", icon: "\u{1F4DD}" },
 ];
+
+const AI_APPROVALS_NAV: NavItem = { href: "/crm/ai-approvals", label: "AI approvals", icon: "🤖", badgeKey: "aiApprovals" };
 
 const CRM_ALL_TOOLS_GROUPS: AllToolsGroup[] = [
   {
@@ -68,6 +75,7 @@ const CRM_ALL_PAGES = [
   { href: "/crm/admin/taxonomies", label: "Taxonomies" },
   { href: "/crm/admin/targets", label: "Targets" },
   { href: "/crm/admin/audit-log", label: "Audit log" },
+  { href: "/crm/ai-approvals", label: "AI approvals" },
   { href: "/crm/profile", label: "Profile" },
 ];
 
@@ -75,6 +83,8 @@ export default function CrmSidebar({
   user,
   pendingCount = 0,
   reminderCount: reminderInitial = 0,
+  aiApprover = false,
+  aiApprovalCount = 0,
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -246,11 +256,11 @@ export default function CrmSidebar({
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {CRM_PRIMARY_NAV.map((item) => {
+          {(aiApprover ? [...CRM_PRIMARY_NAV, AI_APPROVALS_NAV] : CRM_PRIMARY_NAV).map((item) => {
             const active = "exact" in item && item.exact
               ? pathname === item.href
               : pathname.startsWith(item.href);
-            const badge = item.badgeKey === "reminders" ? reminderCount : 0;
+            const badge = item.badgeKey === "reminders" ? reminderCount : item.badgeKey === "aiApprovals" ? aiApprovalCount : 0;
             const badgeColor = "bg-orange-500";
             return (
               <Link

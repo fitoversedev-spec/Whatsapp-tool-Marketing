@@ -16,7 +16,12 @@ export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
   if (!me || me.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const parsed = schema.safeParse(await req.json().catch(() => null));
+  const body = await req.json().catch(() => null);
+  // The AI agent's service account is created by scripts/agent-keys.ts, never here.
+  if (body && typeof body === "object" && (body as { role?: unknown }).role === "ai_agent") {
+    return NextResponse.json({ error: "The ai_agent role cannot be assigned here." }, { status: 403 });
+  }
+  const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
   const email = parsed.data.email.toLowerCase();

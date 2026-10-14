@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { scheduleWindowError } from "@/lib/broadcasts/schedule";
 
 const schema = z.object({
   scheduledAt: z.string().datetime(),
@@ -38,20 +39,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
   const candidate = new Date(parsed.data.scheduledAt);
-  const minFuture = new Date(Date.now() + 2 * 60 * 1000);
-  const maxFuture = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
-  if (candidate < minFuture) {
-    return NextResponse.json(
-      { error: "Scheduled time must be at least 2 minutes in the future" },
-      { status: 422 }
-    );
-  }
-  if (candidate > maxFuture) {
-    return NextResponse.json(
-      { error: "Scheduled time must be within 90 days" },
-      { status: 422 }
-    );
-  }
+  const problem = scheduleWindowError(candidate);
+  if (problem) return NextResponse.json({ error: problem }, { status: 422 });
 
   const updated = await prisma.broadcast.update({
     where: { id: params.id },

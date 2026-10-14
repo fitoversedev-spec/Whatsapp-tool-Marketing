@@ -8,6 +8,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/rbac";
+import { createContactActivity } from "@/lib/crm/contactWrites";
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -83,25 +84,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  let dealId: string | null = null;
-  if (parsed.data.dealId) {
-    const deal = await prisma.deal.findUnique({ where: { id: parsed.data.dealId }, select: { accountId: true } });
-    if (deal && deal.accountId === contact.accountId) dealId = parsed.data.dealId;
-  }
-
-  const activity = await prisma.activity.create({
-    data: {
-      accountContactId: contact.id,
-      accountId: contact.accountId,
-      dealId,
-      activityTypeId: parsed.data.activityTypeId,
-      ownerUserId: user.id,
-      subject: parsed.data.subject,
-      notes: parsed.data.notes ?? null,
-      occurredAt: new Date(),
-      durationMins: parsed.data.durationMins ?? null,
-      outcome: parsed.data.outcome ?? null,
-    },
+  const activity = await createContactActivity({
+    contact,
+    dealId: parsed.data.dealId,
+    activityTypeId: parsed.data.activityTypeId,
+    ownerUserId: user.id,
+    subject: parsed.data.subject,
+    notes: parsed.data.notes,
+    durationMins: parsed.data.durationMins,
+    outcome: parsed.data.outcome,
   });
   return NextResponse.json({ activity });
 }

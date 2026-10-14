@@ -31,7 +31,8 @@ export async function POST(req: NextRequest) {
     if (
       !user ||
       user.deletedAt ||
-      user.approvalStatus !== "approved"
+      user.approvalStatus !== "approved" ||
+      user.role === "ai_agent"
     ) {
       return ok200;
     }

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { isAdmin, canManageAllCustomers, customerAccess } from "@/lib/rbac";
 import { reassignCustomerRep } from "@/lib/crm/assignRep";
 import { logContactEvent } from "@/lib/crm/contactEvents";
+import { executionStatusPatch, wonDetailsPatch } from "@/lib/crm/dealEdits";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -130,22 +131,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const { deleted, expectedCloseAt, customerProfileId, businessType, accountName, accountCity, accountOwnerUserId, executionStatus, nextActionDueAt, expectedStartAt, wonNote, ...rest } = parsed.data;
   const patch: Record<string, unknown> = { ...rest };
-  if (expectedStartAt !== undefined) patch.expectedStartAt = expectedStartAt ? new Date(expectedStartAt) : null;
-  if (wonNote !== undefined) patch.wonNote = wonNote || null;
+  Object.assign(patch, wonDetailsPatch({ expectedStartAt, wonNote }));
   if (expectedCloseAt !== undefined) patch.expectedCloseAt = expectedCloseAt ? new Date(expectedCloseAt) : null;
   if (nextActionDueAt !== undefined) patch.nextActionDueAt = nextActionDueAt ? new Date(nextActionDueAt) : null;
   if (deleted) patch.deletedAt = new Date();
   // Stamped server-side, set-once — a later re-click of the same button
   // (e.g. a double-submit) must not push executionStartedAt/
   // deliveryCompletedAt forward again.
-  if (executionStatus !== undefined) {
-    patch.executionStatus = executionStatus;
-    if (executionStatus === "IN_EXECUTION" && !deal.executionStartedAt) patch.executionStartedAt = new Date();
-    if (executionStatus === "COMPLETED") {
-      patch.deliveryCompletedAt = new Date();
-      if (!deal.executionStartedAt) patch.executionStartedAt = new Date();
-    }
-  }
+  if (executionStatus !== undefined) Object.assign(patch, executionStatusPatch(deal, executionStatus));
 
   const updated = await prisma.deal.update({ where: { id: params.id }, data: patch });
 

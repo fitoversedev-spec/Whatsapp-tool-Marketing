@@ -306,6 +306,8 @@ const ROLE_BADGE_CLASSES: Record<Role, string> = {
   management: "bg-emerald-100 text-emerald-700",
   manager: "bg-amber-100 text-amber-700",
   sales: "bg-blue-100 text-blue-700",
+  // Never listed on this page (the AI agent's service account is hidden), but Role is exhaustive.
+  ai_agent: "bg-slate-100 text-slate-700",
 };
 
 function RoleBadge({ role }: { role: Role }) {

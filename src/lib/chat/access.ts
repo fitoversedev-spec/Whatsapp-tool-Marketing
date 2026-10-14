@@ -47,7 +47,7 @@ async function loadTeamChannel(user: Actor): Promise<LoadThreadResult> {
   const existing = await prisma.chatThread.findFirst({ where: { channelKey: "team" }, select: THREAD_SELECT });
   if (existing) return { thread: existing, owns: false, admin: isAdmin(user.role), created: false };
   const members = await prisma.user.findMany({
-    where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+    where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" } },
     select: { id: true },
   });
   const created = await prisma.chatThread.create({

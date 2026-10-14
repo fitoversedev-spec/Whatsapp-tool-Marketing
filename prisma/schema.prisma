@@ -14,7 +14,9 @@ datasource db {
 
 // NOTE: SQLite did not support native enums, so we use String fields.
 // Allowed values (validated at the API layer via Zod):
-//   role: "admin" | "sales" | "manager" | "management"
+//   role: "admin" | "sales" | "manager" | "management" | "ai_agent"
+//     ("ai_agent" is the non-human service identity for the Fitoverse AI Sales
+//     Agent — never assignable from the users page, never able to sign in.)
 //     (manager/management are granted only via the admin-controlled /users
 //     page — public self-signup keeps offering just admin/sales.)
 //   user.approvalStatus: "pending" | "approved" | "rejected"
@@ -71,6 +73,7 @@ model User {
   importBatches        ImportBatch[]
   pendingStaffAction   PendingStaffAction?
   auditLogs            AuditLog[]
+  agentIdentity        AgentIdentity?
   targetsSet           Target[]
   decisionsLogged      DecisionLog[]
   chatThreadsCreated   ChatThread[]      @relation("ChatThreadCreator")
@@ -759,6 +762,16 @@ model Quotation {
   salespersonPhone String? @map("salesperson_phone")
   sections         String?
 
+  // AI Sales Agent (stage 4). The agent may only send a quote a person has
+  // approved. approvalState: "none" | "pending" | "approved" | "rejected".
+  // parentQuotationId links a revision (or an approved discount) to the quote it
+  // came from; the old quote stays as history. agentOrigin = created by the AI.
+  approvalState     String    @default("none") @map("approval_state")
+  approvedByUserId  String?   @map("approved_by_user_id")
+  approvedAt        DateTime? @map("approved_at")
+  parentQuotationId String?   @map("parent_quotation_id")
+  agentOrigin       Boolean   @default(false) @map("agent_origin")
+
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -778,6 +791,7 @@ model Quotation {
   @@index([createdAt])
   @@index([dealId, version])
   @@index([accountContactId])
+  @@index([parentQuotationId])
   @@map("quotations")
 }
 
@@ -2990,4 +3004,160 @@ model ScoutInsightCache {
   @@unique([googlePlaceId], map: "scout_insight_cache_place_uniq")
   @@index([expiresAt], map: "scout_insight_cache_expires_idx")
   @@map("scout_insight_cache")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fitoverse AI Sales Agent — integration layer (stage 0 foundation).
+//
+// A separate service talks to /api/agent/v1/** with its own API key. The key is
+// never a user session: it resolves to an AgentIdentity (this table) which is
+// linked to a User row with role "ai_agent" only so ownership/assignment in the
+// CRM has something to point at. That User can never sign in.
+// Allowed values (validated in src/lib/agent, not by the database):
+//   identity.status:   "active" | "suspended" | "revoked"
+//   credential.environment / audit.environment: "development" | "staging" | "production"
+//   audit.result:      "success" | "denied" | "error" | "pending_approval" | "rate_limited" | "invalid"
+//   approval.status:   "pending" | "approved" | "rejected" | "expired" | "cancelled" | "executed" | "failed"
+//   idempotency.status: "in_progress" | "completed" | "failed"
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AgentIdentity {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  name      String
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user        User              @relation(fields: [userId], references: [id])
+  credentials AgentCredential[]
+
+  @@map("agent_identities")
+}
+
+// One API key. Only a sha256 of the secret is stored; the full key is shown
+// once, at issue time, by scripts/agent-keys.ts.
+model AgentCredential {
+  id              String    @id @default(uuid())
+  identityId      String    @map("identity_id")
+  environment     String
+  keyId           String    @unique @map("key_id")
+  secretHash      String    @map("secret_hash")
+  label           String
+  ipAllowlist     Json      @default("[]") @map("ip_allowlist")
+  createdByUserId String?   @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  expiresAt       DateTime? @map("expires_at")
+  lastUsedAt      DateTime? @map("last_used_at")
+  lastUsedIp      String?   @map("last_used_ip")
+  revokedAt       DateTime? @map("revoked_at")
+  revokedReason   String?   @map("revoked_reason")
+  rotatedFromId   String?   @map("rotated_from_id")
+
+  identity AgentIdentity @relation(fields: [identityId], references: [id])
+
+  @@index([identityId, environment])
+  @@map("agent_credentials")
+}
+
+// Append-only (database triggers reject UPDATE / DELETE / TRUNCATE — see the
+// agent_foundation migration). Deliberately NO foreign keys so nothing that
+// happens to a user or identity can cascade into it. rowHash is a sha256 over
+// the row's other fields, so edits made behind the trigger are detectable.
+model AgentAuditLog {
+  id             String   @id @default(uuid())
+  at             DateTime @default(now())
+  correlationId  String   @map("correlation_id")
+  identityId     String   @map("identity_id")
+  credentialId   String?  @map("credential_id")
+  environment    String
+  toolName       String   @map("tool_name")
+  httpMethod     String   @map("http_method")
+  route          String
+  ip             String?
+  recordIds      Json     @default("[]") @map("record_ids")
+  action         String
+  result         String
+  httpStatus     Int      @map("http_status")
+  fieldsChanged  Json?    @map("fields_changed")
+  approvalId     String?  @map("approval_id")
+  failureReason  String?  @map("failure_reason")
+  durationMs     Int      @map("duration_ms")
+  idempotencyKey String?  @map("idempotency_key")
+  rowHash        String   @map("row_hash")
+
+  @@index([at])
+  @@index([identityId, at])
+  @@index([toolName, at])
+  @@index([correlationId])
+  @@map("agent_audit_logs")
+}
+
+// A request the agent may only make with a human's sign-off. inputJson holds the
+// exact proposed action; inputHash lets a repeated request reuse the same row.
+model AgentApprovalRequest {
+  id              String    @id @default(uuid())
+  identityId      String    @map("identity_id")
+  correlationId   String    @map("correlation_id")
+  toolName        String    @map("tool_name")
+  inputJson       Json      @map("input_json")
+  inputHash       String    @map("input_hash")
+  summary         String
+  status          String    @default("pending")
+  requestedAt     DateTime  @default(now()) @map("requested_at")
+  expiresAt       DateTime  @map("expires_at")
+  decidedByUserId String?   @map("decided_by_user_id")
+  decidedAt       DateTime? @map("decided_at")
+  decisionNote    String?   @map("decision_note")
+  executedAt      DateTime? @map("executed_at")
+  resultJson      Json?     @map("result_json")
+  failureReason   String?   @map("failure_reason")
+
+  @@index([status, requestedAt])
+  @@index([identityId, toolName, inputHash])
+  @@map("agent_approval_requests")
+}
+
+model AgentIdempotencyKey {
+  id             String    @id @default(uuid())
+  identityId     String    @map("identity_id")
+  key            String
+  requestHash    String    @map("request_hash")
+  status         String    @default("in_progress")
+  responseStatus Int?      @map("response_status")
+  responseBody   Json?     @map("response_body")
+  attempts       Int       @default(1)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  lockedUntil    DateTime? @map("locked_until")
+  expiresAt      DateTime  @map("expires_at")
+
+  @@unique([identityId, key])
+  @@index([expiresAt])
+  @@map("agent_idempotency_keys")
+}
+
+// Fixed-window counters. The scope encodes the window length ("m:all",
+// "h:grp:send", ...) because minute and hour windows can start at the same
+// instant. Incremented with one atomic INSERT ... ON CONFLICT statement.
+model AgentRateBucket {
+  identityId  String   @map("identity_id")
+  scope       String
+  windowStart DateTime @map("window_start")
+  count       Int      @default(0)
+
+  @@id([identityId, scope, windowStart])
+  @@index([windowStart])
+  @@map("agent_rate_buckets")
+}
+
+model AgentAlert {
+  id                   String    @id @default(uuid())
+  at                   DateTime  @default(now())
+  kind                 String
+  severity             String
+  details              Json
+  acknowledgedByUserId String?   @map("acknowledged_by_user_id")
+  acknowledgedAt       DateTime? @map("acknowledged_at")
+
+  @@index([at])
+  @@map("agent_alerts")
 }

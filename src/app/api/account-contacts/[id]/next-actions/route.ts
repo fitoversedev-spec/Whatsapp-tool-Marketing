@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { loadContactForUser } from "@/lib/crm/contactAccess";
-import { syncNextActionReminder } from "@/lib/crm/nextActions";
+import { createNextAction } from "@/lib/crm/nextActions";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -38,14 +38,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
-  const action = await prisma.contactNextAction.create({
-    data: {
-      accountContactId: params.id,
-      text: parsed.data.text,
-      dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
-      createdByUserId: user.id,
-    },
+  const action = await createNextAction({
+    contactId: params.id,
+    text: parsed.data.text,
+    dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
+    createdByUserId: user.id,
   });
-  await syncNextActionReminder(action.id);
   return NextResponse.json({ nextAction: action });
 }

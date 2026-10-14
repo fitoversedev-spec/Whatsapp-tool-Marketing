@@ -8,6 +8,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { loadContactForUser } from "@/lib/crm/contactAccess";
+import { createContactNote } from "@/lib/crm/contactWrites";
 
 const createSchema = z.object({
   title: z.string().max(200).optional(),
@@ -39,14 +40,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
-  const note = await prisma.accountContactNote.create({
-    data: {
-      accountContactId: params.id,
-      authorUserId: user.id,
-      title: parsed.data.title?.trim() || null,
-      body: parsed.data.body.trim(),
-    },
-    include: { author: { select: { name: true } } },
+  const note = await createContactNote({
+    contactId: params.id,
+    authorUserId: user.id,
+    title: parsed.data.title,
+    body: parsed.data.body,
   });
   return NextResponse.json({ note });
 }

@@ -32,7 +32,7 @@ export default async function LeadsPage() {
     // Rep filter options — only for those who see every rep's leads.
     seesAll
       ? prisma.user.findMany({
-          where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+          where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" } },
           select: { id: true, name: true },
           orderBy: { name: "asc" },
         })

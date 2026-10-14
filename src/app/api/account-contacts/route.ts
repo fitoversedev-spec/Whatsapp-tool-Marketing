@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { canManageAllCustomers, canSeeAllCustomers, customerAccess } from "@/lib/rbac";
 import { findAccountContactDuplicate, findAccountDuplicate } from "@/lib/crm/accounts";
 import { firstLeadStage } from "@/lib/crm/leadStages";
+import { createAccountForContact, createContactInAccount } from "@/lib/crm/contactWrites";
 
 const createSchema = z
   .object({
@@ -65,14 +66,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "possible_duplicate", candidate }, { status: 409 });
       }
     }
-    const account = await prisma.account.create({
-      data: {
-        name: data.accountName,
-        city: data.siteCity ?? null,
-        customerProfileId: data.customerProfileId ?? null,
-        businessType: data.businessType ?? null,
-        ownerUserId: user.id,
-      },
+    const account = await createAccountForContact({
+      name: data.accountName,
+      city: data.siteCity,
+      customerProfileId: data.customerProfileId,
+      businessType: data.businessType,
+      ownerUserId: user.id,
     });
     accountId = account.id;
   }
@@ -91,28 +90,20 @@ export async function POST(req: NextRequest) {
     if (!pickedStage) return NextResponse.json({ error: "That stage is no longer available" }, { status: 400 });
   }
   const startStage = pickedStage ?? (data.asLead ? await firstLeadStage() : null);
-  const result = await prisma.$transaction(async (tx) => {
-    if (data.isPrimary) {
-      await tx.accountContact.updateMany({ where: { accountId }, data: { isPrimary: false } });
-    }
-    const contact = await tx.accountContact.create({
-      data: {
-        accountId: accountId!,
-        name: data.name,
-        phone: data.phone ?? null,
-        email: data.email ?? null,
-        designation: data.designation ?? null,
-        notes: data.notes ?? null,
-        fields: JSON.stringify(data.fields ?? {}),
-        isPrimary: data.isPrimary ?? false,
-        leadSourceId: data.leadSourceId ?? null,
-        createdByUserId: user!.id,
-        // The picked stage; a quick-added lead starts at the first stage.
-        leadStageId: startStage?.id ?? null,
-        ...(data.asLead ? { pipelineStage: "LEAD", promotedToLeadAt: new Date() } : {}),
-      },
-    });
-    return { contact };
+  // The picked stage; a quick-added lead starts at the first stage.
+  const result = await createContactInAccount({
+    accountId,
+    name: data.name,
+    phone: data.phone,
+    email: data.email,
+    designation: data.designation,
+    notes: data.notes,
+    fields: data.fields,
+    isPrimary: data.isPrimary,
+    leadSourceId: data.leadSourceId,
+    createdByUserId: user.id,
+    leadStageId: startStage?.id,
+    asLead: data.asLead,
   });
 
   return NextResponse.json({ contact: result.contact });

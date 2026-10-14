@@ -43,7 +43,7 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
     // admin+manager UI — harmless to fetch either way given the pool size.
     manages
       ? prisma.user.findMany({
-          where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+          where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" } },
           select: { id: true, name: true },
           orderBy: { name: "asc" },
         })

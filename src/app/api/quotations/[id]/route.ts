@@ -6,6 +6,7 @@ import { recompute, lineItemSchema, type QuoteLineItem } from "@/lib/quotation/c
 import { reconcileDealAfterQuotationDelete } from "@/lib/crm/deals";
 import { logDocumentDeleted } from "@/lib/crm/contactLinks";
 import { customerAccess } from "@/lib/rbac";
+import { APPROVAL_RESET, editsQuoteContent } from "@/lib/quotation/service";
 
 const patchSchema = z.object({
   customerName: z.string().min(1).max(200).optional(),
@@ -123,6 +124,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     data.grandTotal = totals.grandTotal;
     data.pdfUrl = null;
   }
+
+  // The AI agent only sends a quote a person approved. Changing what the quote
+  // says withdraws that approval (new columns only; nothing the app shows changes).
+  if (res.quotation.approvalState !== "none" && editsQuoteContent(parsed.data)) Object.assign(data, APPROVAL_RESET);
 
   const updated = await prisma.quotation.update({ where: { id: params.id }, data });
 

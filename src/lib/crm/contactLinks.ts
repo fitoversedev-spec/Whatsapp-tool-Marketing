@@ -59,15 +59,22 @@ export async function resolveContactForDocument(
 // typed, so the database compares digits only (last 10) and the normalised
 // forms are then checked here.
 async function uniqueContactIdForPhone(phone: string): Promise<string | null> {
+  const matches = await contactsMatchingPhone(phone);
+  return matches.length === 1 ? matches[0].id : null;
+}
+
+// Every live contact whose phone is this number (last-10-digit match in SQL,
+// then the normalised forms compared). Empty when the number isn't a usable
+// phone. Shared with the AI agent's duplicate check.
+export async function contactsMatchingPhone(phone: string): Promise<{ id: string; phone: string }[]> {
   const wanted = normalizePhone(phone);
   const digits = (wanted ?? phone).replace(/\D/g, "");
-  if (!wanted || digits.length < 10) return null;
+  if (!wanted || digits.length < 10) return [];
   const rows = await prisma.$queryRaw<{ id: string; phone: string }[]>`
     SELECT id, phone FROM "account_contacts"
     WHERE deleted_at IS NULL AND phone IS NOT NULL
       AND right(regexp_replace(phone, '\\D', '', 'g'), 10) = ${digits.slice(-10)}`;
-  const matches = rows.filter((c) => normalizePhone(c.phone) === wanted);
-  return matches.length === 1 ? matches[0].id : null;
+  return rows.filter((c) => normalizePhone(c.phone) === wanted);
 }
 
 // What the quote / design wizard asked about the customer (site city, lead

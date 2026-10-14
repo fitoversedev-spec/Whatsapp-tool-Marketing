@@ -16,6 +16,9 @@ export const getCurrentUser = cache(async () => {
   if (user.deletedAt) return null;
   if (!user.isActive) return null;
   if (user.approvalStatus !== "approved") return null;
+  // The AI Sales Agent's service account must never reach the human UI or any
+  // route that trusts getCurrentUser(). It authenticates only on /api/agent/v1.
+  if (user.role === "ai_agent") return null;
   return user;
 });
 

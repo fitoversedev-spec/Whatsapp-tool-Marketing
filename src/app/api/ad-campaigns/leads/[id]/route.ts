@@ -11,6 +11,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMetaLeadDetail } from "@/lib/meta-ads/queries";
+import { findActiveMetaLeadStage } from "@/lib/meta-ads/leadWrites";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -49,10 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!lead) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   if (stage) {
-    const validStage = await prisma.metaLeadStage.findFirst({
-      where: { slug: stage, deletedAt: null, isActive: true },
-      select: { slug: true },
-    });
+    const validStage = await findActiveMetaLeadStage(stage);
     if (!validStage) return NextResponse.json({ error: "invalid_stage" }, { status: 400 });
   }
 

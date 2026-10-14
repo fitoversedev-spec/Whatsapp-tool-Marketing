@@ -19,6 +19,11 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
   }
+  // Service accounts (the AI Sales Agent) can never sign in here. Same answer
+  // as a wrong password, so nothing about the account is revealed.
+  if (user.role === "ai_agent") {
+    return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+  }
   const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
   if (!ok) return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
 

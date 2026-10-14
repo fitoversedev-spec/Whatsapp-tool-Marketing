@@ -20,7 +20,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: "You cannot modify your own account here." }, { status: 400 });
   }
 
-  const parsed = patchSchema.safeParse(await req.json().catch(() => null));
+  const body = await req.json().catch(() => null);
+  // The ai_agent role can be neither given to a person nor taken off the AI
+  // agent's service account from this page.
+  if (body && typeof body === "object" && "role" in body) {
+    const target = await prisma.user.findUnique({ where: { id: params.id }, select: { role: true } });
+    if ((body as { role?: unknown }).role === "ai_agent" || target?.role === "ai_agent") {
+      return NextResponse.json({ error: "The ai_agent role cannot be changed here." }, { status: 403 });
+    }
+  }
+
+  const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
   const patch: any = { ...parsed.data };

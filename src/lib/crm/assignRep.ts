@@ -13,7 +13,11 @@ export async function reassignCustomerRep(args: {
   accountId: string;
   toUserId: string | null;
   actorUserId: string;
-}): Promise<{ changed: boolean }> {
+  // The AI Sales Agent may hand out a customer nobody owns yet, never take one
+  // from its rep: with this set, an owned customer is left alone (the check is
+  // repeated inside the write, so a concurrent assignment can't be overridden).
+  onlyIfUnowned?: boolean;
+}): Promise<{ changed: boolean; skippedOwned?: boolean }> {
   const account = await prisma.account.findUnique({
     where: { id: args.accountId },
     select: {
@@ -25,14 +29,26 @@ export async function reassignCustomerRep(args: {
     },
   });
   if (!account || account.ownerUserId === args.toUserId) return { changed: false };
+  if (args.onlyIfUnowned && account.ownerUserId) return { changed: false, skippedOwned: true };
 
   const toUser = args.toUserId
     ? await prisma.user.findUnique({ where: { id: args.toUserId }, select: { id: true, name: true, pushEnabled: true } })
     : null;
   const contactIds = account.contacts.map((c) => c.id);
 
+  // Set when onlyIfUnowned lost a race: someone took the customer between our
+  // read and our write.
+  let lostRace = false;
   await prisma.$transaction(async (tx) => {
-    await tx.account.update({ where: { id: account.id }, data: { ownerUserId: args.toUserId } });
+    if (args.onlyIfUnowned) {
+      const claimed = await tx.account.updateMany({ where: { id: account.id, ownerUserId: null }, data: { ownerUserId: args.toUserId } });
+      if (claimed.count === 0) {
+        lostRace = true;
+        return;
+      }
+    } else {
+      await tx.account.update({ where: { id: account.id }, data: { ownerUserId: args.toUserId } });
+    }
     if (!args.toUserId) return;
 
     // Open deals follow the customer; won/lost deals stay credited to the rep
@@ -58,6 +74,7 @@ export async function reassignCustomerRep(args: {
       });
     }
   });
+  if (lostRace) return { changed: false, skippedOwned: true };
 
   const fromName = account.owner?.name.trim() || "Unassigned";
   const toName = toUser?.name.trim() || "Unassigned";

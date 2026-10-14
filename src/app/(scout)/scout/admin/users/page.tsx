@@ -22,7 +22,7 @@ export default async function AdminUsersPage() {
       orderBy: { createdAt: "asc" },
     }),
     prisma.user.findMany({
-      where: { approvalStatus: { not: "pending" } },
+      where: { approvalStatus: { not: "pending" }, role: { not: "ai_agent" } },
       select: { id: true, email: true, name: true, role: true, approvalStatus: true },
       orderBy: { name: "asc" },
     }),

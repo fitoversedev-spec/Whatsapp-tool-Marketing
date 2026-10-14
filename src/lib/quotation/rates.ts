@@ -550,19 +550,29 @@ function settingKeyForSport(sport: Sport): string {
   return `quotation_${sport}_rates`;
 }
 
-export async function getRatesForSport(sport: Sport): Promise<RateSheetItem[]> {
+// Same as getRatesForSport, but also says where the rates came from: the
+// admin-edited Setting row, or the built-in defaults (row missing or unusable).
+export async function getRatesForSportWithSource(
+  sport: Sport,
+): Promise<{ items: RateSheetItem[]; source: "admin_rate_sheet" | "built_in_defaults" }> {
   const fallback = SPORT_DEFAULTS[sport] ?? [];
   const row = await prisma.setting.findUnique({
     where: { key: settingKeyForSport(sport) },
   });
-  if (!row) return withSections(fallback);
+  if (!row) return { items: withSections(fallback), source: "built_in_defaults" };
   try {
     const parsed = JSON.parse(row.value) as RateSheetItem[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return withSections(fallback);
-    return withSections(parsed);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return { items: withSections(fallback), source: "built_in_defaults" };
+    }
+    return { items: withSections(parsed), source: "admin_rate_sheet" };
   } catch {
-    return withSections(fallback);
+    return { items: withSections(fallback), source: "built_in_defaults" };
   }
+}
+
+export async function getRatesForSport(sport: Sport): Promise<RateSheetItem[]> {
+  return (await getRatesForSportWithSource(sport)).items;
 }
 
 export async function setRatesForSport(sport: Sport, items: RateSheetItem[]): Promise<void> {

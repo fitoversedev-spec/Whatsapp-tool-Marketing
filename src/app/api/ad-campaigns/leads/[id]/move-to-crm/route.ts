@@ -14,10 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { normalizePhone } from "@/lib/phone";
-import { findAccountContactDuplicate } from "@/lib/crm/accounts";
-import { firstLeadStage } from "@/lib/crm/leadStages";
+import { moveMetaLeadToCrm } from "@/lib/meta-ads/leadWrites";
 
 const bodySchema = z.object({
   // The rep to own the created Account. Optional — when omitted, the Account is
@@ -33,136 +30,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
-  const metaLead = await prisma.metaLead.findUnique({
-    where: { id: params.id },
-    select: {
-      id: true,
-      fullName: true,
-      phone: true,
-      email: true,
-      city: true,
-      normalizedPhone: true,
-      accountContactId: true,
-    },
-  });
-  if (!metaLead) return NextResponse.json({ error: "not_found" }, { status: 404 });
-
-  // Idempotent: if this lead was already promoted, just hand back the link.
-  if (metaLead.accountContactId) {
-    return NextResponse.json({ ok: true, alreadyLinked: true, accountContactId: metaLead.accountContactId });
-  }
-
   // Owner = the picked rep, or null (left unassigned) when none was chosen.
-  // Verify a picked rep still exists (avoids an FK violation on a stale id).
-  const ownerUserId = parsed.data.ownerUserId ?? null;
-  if (parsed.data.ownerUserId) {
-    const rep = await prisma.user.findUnique({
-      where: { id: parsed.data.ownerUserId },
-      select: { id: true, deletedAt: true },
-    });
-    if (!rep || rep.deletedAt) return NextResponse.json({ error: "invalid_owner" }, { status: 400 });
-  }
-
-  // Normalize the lead phone to the same E.164 key the CRM dedupes on. Phase A
-  // already stamps normalizedPhone at ingest; prefer it, but re-normalize the
-  // raw phone as a fallback so this route stands on its own.
-  const phone = (metaLead.phone ? normalizePhone(metaLead.phone) : null) ?? metaLead.normalizedPhone ?? null;
-
-  const displayName = metaLead.fullName?.trim() || phone || "Unknown lead";
-
-  // Look up the generic "Meta Ads" LeadSource (seeded in scripts/seed-taxonomies.ts).
-  // Note: neither Account nor AccountContact carries a leadSourceId column — that
-  // field lives on Deal, and no Deal is created here — so we can't persist the
-  // attribution onto the promoted contact. We surface it in the response so the
-  // caller (and any later Deal-from-lead action) can attribute the source; falls
-  // back to null when the seed hasn't run.
-  const metaAdsSource = await prisma.leadSource.findFirst({
-    where: { slug: "meta_ads", deletedAt: null },
-    select: { id: true },
+  const result = await moveMetaLeadToCrm({
+    metaLeadId: params.id,
+    actorUserId: user.id,
+    ownerUserId: parsed.data.ownerUserId ?? null,
   });
-  const leadSourceId = metaAdsSource?.id ?? null;
-  // A new lead starts at the first sales stage (Lead Generation).
-  const startStage = await firstLeadStage();
-
-  // Reuse an existing CRM contact with the same phone rather than duplicating it.
-  const dup = await findAccountContactDuplicate({ phone, name: displayName });
-
-  let result: string;
-  try {
-    result = await prisma.$transaction(async (tx) => {
-      let targetId: string;
-      if (dup) {
-        targetId = dup.id;
-        // Promote a plain (un-staged) matched contact so it lands in the CRM
-        // Leads list (which filters pipelineStage='LEAD'). If it already has a
-        // pipeline stage, leave it — never demote a further-along contact.
-        const existing = await tx.accountContact.findUnique({
-          where: { id: dup.id },
-          select: { pipelineStage: true, leadSourceId: true, leadStageId: true },
-        });
-        if (existing && !existing.pipelineStage) {
-          await tx.accountContact.update({
-            where: { id: dup.id },
-            data: {
-              pipelineStage: "LEAD",
-              promotedToLeadAt: new Date(),
-              ...(leadSourceId && !existing.leadSourceId ? { leadSourceId } : {}),
-              ...(startStage && !existing.leadStageId ? { leadStageId: startStage.id } : {}),
-            },
-          });
-        }
-      } else {
-        const account = await tx.account.create({
-          data: {
-            name: displayName,
-            ownerUserId,
-            city: metaLead.city,
-          },
-        });
-        const contact = await tx.accountContact.create({
-          data: {
-            accountId: account.id,
-            name: displayName,
-            phone,
-            email: metaLead.email ?? null,
-            isPrimary: true,
-            pipelineStage: "LEAD",
-            promotedToLeadAt: new Date(),
-            createdByUserId: user.id,
-            ...(leadSourceId ? { leadSourceId } : {}),
-            ...(startStage ? { leadStageId: startStage.id } : {}),
-          },
-        });
-        targetId = contact.id;
-      }
-
-      // Conditional link — only if still unlinked. If a concurrent request won
-      // the race, this affects 0 rows and we throw to roll back the just-created
-      // Account/Contact (prevents duplicate CRM contacts for one lead).
-      const linked = await tx.metaLead.updateMany({
-        where: { id: metaLead.id, accountContactId: null },
-        data: { accountContactId: targetId },
-      });
-      if (linked.count === 0) throw new Error("already_linked");
-      return targetId;
-    });
-  } catch (e) {
-    // A concurrent request already promoted this lead — return the winning link.
-    if (e instanceof Error && e.message === "already_linked") {
-      const fresh = await prisma.metaLead.findUnique({
-        where: { id: metaLead.id },
-        select: { accountContactId: true },
-      });
-      return NextResponse.json({ ok: true, alreadyLinked: true, accountContactId: fresh?.accountContactId ?? null });
-    }
-    throw e;
+  if (result.kind === "not_found") return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (result.kind === "invalid_owner") return NextResponse.json({ error: "invalid_owner" }, { status: 400 });
+  if (result.kind === "already_linked") {
+    return NextResponse.json({ ok: true, alreadyLinked: true, accountContactId: result.accountContactId });
   }
 
   return NextResponse.json({
     ok: true,
-    accountContactId: result,
-    leadSourceId,
-    matchedExisting: !!dup,
+    accountContactId: result.accountContactId,
+    leadSourceId: result.leadSourceId,
+    matchedExisting: result.matchedExisting,
     alreadyLinked: false,
   });
 }

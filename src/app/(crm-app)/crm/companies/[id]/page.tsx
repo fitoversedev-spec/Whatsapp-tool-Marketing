@@ -43,7 +43,7 @@ export default async function CompanyDetailPage({ params }: { params: { id: stri
   });
   const users = isAdmin(user.role)
     ? await prisma.user.findMany({
-        where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+        where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" } },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       })

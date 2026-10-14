@@ -96,7 +96,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     }),
     managesAll
       ? prisma.user.findMany({
-          where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+          where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" } },
           select: { id: true, name: true },
           orderBy: { name: "asc" },
         })

@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requestBroadcastPause } from "@/lib/broadcasts/control";
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -20,20 +21,11 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   if (user.role !== "admin" && b.createdByUserId !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  if (b.status !== "running") {
-    return NextResponse.json(
-      { error: `Cannot pause a ${b.status} broadcast` },
-      { status: 422 }
-    );
-  }
 
   // Mark the pause request. The sender loop picks it up on its next iteration
   // and writes pausedAt + status="paused" itself.
-  await prisma.broadcast.update({
-    where: { id: params.id },
-    data: { pauseRequestedAt: new Date() },
-    select: { id: true },
-  });
+  const paused = await requestBroadcastPause(params.id, b.status);
+  if (!paused.ok) return NextResponse.json({ error: paused.error }, { status: 422 });
 
-  return NextResponse.json({ ok: true, pauseRequestedAt: new Date().toISOString() });
+  return NextResponse.json({ ok: true, pauseRequestedAt: paused.pauseRequestedAt });
 }

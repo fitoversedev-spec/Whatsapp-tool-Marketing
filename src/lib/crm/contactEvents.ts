@@ -20,7 +20,10 @@ export type ContactEventKind =
   | "insight_deleted"
   | "file_deleted"
   | "quotation_deleted"
-  | "design_deleted";
+  | "design_deleted"
+  // Written by the Fitoverse AI Sales Agent (src/lib/agent).
+  | "ai_summary"
+  | "escalated";
 
 export type ContactEventInput = {
   contactId: string;

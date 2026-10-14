@@ -6,6 +6,8 @@ import type { Role } from "@/lib/rbac";
 export default async function UsersPage() {
   const me = await requireAdmin();
   const users = await prisma.user.findMany({
+    // The AI Sales Agent's service account is managed by script, not from this page.
+    where: { role: { not: "ai_agent" } },
     orderBy: [{ deletedAt: "asc" }, { approvalStatus: "asc" }, { createdAt: "desc" }],
     select: {
       id: true,

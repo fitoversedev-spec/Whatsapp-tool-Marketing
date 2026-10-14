@@ -178,6 +178,21 @@ export async function getProduct(id: string): Promise<ProductDTO | null> {
   return row ? toDTO(row) : null;
 }
 
+// Live (non-archived) products only — for read paths that must never surface a
+// retired product (the AI agent's catalogue tools).
+export async function getActiveProductsByIds(ids: string[]): Promise<ProductDTO[]> {
+  if (ids.length === 0) return [];
+  const rows = await prisma.product.findMany({
+    where: { id: { in: ids }, archived: false },
+    include: {
+      media: { orderBy: { sortOrder: "asc" } },
+      tdsFiles: true,
+    },
+  });
+  const byId = new Map(rows.map((r) => [r.id, toDTO(r)]));
+  return ids.map((id) => byId.get(id)).filter((d): d is ProductDTO => !!d);
+}
+
 export type ProductInput = {
   name: string;
   type: ProductType;

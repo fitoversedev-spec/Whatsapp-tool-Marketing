@@ -76,7 +76,7 @@ export default async function DealsDrilldownPage({ searchParams }: { searchParam
   // never sees the rep-comparison UI, so we don't even query it for them.
   const users = isAdmin
     ? await prisma.user.findMany({
-        where: { deletedAt: null, isActive: true, approvalStatus: "approved" },
+        where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { not: "ai_agent" } },
         orderBy: [{ name: "asc" }],
         select: { id: true, name: true },
       })

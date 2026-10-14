@@ -145,6 +145,7 @@ export async function getLeadPage(
   f: LeadFilters,
   page: number,
   prebuilt?: Prisma.MetaLeadWhereInput,
+  pageSize: number = LEADS_PAGE_SIZE,
 ): Promise<LeadPage> {
   const where = prebuilt ?? (await buildLeadWhere(f));
   const wanted = Math.max(1, Math.floor(page) || 1);
@@ -152,14 +153,14 @@ export async function getLeadPage(
     prisma.metaLead.findMany({
       where,
       orderBy: LEAD_ORDER,
-      skip: (p - 1) * LEADS_PAGE_SIZE,
-      take: LEADS_PAGE_SIZE,
+      skip: (p - 1) * pageSize,
+      take: pageSize,
       select: META_LEAD_SELECT,
     });
 
   const [total, firstTry] = await Promise.all([prisma.metaLead.count({ where }), fetchRows(wanted)]);
   let leads = firstTry;
-  const pageCount = Math.max(1, Math.ceil(total / LEADS_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   let current = wanted;
   if (wanted > pageCount) {
     // The list shrank under the viewer (e.g. a filter or a removed lead) — show the last page.

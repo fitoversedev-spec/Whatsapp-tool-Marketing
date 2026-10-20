@@ -15,6 +15,7 @@ const db = vi.hoisted(() => ({
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 // No chat in these tests has an AI → human handoff (covered in handoffs.*.test.ts).
 vi.mock("../handoffs/service", () => ({ handoffGate: async () => null }));
+vi.mock("@/lib/ai-chats/hotLeads", () => ({ checkHotLead: async () => ({ hot: false, alerted: false }) }));
 vi.mock("@/lib/scout/after", () => ({ after: () => undefined }));
 
 const wa = vi.hoisted(() => ({

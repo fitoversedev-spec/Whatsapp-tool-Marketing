@@ -5,6 +5,7 @@ const db = vi.hoisted(() => ({
   message: { findFirst: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
+vi.mock("@/lib/ai-chats/hotLeads", () => ({ checkHotLead: async () => ({ hot: false, alerted: false }) }));
 
 import { handoffGate } from "../handoffs/service";
 

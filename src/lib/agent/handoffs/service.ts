@@ -10,6 +10,7 @@ import type { z } from "zod/v4";
 import { prisma } from "@/lib/prisma";
 import { sendPushToUser } from "@/lib/push";
 import { logContactEvent } from "@/lib/crm/contactEvents";
+import { checkHotLead } from "@/lib/ai-chats/hotLeads";
 import { AGENT_ROLE_NAME, loadApproverConfig } from "../approvals";
 import type { AgentContext } from "../context";
 import { AgentHttpError } from "../errors";
@@ -183,6 +184,9 @@ export const requestHumanHandoff: AgentHandler<z.infer<typeof S.requestHumanHand
     url: "/crm/ai-handoffs",
     tag: `ai-handoff-${row.id}`,
   });
+
+  // Asking for a person is a strong buying signal: alert the team if the chat is now hot.
+  await checkHotLead(conversationId);
 
   const { ai } = await loadAiMode(conversationId);
   return {

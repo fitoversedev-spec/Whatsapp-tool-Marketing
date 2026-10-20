@@ -3190,3 +3190,37 @@ model AiHumanHandoff {
   @@index([assignedToUserId, status])
   @@map("ai_human_handoffs")
 }
+
+// ── AI agent chats: lead temperature (additive) ─────────────────────────────
+// One row per WhatsApp chat once the AI agent or a person has classified it.
+// Chats without a row are scored automatically (src/lib/ai-chats/scoring.ts).
+// Plain id column, no Prisma relation, so no existing model had to change.
+model AiChatInsight {
+  id             String   @id @default(uuid())
+  conversationId String   @unique @map("conversation_id")
+  // HOT | WARM | COLD
+  temperature    String
+  reason         String   @default("")
+  // "agent" (the AI Sales Agent) | "human" (someone on the team)
+  source         String
+  setByUserId    String?  @map("set_by_user_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([temperature])
+  @@map("ai_chat_insights")
+}
+
+// One row per AI chat that has turned hot: when the team was alerted, and who
+// claimed it from the AI agent chats page. Plain id columns, no relations.
+model AiHotLead {
+  id              String    @id @default(uuid())
+  conversationId  String    @unique @map("conversation_id")
+  firstHotAt      DateTime  @default(now()) @map("first_hot_at")
+  notifiedAt      DateTime? @map("notified_at")
+  claimedByUserId String?   @map("claimed_by_user_id")
+  claimedAt       DateTime? @map("claimed_at")
+
+  @@index([claimedByUserId])
+  @@map("ai_hot_leads")
+}

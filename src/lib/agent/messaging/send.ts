@@ -9,6 +9,7 @@ import type { sendMarketingTemplateBody, sendReplyBody, sendTemplateBody } from 
 import { holdForApproval, loadEligibility, MESSAGE_SELECT, parseId, refusal, toMessageDto } from "./access";
 import { detectSensitiveContent } from "./contentGuard";
 import { handoffGate } from "../handoffs/service";
+import { checkHotLead } from "@/lib/ai-chats/hotLeads";
 import { DEDUPE_WINDOW_MS, findDuplicate } from "./dedupe";
 import { chargeConversationLimit } from "./limits";
 import {
@@ -185,6 +186,8 @@ export const sendReplyHandler: AgentHandler<z.infer<typeof sendReplyBody>> = asy
     status: "sent",
     sentByUserId: ctx.userId,
   });
+  // The AI answers each customer message, so this is when a chat's score moves.
+  await checkHotLead(id);
   return {
     body: sentBody(ctx, message, sent.waMessageId, reference),
     recordIds: message ? [id, message.id] : [id],

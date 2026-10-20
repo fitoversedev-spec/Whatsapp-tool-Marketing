@@ -15,6 +15,7 @@ import { postThreadNote } from "@/lib/chat/events";
 import { syncAdsInsights } from "@/lib/meta-ads/sync";
 import { sendPushToUser, isWebPushConfigured } from "@/lib/push";
 import { expireStaleApprovals } from "@/lib/agent/approvals";
+import { sweepHotLeads } from "@/lib/ai-chats/hotLeads";
 
 // The weekday the weekly digest fires on — Monday (getDay() 0=Sun..6=Sat).
 // A visible default, not a business-mandated day: Monday so the digest lands
@@ -221,6 +222,8 @@ export async function sweepAll({ origin }: { origin: string }) {
 
   // AI approval requests nobody decided in time become "expired" (deciding also refuses them; this only tidies the list).
   await expireStaleApprovals().catch((err) => console.error("[cron] approval-expiry sweep threw", err));
+  // AI chats that turned hot from the customer's own messages: alert admins/managers once.
+  await sweepHotLeads().catch((err) => console.error("[cron] hot-lead sweep threw", err));
 
   // Day-of-week-gated weekly digest. Wrapped in its own try/catch — and
   // runWeeklyDigest is itself no-throw by contract — so a digest failure can

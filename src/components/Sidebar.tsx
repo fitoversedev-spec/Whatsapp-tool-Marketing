@@ -29,7 +29,7 @@ const PRIMARY_NAV = [
   { href: "/contacts", label: "Contacts", icon: "📒" },
   { href: "/broadcasts", label: "Broadcasts", icon: "📣" },
   { href: "/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
-  { href: "/leads", label: "Bot leads", icon: "🤖" },
+  { href: "/ai-chats", label: "AI agent chats", icon: "🔥" },
   { href: "/ad-campaigns", label: "Ad campaigns", icon: "📢" },
 ];
 

@@ -171,6 +171,7 @@ async function buildRows(convos: ConvoBase[], agents: string[]): Promise<AiChatR
     handoffBy.set(h.conversationId, h.status);
     latestHandoff.set(h.conversationId, h);
   }
+  const askedBy = new Set(handoffs.filter((h) => h.kind === "CUSTOMER_REQUEST").map((h) => h.conversationId));
   const requesterIds = [...new Set(handoffs.map((h) => h.requestedByUserId).filter((x): x is string => !!x))];
   const requesters = requesterIds.length
     ? await prisma.user.findMany({ where: { id: { in: requesterIds } }, select: { id: true, name: true } })
@@ -197,7 +198,8 @@ async function buildRows(convos: ConvoBase[], agents: string[]): Promise<AiChatR
       customerTexts: textsBy.get(c.id) ?? [],
       customerMessageCount: inbound?._count._all ?? 0,
       lastCustomerMessageAt: inbound?._max.createdAt ?? null,
-      askedForHuman: handoffBy.has(c.id),
+      // Only the customer's own "talk to a person" counts, not a salesperson's request or an assignment.
+      askedForHuman: askedBy.has(c.id),
       requirementKeys,
       inCrm: !!lead,
       optedOut: optedOut.has(c.contactPhone) || optedOut.has(normalized),

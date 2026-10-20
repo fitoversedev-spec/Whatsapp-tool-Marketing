@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { sendPushToUser } from "@/lib/push";
 import { loadApproverConfig } from "@/lib/agent/approvals";
 import { conveyToSales } from "@/lib/agent/handoffs/assign";
+import { adoptExistingOwner } from "./owners";
 import { isRequestableBy, recentAiChatRows, scoreOneChat, type AiChatRow, type Viewer } from "./query";
 
 const ALERT_ROLES = ["admin", "manager"];
@@ -82,7 +83,13 @@ export async function sweepHotLeads(): Promise<{ alerted: number }> {
   });
   const seen = new Set(done.map((d) => d.conversationId));
   let alerted = 0;
-  for (const row of rows) if (!seen.has(row.conversationId) && (await alert(row))) alerted++;
+  for (const row of rows) {
+    if (seen.has(row.conversationId)) continue;
+    // An already-owned customer is linked first, so the alert names their salesperson.
+    const owner = !row.assignedToUserId && !row.handoffStatus ? await adoptExistingOwner(row.conversationId) : null;
+    const current = owner ? { ...row, assignedToUserId: owner.userId, assignedTo: owner.name } : row;
+    if (await alert(current)) alerted++;
+  }
   return { alerted };
 }
 
@@ -94,6 +101,9 @@ export type RequestOutcome = { ok: true } | { ok: false; status: 403 | 404 | 409
  * The AI keeps chatting meanwhile.
  */
 export async function requestHotLead(viewer: Viewer & { name: string }, conversationId: string): Promise<RequestOutcome> {
+  // Never a second owner: a customer someone already has goes to them.
+  const owner = await adoptExistingOwner(conversationId);
+  if (owner) return { ok: false, status: 409, message: `Already ${owner.name}'s customer.` };
   const row = await scoreOneChat(conversationId);
   if (!row) return { ok: false, status: 404, message: "Chat not found." };
   if (!isRequestableBy(viewer, row)) {
@@ -150,6 +160,7 @@ export async function requestHotLead(viewer: Viewer & { name: string }, conversa
  * pass the reply on to the salesperson who owns the lead. Never throws.
  */
 export async function afterAiReply(conversationId: string, text: string): Promise<void> {
+  await adoptExistingOwner(conversationId);
   await checkHotLead(conversationId);
   await conveyToSales(conversationId, text);
 }

@@ -19,7 +19,9 @@
 export const HANDOFF_STATUSES = ["PENDING", "APPROVED", "REJECTED", "RELEASED"] as const;
 export type HandoffStatus = (typeof HANDOFF_STATUSES)[number];
 
-export const HANDOFF_KINDS = ["CUSTOMER_REQUEST", "SALES_REQUEST", "ADMIN_ASSIGN"] as const;
+// EXISTING_OWNER: the customer already had a salesperson (Meta leads, CRM or Inbox)
+// before the AI chat, so the chat was linked to them (src/lib/ai-chats/owners.ts).
+export const HANDOFF_KINDS = ["CUSTOMER_REQUEST", "SALES_REQUEST", "ADMIN_ASSIGN", "EXISTING_OWNER"] as const;
 export type HandoffKind = (typeof HANDOFF_KINDS)[number];
 
 /** Statuses during which a request is open or a salesperson owns the lead. */

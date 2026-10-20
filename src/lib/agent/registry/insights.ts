@@ -25,7 +25,7 @@ export const ROUTES: AgentRouteSpec[] = [
     method: "post",
     tool: "start_lead_conversation",
     summary:
-      "First WhatsApp message to a new Meta lead-form lead (Instagram/Facebook instant form; get_events type lead, source ad). Sends one of the admin's welcome templates (templateId optional: the first by default; variables optional: {{1}} = first name) and returns the conversationId; from then on use the normal messaging tools. Once per lead (a repeat returns deduplicated: true). Refused: opted_out, no_phone, no_welcome_template, template_not_allowed, already_chatting (the customer is already messaging: reply in that conversationId instead).",
+      "First WhatsApp message to a new Meta lead-form lead (Instagram/Facebook instant form; get_events type lead, source ad). Sends one of the admin's welcome templates (templateId optional: the first by default; variables optional: {{1}} = first name) and returns the conversationId; from then on use the normal messaging tools. Once per lead (a repeat returns deduplicated: true). Nothing is sent (200, sent: false, skipped) when a salesperson already owns this customer (already_assigned: leave them to that person), when this person was already welcomed from an earlier form fill (already_welcomed), or when someone messaged them in the last 7 days (contacted_recently). Refused: opted_out, no_phone, no_welcome_template, template_not_allowed, already_chatting (the customer is already messaging: reply in that conversationId instead).",
     requestSchema: S.startLeadConversationBody,
     responseSchema: S.startLeadConversationResponseSchema,
   },

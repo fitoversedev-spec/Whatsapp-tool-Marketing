@@ -9,6 +9,7 @@ const push = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/push", () => ({ sendPushToUser: (...a: unknown[]) => push(...a) }));
 vi.mock("@/lib/agent/approvals", () => ({ loadApproverConfig: async () => ({ roles: ["admin"], userIds: [] }) }));
 vi.mock("@/lib/agent/handoffs/assign", () => ({ conveyToSales: vi.fn() }));
+vi.mock("../owners", () => ({ adoptExistingOwner: vi.fn(async () => null) }));
 const scoreOneChat = vi.hoisted(() => vi.fn());
 vi.mock("../query", async (orig) => ({
   ...(await orig<typeof import("../query")>()),

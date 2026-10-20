@@ -22,7 +22,7 @@ const handoffDto = z.object({
   conversationId: z.string(),
   leadId: z.string().nullable(),
   status: z.enum(["PENDING", "APPROVED", "REJECTED", "RELEASED"]),
-  kind: z.enum(["CUSTOMER_REQUEST", "SALES_REQUEST", "ADMIN_ASSIGN"]),
+  kind: z.enum(["CUSTOMER_REQUEST", "SALES_REQUEST", "ADMIN_ASSIGN", "EXISTING_OWNER"]),
   reason: z.string(),
   requestedAt: z.string(),
   decidedAt: z.string().nullable(),

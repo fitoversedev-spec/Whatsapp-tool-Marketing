@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
   metaLead: { findUnique: vi.fn(), updateMany: vi.fn() },
-  aiLeadOutreach: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  aiLeadOutreach: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   optOut: { findFirst: vi.fn() },
-  conversation: { findUnique: vi.fn(), upsert: vi.fn() },
+  conversation: { findFirst: vi.fn(), upsert: vi.fn() },
   setting: { findUnique: vi.fn() },
   template: { findUnique: vi.fn() },
   message: { create: vi.fn() },
@@ -17,6 +17,12 @@ vi.mock("@/lib/whatsapp", () => ({
   describeMetaError: () => ({ code: "x", message: "boom" }),
 }));
 
+const owner = vi.hoisted(() => vi.fn());
+vi.mock("../owners", async (orig) => ({
+  ...(await orig<typeof import("../owners")>()),
+  findExistingOwner: (...a: unknown[]) => owner(...a),
+}));
+
 import { startLeadConversation } from "../welcome";
 
 const lead = { id: "L1", fullName: "Karan Shah", phone: "+91 98111 22233", normalizedPhone: null, stage: "NEW" };
@@ -27,7 +33,9 @@ beforeEach(() => {
   db.metaLead.findUnique.mockResolvedValue(lead);
   db.aiLeadOutreach.findUnique.mockResolvedValue(null);
   db.optOut.findFirst.mockResolvedValue(null);
-  db.conversation.findUnique.mockResolvedValue(null);
+  db.conversation.findFirst.mockResolvedValue(null);
+  db.aiLeadOutreach.findFirst.mockResolvedValue(null);
+  owner.mockResolvedValue(null);
   db.setting.findUnique.mockResolvedValue({ value: '{"templateIds":["T1"]}' });
   db.template.findUnique.mockResolvedValue(template);
   db.aiLeadOutreach.create.mockResolvedValue({ id: "O1" });
@@ -66,7 +74,7 @@ describe("startLeadConversation", () => {
   });
 
   it("points to the live chat when the customer is already messaging", async () => {
-    db.conversation.findUnique.mockResolvedValue({ id: "C9", lastInboundAt: new Date() });
+    db.conversation.findFirst.mockResolvedValue({ id: "C9", contactPhone: "919811122233", lastInboundAt: new Date(), lastOutboundAt: null });
     expect(await startLeadConversation({ metaLeadId: "L1", agentUserId: "AI" })).toMatchObject({
       code: "already_chatting",
       extra: { conversationId: "C9" },
@@ -78,5 +86,36 @@ describe("startLeadConversation", () => {
     db.aiLeadOutreach.delete.mockResolvedValue({ id: "O1" });
     expect(await startLeadConversation({ metaLeadId: "L1", agentUserId: "AI" })).toMatchObject({ ok: false, code: "send_failed" });
     expect(db.aiLeadOutreach.delete).toHaveBeenCalledWith({ where: { id: "O1" } });
+  });
+
+  it("does not message a customer a salesperson already owns", async () => {
+    owner.mockResolvedValue({ userId: "priya", name: "Priya", source: "ad_lead", leadId: null });
+    db.aiLeadOutreach.create.mockResolvedValue({ id: "S1" });
+    const r = await startLeadConversation({ metaLeadId: "L1", agentUserId: "AI" });
+    expect(r).toMatchObject({ ok: true, status: 200, body: { sent: false, skipped: "already_assigned", assignedTo: { name: "Priya", source: "Meta leads" } } });
+    expect(wa.sendTemplate).not.toHaveBeenCalled();
+    expect(db.aiLeadOutreach.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "skipped:already_assigned" }) }));
+  });
+
+  it("welcomes a person once even when they fill the form twice", async () => {
+    db.conversation.findFirst.mockResolvedValue({ id: "C1", contactPhone: "919811122233", lastInboundAt: null, lastOutboundAt: new Date(Date.now() - 30 * 86400000) });
+    db.aiLeadOutreach.findFirst.mockResolvedValue({ id: "O-first-form" });
+    db.aiLeadOutreach.create.mockResolvedValue({ id: "S2" });
+    expect(await startLeadConversation({ metaLeadId: "L2", agentUserId: "AI" })).toMatchObject({ body: { sent: false, skipped: "already_welcomed", conversationId: "C1" } });
+    expect(wa.sendTemplate).not.toHaveBeenCalled();
+  });
+
+  it("does not pile a welcome onto someone messaged this week", async () => {
+    db.conversation.findFirst.mockResolvedValue({ id: "C1", contactPhone: "919811122233", lastInboundAt: null, lastOutboundAt: new Date(Date.now() - 2 * 86400000) });
+    db.aiLeadOutreach.create.mockResolvedValue({ id: "S3" });
+    expect(await startLeadConversation({ metaLeadId: "L1", agentUserId: "AI" })).toMatchObject({ body: { skipped: "contacted_recently" } });
+    expect(wa.sendTemplate).not.toHaveBeenCalled();
+  });
+
+  it("returns the recorded skip when asked again", async () => {
+    db.aiLeadOutreach.findUnique.mockResolvedValue({ id: "S1", status: "skipped:already_assigned", conversationId: null, templateId: "" });
+    expect(await startLeadConversation({ metaLeadId: "L1", agentUserId: "AI" })).toMatchObject({
+      body: { sent: false, deduplicated: true, skipped: "already_assigned", templateId: null },
+    });
   });
 });

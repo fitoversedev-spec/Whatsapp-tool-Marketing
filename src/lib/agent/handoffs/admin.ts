@@ -12,6 +12,7 @@
 import { prisma } from "@/lib/prisma";
 import { logContactEvent } from "@/lib/crm/contactEvents";
 import { ASSIGNABLE_ROLES } from "../leads/logic";
+import { adoptExistingOwner, OWNER_SOURCE_LABEL } from "@/lib/ai-chats/owners";
 import { applyAssignment, type Rep } from "./assign";
 import { HANDOFF_KINDS, isHandoffStatus, type HandoffKind, type HandoffStatus } from "./logic";
 
@@ -168,6 +169,17 @@ export async function assignChat(args: {
     orderBy: { requestedAt: "desc" },
     select: { id: true, status: true },
   });
+  if (!open) {
+    const owner = await adoptExistingOwner(args.conversationId);
+    if (owner && owner.userId !== args.assignToUserId) {
+      return {
+        ok: false,
+        status: 409,
+        message: `Already ${owner.name}'s customer (from ${OWNER_SOURCE_LABEL[owner.source]}); the chat is now linked to them. Release it first to reassign.`,
+      };
+    }
+    if (owner) return { ok: true };
+  }
   if (open?.status === "APPROVED") {
     return { ok: false, status: 409, message: "This lead already has a salesperson. Release it first to reassign." };
   }

@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { sendPushToUser } from "@/lib/push";
 import { logContactEvent } from "@/lib/crm/contactEvents";
 import { checkHotLead } from "@/lib/ai-chats/hotLeads";
+import { adoptExistingOwner } from "@/lib/ai-chats/owners";
 import { displayPhone } from "./assign";
 import { AGENT_ROLE_NAME, loadApproverConfig } from "../approvals";
 import type { AgentContext } from "../context";
@@ -97,7 +98,7 @@ async function toDto(row: HandoffRow) {
     conversationId: row.conversationId,
     leadId: row.accountContactId,
     status: row.status as "PENDING" | "APPROVED" | "REJECTED" | "RELEASED",
-    kind: row.kind as "CUSTOMER_REQUEST" | "SALES_REQUEST" | "ADMIN_ASSIGN",
+    kind: row.kind as "CUSTOMER_REQUEST" | "SALES_REQUEST" | "ADMIN_ASSIGN" | "EXISTING_OWNER",
     reason: row.reason,
     requestedAt: row.requestedAt.toISOString(),
     decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
@@ -155,6 +156,9 @@ export const requestHumanHandoff: AgentHandler<z.infer<typeof S.requestHumanHand
     select: { id: true, contactPhone: true, contactName: true },
   });
   if (!convo) throw new AgentHttpError("not_found", "Conversation not found.");
+
+  // Already someone's customer (Meta leads / CRM / Inbox): link the chat to them instead of queueing a request.
+  await adoptExistingOwner(conversationId);
 
   // Asking twice while a request is open returns the open one.
   const open = await findActiveHandoff(conversationId);
@@ -215,6 +219,8 @@ export const getAiStatus: AgentHandler<unknown> = async ({ params }) => {
   const conversationId = parseId(params.id);
   const convo = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { id: true } });
   if (!convo) throw new AgentHttpError("not_found", "Conversation not found.");
+  // Before the AI's first reply: a customer who already has a salesperson is linked to them.
+  await adoptExistingOwner(conversationId);
   const { handoff, ai } = await loadAiMode(conversationId);
   const dto = handoff ? await toDto(handoff) : null;
   const guidance =

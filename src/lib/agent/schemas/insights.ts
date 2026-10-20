@@ -26,7 +26,10 @@ export const startLeadConversationBody = z.strictObject({
 export const startLeadConversationResponseSchema = z.object({
   sent: z.boolean(),
   deduplicated: z.boolean(),
+  /** Why nothing was sent: a salesperson already owns the customer, or this person was already welcomed / contacted. */
+  skipped: z.enum(["already_assigned", "already_welcomed", "contacted_recently"]).optional(),
+  assignedTo: z.object({ name: z.string(), source: z.string() }).optional(),
   conversationId: z.string().nullable(),
-  templateId: z.string(),
+  templateId: z.string().nullable(),
   text: z.string().optional(),
 });

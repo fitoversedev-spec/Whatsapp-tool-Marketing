@@ -11,6 +11,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { normalizePhone } from "@/lib/phone";
+import { findExistingOwner, OWNER_SOURCE_LABEL, phoneVariants } from "./owners";
 import { describeMetaError, isMetaConfigured, sendTemplate } from "@/lib/whatsapp";
 import {
   buildTemplateComponents,
@@ -22,6 +23,11 @@ import {
 
 export const WELCOME_SETTING_KEY = "agent_welcome_templates";
 const WINDOW_MS = 24 * 60 * 60 * 1000;
+/** Someone on the team (or a broadcast) messaged this number this recently: no welcome on top. */
+const RECENT_CONTACT_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Why the AI did not send a welcome (stored as ai_lead_outreach.status "skipped:<reason>"). */
+export type SkipReason = "already_assigned" | "already_welcomed" | "contacted_recently";
 
 export function parseWelcomeSetting(raw: string | null | undefined): string[] {
   try {
@@ -80,13 +86,20 @@ export async function startLeadConversation(args: {
   });
   if (!lead) return { ok: false, status: 404, code: "not_found", message: "Ad lead not found." };
 
-  // Once per lead: an earlier send (or one in flight) is returned as-is.
+  // Once per lead: an earlier send, skip (or one in flight) is returned as-is.
   const earlier = await prisma.aiLeadOutreach.findUnique({ where: { metaLeadId: lead.id } });
   if (earlier) {
+    const skipped = earlier.status.startsWith("skipped:") ? earlier.status.slice("skipped:".length) : null;
     return {
       ok: true,
       status: 200,
-      body: { sent: earlier.status === "sent", deduplicated: true, conversationId: earlier.conversationId, templateId: earlier.templateId },
+      body: {
+        sent: earlier.status === "sent",
+        deduplicated: true,
+        ...(skipped ? { skipped } : {}),
+        conversationId: earlier.conversationId,
+        templateId: earlier.templateId || null,
+      },
       recordIds: [lead.id, earlier.id],
     };
   }
@@ -96,7 +109,32 @@ export async function startLeadConversation(args: {
   const optedOut = await prisma.optOut.findFirst({ where: { phoneE164: { in: [phone, `+${phone}`] } }, select: { phoneE164: true } });
   if (optedOut) return { ok: false, status: 403, code: "opted_out", message: "This number has opted out. The AI never messages it." };
 
-  const existing = await prisma.conversation.findUnique({ where: { contactPhone: phone }, select: { id: true, lastInboundAt: true } });
+  // A lead not to message is recorded as skipped, so asking again for this lead returns the same answer.
+  const skip = async (reason: SkipReason, conversationId: string | null, extra: Record<string, unknown> = {}): Promise<StartResult> => {
+    const row = await prisma.aiLeadOutreach
+      .create({ data: { metaLeadId: lead.id, templateId: "", status: `skipped:${reason}`, conversationId }, select: { id: true } })
+      .catch(() => null); // a parallel call recorded it first: same answer
+    return {
+      ok: true,
+      status: 200,
+      body: { sent: false, deduplicated: false, skipped: reason, conversationId, templateId: null, ...extra },
+      recordIds: row ? [lead.id, row.id] : [lead.id],
+    };
+  };
+
+  const existing = await prisma.conversation.findFirst({
+    where: { contactPhone: { in: phoneVariants(phone) } },
+    select: { id: true, contactPhone: true, lastInboundAt: true, lastOutboundAt: true },
+  });
+
+  // Never two people contacting one customer: a salesperson already has them.
+  const owner = await findExistingOwner(phone);
+  if (owner) {
+    return skip("already_assigned", existing?.id ?? null, {
+      assignedTo: { name: owner.name, source: OWNER_SOURCE_LABEL[owner.source] },
+    });
+  }
+
   if (existing?.lastInboundAt && Date.now() - existing.lastInboundAt.getTime() < WINDOW_MS) {
     return {
       ok: false,
@@ -105,6 +143,15 @@ export async function startLeadConversation(args: {
       message: "This customer is already chatting on WhatsApp (24 h window open). Reply with send_reply instead.",
       extra: { conversationId: existing.id },
     };
+  }
+
+  // One welcome per person, not per form fill: repeat leads share the phone (and the chat).
+  if (existing) {
+    const welcomed = await prisma.aiLeadOutreach.findFirst({ where: { conversationId: existing.id, status: "sent" }, select: { id: true } });
+    if (welcomed) return skip("already_welcomed", existing.id);
+    if (existing.lastOutboundAt && Date.now() - existing.lastOutboundAt.getTime() < RECENT_CONTACT_MS) {
+      return skip("contacted_recently", existing.id);
+    }
   }
 
   const allowed = await loadWelcomeTemplateIds();
@@ -154,7 +201,8 @@ export async function startLeadConversation(args: {
 
   const now = new Date();
   const convo = await prisma.conversation.upsert({
-    where: { contactPhone: phone },
+    // Reuse the person's existing chat, whatever spelling its phone was stored under.
+    where: { contactPhone: existing?.contactPhone ?? phone },
     create: { contactPhone: phone, contactName: lead.fullName ?? null, lastOutboundAt: now },
     update: { lastOutboundAt: now },
     select: { id: true },

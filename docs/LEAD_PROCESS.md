@@ -44,6 +44,22 @@ Price, discount and commitment wording in any AI message is always held for a hu
 - **Every customer message and every AI reply** in that chat is pushed to the salesperson.
 - Conversations on the salesperson's own phone are not recorded here — log calls and notes on the CRM lead.
 
+## 5. No duplicates
+
+A customer can already have a salesperson before the AI hears back — on the **Meta leads** page, in the **CRM**
+(account owner), or in the **Inbox** (chat assignee). `src/lib/ai-chats/owners.ts` checks all three, by phone
+number in every stored spelling (priority: Inbox → CRM → Meta leads):
+
+- **No double contact** — `start_lead_conversation` sends nothing (`skipped: already_assigned`, with who) to a customer
+  someone already owns.
+- **One welcome per person, not per form fill** — a repeat form fill gets `skipped: already_welcomed`; anyone messaged
+  in the last 7 days gets `skipped: contacted_recently`. Each skip is recorded, so asking again gives the same answer.
+- **No second owner** — when an owned customer chats with the AI, the chat is linked to their salesperson automatically
+  (handoff kind `EXISTING_OWNER`): it shows as theirs, nobody can request it, an admin assigning someone else is told to
+  release it first, alerts and every message go to that salesperson, and the AI introduces them. An existing CRM rep is
+  never replaced. A customer's "talk to a person" request is linked the same way instead of being queued.
+- One chat per phone number and one hot alert per chat, as before; move-to-CRM reuses the contact with the same phone.
+
 ## Settings and data
 
 - Welcome templates: Setting `agent_welcome_templates` (edited on the AI agent chats page).

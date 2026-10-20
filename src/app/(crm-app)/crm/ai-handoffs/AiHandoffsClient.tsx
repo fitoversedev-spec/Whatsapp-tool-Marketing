@@ -208,7 +208,9 @@ export default function AiHandoffsClient({
                       ? `Requested by ${c.requestedBy?.name ?? "a salesperson"}`
                       : c.kind === "ADMIN_ASSIGN"
                         ? "Assigned by an admin"
-                        : "Customer asked for a person"}
+                        : c.kind === "EXISTING_OWNER"
+                          ? "Already their customer before the AI chat"
+                          : "Customer asked for a person"}
                   </span>
                 </div>
 

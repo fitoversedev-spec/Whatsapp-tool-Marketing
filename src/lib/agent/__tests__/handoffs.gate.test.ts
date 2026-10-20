@@ -10,7 +10,7 @@ vi.mock("@/lib/ai-chats/hotLeads", () => ({ checkHotLead: async () => ({ hot: fa
 import { handoffGate } from "../handoffs/service";
 
 const ctx = { identityId: "i", userId: "u", credentialId: "c", environment: "development", correlationId: "corr", ip: null } as const;
-const pending = { id: "h1", conversationId: "c1", status: "PENDING", requestedAt: new Date("2026-10-20T10:00:00Z") };
+const pending = { id: "h1", conversationId: "c1", status: "PENDING", kind: "CUSTOMER_REQUEST", requestedAt: new Date("2026-10-20T10:00:00Z") };
 
 beforeEach(() => {
   db.aiHumanHandoff.findFirst.mockReset();
@@ -24,11 +24,15 @@ describe("handoffGate", () => {
     expect(db.message.findFirst).not.toHaveBeenCalled();
   });
 
-  it("refuses with human_assigned once a salesperson has the chat", async () => {
-    db.aiHumanHandoff.findFirst.mockResolvedValue({ ...pending, status: "APPROVED" });
-    const r = await handoffGate(ctx, "c1");
-    expect(r?.status).toBe(409);
-    expect(r?.body).toMatchObject({ error: { code: "human_assigned" } });
+  it("lets the AI keep answering once a salesperson has the lead", async () => {
+    db.aiHumanHandoff.findFirst.mockResolvedValue({ ...pending, status: "APPROVED", kind: "ADMIN_ASSIGN" });
+    expect(await handoffGate(ctx, "c1")).toBeNull();
+  });
+
+  it("does not hold the AI back for a salesperson's request", async () => {
+    db.aiHumanHandoff.findFirst.mockResolvedValue({ ...pending, kind: "SALES_REQUEST" });
+    expect(await handoffGate(ctx, "c1")).toBeNull();
+    expect(db.message.findFirst).not.toHaveBeenCalled();
   });
 
   it("while pending, waits for the customer after the AI has spoken", async () => {

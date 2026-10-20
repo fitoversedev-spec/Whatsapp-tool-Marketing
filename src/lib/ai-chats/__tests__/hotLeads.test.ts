@@ -7,8 +7,8 @@ const db = vi.hoisted(() => ({
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 const push = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/push", () => ({ sendPushToUser: (...a: unknown[]) => push(...a) }));
-vi.mock("@/lib/crm/assignRep", () => ({ reassignCustomerRep: vi.fn() }));
-vi.mock("@/lib/crm/contactEvents", () => ({ logContactEvent: vi.fn() }));
+vi.mock("@/lib/agent/approvals", () => ({ loadApproverConfig: async () => ({ roles: ["admin"], userIds: [] }) }));
+vi.mock("@/lib/agent/handoffs/assign", () => ({ conveyToSales: vi.fn() }));
 const scoreOneChat = vi.hoisted(() => vi.fn());
 vi.mock("../query", async (orig) => ({
   ...(await orig<typeof import("../query")>()),
@@ -16,7 +16,7 @@ vi.mock("../query", async (orig) => ({
 }));
 
 import { checkHotLead } from "../hotLeads";
-import { isClaimableBy } from "../query";
+import { isRequestableBy } from "../query";
 
 const hotRow = {
   conversationId: "c1",
@@ -62,17 +62,18 @@ describe("checkHotLead", () => {
   });
 });
 
-describe("isClaimableBy", () => {
+describe("isRequestableBy", () => {
   const sales = { id: "s1", role: "sales" };
   const row = { assignedToUserId: null, temperature: "HOT" as const, handoffStatus: null };
-  it("lets sales and managers take an unassigned hot chat", () => {
-    expect(isClaimableBy(sales, row)).toBe(true);
-    expect(isClaimableBy({ id: "m", role: "manager" }, row)).toBe(true);
+  it("lets sales and managers ask for an unassigned hot chat", () => {
+    expect(isRequestableBy(sales, row)).toBe(true);
+    expect(isRequestableBy({ id: "m", role: "manager" }, row)).toBe(true);
   });
-  it("refuses taken, not-hot, waiting-for-admin chats and other roles", () => {
-    expect(isClaimableBy(sales, { ...row, assignedToUserId: "x" })).toBe(false);
-    expect(isClaimableBy(sales, { ...row, temperature: "WARM" })).toBe(false);
-    expect(isClaimableBy(sales, { ...row, handoffStatus: "PENDING" })).toBe(false);
-    expect(isClaimableBy({ id: "a", role: "management" }, row)).toBe(false);
+  it("refuses assigned, not-hot, already-requested chats and other roles", () => {
+    expect(isRequestableBy(sales, { ...row, handoffStatus: "APPROVED" })).toBe(false);
+    expect(isRequestableBy(sales, { ...row, assignedToUserId: "x" })).toBe(false);
+    expect(isRequestableBy(sales, { ...row, temperature: "WARM" })).toBe(false);
+    expect(isRequestableBy(sales, { ...row, handoffStatus: "PENDING" })).toBe(false);
+    expect(isRequestableBy({ id: "a", role: "management" }, row)).toBe(false);
   });
 });

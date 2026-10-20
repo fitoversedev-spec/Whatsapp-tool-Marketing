@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import { safeFetch } from "@/lib/safe-fetch";
@@ -33,24 +34,32 @@ const BADGE: Record<Temperature, string> = {
 const LABEL: Record<Temperature, string> = { HOT: "🔥 Hot", WARM: "🌤 Warm", COLD: "❄️ Cold" };
 const SOURCE: Record<AiChatRow["source"], string> = { auto: "Auto", agent: "AI agent", human: "Team" };
 const HANDOFF: Record<string, string> = {
-  PENDING: "Asked for a person — waiting",
-  APPROVED: "With a salesperson",
-  REJECTED: "Asked for a person — declined",
-  RELEASED: "Back with AI",
+  REJECTED: "Request declined",
+  RELEASED: "Released",
 };
+
+type Assignee = { id: string; name: string; role: string };
+type TemplateChoice = { id: string; name: string; category: string; language: string; body: string };
 
 export default function AiChatsClient({
   initial,
   seesAll,
   canLabelAll,
   currentUserId,
+  canAssign,
+  assignees,
 }: {
   initial: AiChatsResult;
   seesAll: boolean;
   canLabelAll: boolean;
   currentUserId: string;
+  /** Admins (AI approvers) assign leads directly and pick the welcome templates. */
+  canAssign: boolean;
+  assignees: Assignee[];
 }) {
   const toast = useToast();
+  const params = useSearchParams();
+  const [picks, setPicks] = useState<Record<string, string>>({});
   const [data, setData] = useState<AiChatsResult>(initial);
   const [filter, setFilter] = useState<Filter>("ALL");
   const [q, setQ] = useState("");
@@ -115,20 +124,51 @@ export default function AiChatsClient({
     void load(q);
   }
 
-  async function claim(row: AiChatRow) {
-    if (busyId) return;
+  async function post(row: AiChatRow, action: "request" | "assign", body?: unknown) {
+    if (busyId) return false;
     setBusyId(row.conversationId);
-    const res = await safeFetch(`/api/ai-chats/${row.conversationId}/claim`, { method: "POST" });
+    const res = await safeFetch(`/api/ai-chats/${row.conversationId}/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    });
     const json = await res.json().catch(() => ({}));
     setBusyId(null);
+    void load(q);
     if (!res.ok) {
-      toast.error((json as { error?: string }).error ?? "Could not take this lead.");
-      void load(q);
+      toast.error((json as { error?: string }).error ?? "Something went wrong. Please try again.");
+      return false;
+    }
+    return true;
+  }
+
+  async function requestLead(row: AiChatRow) {
+    if (await post(row, "request")) toast.success("Sent to the admin for approval.");
+  }
+
+  async function assign(row: AiChatRow) {
+    const to = picks[row.conversationId];
+    if (!to) {
+      toast.error("Pick a salesperson first.");
       return;
     }
-    toast.success("It's yours. The chat is in your Inbox and the AI will stay quiet there.");
-    void load(q);
+    if (await post(row, "assign", { assignToUserId: to })) {
+      toast.success("Assigned. They got the handover, and the AI introduced them to the customer if the chat is open.");
+    }
   }
+
+  // Opened from a notification (/ai-chats?c=<id>): show that conversation.
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    const c = params.get("c");
+    if (!c || deepLinked.current) return;
+    const row = data.rows.find((r) => r.conversationId === c);
+    if (!row) return;
+    deepLinked.current = true;
+    void toggle(row);
+    setTimeout(() => document.getElementById(`chat-${c}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, data.rows]);
 
   const rows = filter === "ALL" ? data.rows : data.rows.filter((r) => r.temperature === filter);
 
@@ -139,11 +179,12 @@ export default function AiChatsClient({
         description={
           seesAll
             ? "Every WhatsApp chat the AI sales agent has handled, hot leads first."
-            : "WhatsApp chats the AI sales agent handled that are assigned to you, plus unassigned hot leads you can take."
+            : "WhatsApp chats the AI sales agent handled that are assigned to you, plus unassigned hot leads you can ask for."
         }
         large
       />
       <div className="px-4 sm:px-6 lg:px-8 py-4 max-w-6xl space-y-4">
+        {canAssign && <WelcomeTemplates />}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {FILTERS.map((f) => (
             <button
@@ -182,7 +223,7 @@ export default function AiChatsClient({
               const open = openId === r.conversationId;
               const transcript = lines[r.conversationId];
               return (
-                <li key={r.conversationId} className="card p-4">
+                <li key={r.conversationId} id={`chat-${r.conversationId}`} className="card p-4 scroll-mt-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -198,7 +239,7 @@ export default function AiChatsClient({
                       <div className="mt-1 text-sm text-slate-600">
                         {r.phone}
                         {r.assignedTo ? <span> · with {r.assignedTo}</span> : <span className="font-semibold text-orange-700"> · Unassigned</span>}
-                        {r.handoffStatus && <span> · {HANDOFF[r.handoffStatus] ?? r.handoffStatus}</span>}
+                        {r.handoffStatus && HANDOFF[r.handoffStatus] && <span> · {HANDOFF[r.handoffStatus]}</span>}
                       </div>
                     </div>
                     <div className="text-xs text-slate-500 sm:text-right">
@@ -208,6 +249,14 @@ export default function AiChatsClient({
                       </div>
                     </div>
                   </div>
+
+                  {r.pendingRequest && (
+                    <div className="mt-2 inline-block rounded-md bg-amber-50 border border-amber-200 px-2 py-1 text-xs font-semibold text-amber-800">
+                      {r.pendingRequest.kind === "SALES_REQUEST"
+                        ? `${r.pendingRequest.requestedBy ?? "A salesperson"} asked for this lead — waiting for admin`
+                        : "Customer asked to talk to a person — waiting for admin"}
+                    </div>
+                  )}
 
                   {r.reason && <p className="mt-2 text-sm text-slate-800 break-words">{r.reason}</p>}
 
@@ -222,10 +271,35 @@ export default function AiChatsClient({
                   )}
 
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {r.claimable && (
-                      <button className="btn btn-turf" disabled={busyId !== null} onClick={() => void claim(r)}>
-                        {busyId === r.conversationId ? "Working…" : "🙋 Take this lead"}
+                    {r.requestable && (
+                      <button className="btn btn-turf" disabled={busyId !== null} onClick={() => void requestLead(r)}>
+                        {busyId === r.conversationId ? "Working…" : "🙋 Request this lead"}
                       </button>
+                    )}
+                    {canAssign && r.handoffStatus !== "APPROVED" && (
+                      <span className="flex items-center gap-2">
+                        <select
+                          className="input w-auto"
+                          aria-label="Assign to"
+                          value={picks[r.conversationId] ?? ""}
+                          disabled={busyId !== null}
+                          onChange={(e) => setPicks((p) => ({ ...p, [r.conversationId]: e.target.value }))}
+                        >
+                          <option value="">Assign to…</option>
+                          {assignees.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.name} ({a.role})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="btn btn-turf"
+                          disabled={busyId !== null || !picks[r.conversationId]}
+                          onClick={() => void assign(r)}
+                        >
+                          {busyId === r.conversationId ? "Working…" : "Assign"}
+                        </button>
+                      </span>
                     )}
                     <button className="btn btn-secondary" onClick={() => void toggle(r)} aria-expanded={open}>
                       {open ? "Hide conversation" : "View conversation"}
@@ -291,6 +365,85 @@ export default function AiChatsClient({
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Admin panel: the templates the AI may send on its own as the first message to a new form lead. */
+function WelcomeTemplates() {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [templates, setTemplates] = useState<TemplateChoice[] | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await safeFetch("/api/ai-chats/welcome-templates", { cache: "no-store" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json) return;
+      setTemplates(json.templates as TemplateChoice[]);
+      setSelected(json.selected as string[]);
+    })();
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    const res = await safeFetch("/api/ai-chats/welcome-templates", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ templateIds: selected }),
+    });
+    setSaving(false);
+    if (res.ok) toast.success("Welcome templates saved.");
+    else toast.error("Could not save. Please try again.");
+  }
+
+  const names = (templates ?? []).filter((t) => selected.includes(t.id)).map((t) => t.name);
+  return (
+    <div className="card p-4">
+      <button className="flex w-full items-center justify-between text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span>
+          <span className="font-semibold text-slate-900">Welcome templates for new form leads</span>
+          <span className="block text-xs text-slate-500">
+            {names.length
+              ? `The AI sends ${names.join(", ")} to each new Instagram/Facebook form lead, once.`
+              : "None set: the AI cannot message new form leads until you pick one."}
+          </span>
+        </span>
+        <span className="text-slate-400">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-2">
+          {templates === null ? (
+            <div className="text-sm text-slate-500">Loading…</div>
+          ) : templates.length === 0 ? (
+            <div className="text-sm text-slate-500">No WhatsApp-approved templates yet. Create one under Templates first.</div>
+          ) : (
+            templates.map((t) => (
+              <label key={t.id} className="flex items-start gap-2 rounded-lg border border-slate-200 p-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={selected.includes(t.id)}
+                  onChange={(e) => setSelected((s) => (e.target.checked ? [...s, t.id] : s.filter((x) => x !== t.id)))}
+                />
+                <span className="min-w-0">
+                  <span className="font-semibold">{t.name}</span>
+                  <span className="text-xs text-slate-500">
+                    {" "}
+                    · {t.category} · {t.language}
+                  </span>
+                  <span className="block text-slate-600 whitespace-pre-wrap break-words">{t.body}</span>
+                </span>
+              </label>
+            ))
+          )}
+          <button className="btn btn-primary" disabled={saving || templates === null} onClick={() => void save()}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

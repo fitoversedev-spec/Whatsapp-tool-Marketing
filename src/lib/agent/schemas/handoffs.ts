@@ -22,16 +22,25 @@ const handoffDto = z.object({
   conversationId: z.string(),
   leadId: z.string().nullable(),
   status: z.enum(["PENDING", "APPROVED", "REJECTED", "RELEASED"]),
+  kind: z.enum(["CUSTOMER_REQUEST", "SALES_REQUEST", "ADMIN_ASSIGN"]),
   reason: z.string(),
   requestedAt: z.string(),
   decidedAt: z.string().nullable(),
-  assignedTo: z.object({ userId: z.string(), name: z.string() }).nullable(),
+  assignedTo: z.object({ userId: z.string(), name: z.string(), phone: z.string().nullable() }).nullable(),
+  customerIntroduced: z.boolean(),
 });
 
 const aiModeDto = z.object({
-  mode: z.enum(["ai", "waiting_for_human", "human"]),
+  mode: z.enum(["ai", "waiting_for_human", "sales_assigned"]),
   canReply: z.boolean(),
-  reason: z.enum(["no_handoff", "holding_reply_allowed", "customer_wrote_again", "waiting_for_customer", "human_assigned"]),
+  reason: z.enum([
+    "no_handoff",
+    "sales_requested",
+    "holding_reply_allowed",
+    "customer_wrote_again",
+    "waiting_for_customer",
+    "sales_assigned",
+  ]),
 });
 
 export const requestHumanHandoffResponseSchema = z.object({
@@ -45,4 +54,6 @@ export const aiStatusResponseSchema = z.object({
   conversationId: z.string(),
   ai: aiModeDto,
   handoff: handoffDto.nullable(),
+  /** When a salesperson owns the lead: what the AI should and should not handle. */
+  guidance: z.string().nullable(),
 });

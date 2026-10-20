@@ -13,13 +13,13 @@ type Assignee = { id: string; name: string; role: string };
 const TABS: { key: HandoffStatus; label: string; approverOnly?: boolean }[] = [
   { key: "PENDING", label: "Waiting", approverOnly: true },
   { key: "APPROVED", label: "With salesperson" },
-  { key: "RELEASED", label: "Back with AI" },
+  { key: "RELEASED", label: "Released" },
   { key: "REJECTED", label: "Declined", approverOnly: true },
 ];
 
 const EMPTY: Record<HandoffStatus, string> = {
-  PENDING: "No customer is waiting for a person.",
-  APPROVED: "No chats are with a salesperson right now.",
+  PENDING: "No lead requests are waiting.",
+  APPROVED: "No AI leads are with a salesperson right now.",
   RELEASED: "Nothing here yet.",
   REJECTED: "Nothing here yet.",
 };
@@ -81,8 +81,13 @@ export default function AiHandoffsClient({
   }
 
   // Suggest the lead's current rep when they can take chats.
-  const defaultPick = (c: HandoffCard) =>
-    c.lead?.ownerId && assignees.some((a) => a.id === c.lead?.ownerId) ? c.lead.ownerId : "";
+  // Suggest the salesperson who asked, else the lead's current rep, when they can take leads.
+  const defaultPick = (c: HandoffCard) => {
+    const can = (id: string | null | undefined): id is string => !!id && assignees.some((a) => a.id === id);
+    if (can(c.requestedBy?.id)) return c.requestedBy.id;
+    if (can(c.lead?.ownerId)) return c.lead.ownerId;
+    return "";
+  };
 
   async function act(card: HandoffCard, action: "approve" | "reject" | "release") {
     if (busyId) return;
@@ -108,9 +113,9 @@ export default function AiHandoffsClient({
     }
     setItems((prev) => prev.filter((c) => c.id !== card.id));
     if (card.status === "PENDING") setPendingCount((n) => Math.max(0, n - 1));
-    if (action === "approve") toast.success("Assigned. The AI will stay quiet in this chat.");
+    if (action === "approve") toast.success("Assigned. The salesperson got the handover; the AI keeps answering technical questions.");
     else if (action === "reject") toast.success("Declined. The AI agent carries on with the chat.");
-    else toast.success("Handed back to the AI agent.");
+    else toast.success("Lead released.");
   }
 
   const tabs = TABS.filter((t) => approver || !t.approverOnly);
@@ -121,8 +126,8 @@ export default function AiHandoffsClient({
         title="AI handoffs"
         description={
           approver
-            ? "Customers who asked the AI agent for a person. Pick a salesperson to take over the chat; the AI stops replying there until it is handed back."
-            : "Chats the AI agent handed to you. When you are done, hand the chat back so the AI can carry on."
+            ? "Requests for AI leads: customers who asked for a person, and salespeople asking for hot leads. Assign a salesperson; they contact the customer from their own phone while the AI keeps answering technical questions."
+            : "AI leads assigned to you, and the ones you asked for. Contact the customer from your own phone; the AI keeps answering technical questions and every message reaches you as a notification."
         }
         large
       />
@@ -197,9 +202,19 @@ export default function AiHandoffsClient({
                   )}
                 </div>
 
+                <div className="mt-2">
+                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                    {c.kind === "SALES_REQUEST"
+                      ? `Requested by ${c.requestedBy?.name ?? "a salesperson"}`
+                      : c.kind === "ADMIN_ASSIGN"
+                        ? "Assigned by an admin"
+                        : "Customer asked for a person"}
+                  </span>
+                </div>
+
                 <dl className="mt-3 space-y-2">
                   <div className="flex flex-wrap gap-x-2">
-                    <dt className="text-sm text-slate-500">Why they want a person:</dt>
+                    <dt className="text-sm text-slate-500">{c.kind === "CUSTOMER_REQUEST" ? "Why they want a person:" : "Note:"}</dt>
                     <dd className="text-sm font-semibold text-slate-900 break-words">{c.reason}</dd>
                   </div>
                   {c.summary && (
@@ -265,7 +280,7 @@ export default function AiHandoffsClient({
                     {c.decisionNote && <div>Note: {c.decisionNote}</div>}
                     {c.status === "APPROVED" && (
                       <button className="btn btn-secondary" disabled={busyId !== null} onClick={() => void act(c, "release")}>
-                        {busyId === c.id ? "Working…" : "Hand back to AI"}
+                        {busyId === c.id ? "Working…" : "Release lead"}
                       </button>
                     )}
                   </div>

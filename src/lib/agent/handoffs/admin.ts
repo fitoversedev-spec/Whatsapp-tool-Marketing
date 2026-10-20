@@ -1,25 +1,26 @@
 /**
- * The human side of the AI → human handoff: list the requests, approve one by
- * assigning a salesperson, reject it (the AI carries on), or hand an assigned
- * chat back to the AI.
+ * The human side of handing AI leads to sales: list the requests, approve one
+ * by assigning a salesperson, assign a chat directly, decline a request (the
+ * AI carries on), or release a lead.
  *
  * Who may do what:
- *   approve / reject   an AI approver (Setting agent_approvers; admins by default)
- *   hand back          an approver, or the salesperson the chat was assigned to
- *   see the list       approvers see everything; anyone else sees what was assigned to them
+ *   approve / decline / assign   an AI approver (Setting agent_approvers; admins by default)
+ *   release                      an approver, or the salesperson the lead was assigned to
+ *   see the list                 approvers see everything; anyone else sees what was
+ *                                assigned to them and what they asked for
  */
 import { prisma } from "@/lib/prisma";
-import { sendPushToUser } from "@/lib/push";
-import { reassignCustomerRep } from "@/lib/crm/assignRep";
 import { logContactEvent } from "@/lib/crm/contactEvents";
 import { ASSIGNABLE_ROLES } from "../leads/logic";
-import { isHandoffStatus, type HandoffStatus } from "./logic";
+import { applyAssignment, type Rep } from "./assign";
+import { HANDOFF_KINDS, isHandoffStatus, type HandoffKind, type HandoffStatus } from "./logic";
 
 export type HandoffViewer = { id: string; role: string; name: string; approver: boolean };
 
 export type HandoffCard = {
   id: string;
   status: HandoffStatus;
+  kind: HandoffKind;
   reason: string;
   summary: string;
   requestedAt: string;
@@ -28,16 +29,21 @@ export type HandoffCard = {
   conversation: { id: string; name: string | null; phone: string };
   lead: { id: string; name: string; company: string | null; ownerId: string | null; ownerName: string | null } | null;
   assignedTo: { id: string; name: string } | null;
+  requestedBy: { id: string; name: string } | null;
   decidedBy: { id: string; name: string } | null;
 };
 
 export type HandoffOutcome = { ok: true } | { ok: false; status: 400 | 403 | 404 | 409; message: string };
 
 const notFound: HandoffOutcome = { ok: false, status: 404, message: "Request not found." };
+const notApprover: HandoffOutcome = { ok: false, status: 403, message: "You are not allowed to decide AI requests." };
 
 export async function listHandoffCards(viewer: HandoffViewer, status: HandoffStatus): Promise<HandoffCard[]> {
   const rows = await prisma.aiHumanHandoff.findMany({
-    where: { status, ...(viewer.approver ? {} : { assignedToUserId: viewer.id }) },
+    where: {
+      status,
+      ...(viewer.approver ? {} : { OR: [{ assignedToUserId: viewer.id }, { requestedByUserId: viewer.id }] }),
+    },
     orderBy: { requestedAt: status === "PENDING" ? "asc" : "desc" },
     take: 100,
   });
@@ -54,22 +60,25 @@ export async function listHandoffCards(viewer: HandoffViewer, status: HandoffSta
       select: { id: true, name: true, account: { select: { name: true, ownerUserId: true, owner: { select: { name: true } } } } },
     }),
     prisma.user.findMany({
-      where: { id: { in: ids(rows.flatMap((r) => [r.assignedToUserId, r.decidedByUserId])) } },
+      where: { id: { in: ids(rows.flatMap((r) => [r.assignedToUserId, r.decidedByUserId, r.requestedByUserId])) } },
       select: { id: true, name: true },
     }),
   ]);
   const convoById = new Map(convos.map((c) => [c.id, c]));
   const leadById = new Map(leads.map((l) => [l.id, l]));
   const userById = new Map(users.map((u) => [u.id, u]));
+  const person = (id: string | null) => {
+    const u = id ? userById.get(id) : undefined;
+    return u ? { id: u.id, name: u.name } : null;
+  };
 
   return rows.map((r) => {
     const c = convoById.get(r.conversationId);
     const l = r.accountContactId ? leadById.get(r.accountContactId) : undefined;
-    const a = r.assignedToUserId ? userById.get(r.assignedToUserId) : undefined;
-    const d = r.decidedByUserId ? userById.get(r.decidedByUserId) : undefined;
     return {
       id: r.id,
       status: (isHandoffStatus(r.status) ? r.status : "PENDING") as HandoffStatus,
+      kind: ((HANDOFF_KINDS as readonly string[]).includes(r.kind) ? r.kind : "CUSTOMER_REQUEST") as HandoffKind,
       reason: r.reason,
       summary: r.summary,
       requestedAt: r.requestedAt.toISOString(),
@@ -85,8 +94,9 @@ export async function listHandoffCards(viewer: HandoffViewer, status: HandoffSta
             ownerName: l.account?.owner?.name ?? null,
           }
         : null,
-      assignedTo: a ? { id: a.id, name: a.name } : null,
-      decidedBy: d ? { id: d.id, name: d.name } : null,
+      assignedTo: person(r.assignedToUserId),
+      requestedBy: person(r.requestedByUserId),
+      decidedBy: person(r.decidedByUserId),
     };
   });
 }
@@ -95,7 +105,7 @@ export async function countPendingHandoffs(): Promise<number> {
   return prisma.aiHumanHandoff.count({ where: { status: "PENDING" } });
 }
 
-/** Active, approved salespeople and managers — the people a chat can go to. */
+/** Active, approved salespeople and managers — the people a lead can go to. */
 export async function listAssignees(): Promise<{ id: string; name: string; role: string }[]> {
   return prisma.user.findMany({
     where: { deletedAt: null, isActive: true, approvalStatus: "approved", role: { in: [...ASSIGNABLE_ROLES] } },
@@ -104,27 +114,25 @@ export async function listAssignees(): Promise<{ id: string; name: string; role:
   });
 }
 
+async function loadRep(userId: string): Promise<Rep | null> {
+  return prisma.user.findFirst({
+    where: { id: userId, deletedAt: null, isActive: true, approvalStatus: "approved", role: { in: [...ASSIGNABLE_ROLES] } },
+    select: { id: true, name: true, phone: true, pushEnabled: true },
+  });
+}
+
+/** Approve a PENDING request (the customer's or a salesperson's) and assign the lead. */
 export async function approveHandoff(args: {
   id: string;
   approver: HandoffViewer;
   assignToUserId: string;
   note: string | null;
 }): Promise<HandoffOutcome> {
-  if (!args.approver.approver) return { ok: false, status: 403, message: "You are not allowed to decide AI requests." };
+  if (!args.approver.approver) return notApprover;
   const row = await prisma.aiHumanHandoff.findUnique({ where: { id: args.id } });
   if (!row) return notFound;
   if (row.status !== "PENDING") return { ok: false, status: 409, message: "This request was already decided." };
-
-  const rep = await prisma.user.findFirst({
-    where: {
-      id: args.assignToUserId,
-      deletedAt: null,
-      isActive: true,
-      approvalStatus: "approved",
-      role: { in: [...ASSIGNABLE_ROLES] },
-    },
-    select: { id: true, name: true, pushEnabled: true },
-  });
+  const rep = await loadRep(args.assignToUserId);
   if (!rep) return { ok: false, status: 400, message: "Pick an active salesperson or manager." };
 
   // Only the first decision counts, even if two admins click at once.
@@ -139,44 +147,62 @@ export async function approveHandoff(args: {
     },
   });
   if (claimed.count === 0) return { ok: false, status: 409, message: "This request was already decided." };
+  await applyAssignment({ handoff: row, rep, actorUserId: args.approver.id, note: args.note });
+  return { ok: true };
+}
 
-  // The WhatsApp chat goes to the salesperson's inbox.
-  await prisma.conversation.update({ where: { id: row.conversationId }, data: { assignedToUserId: rep.id }, select: { id: true } });
-
-  // The CRM customer follows, through the same path every other rep change uses
-  // (open deals, reminders, timeline and push go with it).
-  if (row.accountContactId) {
-    const lead = await prisma.accountContact.findUnique({ where: { id: row.accountContactId }, select: { accountId: true } });
-    if (lead) {
-      await reassignCustomerRep({ accountId: lead.accountId, toUserId: rep.id, actorUserId: args.approver.id });
-      await logContactEvent({
-        contactId: row.accountContactId,
-        actorUserId: args.approver.id,
-        kind: "escalated",
-        summary: `Human handoff approved — chat assigned to ${rep.name}`,
-        detail: args.note,
-        refId: row.id,
-      });
-    }
+/**
+ * An admin assigns an AI chat straight from the AI agent chats page. A waiting
+ * request on the chat is approved with this salesperson; otherwise a new,
+ * already-approved ADMIN_ASSIGN record is made.
+ */
+export async function assignChat(args: {
+  conversationId: string;
+  approver: HandoffViewer;
+  assignToUserId: string;
+  note: string | null;
+}): Promise<HandoffOutcome> {
+  if (!args.approver.approver) return notApprover;
+  const open = await prisma.aiHumanHandoff.findFirst({
+    where: { conversationId: args.conversationId, status: { in: ["PENDING", "APPROVED"] } },
+    orderBy: { requestedAt: "desc" },
+    select: { id: true, status: true },
+  });
+  if (open?.status === "APPROVED") {
+    return { ok: false, status: 409, message: "This lead already has a salesperson. Release it first to reassign." };
   }
+  if (open) return approveHandoff({ id: open.id, approver: args.approver, assignToUserId: args.assignToUserId, note: args.note });
 
-  if (rep.pushEnabled) {
-    try {
-      await sendPushToUser(rep.id, {
-        title: "A customer is waiting for you",
-        body: row.reason.slice(0, 140),
-        url: `/inbox?conversation=${row.conversationId}`,
-        tag: `ai-handoff-${row.id}`,
-      });
-    } catch {
-      // Best effort: the chat is already in their inbox.
-    }
-  }
+  const convo = await prisma.conversation.findUnique({ where: { id: args.conversationId }, select: { id: true, contactPhone: true } });
+  if (!convo) return { ok: false, status: 404, message: "Chat not found." };
+  const rep = await loadRep(args.assignToUserId);
+  if (!rep) return { ok: false, status: 400, message: "Pick an active salesperson or manager." };
+  const [identity, contact] = await Promise.all([
+    prisma.agentIdentity.findFirst({ select: { id: true } }),
+    prisma.contact.findFirst({ where: { phone: convo.contactPhone }, select: { accountContactId: true } }),
+  ]);
+  const now = new Date();
+  const row = await prisma.aiHumanHandoff.create({
+    data: {
+      conversationId: convo.id,
+      accountContactId: contact?.accountContactId ?? null,
+      identityId: identity?.id ?? "admin-assign",
+      kind: "ADMIN_ASSIGN",
+      reason: `Assigned by ${args.approver.name}`,
+      summary: "",
+      status: "APPROVED",
+      assignedToUserId: rep.id,
+      decidedByUserId: args.approver.id,
+      decidedAt: now,
+      decisionNote: args.note,
+    },
+  });
+  await applyAssignment({ handoff: row, rep, actorUserId: args.approver.id, note: args.note });
   return { ok: true };
 }
 
 export async function rejectHandoff(args: { id: string; approver: HandoffViewer; note: string }): Promise<HandoffOutcome> {
-  if (!args.approver.approver) return { ok: false, status: 403, message: "You are not allowed to decide AI requests." };
+  if (!args.approver.approver) return notApprover;
   const row = await prisma.aiHumanHandoff.findUnique({ where: { id: args.id }, select: { id: true, accountContactId: true } });
   if (!row) return notFound;
   const claimed = await prisma.aiHumanHandoff.updateMany({
@@ -189,7 +215,7 @@ export async function rejectHandoff(args: { id: string; approver: HandoffViewer;
       contactId: row.accountContactId,
       actorUserId: args.approver.id,
       kind: "escalated",
-      summary: "Human handoff declined — the AI agent continues the chat",
+      summary: "Request for this AI lead declined — the AI agent continues the chat",
       detail: args.note,
       refId: row.id,
     });
@@ -197,7 +223,7 @@ export async function rejectHandoff(args: { id: string; approver: HandoffViewer;
   return { ok: true };
 }
 
-/** Give an assigned chat back to the AI. */
+/** End a salesperson's ownership of an AI lead. The AI keeps chatting either way. */
 export async function releaseHandoff(args: { id: string; user: HandoffViewer }): Promise<HandoffOutcome> {
   const row = await prisma.aiHumanHandoff.findUnique({
     where: { id: args.id },
@@ -205,19 +231,19 @@ export async function releaseHandoff(args: { id: string; user: HandoffViewer }):
   });
   if (!row) return notFound;
   if (!args.user.approver && row.assignedToUserId !== args.user.id) {
-    return { ok: false, status: 403, message: "Only the assigned salesperson or an admin can hand this chat back." };
+    return { ok: false, status: 403, message: "Only the assigned salesperson or an admin can release this lead." };
   }
   const claimed = await prisma.aiHumanHandoff.updateMany({
     where: { id: row.id, status: "APPROVED" },
     data: { status: "RELEASED", releasedByUserId: args.user.id, releasedAt: new Date() },
   });
-  if (claimed.count === 0) return { ok: false, status: 409, message: "This chat is not currently with a salesperson." };
+  if (claimed.count === 0) return { ok: false, status: 409, message: "This lead is not currently with a salesperson." };
   if (row.accountContactId) {
     await logContactEvent({
       contactId: row.accountContactId,
       actorUserId: args.user.id,
       kind: "escalated",
-      summary: `Chat handed back to the AI agent by ${args.user.name}`,
+      summary: `AI lead released by ${args.user.name}`,
       refId: row.id,
     });
   }

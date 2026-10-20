@@ -6,16 +6,16 @@
  *                      Called after the AI replies, labels a chat, or asks for a human,
  *                      after a person labels a chat, and from the cron sweep.
  *                      Each chat alerts once (ai_hot_leads.conversation_id is unique).
- *   claimHotLead()     a salesperson takes an unassigned hot chat: it is assigned to
- *                      them in the Inbox, its unowned CRM customer goes to them, and
- *                      the AI goes quiet there (an APPROVED handoff, which they can
- *                      hand back from CRM → AI handoffs).
+ *   requestHotLead()   a salesperson asks for an unassigned hot chat; an admin approves
+ *                      it on CRM → AI handoffs (src/lib/agent/handoffs/admin.ts).
+ *   afterAiReply()     after each AI reply: the hot check, and the reply pushed to the
+ *                      salesperson who owns the lead.
  */
 import { prisma } from "@/lib/prisma";
 import { sendPushToUser } from "@/lib/push";
-import { reassignCustomerRep } from "@/lib/crm/assignRep";
-import { logContactEvent } from "@/lib/crm/contactEvents";
-import { isClaimableBy, recentAiChatRows, scoreOneChat, type AiChatRow, type Viewer } from "./query";
+import { loadApproverConfig } from "@/lib/agent/approvals";
+import { conveyToSales } from "@/lib/agent/handoffs/assign";
+import { isRequestableBy, recentAiChatRows, scoreOneChat, type AiChatRow, type Viewer } from "./query";
 
 const ALERT_ROLES = ["admin", "manager"];
 
@@ -86,76 +86,70 @@ export async function sweepHotLeads(): Promise<{ alerted: number }> {
   return { alerted };
 }
 
-export type ClaimOutcome = { ok: true } | { ok: false; status: 403 | 404 | 409; message: string };
+export type RequestOutcome = { ok: true } | { ok: false; status: 403 | 404 | 409; message: string };
 
-export async function claimHotLead(viewer: Viewer & { name: string }, conversationId: string): Promise<ClaimOutcome> {
+/**
+ * A salesperson asks for an unassigned hot lead. It waits on CRM → AI handoffs
+ * until an admin approves (assigning it to them, or someone else) or declines.
+ * The AI keeps chatting meanwhile.
+ */
+export async function requestHotLead(viewer: Viewer & { name: string }, conversationId: string): Promise<RequestOutcome> {
   const row = await scoreOneChat(conversationId);
   if (!row) return { ok: false, status: 404, message: "Chat not found." };
-  if (!isClaimableBy(viewer, row)) {
-    if (row.assignedToUserId) return { ok: false, status: 409, message: `Already taken by ${row.assignedTo ?? "someone"}.` };
-    if (row.handoffStatus === "PENDING") {
-      return { ok: false, status: 409, message: "The customer asked for a person and an admin is choosing who. Ask an admin." };
+  if (!isRequestableBy(viewer, row)) {
+    if (row.assignedToUserId || row.handoffStatus === "APPROVED") {
+      return { ok: false, status: 409, message: `Already assigned to ${row.assignedTo ?? "someone"}.` };
     }
+    if (row.handoffStatus === "PENDING") return { ok: false, status: 409, message: "A request for this lead is already waiting for an admin." };
     if (row.temperature !== "HOT") return { ok: false, status: 409, message: "This chat is no longer hot." };
-    return { ok: false, status: 403, message: "Only salespeople and managers can take leads." };
+    return { ok: false, status: 403, message: "Only salespeople and managers can ask for leads." };
   }
 
-  // First click wins.
-  const taken = await prisma.conversation.updateMany({
-    where: { id: conversationId, assignedToUserId: null },
-    data: { assignedToUserId: viewer.id },
-  });
-  if (taken.count === 0) return { ok: false, status: 409, message: "Someone else just took this lead." };
-
-  const now = new Date();
-  // The AI goes quiet, exactly as after an admin-approved handoff; hand back from CRM → AI handoffs.
   const identity = await prisma.agentIdentity.findFirst({ select: { id: true } });
-  const handoff = await prisma.aiHumanHandoff.create({
+  await prisma.aiHumanHandoff.create({
     data: {
       conversationId,
       accountContactId: row.leadId,
-      identityId: identity?.id ?? "team-claim",
-      reason: `Hot lead taken by ${viewer.name}`,
+      identityId: identity?.id ?? "sales-request",
+      kind: "SALES_REQUEST",
+      requestedByUserId: viewer.id,
+      reason: `${viewer.name} asked for this hot lead`,
       summary: row.requirements.map((r) => `${r.label}: ${r.value}`).join("\n"),
-      status: "APPROVED",
-      decidedByUserId: viewer.id,
-      decidedAt: now,
-      decisionNote: "Claimed from WhatsApp Marketing → AI agent chats",
-      assignedToUserId: viewer.id,
+      status: "PENDING",
     },
-    select: { id: true },
   });
-  await prisma.aiHotLead.upsert({
-    where: { conversationId },
-    create: { conversationId, claimedByUserId: viewer.id, claimedAt: now },
-    update: { claimedByUserId: viewer.id, claimedAt: now },
-  });
-
-  // The CRM customer follows only if nobody owns it yet.
-  if (row.leadId) {
-    const lead = await prisma.accountContact.findUnique({ where: { id: row.leadId }, select: { accountId: true } });
-    if (lead) {
-      await reassignCustomerRep({ accountId: lead.accountId, toUserId: viewer.id, actorUserId: viewer.id, onlyIfUnowned: true });
-      await logContactEvent({
-        contactId: row.leadId,
-        actorUserId: viewer.id,
-        kind: "escalated",
-        summary: `Hot lead taken by ${viewer.name} from AI agent chats`,
-        refId: handoff.id,
-      });
-    }
-  }
 
   try {
-    const admins = (await alertRecipients()).filter((id) => id !== viewer.id);
-    await pushTo(admins, {
-      title: `${viewer.name} took a hot lead`,
-      body: `${row.name || row.phone}: ${headline(row)}`,
-      url: "/ai-chats",
-      tag: `hot-lead-${conversationId}`,
+    const cfg = await loadApproverConfig();
+    const approvers = await prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        role: { not: "ai_agent" },
+        OR: [{ role: { in: cfg.roles } }, { id: { in: cfg.userIds } }],
+      },
+      select: { id: true },
     });
+    await pushTo(
+      approvers.map((u) => u.id).filter((id) => id !== viewer.id),
+      {
+        title: `${viewer.name} asks for a hot lead`,
+        body: `${row.name || row.phone}: ${headline(row)}`,
+        url: "/crm/ai-handoffs",
+        tag: `lead-request-${conversationId}`,
+      },
+    );
   } catch {
-    // Best effort.
+    // Best effort: the request is on CRM → AI handoffs.
   }
   return { ok: true };
+}
+
+/**
+ * Run after every AI reply: alert the team if the chat just turned hot, and
+ * pass the reply on to the salesperson who owns the lead. Never throws.
+ */
+export async function afterAiReply(conversationId: string, text: string): Promise<void> {
+  await checkHotLead(conversationId);
+  await conveyToSales(conversationId, text);
 }

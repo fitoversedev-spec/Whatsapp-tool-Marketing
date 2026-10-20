@@ -6,7 +6,8 @@
  * Visibility:
  *   admin, manager, management   every AI chat
  *   anyone else                  AI chats assigned to them, plus UNASSIGNED HOT
- *                                chats, which a salesperson can claim (./hotLeads.ts)
+ *                                chats, which a salesperson can ask an admin for
+ *                                (./hotLeads.ts requestHotLead)
  */
 import { prisma } from "@/lib/prisma";
 import { normalizePhone } from "@/lib/phone";
@@ -17,8 +18,8 @@ import { finalTemperature, scoreChat, type Temperature, type TemperatureSource }
 export const AI_CHATS_LIMIT = 300;
 const TEXT_LOOKBACK_MS = 60 * 24 * 60 * 60 * 1000;
 const AGENT_PREFIX = "agent.";
-/** Roles that can take an unassigned hot lead. */
-export const CLAIMER_ROLES = ["sales", "manager"];
+/** Roles that can ask for an unassigned hot lead. */
+export const REQUESTER_ROLES = ["sales", "manager"];
 
 export type Viewer = { id: string; role: string };
 
@@ -39,10 +40,12 @@ export type AiChatRow = {
   score: number;
   signals: string[];
   handoffStatus: string | null;
+  /** A request waiting for an admin: the customer's own, or a salesperson's. */
+  pendingRequest: { kind: string; requestedBy: string | null } | null;
   leadId: string | null;
   requirements: { label: string; value: string }[];
-  /** Filled per viewer by listAiChats: this person may take the lead now. */
-  claimable: boolean;
+  /** Filled per viewer by listAiChats: this person may ask an admin for this lead. */
+  requestable: boolean;
 };
 
 export type AiChatsResult = { rows: AiChatRow[]; counts: Record<Temperature | "ALL", number>; truncated: boolean };
@@ -94,13 +97,14 @@ export function canLabelChat(viewer: Viewer, assignedToUserId: string | null): b
   return canManageAllCustomers(viewer.role) || (!!assignedToUserId && assignedToUserId === viewer.id);
 }
 
-/** May this person take this chat? Sales/manager, the chat is unassigned and hot, and no human request is waiting for an admin. */
-export function isClaimableBy(viewer: Viewer, row: Pick<AiChatRow, "assignedToUserId" | "temperature" | "handoffStatus">): boolean {
+/** May this person ask for this lead? Sales/manager, the chat is unassigned and hot, and nothing is already waiting or assigned. */
+export function isRequestableBy(viewer: Viewer, row: Pick<AiChatRow, "assignedToUserId" | "temperature" | "handoffStatus">): boolean {
   return (
-    CLAIMER_ROLES.includes(viewer.role) &&
+    REQUESTER_ROLES.includes(viewer.role) &&
     !row.assignedToUserId &&
     row.temperature === "HOT" &&
-    row.handoffStatus !== "PENDING"
+    row.handoffStatus !== "PENDING" &&
+    row.handoffStatus !== "APPROVED"
   );
 }
 
@@ -142,7 +146,7 @@ async function buildRows(convos: ConvoBase[], agents: string[]): Promise<AiChatR
     prisma.aiHumanHandoff.findMany({
       where: { conversationId: { in: ids } },
       orderBy: { requestedAt: "desc" },
-      select: { conversationId: true, status: true },
+      select: { conversationId: true, status: true, kind: true, requestedByUserId: true },
     }),
     prisma.aiChatInsight.findMany({ where: { conversationId: { in: ids } } }),
     prisma.contact.findMany({
@@ -161,7 +165,17 @@ async function buildRows(convos: ConvoBase[], agents: string[]): Promise<AiChatR
     textsBy.set(t.conversationId, list);
   }
   const handoffBy = new Map<string, string>();
-  for (const h of handoffs) if (!handoffBy.has(h.conversationId)) handoffBy.set(h.conversationId, h.status);
+  const latestHandoff = new Map<string, (typeof handoffs)[number]>();
+  for (const h of handoffs) {
+    if (handoffBy.has(h.conversationId)) continue;
+    handoffBy.set(h.conversationId, h.status);
+    latestHandoff.set(h.conversationId, h);
+  }
+  const requesterIds = [...new Set(handoffs.map((h) => h.requestedByUserId).filter((x): x is string => !!x))];
+  const requesters = requesterIds.length
+    ? await prisma.user.findMany({ where: { id: { in: requesterIds } }, select: { id: true, name: true } })
+    : [];
+  const requesterName = new Map(requesters.map((u) => [u.id, u.name]));
   const insightBy = new Map(insights.map((i) => [i.conversationId, i]));
   const contactByPhone = new Map(contacts.map((c) => [c.phone, c]));
   const optedOut = new Set(optOuts.map((o) => o.phoneE164));
@@ -209,12 +223,17 @@ async function buildRows(convos: ConvoBase[], agents: string[]): Promise<AiChatR
       score: auto.score,
       signals: auto.signals,
       handoffStatus: handoffBy.get(c.id) ?? null,
+      pendingRequest: (() => {
+        const h = latestHandoff.get(c.id);
+        if (!h || h.status !== "PENDING") return null;
+        return { kind: h.kind, requestedBy: h.requestedByUserId ? (requesterName.get(h.requestedByUserId) ?? null) : null };
+      })(),
       leadId: lead ? (contact?.accountContactId ?? null) : null,
       requirements: REQUIREMENT_LABELS.filter(([k]) => has(k)).map(([k, label]) => ({
         label,
         value: String(fields[`${AGENT_PREFIX}${k}`]),
       })),
-      claimable: false,
+      requestable: false,
     };
   });
 }
@@ -278,7 +297,7 @@ export async function listAiChats(viewer: Viewer, opts: { q?: string } = {}): Pr
 
   let rows = await buildRows(convos, agents);
   if (!seesAll) rows = rows.filter((r) => r.assignedToUserId === viewer.id || (!r.assignedToUserId && r.temperature === "HOT"));
-  for (const r of rows) r.claimable = isClaimableBy(viewer, r);
+  for (const r of rows) r.requestable = isRequestableBy(viewer, r);
 
   const rank: Record<Temperature, number> = { HOT: 0, WARM: 1, COLD: 2 };
   rows.sort(
@@ -298,7 +317,7 @@ export async function findVisibleChat(viewer: Viewer, conversationId: string) {
   });
   if (!convo) return null;
   if (canSeeAllAiChats(viewer.role) || convo.assignedToUserId === viewer.id) return convo;
-  // Unassigned hot chats are open to everyone who can claim them.
+  // Unassigned hot chats are open to everyone who can ask for them.
   if (!convo.assignedToUserId) {
     const row = await scoreOneChat(convo.id);
     if (row?.temperature === "HOT") return convo;

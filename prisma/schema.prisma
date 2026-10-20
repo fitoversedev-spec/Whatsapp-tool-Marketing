@@ -3184,6 +3184,12 @@ model AiHumanHandoff {
   assignedToUserId String?   @map("assigned_to_user_id")
   releasedByUserId String?   @map("released_by_user_id")
   releasedAt       DateTime? @map("released_at")
+  // CUSTOMER_REQUEST (the customer asked the AI for a person) | SALES_REQUEST
+  // (a salesperson asked for a hot lead) | ADMIN_ASSIGN (an admin assigned it directly)
+  kind              String    @default("CUSTOMER_REQUEST")
+  requestedByUserId String?   @map("requested_by_user_id")
+  // When the AI told the customer who their salesperson is.
+  introducedAt      DateTime? @map("introduced_at")
 
   @@index([conversationId, status])
   @@index([status, requestedAt])
@@ -3223,4 +3229,21 @@ model AiHotLead {
 
   @@index([claimedByUserId])
   @@map("ai_hot_leads")
+}
+
+// First WhatsApp template the AI sent to a Meta lead-form lead (one per lead).
+// Plain id columns, no relations, so MetaLead itself is unchanged.
+model AiLeadOutreach {
+  id             String    @id @default(uuid())
+  metaLeadId     String    @unique @map("meta_lead_id")
+  conversationId String?   @map("conversation_id")
+  templateId     String    @map("template_id")
+  // sending | sent
+  status         String    @default("sending")
+  waMessageId    String?   @map("wa_message_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  sentAt         DateTime? @map("sent_at")
+
+  @@index([conversationId])
+  @@map("ai_lead_outreach")
 }

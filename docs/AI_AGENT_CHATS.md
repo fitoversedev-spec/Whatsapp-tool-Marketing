@@ -4,7 +4,9 @@ A page (`/ai-chats`, sidebar **AI agent chats**) listing every WhatsApp chat in
 which the AI Sales Agent has sent at least one message, hot leads first.
 
 - **Who sees what:** admin, manager and management see every AI chat; a salesperson sees the AI chats assigned to them
-  **plus every unassigned HOT chat**, which they can take with **🙋 Take this lead**.
+  **plus every unassigned HOT chat**, which they can ask for with **🙋 Request this lead**.
+- **Admins** can **Assign** any chat to a salesperson and choose the welcome templates for new form leads
+  (see [LEAD_PROCESS.md](LEAD_PROCESS.md)).
 
 ## Hot-lead alerts
 
@@ -12,15 +14,11 @@ The first time a chat is HOT, admins and managers (and the chat's rep, if any) g
 linking to this page. It is checked right after the AI replies, labels a chat or asks for a human, after a person
 labels a chat, and in the cron sweep (`/api/cron/sweep`, `/api/cron/tick`). Each chat alerts once (`ai_hot_leads`).
 
-## Taking a hot lead
+## Requesting a hot lead
 
-Sales and managers can take an unassigned hot chat; the first click wins. The chat is assigned to them in the Inbox,
-an unowned CRM customer goes to them, admins/managers get a push, and the AI goes quiet in that chat (an APPROVED
-handoff — hand it back from CRM → AI handoffs). A chat whose customer is waiting for an admin to approve a
-human handoff cannot be taken; the admin decides.
-- **Per chat:** hot / warm / cold label and why, AI vs customer message counts, last activity, handoff status,
-  requirements the AI captured (sport, budget, city, timeline, court size), the transcript inline, links to the Inbox and the CRM lead.
-- **Changing a label:** admin, manager or the assigned salesperson can mark a chat hot / warm / cold, or set it back to automatic.
+Sales and managers can ask for an unassigned hot chat; it waits on CRM → AI handoffs until an admin approves
+(the requester is pre-selected) or declines. The AI keeps chatting meanwhile. After assignment the salesperson
+contacts the customer from their own phone — see [LEAD_PROCESS.md](LEAD_PROCESS.md).
 
 ## How a chat gets its label (strongest first)
 

@@ -11,24 +11,33 @@ import { prisma } from "@/lib/prisma";
 import { sendPushToUser } from "@/lib/push";
 import { logContactEvent } from "@/lib/crm/contactEvents";
 import { checkHotLead } from "@/lib/ai-chats/hotLeads";
+import { displayPhone } from "./assign";
 import { AGENT_ROLE_NAME, loadApproverConfig } from "../approvals";
 import type { AgentContext } from "../context";
 import { AgentHttpError } from "../errors";
 import { parseId, phoneCandidates, refusal } from "../messaging/access";
 import type { AgentHandler, AgentHandlerResult } from "../withAgent";
 import type * as S from "../schemas/handoffs";
-import { ACTIVE_HANDOFF_STATUSES, decideAiMode, HANDOFF_REFUSAL_MESSAGE, type AiModeDecision } from "./logic";
+import {
+  ACTIVE_HANDOFF_STATUSES,
+  decideAiMode,
+  salesAssignedGuidance,
+  WAITING_FOR_CUSTOMER_MESSAGE,
+  type AiModeDecision,
+} from "./logic";
 
 export type HandoffRow = {
   id: string;
   conversationId: string;
   accountContactId: string | null;
   status: string;
+  kind: string;
   reason: string;
   summary: string;
   requestedAt: Date;
   decidedAt: Date | null;
   assignedToUserId: string | null;
+  introducedAt: Date | null;
 };
 
 const HANDOFF_SELECT = {
@@ -36,11 +45,13 @@ const HANDOFF_SELECT = {
   conversationId: true,
   accountContactId: true,
   status: true,
+  kind: true,
   reason: true,
   summary: true,
   requestedAt: true,
   decidedAt: true,
   assignedToUserId: true,
+  introducedAt: true,
 } as const;
 
 /** The PENDING or APPROVED handoff on a chat, if any (newest wins). */
@@ -55,7 +66,7 @@ export async function findActiveHandoff(conversationId: string): Promise<Handoff
 export async function loadAiMode(conversationId: string): Promise<{ handoff: HandoffRow | null; ai: AiModeDecision }> {
   const handoff = await findActiveHandoff(conversationId);
   const latest =
-    handoff?.status === "PENDING"
+    handoff?.status === "PENDING" && handoff.kind === "CUSTOMER_REQUEST"
       ? await prisma.message.findFirst({
           where: { conversationId, createdAt: { gte: handoff.requestedAt } },
           orderBy: { createdAt: "desc" },
@@ -67,29 +78,31 @@ export async function loadAiMode(conversationId: string): Promise<{ handoff: Han
 
 /**
  * Called by send_reply / send_template / send_marketing_template before they
- * send. Null means "go ahead"; otherwise a 409 refusal to return as-is. A chat
- * with no handoff costs one indexed lookup and behaves exactly as before.
+ * send. Null means "go ahead"; otherwise a 409 refusal to return as-is. Only a
+ * customer's own "talk to a person" request, still waiting for an admin, ever
+ * holds the AI back. A chat with no handoff costs one indexed lookup.
  */
 export async function handoffGate(ctx: AgentContext, conversationId: string): Promise<AgentHandlerResult | null> {
   const { ai } = await loadAiMode(conversationId);
   if (ai.canReply) return null;
-  const code = ai.reason === "human_assigned" ? "human_assigned" : "waiting_for_customer";
-  return refusal(ctx, code, HANDOFF_REFUSAL_MESSAGE[code], 409, [conversationId]);
+  return refusal(ctx, "waiting_for_customer", WAITING_FOR_CUSTOMER_MESSAGE, 409, [conversationId]);
 }
 
 async function toDto(row: HandoffRow) {
   const assignee = row.assignedToUserId
-    ? await prisma.user.findUnique({ where: { id: row.assignedToUserId }, select: { id: true, name: true } })
+    ? await prisma.user.findUnique({ where: { id: row.assignedToUserId }, select: { id: true, name: true, phone: true } })
     : null;
   return {
     id: row.id,
     conversationId: row.conversationId,
     leadId: row.accountContactId,
     status: row.status as "PENDING" | "APPROVED" | "REJECTED" | "RELEASED",
+    kind: row.kind as "CUSTOMER_REQUEST" | "SALES_REQUEST" | "ADMIN_ASSIGN",
     reason: row.reason,
     requestedAt: row.requestedAt.toISOString(),
     decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
-    assignedTo: assignee ? { userId: assignee.id, name: assignee.name } : null,
+    assignedTo: assignee ? { userId: assignee.id, name: assignee.name, phone: displayPhone(assignee.phone) } : null,
+    customerIntroduced: !!row.introducedAt,
   };
 }
 
@@ -203,8 +216,14 @@ export const getAiStatus: AgentHandler<unknown> = async ({ params }) => {
   const convo = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { id: true } });
   if (!convo) throw new AgentHttpError("not_found", "Conversation not found.");
   const { handoff, ai } = await loadAiMode(conversationId);
+  const dto = handoff ? await toDto(handoff) : null;
+  const guidance =
+    ai.mode === "sales_assigned" && dto?.assignedTo
+      ? salesAssignedGuidance(dto.assignedTo) +
+        (dto.customerIntroduced ? "" : ` The customer has not been told yet: introduce ${dto.assignedTo.name} in your next reply.`)
+      : null;
   return {
-    body: { conversationId, ai, handoff: handoff ? await toDto(handoff) : null },
+    body: { conversationId, ai, handoff: dto, guidance },
     recordIds: handoff ? [conversationId, handoff.id] : [conversationId],
   };
 };

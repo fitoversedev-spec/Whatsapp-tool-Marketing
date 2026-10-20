@@ -3161,3 +3161,32 @@ model AgentAlert {
   @@index([at])
   @@map("agent_alerts")
 }
+
+// ── AI → human handoff (additive) ───────────────────────────────────────────
+// A customer chatting with the AI Sales Agent asked for a person. The AI files
+// one of these; an approver picks the salesperson. While it is PENDING the AI
+// may only answer when the customer writes again; once APPROVED the AI stays
+// silent in that chat until someone hands it back (RELEASED) or it is REJECTED.
+// Plain id columns, no Prisma relations, so no existing model had to change.
+model AiHumanHandoff {
+  id               String    @id @default(uuid())
+  conversationId   String    @map("conversation_id")
+  accountContactId String?   @map("account_contact_id")
+  identityId       String    @map("identity_id")
+  reason           String
+  summary          String    @default("")
+  // PENDING | APPROVED | REJECTED | RELEASED
+  status           String    @default("PENDING")
+  requestedAt      DateTime  @default(now()) @map("requested_at")
+  decidedByUserId  String?   @map("decided_by_user_id")
+  decidedAt        DateTime? @map("decided_at")
+  decisionNote     String?   @map("decision_note")
+  assignedToUserId String?   @map("assigned_to_user_id")
+  releasedByUserId String?   @map("released_by_user_id")
+  releasedAt       DateTime? @map("released_at")
+
+  @@index([conversationId, status])
+  @@index([status, requestedAt])
+  @@index([assignedToUserId, status])
+  @@map("ai_human_handoffs")
+}

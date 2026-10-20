@@ -17,11 +17,13 @@ type Props = {
   /** Shows the "AI approvals" link (people who may decide the AI's requests). */
   aiApprover?: boolean;
   aiApprovalCount?: number;
+  /** Pending "customer wants a person" requests (approvers only). */
+  aiHandoffCount?: number;
 };
 
 // --- CrmSidebar state + toggle event below ---
 
-type NavItem = { href: string; label: string; icon: string; exact?: boolean; badgeKey?: "reminders" | "aiApprovals" };
+type NavItem = { href: string; label: string; icon: string; exact?: boolean; badgeKey?: "reminders" | "aiApprovals" | "aiHandoffs" };
 
 const CRM_PRIMARY_NAV: NavItem[] = [
   { href: "/crm", label: "Dashboard", icon: "\u{1F9ED}", exact: true },
@@ -37,6 +39,8 @@ const CRM_PRIMARY_NAV: NavItem[] = [
 ];
 
 const AI_APPROVALS_NAV: NavItem = { href: "/crm/ai-approvals", label: "AI approvals", icon: "🤖", badgeKey: "aiApprovals" };
+// Approvers assign a salesperson; salespeople see (and hand back) the chats given to them.
+const AI_HANDOFFS_NAV: NavItem = { href: "/crm/ai-handoffs", label: "AI handoffs", icon: "🙋", badgeKey: "aiHandoffs" };
 
 const CRM_ALL_TOOLS_GROUPS: AllToolsGroup[] = [
   {
@@ -76,6 +80,7 @@ const CRM_ALL_PAGES = [
   { href: "/crm/admin/targets", label: "Targets" },
   { href: "/crm/admin/audit-log", label: "Audit log" },
   { href: "/crm/ai-approvals", label: "AI approvals" },
+  { href: "/crm/ai-handoffs", label: "AI handoffs" },
   { href: "/crm/profile", label: "Profile" },
 ];
 
@@ -85,6 +90,7 @@ export default function CrmSidebar({
   reminderCount: reminderInitial = 0,
   aiApprover = false,
   aiApprovalCount = 0,
+  aiHandoffCount = 0,
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -256,11 +262,22 @@ export default function CrmSidebar({
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {(aiApprover ? [...CRM_PRIMARY_NAV, AI_APPROVALS_NAV] : CRM_PRIMARY_NAV).map((item) => {
+          {[
+            ...CRM_PRIMARY_NAV,
+            ...(aiApprover ? [AI_APPROVALS_NAV] : []),
+            ...(aiApprover || user.role === "sales" || user.role === "manager" ? [AI_HANDOFFS_NAV] : []),
+          ].map((item) => {
             const active = "exact" in item && item.exact
               ? pathname === item.href
               : pathname.startsWith(item.href);
-            const badge = item.badgeKey === "reminders" ? reminderCount : item.badgeKey === "aiApprovals" ? aiApprovalCount : 0;
+            const badge =
+              item.badgeKey === "reminders"
+                ? reminderCount
+                : item.badgeKey === "aiApprovals"
+                  ? aiApprovalCount
+                  : item.badgeKey === "aiHandoffs"
+                    ? aiHandoffCount
+                    : 0;
             const badgeColor = "bg-orange-500";
             return (
               <Link

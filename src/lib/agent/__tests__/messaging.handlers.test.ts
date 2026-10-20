@@ -13,6 +13,8 @@ const db = vi.hoisted(() => ({
   $executeRaw: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
+// No chat in these tests has an AI → human handoff (covered in handoffs.*.test.ts).
+vi.mock("../handoffs/service", () => ({ handoffGate: async () => null }));
 vi.mock("@/lib/scout/after", () => ({ after: () => undefined }));
 
 const wa = vi.hoisted(() => ({

@@ -63,6 +63,10 @@ export default async function CrmAppLayout({ children }: { children: React.React
   const aiApprovalCount = aiApprover
     ? await orZero(prisma.agentApprovalRequest.count({ where: { status: "pending", expiresAt: { gt: new Date() } } }))
     : 0;
+  // Customers who asked the AI for a person and are waiting for an approver.
+  const aiHandoffCount = aiApprover
+    ? await orZero(prisma.aiHumanHandoff.count({ where: { status: "PENDING" } }))
+    : 0;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-slate-50">
@@ -76,6 +80,7 @@ export default async function CrmAppLayout({ children }: { children: React.React
         reminderCount={crmReminderCount}
         aiApprover={aiApprover}
         aiApprovalCount={aiApprovalCount}
+        aiHandoffCount={aiHandoffCount}
       />
       <main className="flex-1 min-w-0 overflow-x-hidden pb-14 md:pb-0">{children}</main>
       <NavigationTracker />

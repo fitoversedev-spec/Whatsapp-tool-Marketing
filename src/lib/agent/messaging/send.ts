@@ -8,6 +8,8 @@ import type { AgentHandler, AgentHandlerResult } from "../withAgent";
 import type { sendMarketingTemplateBody, sendReplyBody, sendTemplateBody } from "../schemas/messaging";
 import { holdForApproval, loadEligibility, MESSAGE_SELECT, parseId, refusal, toMessageDto } from "./access";
 import { detectSensitiveContent } from "./contentGuard";
+import { handoffGate } from "../handoffs/service";
+import { afterAiReply } from "@/lib/ai-chats/hotLeads";
 import { DEDUPE_WINDOW_MS, findDuplicate } from "./dedupe";
 import { chargeConversationLimit } from "./limits";
 import {
@@ -117,6 +119,9 @@ export const sendReplyHandler: AgentHandler<z.infer<typeof sendReplyBody>> = asy
   const now = Date.now();
   const elig = await loadEligibility(convo, now);
   if (elig.optedOut) return refusal(ctx, "opted_out", OPTED_OUT_MESSAGE, 403, [id]);
+  // Customer asked for a human: see src/lib/agent/handoffs.
+  const held = await handoffGate(ctx, id);
+  if (held) return held;
   if (!elig.windowOpen) {
     return refusal(
       ctx,
@@ -181,6 +186,9 @@ export const sendReplyHandler: AgentHandler<z.infer<typeof sendReplyBody>> = asy
     status: "sent",
     sentByUserId: ctx.userId,
   });
+  // The AI answers each customer message, so this is when a chat's score moves;
+  // a salesperson who owns the lead also gets the reply.
+  await afterAiReply(id, input.text);
   return {
     body: sentBody(ctx, message, sent.waMessageId, reference),
     recordIds: message ? [id, message.id] : [id],
@@ -203,6 +211,9 @@ async function sendTemplateCore(tool: TemplateTool, ctx: AgentContext, req: Temp
   const now = Date.now();
   const elig = await loadEligibility(convo, now);
   if (elig.optedOut) return refusal(ctx, "opted_out", OPTED_OUT_MESSAGE, 403, [id]);
+  // Customer asked for a human: see src/lib/agent/handoffs.
+  const held = await handoffGate(ctx, id);
+  if (held) return held;
 
   const template = await prisma.template.findUnique({
     where: { id: req.templateId },

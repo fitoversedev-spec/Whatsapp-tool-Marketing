@@ -7,7 +7,7 @@ import { ALL_TOOLS_GROUPS } from "./AllToolsPanel";
 // SECTION the current page belongs to (e.g. "Meta Ads" on /ad-campaigns,
 // "CRM" on /crm, "Marketing & Sales" on /templates), derived from the single
 // source of truth ALL_TOOLS_GROUPS. Pages not in any group (Inbox, Broadcasts,
-// Contacts, Search, Reminders, Bot leads — the core WhatsApp surface) keep the
+// Contacts, Search, Reminders, AI agent chats — the core WhatsApp surface) keep the
 // default "WhatsApp Marketing".
 //
 // Flatten groups → {href, title}, longest href first so the more specific route

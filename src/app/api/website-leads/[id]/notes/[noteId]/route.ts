@@ -45,10 +45,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string; 
 
   const existing = await prisma.websiteLeadNote.findUnique({
     where: { id: params.noteId },
-    select: { websiteLeadId: true, authorUserId: true },
+    select: { websiteLeadId: true, authorUserId: true, websiteLead: { select: { deletedAt: true } } },
   });
   if (existing) {
-    if (existing.websiteLeadId !== params.id) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    // A removed lead is read-only: its notes can't be edited until it's restored.
+    if (existing.websiteLeadId !== params.id || existing.websiteLead.deletedAt) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
     if (existing.authorUserId !== user.id) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     const note = await prisma.websiteLeadNote.update({ where: { id: params.noteId }, data: { body }, select: NOTE_SELECT });
     return NextResponse.json({ ok: true, note: toRow(note) });
@@ -83,10 +86,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   const note = await prisma.websiteLeadNote.findUnique({
     where: { id: params.noteId },
-    select: { id: true, websiteLeadId: true, authorUserId: true },
+    select: { id: true, websiteLeadId: true, authorUserId: true, websiteLead: { select: { deletedAt: true } } },
   });
   // Guard the note belongs to this lead (defends against a mismatched URL).
-  if (!note || note.websiteLeadId !== params.id) {
+  if (!note || note.websiteLeadId !== params.id || note.websiteLead.deletedAt) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   if (note.authorUserId !== user.id && user.role !== "admin") {

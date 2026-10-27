@@ -15,7 +15,8 @@ import { requireId } from "../read/shared";
  * Website leads (enquiries from the fitoverse.com court configurator) for the
  * agent. Reuses the Website Leads page's list and detail queries. Only fields a
  * salesperson would say out loud leave the server: no normalised phone,
- * user-agent, website-side ids or internal user ids, and no export.
+ * user-agent, website-side ids or internal user ids, and no export. Removed
+ * leads are never returned: neither query is given the `removed` flag.
  */
 
 export function toAgentWebsiteLead(r: BackendRow): WebsiteLeadRow {

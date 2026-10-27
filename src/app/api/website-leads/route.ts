@@ -12,8 +12,11 @@
 // areaMin, areaMax (sq ft), stage (slug), assigned ("unassigned", a user id or
 // part of a name), label (name), cameFrom (where it came from: a label such as
 // "ChatGPT", or "unknown" for leads with no attribution), q (name / phone / email), page.
+// removed=1 lists ONLY the removed leads (and every response above is then about that
+// set); admins and managers only — for anyone else it is ignored.
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { isManagerOrAbove } from "@/lib/rbac";
 import {
   WEBSITE_LEAD_EXPORT_CAP,
   WEBSITE_LEAD_IDS_CAP,
@@ -27,7 +30,7 @@ import {
 
 export const maxDuration = 30;
 
-function filtersFrom(sp: URLSearchParams): WebsiteLeadFilters {
+function filtersFrom(sp: URLSearchParams, canSeeRemoved: boolean): WebsiteLeadFilters {
   const { from, to } = parseLeadRange(sp.get("from"), sp.get("to"));
   const text = (k: string) => (sp.get(k) ?? "").trim().slice(0, 200) || undefined;
   // Stage / label are exact matches, so they are passed through as sent.
@@ -49,6 +52,7 @@ function filtersFrom(sp: URLSearchParams): WebsiteLeadFilters {
     label: exact("label"),
     cameFrom: text("cameFrom"),
     q: text("q"),
+    removed: (canSeeRemoved && sp.get("removed") === "1") || undefined,
   };
 }
 
@@ -58,7 +62,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const sp = req.nextUrl.searchParams;
-    const filters = filtersFrom(sp);
+    const filters = filtersFrom(sp, isManagerOrAbove(user.role));
 
     if (sp.get("idsOnly") === "1") {
       const { ids, total } = await getWebsiteLeadIds(filters);

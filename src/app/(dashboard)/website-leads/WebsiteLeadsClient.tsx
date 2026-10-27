@@ -18,12 +18,14 @@ export default function WebsiteLeadsClient({
   reps,
   stageCatalog,
   canBulkAssign,
+  canRemove,
   range,
 }: {
   initial: WebsiteLeadPage & { options: WebsiteLeadOptions };
   reps: Rep[];
   stageCatalog: MetaLeadStageRow[];
   canBulkAssign: boolean;
+  canRemove: boolean;
   range: DateRange;
 }) {
   const router = useRouter();
@@ -62,6 +64,7 @@ export default function WebsiteLeadsClient({
           reps={reps}
           stageCatalog={stageCatalog}
           canBulkAssign={canBulkAssign}
+          canRemove={canRemove}
         />
       </div>
     </div>

@@ -81,6 +81,22 @@ export async function assignWebsiteLeads(
   return { kind: "ok", updated: res.count, assignedToName };
 }
 
+// ---- remove / restore ------------------------------------------------------
+
+/**
+ * Remove (soft: deletedAt = now) or restore (deletedAt = null) website leads. Only
+ * leads in the other state are touched, so the count is how many really changed.
+ * A CRM contact, WhatsApp marketing contact or group membership made from a lead
+ * is left as it is. While a lead is removed every other write here 404s (`live`).
+ */
+export async function setWebsiteLeadsRemoved(ids: string[], removed: boolean): Promise<number> {
+  const res = await prisma.websiteLead.updateMany({
+    where: { id: { in: ids }, deletedAt: removed ? null : { not: null } },
+    data: { deletedAt: removed ? new Date() : null },
+  });
+  return res.count;
+}
+
 // ---- notes -----------------------------------------------------------------
 
 /** Add a rep's note; null when the lead doesn't exist. */

@@ -33,6 +33,7 @@ export default async function WebsiteLeadsPage({
       reps={reps}
       stageCatalog={stageCatalog}
       canBulkAssign={isManagerOrAbove(user.role)}
+      canRemove={isManagerOrAbove(user.role)}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}
     />
   );

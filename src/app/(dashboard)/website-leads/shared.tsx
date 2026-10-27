@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { labelChip } from "@/lib/meta-ads/lead-fields";
 import type { LeadBadge } from "@/lib/website-leads/badges";
 
@@ -67,6 +68,67 @@ export function CameFromChip({ cameFrom, group }: { cameFrom: string | null; gro
     >
       {label}
     </span>
+  );
+}
+
+// The "Remove" confirmation, on the list's bulk bar and on the lead's page. Same
+// look as the CRM "Remove from Leads" confirm (src/app/(crm-app)/crm/leads/LeadsClient.tsx).
+export function RemoveLeadsDialog({
+  title,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  // Keyboard: focus lands on Cancel (the safe choice) and Escape closes, unless a save is running.
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    cancelRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={() => !busy && onCancel()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="bg-white rounded-xl shadow-xl w-full max-w-md p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-semibold text-slate-900 mb-1">{title}</h2>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          They&apos;ll be hidden from Fito Website (Leads and Analytics). Any CRM or WhatsApp marketing copies stay. You
+          can bring them back with Show removed.
+        </p>
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button ref={cancelRef} type="button" onClick={onCancel} disabled={busy} className="btn btn-ghost">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className="btn btn-danger"
+          >
+            {busy ? "Removing…" : "Remove"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

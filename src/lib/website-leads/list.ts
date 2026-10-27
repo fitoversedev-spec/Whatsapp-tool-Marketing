@@ -4,7 +4,9 @@
 // date range, city, sport, court size (sq ft) range, stage, rep (a name, a user id
 // or "unassigned"), label (exact name), where the lead came from (a label such as
 // "ChatGPT", or "unknown" for leads saved before the website sent attribution) and
-// a search on name / phone / email.
+// a search on name / phone / email. Removed leads (WebsiteLead.deletedAt set) are
+// hidden everywhere except the `removed` list filter, which admins and managers use
+// to see them (and bring them back) — the routes decide who may set it.
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { MAX_LEADS_PER_REQUEST } from "@/lib/broadcast-groups";
@@ -30,6 +32,7 @@ export type WebsiteLeadFilters = {
   label?: string; // label name, exact
   cameFrom?: string; // where it came from: a classifier label (any case) or "unknown" for no attribution
   q?: string; // name / phone / email
+  removed?: boolean; // true = ONLY the removed leads; default = only the leads that are not removed
 };
 
 export type WebsiteLeadLabelChip = { id: string; name: string; color: string };
@@ -56,6 +59,7 @@ export type WebsiteLeadRow = {
   inCrm: boolean; // moved to the CRM (accountContactId set)
   inMarketing: boolean; // moved to WhatsApp marketing (contactId set)
   receivedAt: string; // ISO
+  removedAt: string | null; // ISO; set only on a removed lead, and only when the query asked for removed ones (list `removed`, detail `includeRemoved`)
   badges: LeadBadge[]; // duplicate badges, worked out when read
 };
 
@@ -109,7 +113,10 @@ const UNKNOWN_CAME_FROM = "unknown";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function buildWebsiteLeadWhere(f: WebsiteLeadFilters): Prisma.WebsiteLeadWhereInput {
-  const and: Prisma.WebsiteLeadWhereInput[] = [{ deletedAt: null }, { receivedAt: { gte: f.from, lte: f.to } }];
+  const and: Prisma.WebsiteLeadWhereInput[] = [
+    { deletedAt: f.removed ? { not: null } : null },
+    { receivedAt: { gte: f.from, lte: f.to } },
+  ];
 
   const city = f.city?.trim();
   if (city) and.push({ city: { contains: likeLiteral(city), mode: "insensitive" } });
@@ -191,7 +198,11 @@ export const WEBSITE_LEAD_SELECT = {
 
 type Selected = Prisma.WebsiteLeadGetPayload<{ select: typeof WEBSITE_LEAD_SELECT }>;
 
-export function toWebsiteLeadRow(l: Selected, badges: LeadBadge[] = []): WebsiteLeadRow {
+// When a lead was removed is selected only by queries that may return removed leads;
+// the live list (and the AI agent, which reuses it) never reads the column.
+const withRemovedAt = (on?: boolean) => (on ? { deletedAt: true as const } : {});
+
+export function toWebsiteLeadRow(l: Selected & { deletedAt?: Date | null }, badges: LeadBadge[] = []): WebsiteLeadRow {
   return {
     id: l.id,
     name: l.name,
@@ -214,6 +225,7 @@ export function toWebsiteLeadRow(l: Selected, badges: LeadBadge[] = []): Website
     inCrm: l.accountContactId != null,
     inMarketing: l.contactId != null,
     receivedAt: l.receivedAt.toISOString(),
+    removedAt: l.deletedAt?.toISOString() ?? null,
     badges,
   };
 }
@@ -231,7 +243,7 @@ export async function getWebsiteLeadPage(
       orderBy: LEAD_ORDER,
       skip: (p - 1) * pageSize,
       take: pageSize,
-      select: WEBSITE_LEAD_SELECT,
+      select: { ...WEBSITE_LEAD_SELECT, ...withRemovedAt(f.removed) },
     });
 
   const [total, firstTry] = await Promise.all([prisma.websiteLead.count({ where }), fetchRows(wanted)]);
@@ -421,7 +433,7 @@ export async function getWebsiteLeadFacets(
   want: { options?: boolean; breakdown?: boolean },
 ): Promise<{ options?: WebsiteLeadOptions; breakdown?: WebsiteLeadBreakdown }> {
   const filtered = hasDropdownFilter(f);
-  const baseWhere = buildWebsiteLeadWhere({ from: f.from, to: f.to });
+  const baseWhere = buildWebsiteLeadWhere({ from: f.from, to: f.to, removed: f.removed });
 
   // Options always describe the whole window; with no filter the breakdown is the same numbers.
   const needOptions = !!want.options || (!!want.breakdown && !filtered);
@@ -496,12 +508,17 @@ function parseAttribution(raw: string | null): WebsiteLeadAttribution | null {
   }
 }
 
-// One website lead with everything the detail page shows; null when it doesn't exist.
-export async function getWebsiteLeadDetail(id: string): Promise<WebsiteLeadDetail | null> {
+// One website lead with everything the detail page shows; null when it doesn't exist
+// (or is removed, unless includeRemoved — only the admin / manager callers pass it).
+export async function getWebsiteLeadDetail(
+  id: string,
+  opts: { includeRemoved?: boolean } = {},
+): Promise<WebsiteLeadDetail | null> {
   const lead = await prisma.websiteLead.findFirst({
-    where: { id, deletedAt: null },
+    where: opts.includeRemoved ? { id } : { id, deletedAt: null },
     select: {
       ...WEBSITE_LEAD_SELECT,
+      ...withRemovedAt(opts.includeRemoved),
       jobTitle: true,
       notes: true,
       answers: true,

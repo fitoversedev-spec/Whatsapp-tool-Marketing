@@ -17,12 +17,14 @@ import {
 } from "@/lib/meta-ads/lead-fields";
 import { fmtDateTimeIST } from "@/lib/time";
 import type { WebsiteLeadDetail, WebsiteLeadNoteRow } from "@/lib/website-leads/list";
-import { LeadBadges, courtSizeText } from "../shared";
+import { LeadBadges, RemoveLeadsDialog, courtSizeText } from "../shared";
 
 // Detail page for one website lead. Two columns: every field the visitor gave
 // (including each answer to the form's questions) on the left, and the lead
 // management card (stage, rep, labels, notes) on the right. Header actions:
-// Add to group, Move to marketing and Move to CRM. Times are shown in IST.
+// Add to group, Move to marketing and Move to CRM, plus Remove for admins and
+// managers (a removed lead opens with a Restore banner and read-only controls).
+// Times are shown in IST.
 
 const inputCls =
   "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
@@ -66,6 +68,7 @@ export default function WebsiteLeadDetailClient({
   stageCatalog,
   currentUserId,
   isAdmin,
+  canRemove,
 }: {
   lead: WebsiteLeadDetail;
   reps: Rep[];
@@ -73,6 +76,7 @@ export default function WebsiteLeadDetailClient({
   stageCatalog: MetaLeadStageRow[];
   currentUserId: string;
   isAdmin: boolean;
+  canRemove: boolean; // admins and managers: Remove button (and they alone can open a removed lead)
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -81,6 +85,40 @@ export default function WebsiteLeadDetailClient({
   const [sendingToMarketing, setSendingToMarketing] = useState(false);
 
   const base = `/api/website-leads/${lead.id}`;
+
+  // --- Remove / restore ------------------------------------------------------
+  // A removed lead (admins and managers can still open it) is read-only here
+  // apart from Restore: the server refuses every other change to it.
+  const removed = lead.removedAt != null;
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
+
+  async function changeRemoved(action: "remove" | "restore") {
+    setRemoveBusy(true);
+    try {
+      const res = await fetch("/api/website-leads/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [lead.id], action }),
+      });
+      if (!res.ok) {
+        toast.error(`Could not ${action} this lead`);
+        return;
+      }
+      setConfirmRemove(false);
+      if (action === "remove") {
+        toast.success("Removed 1 lead");
+        router.push("/website-leads");
+      } else {
+        toast.success("Restored 1 lead");
+        router.refresh();
+      }
+    } catch {
+      toast.error(`Could not ${action} this lead`);
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
 
   async function moveToMarketing() {
     setSendingToMarketing(true);
@@ -477,7 +515,7 @@ export default function WebsiteLeadDetailClient({
         description="Every answer from this Build a court form submission."
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => setGroupOpen(true)} className="btn btn-secondary !px-3 !py-1.5">
+            <button type="button" onClick={() => setGroupOpen(true)} disabled={removed} className="btn btn-secondary !px-3 !py-1.5">
               Add to group
             </button>
             {lead.inMarketing ? (
@@ -486,7 +524,7 @@ export default function WebsiteLeadDetailClient({
               <button
                 type="button"
                 onClick={() => void moveToMarketing()}
-                disabled={sendingToMarketing}
+                disabled={sendingToMarketing || removed}
                 title="Add this lead's phone to the WhatsApp marketing contact list"
                 className="btn btn-secondary !px-3 !py-1.5"
               >
@@ -496,13 +534,36 @@ export default function WebsiteLeadDetailClient({
             {lead.inCrm ? (
               <span className="badge bg-green-100 text-green-700">In CRM ✓</span>
             ) : (
-              <button type="button" onClick={() => setMovingToCrm(true)} className="btn btn-primary !px-3 !py-1.5">
+              <button type="button" onClick={() => setMovingToCrm(true)} disabled={removed} className="btn btn-primary !px-3 !py-1.5">
                 Move to CRM
+              </button>
+            )}
+            {canRemove && !removed && (
+              <button
+                type="button"
+                onClick={() => setConfirmRemove(true)}
+                className="btn btn-danger !px-3 !py-1.5"
+              >
+                Remove
               </button>
             )}
           </div>
         }
       />
+
+      {removed && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>This lead was removed on {fmtDateTimeIST(lead.removedAt!)}.</span>
+          <button
+            type="button"
+            onClick={() => void changeRemoved("restore")}
+            disabled={removeBusy}
+            className="btn btn-secondary !px-3 !py-1.5"
+          >
+            {removeBusy ? "Restoring…" : "Restore"}
+          </button>
+        </div>
+      )}
 
       {lead.badges.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -563,7 +624,7 @@ export default function WebsiteLeadDetailClient({
               id="wl-detail-stage"
               className={inputCls}
               value={stage}
-              disabled={savingStage}
+              disabled={savingStage || removed}
               onChange={(e) => void onStageChange(e.target.value)}
             >
               {!stageKnown && <option value={stage}>{stageLabelFromRow(stage, stageCatalog)}</option>}
@@ -590,7 +651,7 @@ export default function WebsiteLeadDetailClient({
               id="wl-detail-rep"
               className={inputCls}
               value={assignedToUserId ?? ""}
-              disabled={savingAssignee}
+              disabled={savingAssignee || removed}
               onChange={(e) => void onAssigneeChange(e.target.value)}
             >
               <option value="">Unassigned</option>
@@ -612,7 +673,8 @@ export default function WebsiteLeadDetailClient({
               <button
                 type="button"
                 onClick={() => setPickerOpen((o) => !o)}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-900"
+                disabled={removed}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-900 disabled:opacity-40"
               >
                 {pickerOpen ? "Done" : "+ Add label"}
               </button>
@@ -630,7 +692,7 @@ export default function WebsiteLeadDetailClient({
                     <button
                       type="button"
                       onClick={() => void saveLabels(applied.filter((x) => x.id !== l.id))}
-                      disabled={savingLabels || creatingLabel}
+                      disabled={savingLabels || creatingLabel || removed}
                       aria-label={`Remove ${l.name}`}
                       className="ml-0.5 text-current/70 hover:text-current"
                     >
@@ -713,7 +775,8 @@ export default function WebsiteLeadDetailClient({
                 rows={3}
                 placeholder="Write a note…"
                 aria-label="Note"
-                className={`${inputCls} resize-y`}
+                disabled={removed}
+                className={`${inputCls} resize-y disabled:opacity-60`}
                 onChange={(e) => onNoteInput(e.target.value)}
                 onBlur={() => void saveDraftNow()}
               />
@@ -742,7 +805,7 @@ export default function WebsiteLeadDetailClient({
                   <li key={n.id} className="rounded-lg border border-slate-200 bg-white p-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm text-slate-800 whitespace-pre-wrap break-words">{n.body}</p>
-                      {(n.authorUserId === currentUserId || isAdmin) && (
+                      {(n.authorUserId === currentUserId || isAdmin) && !removed && (
                         <button
                           type="button"
                           onClick={() => void deleteNote(n.id)}
@@ -763,6 +826,15 @@ export default function WebsiteLeadDetailClient({
           </div>
         </aside>
       </div>
+
+      {confirmRemove && (
+        <RemoveLeadsDialog
+          title="Remove this lead?"
+          busy={removeBusy}
+          onConfirm={() => void changeRemoved("remove")}
+          onCancel={() => setConfirmRemove(false)}
+        />
+      )}
 
       {movingToCrm && (
         <MoveToCrmDialog

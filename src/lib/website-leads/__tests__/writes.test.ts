@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
-  websiteLead: { updateMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+  websiteLead: { updateMany: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+  websiteLeadNote: { create: vi.fn() },
   websiteLeadToLabel: { deleteMany: vi.fn(), createMany: vi.fn(), findMany: vi.fn() },
   accountContact: { findFirst: vi.fn() },
   accountContactToLabel: { createMany: vi.fn(), deleteMany: vi.fn() },
@@ -18,10 +19,15 @@ const lw = vi.hoisted(() => ({
 vi.mock("@/lib/meta-ads/leadWrites", () => lw);
 
 import {
+  addWebsiteLeadNote,
+  addWebsiteLeadsToGroup,
+  assignWebsiteLead,
   assignWebsiteLeads,
   moveWebsiteLeadToCrm,
   moveWebsiteLeadToMarketing,
   setWebsiteLeadLabels,
+  setWebsiteLeadStage,
+  setWebsiteLeadsRemoved,
   updateWebsiteLead,
 } from "../writes";
 
@@ -165,5 +171,65 @@ describe("moveWebsiteLeadToMarketing", () => {
   it("no usable phone", async () => {
     db.websiteLead.findFirst.mockResolvedValue({ id: "l1", name: "Asha", phone: "abc", normalizedPhone: null, city: null });
     expect(await moveWebsiteLeadToMarketing("l1")).toEqual({ kind: "no_phone" });
+  });
+});
+
+describe("setWebsiteLeadsRemoved", () => {
+  it("remove stamps deletedAt on the leads that are not removed yet and returns how many changed", async () => {
+    db.websiteLead.updateMany.mockResolvedValue({ count: 2 });
+    expect(await setWebsiteLeadsRemoved(["a", "b", "c"], true)).toBe(2);
+    expect(db.websiteLead.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["a", "b", "c"] }, deletedAt: null },
+      data: { deletedAt: expect.any(Date) },
+    });
+  });
+
+  it("restore clears deletedAt on the removed leads only", async () => {
+    db.websiteLead.updateMany.mockResolvedValue({ count: 1 });
+    expect(await setWebsiteLeadsRemoved(["a", "b"], false)).toBe(1);
+    expect(db.websiteLead.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["a", "b"] }, deletedAt: { not: null } },
+      data: { deletedAt: null },
+    });
+  });
+
+  it("changes nothing but the one column, and no CRM / marketing contact or lead link", async () => {
+    await setWebsiteLeadsRemoved(["a"], true);
+    await setWebsiteLeadsRemoved(["a"], false);
+    expect(db.websiteLead.updateMany).toHaveBeenCalledTimes(2);
+    for (const [args] of db.websiteLead.updateMany.mock.calls) expect(Object.keys(args.data)).toEqual(["deletedAt"]);
+    expect(db.websiteLead.update).not.toHaveBeenCalled();
+    expect(db.accountContact.findFirst).not.toHaveBeenCalled();
+    expect(lw.promoteLeadToCrm).not.toHaveBeenCalled();
+    expect(lw.upsertMarketingContact).not.toHaveBeenCalled();
+  });
+});
+
+describe("a removed lead is out of reach of every other write", () => {
+  // A database in which the lead is removed: a query that asks for deletedAt: null finds nothing.
+  beforeEach(() => {
+    const hidden = (args: { where: { deletedAt?: unknown } }) => args.where.deletedAt === null;
+    db.websiteLead.findFirst.mockImplementation(async (args) => (hidden(args) ? null : { id: "l1" }));
+    db.websiteLead.findMany.mockImplementation(async (args) => (hidden(args) ? [] : [{ name: "Asha", phone: "+919876543210" }]));
+    db.websiteLead.updateMany.mockImplementation(async (args) => ({ count: hidden(args) ? 0 : 1 }));
+  });
+
+  it("stage, rep and bulk assign change nothing", async () => {
+    expect(await setWebsiteLeadStage("l1", "QUALIFIED")).toBe("not_found");
+    expect(await assignWebsiteLead("l1", rep)).toBe("not_found");
+    expect(await updateWebsiteLead("l1", { stage: "QUALIFIED", assignedToUserId: rep })).toBe("not_found");
+    expect(await assignWebsiteLeads(["l1"], rep)).toEqual({ kind: "ok", updated: 0, assignedToName: "Ravi" });
+  });
+
+  it("notes, labels, Move to CRM, Move to marketing and Add to group find no lead", async () => {
+    expect(await addWebsiteLeadNote({ websiteLeadId: "l1", authorUserId: "u1", body: "hi" })).toBeNull();
+    expect(db.websiteLeadNote.create).not.toHaveBeenCalled();
+    expect(await setWebsiteLeadLabels("l1", [])).toEqual({ kind: "not_found" });
+    expect(db.websiteLeadToLabel.createMany).not.toHaveBeenCalled();
+    expect((await moveWebsiteLeadToCrm({ websiteLeadId: "l1", actorUserId: "u1", ownerUserId: null })).kind).toBe("not_found");
+    expect(lw.promoteLeadToCrm).not.toHaveBeenCalled();
+    expect(await moveWebsiteLeadToMarketing("l1")).toEqual({ kind: "not_found" });
+    expect(lw.upsertMarketingContact).not.toHaveBeenCalled();
+    expect(await addWebsiteLeadsToGroup("g1", ["l1"], "u1")).toEqual({ added: 0, alreadyIn: 0, noPhone: 0 });
   });
 });

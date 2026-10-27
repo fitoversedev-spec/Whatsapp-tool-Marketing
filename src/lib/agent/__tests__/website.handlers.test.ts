@@ -83,6 +83,7 @@ const INTERNAL = [
   "websiteLeadId",
   "authorUserId",
   "deletedAt",
+  "removedAt",
   "source",
   "color",
 ];
@@ -186,6 +187,24 @@ describe("list_website_leads", () => {
     expect(select.deletedAt).toBeUndefined();
   });
 
+  it("never lists removed leads: a removed flag in the query is dropped and the query stays on live leads", async () => {
+    db.websiteLead.count.mockResolvedValue(0);
+    db.websiteLead.findMany.mockResolvedValue([]);
+    const res = await list("?removed=1");
+    expect(res.status).toBe(200);
+    const args = db.websiteLead.findMany.mock.calls[0][0];
+    expect(args.where.AND[0]).toEqual({ deletedAt: null });
+    expect(args.select.deletedAt).toBeUndefined();
+    expect(db.websiteLead.count.mock.calls[0][0].where.AND[0]).toEqual({ deletedAt: null });
+  });
+
+  it("builds its filters without the removed flag, whatever the input carries", async () => {
+    const { websiteLeadFilters } = await import("../website/read");
+    const filters = websiteLeadFilters({ city: "Pune", removed: true } as never);
+    expect(filters.city).toBe("Pune");
+    expect("removed" in filters).toBe(false);
+  });
+
   it("rejects limit 101 and a reversed date range before any query", async () => {
     const tooMany = await list("?limit=101");
     expect(tooMany.status).toBe(400);
@@ -243,6 +262,17 @@ describe("get_website_lead", () => {
     expect(select.userAgent).toBeUndefined();
     expect(select.websiteLeadId).toBeUndefined();
     expect(db.websiteLead.findFirst.mock.calls[0][0].where).toEqual({ id: LEAD, deletedAt: null });
+  });
+
+  it("404s a removed lead: the agent's query only ever matches live leads", async () => {
+    // A database that returns the lead only when the query does not filter out removed ones.
+    db.websiteLead.findFirst.mockImplementation(async ({ where }: { where: { deletedAt?: unknown } }) =>
+      where.deletedAt === null ? null : { ...detail(), deletedAt: new Date("2026-10-20T08:15:00Z") },
+    );
+    const res = await get(LEAD);
+    expect(res.status).toBe(404);
+    expect(db.websiteLead.findFirst.mock.calls[0][0].where).toEqual({ id: LEAD, deletedAt: null });
+    expect(db.websiteLead.findFirst.mock.calls[0][0].select.deletedAt).toBeUndefined();
   });
 
   it("404s an unknown lead, and a malformed id without asking the database", async () => {

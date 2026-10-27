@@ -8,9 +8,10 @@ import * as quotes from "./quotes";
 import * as deals from "./deals";
 import * as documents from "./documents";
 import * as approvals from "./approvals";
+import * as website from "./website";
 
 type Area = { TOOLS: Record<string, ToolDefinition>; ROUTES: AgentRouteSpec[]; EXECUTORS?: Record<string, ApprovalExecutor> };
-const AREAS: Area[] = [read, leads, messaging, quotes, deals, documents, approvals];
+const AREAS: Area[] = [read, leads, messaging, quotes, deals, documents, approvals, website];
 
 export const AREA_TOOLS: Record<string, ToolDefinition>[] = AREAS.map((a) => a.TOOLS);
 export const AREA_ROUTES: AgentRouteSpec[] = AREAS.flatMap((a) => a.ROUTES);

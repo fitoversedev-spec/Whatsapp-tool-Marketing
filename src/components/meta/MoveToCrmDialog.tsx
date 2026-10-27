@@ -3,23 +3,28 @@
 import { useState } from "react";
 import { useToast } from "@/components/Toast";
 import { postCrossTab } from "@/lib/cross-tab";
-import type { MetaLeadRow } from "@/lib/meta-ads/queries";
 
 export type Rep = { id: string; name: string };
+
+// The few lead fields the dialog needs (ad leads and website leads both fit).
+export type MoveToCrmLead = { id: string; fullName: string | null; phone: string | null };
 
 // Pick an owner (rep) and move a captured lead into the CRM. POSTs to the
 // move route which creates the Account + AccountContact and back-links
 // MetaLead.accountContactId; on success the caller marks the row "In CRM ✓" and
 // reloads the page. Shared by the Ad Campaigns list and the campaign detail
-// leads table.
+// leads table; the Website leads page passes its own `endpoint`.
 export default function MoveToCrmDialog({
   lead,
   reps,
+  endpoint,
   onClose,
   onDone,
 }: {
-  lead: Pick<MetaLeadRow, "id" | "fullName" | "phone">;
+  lead: MoveToCrmLead;
   reps: Rep[];
+  // Defaults to the ad lead route.
+  endpoint?: string;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -31,7 +36,7 @@ export default function MoveToCrmDialog({
   async function submit() {
     setSaving(true);
     try {
-      const res = await fetch(`/api/ad-campaigns/leads/${lead.id}/move-to-crm`, {
+      const res = await fetch(endpoint ?? `/api/ad-campaigns/leads/${lead.id}/move-to-crm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // Empty = don't assign a specific rep; the route defaults the owner to

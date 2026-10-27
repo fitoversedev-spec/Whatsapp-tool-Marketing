@@ -29,6 +29,9 @@ import { postQuoteSend } from "@/lib/quotation/send-client";
 import { safeFetch } from "@/lib/safe-fetch";
 import { uploadFile } from "@/lib/blob-client";
 import { useSyncedState } from "@/lib/use-synced-state";
+import LabelChips from "@/components/labels/LabelChips";
+import LabelPicker from "@/components/labels/LabelPicker";
+import type { MetaLeadLabelChip } from "@/lib/meta-ads/queries";
 
 type Contact = {
   id: string; name: string; phone: string | null; email: string | null;
@@ -162,7 +165,7 @@ const SECTIONS = [
 ];
 
 export default function ContactDetailClient({
-  contact: contactProp, viewer, leadStages, assignableUsers, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, customerProfiles, contactNotes: contactNotesProp, reminders: remindersProp, attachments: attachmentsProp, leadSources, nextActions, insights,
+  contact: contactProp, viewer, leadStages, assignableUsers, deals, activities, quotations, courtImages, productInterests, timeline, products, activityTypes, customerProfiles, contactNotes: contactNotesProp, reminders: remindersProp, attachments: attachmentsProp, leadSources, labels: labelsProp, labelCatalog: labelCatalogProp, nextActions, insights,
 }: {
   contact: Contact; viewer: Viewer; leadStages: LeadStageOption[]; assignableUsers: UserOption[];
   deals: Deal[]; activities: ActivityRow[]; quotations: QuotationRow[]; courtImages: CourtImageRow[];
@@ -170,6 +173,7 @@ export default function ContactDetailClient({
   activityTypes: ActivityTypeOption[];
   customerProfiles: CustomerProfileOption[]; contactNotes: ContactNoteRow[]; reminders: ReminderRow[]; attachments: AttachmentRow[];
   leadSources: LeadSourceOption[];
+  labels: MetaLeadLabelChip[]; labelCatalog: MetaLeadLabelChip[];
   nextActions: NextActionRow[];
   insights: InsightRow[];
 }) {
@@ -378,6 +382,41 @@ export default function ContactDetailClient({
       markTimelineStale();
     }
     else toast.error("Could not remove from Leads");
+  }
+
+  // Labels come from the list shared with ad leads and website leads. Each change
+  // saves the full new set; the chips update first and snap back if it fails.
+  const [labels, setLabels] = useSyncedState(labelsProp);
+  const [labelCatalog, setLabelCatalog] = useState(labelCatalogProp);
+  const [savingLabels, setSavingLabels] = useState(false);
+
+  async function saveLabels(next: MetaLeadLabelChip[]) {
+    const prev = labels;
+    setLabels(next);
+    setSavingLabels(true);
+    const res = await safeFetch(`/api/account-contacts/${contact.id}/labels`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ labelIds: next.map((l) => l.id) }),
+    });
+    setSavingLabels(false);
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (Array.isArray(data.labels)) setLabels(data.labels);
+    } else {
+      setLabels(prev);
+      toast.error("Could not update labels");
+    }
+  }
+
+  function addLabel(label: MetaLeadLabelChip) {
+    if (savingLabels || labels.some((l) => l.id === label.id)) return;
+    void saveLabels([...labels, label].sort((a, b) => a.name.localeCompare(b.name)));
+  }
+
+  function removeLabel(labelId: string) {
+    if (savingLabels) return;
+    void saveLabels(labels.filter((l) => l.id !== labelId));
   }
 
   const [editing, setEditing] = useState(false);
@@ -1003,6 +1042,21 @@ export default function ContactDetailClient({
                 )}
               </span>
             </div>
+            {(labels.length > 0 || viewer.canEdit) && (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-2">
+                <span className="text-xs text-slate-600">Labels</span>
+                <LabelChips labels={labels} onRemove={viewer.canEdit ? removeLabel : undefined} disabled={savingLabels} />
+                {viewer.canEdit && (
+                  <LabelPicker
+                    catalogue={labelCatalog}
+                    excludeIds={labels.map((l) => l.id)}
+                    onPick={addLabel}
+                    onCatalogueChange={setLabelCatalog}
+                    disabled={savingLabels}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

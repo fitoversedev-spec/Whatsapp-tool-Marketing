@@ -31,6 +31,7 @@ const PRIMARY_NAV = [
   { href: "/reminders", label: "Reminders", icon: "⏰", badgeKey: "reminders" as const },
   { href: "/leads", label: "Bot leads", icon: "🤖" },
   { href: "/ad-campaigns", label: "Ad campaigns", icon: "📢" },
+  { href: "/website-leads", label: "Fito Website", icon: "🌐" },
 ];
 
 export default function Sidebar({

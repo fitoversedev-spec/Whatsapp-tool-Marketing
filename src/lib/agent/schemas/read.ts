@@ -20,12 +20,12 @@ export const isUuid = (v: string): boolean => UUID_RE.test(v);
 
 // ---- query-string building blocks -----------------------------------------
 
-const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+export const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
 
 /** Optional bounded text; an empty value counts as absent. */
-const text = (max = 100) => z.preprocess(blankToUndefined, z.string().trim().max(max).optional());
+export const text = (max = 100) => z.preprocess(blankToUndefined, z.string().trim().max(max).optional());
 const uuidParam = z.preprocess(blankToUndefined, z.string().trim().regex(UUID_RE, "must be an id").optional());
-const dayParam = z.preprocess(
+export const dayParam = z.preprocess(
   blankToUndefined,
   z
     .string()
@@ -50,8 +50,8 @@ export const pageParam = z.preprocess(blankToUndefined, z.coerce.number().int().
 
 export const sportSchema = z.enum(SUPPORTED_SPORTS as [Sport, ...Sport[]]);
 
-const dateRangeRefine = <T extends { from?: string; to?: string }>(v: T) => !v.from || !v.to || v.from <= v.to;
-const DATE_RANGE_MSG = { message: "from must not be after to", path: ["from"] };
+export const dateRangeRefine = <T extends { from?: string; to?: string }>(v: T) => !v.from || !v.to || v.from <= v.to;
+export const DATE_RANGE_MSG = { message: "from must not be after to", path: ["from"] };
 
 // ---- shared response pieces -----------------------------------------------
 

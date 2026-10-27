@@ -7,6 +7,9 @@ import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
+import LabelChips from "@/components/labels/LabelChips";
+import LabelPicker from "@/components/labels/LabelPicker";
+import type { MetaLeadLabelChip } from "@/lib/meta-ads/queries";
 import { matchesContactFilter } from "@/lib/contacts";
 import { postCrossTab } from "@/lib/cross-tab";
 import { safeFetch } from "@/lib/safe-fetch";
@@ -23,6 +26,7 @@ type Contact = {
   accountName: string;
   accountOwnerUserId: string | null;
   addedBy: string | null;
+  labels: MetaLeadLabelChip[];
 };
 type Option = { id: string; name: string };
 type StageOption = { id: string; name: string; colorHex: string | null };
@@ -39,6 +43,8 @@ export default function AccountContactsClient({
   users,
   dateRange,
   repFilter,
+  labelFilter,
+  labelCatalogue,
 }: {
   isAdmin: boolean;
   contacts: Contact[];
@@ -49,23 +55,27 @@ export default function AccountContactsClient({
   users: Option[];
   dateRange: DateRange | null;
   repFilter: string;
+  labelFilter: string;
+  labelCatalogue: MetaLeadLabelChip[];
 }) {
   const router = useRouter();
   const toast = useToast();
 
-  // Shared so changing one filter (date range or rep) never drops the other
-  // — each call only overrides the piece it's changing, current values of
-  // everything else carry forward from props.
-  function navigate(next: { from?: string; to?: string; rep?: string }) {
+  // Shared so changing one filter (date range, rep or label) never drops the
+  // others — each call only overrides the piece it's changing, current values
+  // of everything else carry forward from props.
+  function navigate(next: { from?: string; to?: string; rep?: string; label?: string }) {
     const params = new URLSearchParams();
     const from = next.from ?? dateRange?.from;
     const to = next.to ?? dateRange?.to;
     const rep = next.rep ?? repFilter;
+    const label = next.label ?? labelFilter;
     if (from && to) {
       params.set("from", from);
       params.set("to", to);
     }
     if (rep) params.set("rep", rep);
+    if (label) params.set("label", label);
     router.push(`/crm/contacts${params.toString() ? `?${params}` : ""}`);
   }
 
@@ -76,11 +86,16 @@ export default function AccountContactsClient({
   function clearDateRange() {
     const params = new URLSearchParams();
     if (repFilter) params.set("rep", repFilter);
+    if (labelFilter) params.set("label", labelFilter);
     router.push(`/crm/contacts${params.toString() ? `?${params}` : ""}`);
   }
 
   function applyRepFilter(rep: string) {
     navigate({ rep });
+  }
+
+  function applyLabelFilter(label: string) {
+    navigate({ label });
   }
   const [q, setQ] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -91,11 +106,23 @@ export default function AccountContactsClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [movingToLeads, setMovingToLeads] = useState(false);
+  // Shared label catalogue — local so a label created from the bulk picker
+  // shows up in the filter and picker straight away.
+  const [catalog, setCatalog] = useState(labelCatalogue);
+  const [labelBusy, setLabelBusy] = useState(false);
+  const [removeLabelId, setRemoveLabelId] = useState("");
   const [filterField, setFilterField] = useState("");
   const [filterCondition, setFilterCondition] = useState<"contains" | "equals" | "not_empty">("contains");
   const [filterValue, setFilterValue] = useState("");
 
   const knownFieldKeys = Array.from(new Set(contacts.flatMap((c) => Object.keys(c.fields)))).sort();
+
+  // Labels on the ticked contacts — the only ones worth offering to remove.
+  const selectedLabels = Array.from(
+    new Map(contacts.filter((c) => selected.has(c.id)).flatMap((c) => c.labels).map((l) => [l.id, l])).values(),
+  ).sort((a, b) => a.name.localeCompare(b.name));
+  // Selection can change under a pending choice; fall back to the placeholder.
+  const removeLabel = selectedLabels.some((l) => l.id === removeLabelId) ? removeLabelId : "";
 
   const visible = contacts.filter((c) => {
     const matchesSearch =
@@ -207,6 +234,32 @@ export default function AccountContactsClient({
     router.refresh();
   }
 
+  async function changeLabelOnSelected(labelId: string, action: "add" | "remove") {
+    // Only contacts still on the page — the server caps one request at 300.
+    const ids = contacts.filter((c) => selected.has(c.id)).map((c) => c.id);
+    if (ids.length === 0) return;
+    setLabelBusy(true);
+    const res = await safeFetch("/api/account-contacts/bulk-labels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, labelId, action }),
+    });
+    setLabelBusy(false);
+    if (!res.ok) {
+      toast.error(action === "add" ? "Could not add label" : "Could not remove label");
+      return;
+    }
+    const data = await res.json();
+    const changed: number = data.changed ?? 0;
+    const skipped: number = data.skipped ?? 0;
+    const msg = `${action === "add" ? "Label added to" : "Label removed from"} ${changed} contact${changed === 1 ? "" : "s"}${skipped > 0 ? ` · ${skipped} skipped` : ""}`;
+    if (changed > 0) toast.success(msg);
+    else toast.error(msg);
+    setSelected(new Set());
+    setRemoveLabelId("");
+    router.refresh();
+  }
+
   async function deleteSelected() {
     const count = selected.size;
     if (!confirm(`Delete ${count} contact${count === 1 ? "" : "s"}? This removes them from every list — recoverable by an admin if needed, but not from here.`)) return;
@@ -281,6 +334,15 @@ export default function AccountContactsClient({
               {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           )}
+          <select
+            value={labelFilter}
+            onChange={(e) => applyLabelFilter(e.target.value)}
+            className="input w-auto text-sm"
+            aria-label="Filter by label"
+          >
+            <option value="">All labels</option>
+            {catalog.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
           {knownFieldKeys.length > 0 && (
             <>
               <select value={filterField} onChange={(e) => setFilterField(e.target.value)} className="input w-auto text-sm">
@@ -333,6 +395,32 @@ export default function AccountContactsClient({
                 </button>
               </div>
             )}
+            <div className="flex items-center gap-1.5 border-l border-court-200 pl-2">
+              <LabelPicker
+                catalogue={catalog}
+                onPick={(l) => changeLabelOnSelected(l.id, "add")}
+                onCatalogueChange={setCatalog}
+                buttonLabel="Add label"
+                disabled={labelBusy}
+              />
+              <select
+                value={removeLabel}
+                onChange={(e) => setRemoveLabelId(e.target.value)}
+                disabled={labelBusy || selectedLabels.length === 0}
+                className="input w-auto !py-1 text-xs"
+                aria-label="Label to remove"
+              >
+                <option value="">Label to remove...</option>
+                {selectedLabels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+              <button
+                onClick={() => changeLabelOnSelected(removeLabel, "remove")}
+                disabled={labelBusy || !removeLabel}
+                className="btn btn-secondary !px-3 !py-1 !text-xs"
+              >
+                Remove label
+              </button>
+            </div>
             <button
               onClick={moveSelectedToLeads}
               disabled={movingToLeads}
@@ -368,6 +456,7 @@ export default function AccountContactsClient({
               <th>Email</th>
               <th>Added by</th>
               {isAdmin && <th>Owner</th>}
+              <th>Labels</th>
               <th className="w-8 !text-right"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
@@ -395,6 +484,9 @@ export default function AccountContactsClient({
                     {users.find((u) => u.id === c.accountOwnerUserId)?.name ?? "—"}
                   </td>
                 )}
+                <td className="text-slate-600 min-w-[8rem] max-w-[16rem]">
+                  <LabelChips labels={c.labels} fallback="—" />
+                </td>
                 <td className="!text-right">
                   <button
                     onClick={() => deleteOne(c.id, c.name)}
@@ -410,7 +502,7 @@ export default function AccountContactsClient({
             ))}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 8 : 7} className="py-8 text-center text-slate-400">No contacts found.</td>
+                <td colSpan={isAdmin ? 10 : 9} className="py-8 text-center text-slate-400">No contacts found.</td>
               </tr>
             )}
           </tbody>

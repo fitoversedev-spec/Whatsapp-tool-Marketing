@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { upsertMarketingContact } from "@/lib/meta-ads/leadWrites";
 import { normalizePhone } from "@/lib/phone";
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -32,40 +33,10 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const phone = (metaLead.phone ? normalizePhone(metaLead.phone) : null) ?? metaLead.normalizedPhone ?? null;
   if (!phone) return NextResponse.json({ error: "no_phone" }, { status: 422 });
 
-  const name = metaLead.fullName?.trim() || null;
-  const city = metaLead.city;
-
-  const existing = await prisma.contact.findUnique({ where: { phone } });
-  if (existing) {
-    // Merge the city into the existing fields (a JSON STRING) under the
-    // "Attribute 1" key — the same key imported contacts use for city — and ONLY
-    // when that key is still empty, so a value the user already curated is never
-    // clobbered. Guard on city too. Every other key is preserved. NEVER touch
-    // allowCampaign.
-    let fields: Record<string, unknown> = {};
-    try {
-      const parsed = JSON.parse(existing.fields);
-      if (parsed && typeof parsed === "object") fields = parsed as Record<string, unknown>;
-    } catch {
-      /* corrupt fields — start fresh */
-    }
-    const existingAttr1 = String(fields["Attribute 1"] ?? "").trim();
-    if (city && !existingAttr1) fields["Attribute 1"] = city;
-    await prisma.contact.update({
-      where: { id: existing.id },
-      // Only overwrite the name when we actually have one.
-      data: { ...(name ? { name } : {}), fields: JSON.stringify(fields) },
-    });
-    return NextResponse.json({ ok: true, created: false });
-  }
-
-  await prisma.contact.create({
-    data: {
-      phone,
-      name,
-      allowCampaign: true,
-      fields: JSON.stringify(city ? { "Attribute 1": city } : {}),
-    },
+  const { created } = await upsertMarketingContact({
+    phone,
+    name: metaLead.fullName?.trim() || null,
+    city: metaLead.city,
   });
-  return NextResponse.json({ ok: true, created: true });
+  return NextResponse.json({ ok: true, created });
 }

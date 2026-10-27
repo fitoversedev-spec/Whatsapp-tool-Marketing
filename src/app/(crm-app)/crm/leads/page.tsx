@@ -2,11 +2,21 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canSeeAllCustomers, customerAccess } from "@/lib/rbac";
 import { listLeadStages } from "@/lib/crm/leadStages";
+import { getMetaLeadLabels } from "@/lib/meta-ads/queries";
 import LeadsClient from "./LeadsClient";
 
-export default async function LeadsPage() {
+export default async function LeadsPage({ searchParams }: { searchParams: { label?: string } }) {
   const user = await requireUser();
   const seesAll = canSeeAllCustomers(user.role);
+
+  // Shared label catalogue (same one ad leads and website leads use). The
+  // "label" URL param filters server-side, so it narrows the 300 newest leads
+  // below rather than just the rows already loaded — and an id that isn't in
+  // the catalogue (stale link, deleted label) is ignored instead of emptying
+  // the list.
+  const labelCatalog = await getMetaLeadLabels();
+  const labelParam = typeof searchParams.label === "string" ? searchParams.label : "";
+  const labelFilter = labelCatalog.some((l) => l.id === labelParam) ? labelParam : "";
 
   // Same owner-scoping the Contacts list uses — ownership lives on the parent
   // Account, so sales sees only leads under accounts they own; admins,
@@ -17,6 +27,7 @@ export default async function LeadsPage() {
         deletedAt: null,
         pipelineStage: "LEAD",
         ...(seesAll ? {} : { account: { ownerUserId: user.id } }),
+        ...(labelFilter ? { labels: { some: { labelId: labelFilter } } } : {}),
       },
       orderBy: { createdAt: "desc" },
       take: 300,
@@ -26,6 +37,10 @@ export default async function LeadsPage() {
         // "Converted" is derived, never stored — a lead is converted once it
         // already backs a Deal as the primary contact.
         dealsAsPrimary: { where: { deletedAt: null }, select: { id: true } },
+        labels: {
+          select: { label: { select: { id: true, name: true, color: true } } },
+          orderBy: { label: { name: "asc" } },
+        },
       },
     }),
     listLeadStages(),
@@ -45,6 +60,8 @@ export default async function LeadsPage() {
     <LeadsClient
       leadStages={leadStages}
       reps={reps}
+      labelCatalog={labelCatalog}
+      labelFilter={labelFilter}
       leads={leads.map((l) => ({
         id: l.id,
         name: l.name,
@@ -54,6 +71,7 @@ export default async function LeadsPage() {
         location: l.account.city ?? null,
         leadSource: l.leadSource?.name ?? null,
         converted: l.dealsAsPrimary.length > 0,
+        labels: l.labels.map((x) => x.label),
         leadStageId: l.leadStageId,
         ownerUserId: l.account.ownerUserId,
         ownerName: l.account.owner?.name?.trim() || null,

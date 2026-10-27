@@ -28,18 +28,23 @@ function resultMessage(groupName: string, r: AddResult): string {
 // Groups are listed and sent to from the Broadcasts page.
 export default function AddToGroupDialog({
   leadIds,
+  websiteLeadIds,
   contactIds,
   onClose,
   onDone,
 }: {
   leadIds?: string[];
+  // Website leads (the Website leads page) — added through /api/website-leads/add-to-group.
+  websiteLeadIds?: string[];
   contactIds?: string[];
   onClose: () => void;
   onDone: () => void;
 }) {
-  const people = leadIds?.length
-    ? { key: "metaLeadIds" as const, ids: leadIds, one: "lead", many: "leads" }
-    : { key: "contactIds" as const, ids: contactIds ?? [], one: "contact", many: "contacts" };
+  const people = websiteLeadIds?.length
+    ? { key: "websiteLeadIds" as const, ids: websiteLeadIds, one: "lead", many: "leads" }
+    : leadIds?.length
+      ? { key: "metaLeadIds" as const, ids: leadIds, one: "lead", many: "leads" }
+      : { key: "contactIds" as const, ids: contactIds ?? [], one: "contact", many: "contacts" };
   const toast = useToast();
   const [groups, setGroups] = useState<GroupOption[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -89,7 +94,15 @@ export default function AddToGroupDialog({
     setError(null);
     try {
       const res =
-        mode === "existing"
+        people.key === "websiteLeadIds"
+          ? await fetch("/api/website-leads/add-to-group", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(
+                mode === "existing" ? { leadIds: people.ids, groupId } : { leadIds: people.ids, newGroupName: newName },
+              ),
+            })
+          : mode === "existing"
           ? await fetch(`/api/broadcast-groups/${groupId}/members`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -148,7 +161,7 @@ export default function AddToGroupDialog({
             Broadcasts
           </Link>{" "}
           page.
-          {people.key === "metaLeadIds"
+          {people.key !== "contactIds"
             ? " The leads are added to your WhatsApp contacts; leads without a phone number are skipped."
             : " Contacts who blocked campaigns can be added — broadcasts skip them."}
         </p>

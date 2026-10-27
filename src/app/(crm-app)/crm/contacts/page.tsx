@@ -4,7 +4,7 @@ import { canSeeAllCustomers, canManageAllCustomers } from "@/lib/rbac";
 import { parseFields } from "@/lib/contacts";
 import AccountContactsClient from "./AccountContactsClient";
 
-export default async function AccountContactsPage({ searchParams }: { searchParams: { from?: string; to?: string; rep?: string } }) {
+export default async function AccountContactsPage({ searchParams }: { searchParams: { from?: string; to?: string; rep?: string; label?: string } }) {
   const user = await requireUser();
   const dateRange = searchParams.from && searchParams.to ? { from: searchParams.from, to: searchParams.to } : null;
   const seesAll = canSeeAllCustomers(user.role);
@@ -15,13 +15,18 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
   // count the page already shows.
   const manages = canManageAllCustomers(user.role);
   const repFilter = manages ? searchParams.rep : undefined;
+  // The label filter (a shared-catalogue label id) is open to everyone — it
+  // narrows within whatever contacts the user can already see.
+  // Only a single plain id is used; ?label=a&label=b arrives as an array and is ignored.
+  const labelFilter = typeof searchParams.label === "string" && searchParams.label ? searchParams.label : undefined;
   const where = {
     deletedAt: null,
     ...(seesAll ? (repFilter ? { account: { ownerUserId: repFilter } } : {}) : { account: { ownerUserId: user.id } }),
     ...(dateRange ? { createdAt: { gte: new Date(dateRange.from + "T00:00:00"), lte: new Date(dateRange.to + "T23:59:59") } } : {}),
+    ...(labelFilter ? { labels: { some: { labelId: labelFilter } } } : {}),
   };
 
-  const [contacts, accounts, leadSources, customerProfiles, leadStages, users] = await Promise.all([
+  const [contacts, accounts, leadSources, customerProfiles, leadStages, users, labelCatalogue] = await Promise.all([
     prisma.accountContact.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -29,6 +34,10 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
       include: {
         account: { select: { id: true, name: true, city: true, ownerUserId: true } },
         createdByUser: { select: { name: true } },
+        labels: {
+          select: { label: { select: { id: true, name: true, color: true } } },
+          orderBy: { label: { name: "asc" } },
+        },
       },
     }),
     prisma.account.findMany({
@@ -48,6 +57,8 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
           orderBy: { name: "asc" },
         })
       : Promise.resolve([]),
+    // Shared with ad leads and website leads — one catalogue for every label.
+    prisma.metaLeadLabel.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
   ]);
 
   return (
@@ -65,6 +76,7 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
         accountName: c.account.name,
         accountOwnerUserId: c.account.ownerUserId,
         addedBy: c.createdByUser?.name ?? null,
+        labels: c.labels.map((l) => l.label),
       }))}
       accounts={accounts}
       leadSources={leadSources}
@@ -73,6 +85,8 @@ export default async function AccountContactsPage({ searchParams }: { searchPara
       users={users}
       dateRange={dateRange}
       repFilter={repFilter ?? ""}
+      labelFilter={labelFilter ?? ""}
+      labelCatalogue={labelCatalogue}
     />
   );
 }

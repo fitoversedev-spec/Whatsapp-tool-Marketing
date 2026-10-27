@@ -7,12 +7,10 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
-  GROUP_NAME_MAX,
   MAX_CONTACTS_PER_REQUEST,
   MAX_LEADS_PER_REQUEST,
   addPeopleToGroup,
-  findGroupByName,
-  tidyGroupName,
+  createBroadcastGroup,
 } from "@/lib/broadcast-groups";
 
 export async function GET() {
@@ -58,30 +56,15 @@ export async function POST(req: NextRequest) {
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
 
-  const name = tidyGroupName(parsed.data.name);
-  if (!name) return NextResponse.json({ error: "Give the group a name" }, { status: 400 });
-  if (name.length > GROUP_NAME_MAX) {
-    return NextResponse.json({ error: `Group names can be up to ${GROUP_NAME_MAX} characters` }, { status: 400 });
+  const made = await createBroadcastGroup(parsed.data.name, user.id);
+  if (made.kind === "invalid_name") return NextResponse.json({ error: made.error }, { status: 400 });
+  if (made.kind === "exists") {
+    return NextResponse.json(
+      { error: made.error, ...(made.group ? { group: made.group } : {}) },
+      { status: 409 },
+    );
   }
-
-  const clash = await findGroupByName(name);
-  if (clash) {
-    return NextResponse.json({ error: `A group called "${clash.name}" already exists`, group: clash }, { status: 409 });
-  }
-
-  let group: { id: string; name: string };
-  try {
-    group = await prisma.broadcastGroup.create({
-      data: { name, createdByUserId: user.id },
-      select: { id: true, name: true },
-    });
-  } catch (err) {
-    // Two people creating the same name at once — the unique index wins.
-    if ((err as { code?: string }).code === "P2002") {
-      return NextResponse.json({ error: `A group called "${name}" already exists` }, { status: 409 });
-    }
-    throw err;
-  }
+  const group = made.group;
 
   const result = await addPeopleToGroup(
     group.id,

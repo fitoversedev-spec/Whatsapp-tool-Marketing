@@ -45,6 +45,37 @@ export async function findGroupByName(name: string, excludeId?: string) {
   });
 }
 
+export type CreateGroupResult =
+  | { kind: "ok"; group: { id: string; name: string } }
+  | { kind: "invalid_name"; error: string }
+  | { kind: "exists"; error: string; group?: { id: string; name: string } };
+
+/** Make a new group from a typed name (tidied, length-checked, no duplicate names). */
+export async function createBroadcastGroup(rawName: string, userId: string): Promise<CreateGroupResult> {
+  const name = tidyGroupName(rawName);
+  if (!name) return { kind: "invalid_name", error: "Give the group a name" };
+  if (name.length > GROUP_NAME_MAX) {
+    return { kind: "invalid_name", error: `Group names can be up to ${GROUP_NAME_MAX} characters` };
+  }
+
+  const clash = await findGroupByName(name);
+  if (clash) return { kind: "exists", error: `A group called "${clash.name}" already exists`, group: clash };
+
+  try {
+    const group = await prisma.broadcastGroup.create({
+      data: { name, createdByUserId: userId },
+      select: { id: true, name: true },
+    });
+    return { kind: "ok", group };
+  } catch (err) {
+    // Two people creating the same name at once — the unique index wins.
+    if ((err as { code?: string }).code === "P2002") {
+      return { kind: "exists", error: `A group called "${name}" already exists` };
+    }
+    throw err;
+  }
+}
+
 export type AddLeadsResult = {
   added: number; // newly in the group
   alreadyIn: number; // were members already
@@ -70,7 +101,29 @@ export async function addMetaLeadsToGroup(
     where: { id: { in: metaLeadIds } },
     select: { fullName: true, phone: true, normalizedPhone: true, city: true },
   });
+  return addLeadPeopleToGroup(groupId, leads, userId);
+}
 
+/** Put website leads into a group, exactly like Meta ad leads (see addMetaLeadsToGroup). */
+export async function addWebsiteLeadsToGroup(
+  groupId: string,
+  websiteLeadIds: string[],
+  userId: string,
+): Promise<AddLeadsResult> {
+  const leads = await prisma.websiteLead.findMany({
+    where: { id: { in: websiteLeadIds }, deletedAt: null },
+    select: { name: true, phone: true, normalizedPhone: true, city: true },
+  });
+  return addLeadPeopleToGroup(
+    groupId,
+    leads.map((l) => ({ fullName: l.name, phone: l.phone, normalizedPhone: l.normalizedPhone, city: l.city })),
+    userId,
+  );
+}
+
+type LeadPerson = { fullName: string | null; phone: string | null; normalizedPhone: string | null; city: string | null };
+
+async function addLeadPeopleToGroup(groupId: string, leads: LeadPerson[], userId: string): Promise<AddLeadsResult> {
   const byPhone = new Map<string, { name: string | null; city: string | null }>();
   let noPhone = 0;
   for (const l of leads) {
@@ -175,12 +228,13 @@ async function joinGroup(groupId: string, contactIds: string[], userId: string) 
 /** Add whichever of leads / contacts a request carries, and total the counts. */
 export async function addPeopleToGroup(
   groupId: string,
-  people: { metaLeadIds?: string[]; contactIds?: string[] },
+  people: { metaLeadIds?: string[]; websiteLeadIds?: string[]; contactIds?: string[] },
   userId: string,
 ): Promise<AddLeadsResult> {
   const total: AddLeadsResult = { added: 0, alreadyIn: 0, noPhone: 0 };
   for (const r of [
     people.metaLeadIds?.length ? await addMetaLeadsToGroup(groupId, people.metaLeadIds, userId) : null,
+    people.websiteLeadIds?.length ? await addWebsiteLeadsToGroup(groupId, people.websiteLeadIds, userId) : null,
     people.contactIds?.length ? await addContactsToGroup(groupId, people.contactIds, userId) : null,
   ]) {
     if (!r) continue;

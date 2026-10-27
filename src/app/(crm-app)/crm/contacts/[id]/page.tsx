@@ -5,6 +5,7 @@ import { canManageAllCustomers, customerAccess } from "@/lib/rbac";
 import { parseFields } from "@/lib/contacts";
 import { getContactTimeline } from "@/lib/crm/timeline";
 import { listLeadStages } from "@/lib/crm/leadStages";
+import { getMetaLeadLabels } from "@/lib/meta-ads/queries";
 import ContactDetailClient from "./ContactDetailClient";
 
 export default async function ContactDetailPage({ params }: { params: { id: string } }) {
@@ -21,6 +22,10 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       },
       leadSource: {
         select: { id: true, name: true, colorHex: true },
+      },
+      labels: {
+        select: { label: { select: { id: true, name: true, color: true } } },
+        orderBy: { label: { name: "asc" } },
       },
     },
   });
@@ -52,6 +57,7 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
     nextActions,
     insights,
     assignableUsers,
+    labelCatalog,
   ] = await Promise.all([
     getContactTimeline(contact.id, user),
     prisma.deal.findMany({
@@ -101,6 +107,8 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
           orderBy: { name: "asc" },
         })
       : Promise.resolve([] as { id: string; name: string }[]),
+    // The label list shared with ad leads and website leads.
+    getMetaLeadLabels(),
   ]);
 
   // Wave B: everything that depends on the contact's dealIds.
@@ -174,6 +182,8 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
       leadStages={leadStages}
       assignableUsers={assignableUsers}
       leadSources={leadSources}
+      labels={contact.labels.map((l) => l.label)}
+      labelCatalog={labelCatalog}
       deals={deals.map((d) => ({
         id: d.id, code: d.code, title: d.title,
         quotedValue: d.quotedValue ? Number(d.quotedValue) : null,

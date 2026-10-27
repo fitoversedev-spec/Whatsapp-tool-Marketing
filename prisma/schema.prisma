@@ -93,6 +93,8 @@ model User {
   aiUsage                 AiUsage[]        @relation("AiUsageUser")
   metaLeadsAssigned       MetaLead[]       @relation("MetaLeadAssignee")
   metaLeadNotes           MetaLeadNote[]   @relation("MetaLeadNoteAuthor")
+  websiteLeadsAssigned    WebsiteLead[]    @relation("WebsiteLeadAssignee")
+  websiteLeadNotes        WebsiteLeadNote[] @relation("WebsiteLeadNoteAuthor")
   broadcastGroups         BroadcastGroup[] @relation("BroadcastGroupCreator")
   pushEnabled             Boolean          @default(false) @map("push_enabled")
   pushSubscriptions       PushSubscription[]
@@ -1534,6 +1536,8 @@ model AccountContact {
   courtImages      CourtImage[]
   productInterests ContactProductInterest[]
   coverageGrants  CoverageGrant[]  @relation("CoverageContact")
+  // Labels from the shared MetaLeadLabel catalogue (same names/colours as ad leads and website leads).
+  labels AccountContactToLabel[]
 
   @@index([accountId])
   @@index([importBatchId])
@@ -2360,7 +2364,9 @@ model MetaLeadLabel {
   color     String   @default("slate")
   createdAt DateTime @default(now()) @map("created_at")
 
-  leads MetaLeadToLabel[]
+  leads           MetaLeadToLabel[]
+  websiteLeads    WebsiteLeadToLabel[]
+  accountContacts AccountContactToLabel[]
 
   @@map("meta_lead_labels")
 }
@@ -2376,6 +2382,101 @@ model MetaLeadToLabel {
   @@id([metaLeadId, labelId])
   @@index([labelId])
   @@map("meta_lead_to_labels")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WEBSITE LEADS — "Build a court" enquiries POSTed by the Fitoverse website to
+// /api/website-leads/incoming. Managed like Meta ad leads (same stages, same
+// label catalogue, notes, assign rep, Move to CRM / marketing / group).
+// ═══════════════════════════════════════════════════════════════════════════
+
+model WebsiteLead {
+  id               String    @id @default(uuid())
+  websiteLeadId    String    @unique @map("website_lead_id") // the website's own lead id: dedupe key (a retry never makes a second row)
+  receivedAt       DateTime  @map("received_at") // when the website received the enquiry
+  name             String
+  phone            String
+  normalizedPhone  String?   @map("normalized_phone") // E.164 digits (src/lib/phone.ts) for duplicate badges
+  email            String?
+  city             String?
+  state            String?
+  jobTitle         String?   @map("job_title")
+  sport            String?
+  areaSqft         Int?      @map("area_sqft")
+  lengthFt         Int?      @map("length_ft")
+  widthFt          Int?      @map("width_ft")
+  startWhen        String?   @map("start_when")
+  notes            String? // the customer's own message from the form (rep notes are WebsiteLeadNote)
+  answers          Json      @default("[]") // [{ key, label, value }] answers to the form's custom questions
+  surface          String?
+  env              String? // the court configurator's environment (school, academy, ...), NOT a deployment marker
+  source           String?
+  userAgent        String?   @map("user_agent")
+  cameFrom         String?   @map("came_from") // where the visitor came from ("ChatGPT", "Google search"...); null = the website sent no attribution
+  cameFromGroup    String?   @map("came_from_group") // AI assistants / Search / Paid ads / Social / Email / Other websites / Direct
+  landingPage      String?   @map("landing_page") // path of the first page of the visit
+  attribution      String?   @map("attribution") // the sanitized attribution payload (JSON text): referrer, utm_*, click_id, first_seen_at
+  stage            String    @default("NEW") // MetaLeadStage.slug
+  assignedToUserId String?   @map("assigned_to_user_id")
+  accountContactId String?   @map("account_contact_id") // set on Move to CRM
+  contactId        String?   @map("contact_id") // WhatsApp marketing Contact, set on Move to marketing
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  assignedTo    User?                @relation("WebsiteLeadAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  internalNotes WebsiteLeadNote[]
+  labels        WebsiteLeadToLabel[]
+
+  @@index([receivedAt])
+  @@index([normalizedPhone])
+  @@index([stage])
+  @@index([assignedToUserId])
+  @@index([cameFrom])
+  @@map("website_leads")
+}
+
+model WebsiteLeadNote {
+  id            String   @id @default(uuid())
+  websiteLeadId String   @map("website_lead_id")
+  authorUserId  String   @map("author_user_id")
+  body          String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  websiteLead WebsiteLead @relation(fields: [websiteLeadId], references: [id], onDelete: Cascade)
+  author      User        @relation("WebsiteLeadNoteAuthor", fields: [authorUserId], references: [id])
+
+  @@index([websiteLeadId, createdAt])
+  @@map("website_lead_notes")
+}
+
+// Applies the shared MetaLeadLabel catalogue to website leads (same names and colours everywhere).
+model WebsiteLeadToLabel {
+  websiteLeadId String   @map("website_lead_id")
+  labelId       String   @map("label_id")
+  labeledAt     DateTime @default(now()) @map("labeled_at")
+
+  websiteLead WebsiteLead   @relation(fields: [websiteLeadId], references: [id], onDelete: Cascade)
+  label       MetaLeadLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([websiteLeadId, labelId])
+  @@index([labelId])
+  @@map("website_lead_to_labels")
+}
+
+// Applies the shared MetaLeadLabel catalogue to CRM contacts. A lead's labels are
+// copied here once when it is moved to CRM (no later sync between the two).
+model AccountContactToLabel {
+  accountContactId String   @map("account_contact_id")
+  labelId          String   @map("label_id")
+  labeledAt        DateTime @default(now()) @map("labeled_at")
+
+  accountContact AccountContact @relation(fields: [accountContactId], references: [id], onDelete: Cascade)
+  label          MetaLeadLabel  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([accountContactId, labelId])
+  @@index([labelId])
+  @@map("account_contact_labels")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

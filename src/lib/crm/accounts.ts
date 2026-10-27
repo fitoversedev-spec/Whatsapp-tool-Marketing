@@ -5,6 +5,7 @@
 // merge}/route.ts) adapted to these two models.
 import { prisma } from "@/lib/prisma";
 import { normalizePhone } from "@/lib/phone";
+import { mergeContactLabels } from "@/lib/crm/contactLabels";
 
 export type AccountDuplicateCandidate = { id: string; name: string; city: string | null };
 
@@ -133,6 +134,8 @@ export async function mergeAccountContacts(primaryId: string, secondaryIds: stri
       const thread = await tx.chatThread.findFirst({ where: { accountContactId: from }, select: { id: true } });
       if (thread) await tx.chatThread.update({ where: { id: thread.id }, data: to });
     }
+    // Labels are unioned onto the survivor; the secondaries' own rows cascade away below.
+    await mergeContactLabels(tx, secondaryIds, primaryId);
     await tx.accountContact.deleteMany({ where: { id: from } });
   }, { timeout: 30_000, maxWait: 10_000 });
 }

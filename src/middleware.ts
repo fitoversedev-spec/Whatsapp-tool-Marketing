@@ -20,7 +20,7 @@ export const config = {
   matcher: [
     {
       source:
-        "/:section(inbox|contacts|broadcasts|reminders|leads|ad-campaigns|crm|deals|pipeline|quotations|invoices|court-images|products|templates|tags|analytics|admin|settings|users|profile|search|media|portfolio|connection|help|scout)/:path*",
+        "/:section(inbox|contacts|broadcasts|reminders|leads|ad-campaigns|website-leads|crm|deals|pipeline|quotations|invoices|court-images|products|templates|tags|analytics|admin|settings|users|profile|search|media|portfolio|connection|help|scout)/:path*",
       missing: [
         { type: "header", key: "rsc" },
         { type: "header", key: "next-router-prefetch" },

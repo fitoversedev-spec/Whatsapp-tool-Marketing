@@ -90,7 +90,7 @@ const NO_AREA: Prisma.MetaLeadWhereInput = { OR: [{ area: null }, { area: "" }] 
 
 // Prisma's contains is a LIKE: escape \, % and _ so typed text matches
 // literally, like the old in-browser filter did.
-const likeLiteral = (s: string) => s.replace(/[\\%_]/g, "\\$&");
+export const likeLiteral = (s: string) => s.replace(/[\\%_]/g, "\\$&");
 export async function buildLeadWhere(f: LeadFilters): Promise<Prisma.MetaLeadWhereInput> {
   const and: Prisma.MetaLeadWhereInput[] = [leadWindowWhere(f)];
   if (f.campaignId) and.push({ campaignId: f.campaignId });
@@ -240,7 +240,7 @@ export async function getLeadExportRows(f: LeadFilters): Promise<{ rows: LeadExp
 // Merge raw values case-insensitively (key = trimmed, lower-cased; blank = "—"),
 // biggest first — the same rule the table's tally() used. The shown label is the
 // spelling most leads used.
-function mergeTally(items: { raw: string | null; count: number }[]): LeadTally[] {
+export function mergeTally(items: { raw: string | null; count: number }[]): LeadTally[] {
   const m = new Map<string, LeadTally & { best: number }>();
   for (const it of items) {
     const raw = (it.raw ?? "").trim();

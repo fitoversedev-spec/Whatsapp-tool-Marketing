@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import { DropdownFilter, type DropdownOption } from "@/components/DropdownFilter";
 import SelectAllCheckbox from "@/components/SelectAllCheckbox";
 import WonDealModal from "@/components/crm/WonDealModal";
+import LabelChips from "@/components/labels/LabelChips";
+import type { MetaLeadLabelChip } from "@/lib/meta-ads/queries";
 import { safeFetch } from "@/lib/safe-fetch";
 
 type Lead = {
@@ -19,6 +21,7 @@ type Lead = {
   location: string | null;
   leadSource: string | null;
   converted: boolean;
+  labels: MetaLeadLabelChip[];
   leadStageId: string | null;
   ownerUserId: string | null;
   ownerName: string | null;
@@ -63,8 +66,22 @@ function ReminderCell({ r }: { r: Lead["nextReminder"] }) {
   );
 }
 
-export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]; leadStages: LeadStageOption[]; reps: RepOption[] }) {
+export default function LeadsClient({
+  leads,
+  leadStages,
+  reps,
+  labelCatalog,
+  labelFilter,
+}: {
+  leads: Lead[];
+  leadStages: LeadStageOption[];
+  reps: RepOption[];
+  labelCatalog: MetaLeadLabelChip[];
+  // Label picked in the filter ("" = all). Applied by the server, via the "label" URL param.
+  labelFilter: string;
+}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useToast();
   const [q, setQ] = useState("");
   const [cityFilter, setCityFilter] = useState("");
@@ -82,7 +99,16 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
   const [removing, setRemoving] = useState(false);
   useEffect(() => {
     setSelected(new Set());
-  }, [q, cityFilter, repFilter, stageFilter]);
+  }, [q, cityFilter, repFilter, stageFilter, labelFilter]);
+
+  // The label filter lives in the URL (the server narrows the list), so swap
+  // only the "label" param and keep whatever else is in the address.
+  function changeLabelFilter(labelId: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (labelId) params.set("label", labelId);
+    else params.delete("label");
+    router.push(`/crm/leads${params.toString() ? `?${params}` : ""}`);
+  }
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -244,7 +270,7 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
       (!repFilter || (repFilter === "__none__" ? !l.ownerUserId : l.ownerUserId === repFilter)) &&
       (!stageFilter || (stageFilter === "__none__" ? !l.leadStageId : l.leadStageId === stageFilter)),
   );
-  const filtering = !!(qt || cityQ || repFilter || stageFilter);
+  const filtering = !!(qt || cityQ || repFilter || stageFilter || labelFilter);
   // Only leads this viewer may edit can be ticked.
   const selectableIds = visible.filter((l) => l.canEdit).map((l) => l.id);
 
@@ -284,6 +310,15 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
             <option value="__none__">No stage</option>
           </select>
         </div>
+        {labelCatalog.length > 0 && (
+          <div>
+            <label className="block text-[11px] font-medium text-slate-600 mb-1">Label</label>
+            <select value={labelFilter} onChange={(e) => changeLabelFilter(e.target.value)} className="input w-44 !py-1.5 text-sm" data-guide="crm-leads-label-filter">
+              <option value="">All labels</option>
+              {labelCatalog.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </div>
+        )}
         {reps.length > 0 && (
           <div>
             <label className="block text-[11px] font-medium text-slate-600 mb-1">Handled by</label>
@@ -297,7 +332,18 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
         {filtering && (
           <span className="text-xs text-slate-500 pb-2">
             <span className="font-mono">{visible.length}</span> of <span className="font-mono">{leads.length}</span>
-            <button onClick={() => { setQ(""); setCityFilter(""); setRepFilter(""); setStageFilter(""); }} className="ml-2 text-court-700 hover:underline">Clear</button>
+            <button
+              onClick={() => {
+                setQ("");
+                setCityFilter("");
+                setRepFilter("");
+                setStageFilter("");
+                if (labelFilter) changeLabelFilter("");
+              }}
+              className="ml-2 text-court-700 hover:underline"
+            >
+              Clear
+            </button>
           </span>
         )}
       </div>
@@ -358,6 +404,7 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
                     </div>
                   )}
                   <div className="text-xs text-slate-500 mt-0.5">Handled by <span className="font-medium text-slate-700">{l.ownerName ?? "Unassigned"}</span></div>
+                  <LabelChips labels={l.labels} className="mt-1.5" />
                 </div>
                 {l.converted && <span className="shrink-0 badge bg-green-100 text-green-700">Converted</span>}
               </div>
@@ -397,6 +444,7 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
                 <th>Handled by</th>
                 <th>Reminder</th>
                 <th>Lead Source</th>
+                <th>Labels</th>
                 <th className="!text-right"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -429,6 +477,9 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
                   <td className="text-slate-600 whitespace-nowrap">{l.ownerName ?? <span className="text-slate-400">Unassigned</span>}</td>
                   <td><ReminderCell r={l.nextReminder} /></td>
                   <td className="text-slate-600">{l.leadSource ?? "—"}</td>
+                  <td className="max-w-[220px]">
+                    <LabelChips labels={l.labels} fallback={<span className="text-slate-400">—</span>} />
+                  </td>
                   <td className="!text-right">
                     {l.canEdit && (
                       <button
@@ -445,7 +496,7 @@ export default function LeadsClient({ leads, leadStages, reps }: { leads: Lead[]
               ))}
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-slate-400">
+                  <td colSpan={11} className="py-8 text-center text-slate-400">
                     {filtering ? "No leads match these filters." : "No leads yet — promote a contact from the Contacts list."}
                   </td>
                 </tr>

@@ -3,7 +3,11 @@ import { lazyImport } from "@/lib/chunk-reload";
 
 export function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
   const escape = (v: string | number) => {
-    const s = String(v);
+    let s = String(v);
+    // Text from outside (e.g. a website visitor's campaign tag "=HYPERLINK(...)") must never run
+    // as a formula when the file is opened in Excel/Sheets. Phones (+91…) and negative numbers
+    // keep their sign; + or - only get the guard when letters or formula characters follow.
+    if (typeof v === "string" && (/^[=@\t\r]/.test(s) || (/^[+-]/.test(s) && /[A-Za-z(|!]/.test(s)))) s = `'${s}`;
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines = [headers.map(escape).join(","), ...rows.map((r) => r.map(escape).join(","))];

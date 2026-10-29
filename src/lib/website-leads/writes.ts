@@ -97,6 +97,20 @@ export async function setWebsiteLeadsRemoved(ids: string[], removed: boolean): P
   return res.count;
 }
 
+/**
+ * Delete removed website leads for good (the route lets admins only). A lead that is
+ * not removed is skipped, so the count is how many rows really went. Their notes and
+ * label links go with them (ON DELETE CASCADE on both tables; nothing else points at
+ * website_leads). A CRM contact, WhatsApp marketing contact or group membership made
+ * from a lead is left as it is.
+ */
+export async function deleteRemovedWebsiteLeads(ids: string[]): Promise<number> {
+  const res = await prisma.websiteLead.deleteMany({
+    where: { id: { in: ids }, deletedAt: { not: null } },
+  });
+  return res.count;
+}
+
 // ---- notes -----------------------------------------------------------------
 
 /** Add a rep's note; null when the lead doesn't exist. */

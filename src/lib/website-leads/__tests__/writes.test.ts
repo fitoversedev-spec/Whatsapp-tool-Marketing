@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
-  websiteLead: { updateMany: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+  websiteLead: { updateMany: vi.fn(), deleteMany: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
   websiteLeadNote: { create: vi.fn() },
   websiteLeadToLabel: { deleteMany: vi.fn(), createMany: vi.fn(), findMany: vi.fn() },
   accountContact: { findFirst: vi.fn() },
@@ -23,6 +23,7 @@ import {
   addWebsiteLeadsToGroup,
   assignWebsiteLead,
   assignWebsiteLeads,
+  deleteRemovedWebsiteLeads,
   moveWebsiteLeadToCrm,
   moveWebsiteLeadToMarketing,
   setWebsiteLeadLabels,
@@ -38,6 +39,7 @@ beforeEach(() => {
   lw.findActiveMetaLeadStage.mockResolvedValue({ slug: "QUALIFIED" });
   db.user.findFirst.mockResolvedValue({ id: rep, name: "Ravi" });
   db.websiteLead.updateMany.mockResolvedValue({ count: 1 });
+  db.websiteLead.deleteMany.mockResolvedValue({ count: 1 });
   db.websiteLeadToLabel.findMany.mockResolvedValue([{ labelId: "L1" }, { labelId: "L2" }]);
   db.accountContact.findFirst.mockResolvedValue({ id: "any" });
   db.$transaction.mockImplementation(async (fn: (tx: typeof db) => unknown) => fn(db));
@@ -202,6 +204,40 @@ describe("setWebsiteLeadsRemoved", () => {
     expect(db.accountContact.findFirst).not.toHaveBeenCalled();
     expect(lw.promoteLeadToCrm).not.toHaveBeenCalled();
     expect(lw.upsertMarketingContact).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteRemovedWebsiteLeads", () => {
+  it("deletes only the leads that are already removed and returns how many went", async () => {
+    db.websiteLead.deleteMany.mockResolvedValue({ count: 2 });
+    expect(await deleteRemovedWebsiteLeads(["a", "b", "c"])).toBe(2);
+    expect(db.websiteLead.deleteMany).toHaveBeenCalledTimes(1);
+    expect(db.websiteLead.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ["a", "b", "c"] }, deletedAt: { not: null } },
+    });
+  });
+
+  it("a live lead is never matched: the filter needs deletedAt to be set", async () => {
+    // A database holding one live and one removed lead: deleteMany honours the where.
+    const rows = [{ id: "live", deletedAt: null }, { id: "gone", deletedAt: new Date() }];
+    db.websiteLead.deleteMany.mockImplementation(async (args: { where: { id: { in: string[] }; deletedAt: { not: null } } }) => ({
+      count: rows.filter((r) => args.where.id.in.includes(r.id) && r.deletedAt !== null).length,
+    }));
+    expect(await deleteRemovedWebsiteLeads(["live", "gone"])).toBe(1);
+    expect(await deleteRemovedWebsiteLeads(["live"])).toBe(0);
+  });
+
+  it("is one deleteMany on the lead table: notes and labels go by cascade, nothing else is touched", async () => {
+    await deleteRemovedWebsiteLeads(["a"]);
+    expect(db.websiteLead.updateMany).not.toHaveBeenCalled();
+    expect(db.websiteLead.update).not.toHaveBeenCalled();
+    expect(db.websiteLeadNote.create).not.toHaveBeenCalled();
+    expect(db.websiteLeadToLabel.deleteMany).not.toHaveBeenCalled();
+    expect(db.accountContactToLabel.deleteMany).not.toHaveBeenCalled();
+    expect(db.accountContact.findFirst).not.toHaveBeenCalled();
+    expect(lw.promoteLeadToCrm).not.toHaveBeenCalled();
+    expect(lw.upsertMarketingContact).not.toHaveBeenCalled();
+    expect(db.$transaction).not.toHaveBeenCalled();
   });
 });
 

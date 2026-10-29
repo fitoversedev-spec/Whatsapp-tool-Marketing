@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { downloadCsv, downloadXlsx } from "@/lib/analytics/export";
 import { useToast } from "@/components/Toast";
 import { DropdownFilter } from "@/components/DropdownFilter";
 import AddToGroupDialog from "@/components/meta/AddToGroupDialog";
 import type { Rep } from "@/components/meta/MoveToCrmDialog";
+import type { MetaLeadLabelChip } from "@/lib/meta-ads/queries";
 import { labelChip, labelDot, stageChipFromRow, stageLabelFromRow, type MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
 import { fmtDateTimeIST, fmtShortDateTimeIST } from "@/lib/time";
 import type {
@@ -16,7 +16,8 @@ import type {
   WebsiteLeadPage,
   WebsiteLeadRow,
 } from "@/lib/website-leads/list";
-import { CameFromChip, LeadBadges, RemoveLeadsDialog, courtAreaText, courtSizeText } from "./shared";
+import { CameFromChip, LeadBadges, RemoveLeadsDialog, courtAreaText, courtSizeText, type RemoveAction } from "./shared";
+import WebsiteLeadPanel from "./WebsiteLeadPanel";
 
 // The Website leads table: the server renders page 1 and the dropdown options;
 // every later page, filter, "Select all N matching" and the export come from
@@ -24,7 +25,10 @@ import { CameFromChip, LeadBadges, RemoveLeadsDialog, courtAreaText, courtSizeTe
 // filters are remembered for the browser session, ticks live across pages and a
 // filter change clears them so a bulk action never reaches a lead that isn't shown.
 // Admins and managers can also Remove ticked leads (hidden from Fito Website, not
-// deleted) and tick "Show removed" to list only the removed ones and Restore them.
+// deleted) and tick "Show removed" to list only the removed ones and Restore them;
+// admins can also Delete permanently the removed ones (after typing DELETE).
+// Clicking a row opens that lead in a side panel (WebsiteLeadPanel) for working it
+// without leaving the list; the lead's name opens its full page.
 
 const FILTER_STORAGE_KEY = "website-leads-filter";
 // Leads per request to /api/website-leads/remove (its cap); a bigger selection goes in batches.
@@ -78,19 +82,25 @@ export default function WebsiteLeadsTable({
   range,
   reps,
   stageCatalog,
+  labelCatalog: initialLabelCatalog,
+  currentUserId,
   canBulkAssign,
   canRemove,
+  canDelete,
 }: {
   initial: WebsiteLeadPage & { options: WebsiteLeadOptions };
   range: { from: string; to: string };
   reps: Rep[];
   stageCatalog: MetaLeadStageRow[];
+  labelCatalog: MetaLeadLabelChip[]; // for the side panel's label picker
+  currentUserId: string;
   // Admins and managers: show "Assign to rep" for ticked leads.
   canBulkAssign: boolean;
   // Admins and managers: Remove ticked leads, and the "Show removed" filter with Restore.
   canRemove: boolean;
+  // Admins only: Delete permanently on the removed leads.
+  canDelete: boolean;
 }) {
-  const router = useRouter();
   const toast = useToast();
 
   // --- The list: one server-backed page at a time ---------------------------
@@ -274,7 +284,9 @@ export default function WebsiteLeadsTable({
   const [assigning, setAssigning] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [removeAction, setRemoveAction] = useState<RemoveAction | null>(null);
+  const removing = removeAction !== null;
   // Shift-click ticks every row between the last tick and this one.
   const lastPickedIndexRef = useRef<number | null>(null);
   const shiftHeldRef = useRef(false);
@@ -329,13 +341,12 @@ export default function WebsiteLeadsTable({
     }
   }
 
-  // Removing / restoring the ticked leads, in batches of the route's cap. The rows leave the screen
-  // at once; the reload that follows brings the true counts and paging.
-  async function changeRemoved(action: "remove" | "restore") {
+  // Removing / restoring / deleting the ticked leads, in batches of the route's cap. The rows leave the
+  // screen at once; the reload that follows brings the true counts and paging.
+  async function changeRemoved(action: RemoveAction) {
     const ids = [...pickedIds];
     if (ids.length === 0) return;
-    const verb = action === "remove" ? "remove" : "restore";
-    setRemoving(true);
+    setRemoveAction(action);
     let changed = 0;
     try {
       for (let i = 0; i < ids.length; i += REMOVE_BATCH) {
@@ -346,23 +357,64 @@ export default function WebsiteLeadsTable({
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          toast.error(data.error ? String(data.error) : `Could not ${verb} the leads`);
+          toast.error(data.error ? String(data.error) : `Could not ${action} the leads`);
           return;
         }
         changed += Number(data.changed) || 0;
       }
       const gone = new Set(ids);
       setRows((r) => r.filter((l) => !gone.has(l.id)));
+      setSelectedId((cur) => (cur && gone.has(cur) ? null : cur)); // the open panel's lead left the view
       setTotal((t) => Math.max(0, t - changed));
-      toast.success(`${action === "remove" ? "Removed" : "Restored"} ${leadCount(changed)}`);
+      toast.success(
+        action === "delete"
+          ? `Deleted ${leadCount(changed)} permanently`
+          : `${action === "remove" ? "Removed" : "Restored"} ${leadCount(changed)}`,
+      );
       clearPicked();
       setConfirmRemove(false);
+      setConfirmDelete(false);
     } catch {
-      toast.error(`Could not ${verb} the leads`);
+      toast.error(`Could not ${action} the leads`);
     } finally {
-      setRemoving(false);
+      setRemoveAction(null);
       refetch(true); // also after a failed batch: earlier ones may have gone through
     }
+  }
+
+  // --- Side panel: one lead opened beside the list ----------------------------
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [labelCatalog, setLabelCatalog] = useState(initialLabelCatalog); // grows when a label is made in the panel
+  const closePanel = useCallback(() => setSelectedId(null), []);
+  // Clicking the open lead's row again closes it.
+  const toggleLead = (id: string) => setSelectedId((cur) => (cur === id ? null : id));
+  const rowTint = (id: string) =>
+    selectedId === id ? "bg-court-50 border-l-2 border-l-court-500" : pickedIds.has(id) ? "bg-court-50" : "hover:bg-slate-50";
+
+  // A change made in the panel shows in the lead's row at once; with a filter on that field the lead may no longer match.
+  function onPanelRowChange(id: string, patch: Partial<WebsiteLeadRow>) {
+    patchLocal([id], patch);
+    if (
+      ("stage" in patch && filters.stage) ||
+      ("assignedToUserId" in patch && filters.assigned) ||
+      ("labels" in patch && filters.label)
+    ) {
+      refetch(true);
+    }
+  }
+
+  // Removed, restored or deleted in the panel: the lead leaves this view and the panel closes.
+  function onPanelLeadGone(id: string) {
+    setRows((r) => r.filter((l) => l.id !== id));
+    setTotal((t) => Math.max(0, t - 1));
+    setPickedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setSelectedId(null);
+    refetch(true);
   }
 
   const hasFilter = FILTER_KEYS.some((k) => filters[k].trim() !== "");
@@ -504,7 +556,6 @@ export default function WebsiteLeadsTable({
     return <p className="text-sm text-slate-400">No website leads yet</p>;
   }
 
-  const openLead = (id: string) => router.push(`/website-leads/${id}`);
   const labelCls = "block text-[11px] font-medium text-slate-600 mb-1";
 
   return (
@@ -708,14 +759,26 @@ export default function WebsiteLeadsTable({
               )}
               {canRemove &&
                 (showingRemoved ? (
-                  <button
-                    type="button"
-                    onClick={() => void changeRemoved("restore")}
-                    disabled={removing}
-                    className="text-xs font-medium px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-md disabled:opacity-60"
-                  >
-                    {removing ? "Restoring…" : "Restore"}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void changeRemoved("restore")}
+                      disabled={removing}
+                      className="text-xs font-medium px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-md disabled:opacity-60"
+                    >
+                      {removeAction === "restore" ? "Restoring…" : "Restore"}
+                    </button>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(true)}
+                        disabled={removing}
+                        className="btn btn-danger !px-3 !py-1.5 !text-xs"
+                      >
+                        Delete permanently
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <button
                     type="button"
@@ -766,8 +829,8 @@ export default function WebsiteLeadsTable({
                 {leads.map((l, i) => (
                   <div
                     key={l.id}
-                    onClick={() => openLead(l.id)}
-                    className={`p-4 cursor-pointer transition-colors ${pickedIds.has(l.id) ? "bg-court-50" : "hover:bg-slate-50"}`}
+                    onClick={() => toggleLead(l.id)}
+                    className={`p-4 cursor-pointer transition-colors ${rowTint(l.id)}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <input
@@ -849,8 +912,8 @@ export default function WebsiteLeadsTable({
                       return (
                         <tr
                           key={l.id}
-                          onClick={() => openLead(l.id)}
-                          className={`cursor-pointer transition-colors ${pickedIds.has(l.id) ? "bg-court-50" : "hover:bg-slate-50"}`}
+                          onClick={() => toggleLead(l.id)}
+                          className={`cursor-pointer transition-colors ${rowTint(l.id)}`}
                         >
                           <td className="w-8 !pr-0" onClick={(e) => e.stopPropagation()}>
                             <input
@@ -953,12 +1016,40 @@ export default function WebsiteLeadsTable({
         </div>
       </div>
 
+      {selectedId && (
+        <WebsiteLeadPanel
+          key={selectedId}
+          leadId={selectedId}
+          listName={leads.find((l) => l.id === selectedId)?.name ?? "Lead"}
+          reps={reps}
+          labelCatalog={labelCatalog}
+          stageCatalog={stageCatalog}
+          currentUserId={currentUserId}
+          isAdmin={canDelete}
+          canRemove={canRemove}
+          onClose={closePanel}
+          onRowChange={onPanelRowChange}
+          onLabelCreated={(label) => setLabelCatalog((c) => (c.some((x) => x.id === label.id) ? c : [...c, label]))}
+          onLeadGone={onPanelLeadGone}
+        />
+      )}
+
       {confirmRemove && (
         <RemoveLeadsDialog
           title={`Remove ${leadCount(pickedIds.size)}?`}
           busy={removing}
           onConfirm={() => void changeRemoved("remove")}
           onCancel={() => setConfirmRemove(false)}
+        />
+      )}
+
+      {confirmDelete && (
+        <RemoveLeadsDialog
+          permanent
+          title={`Delete ${leadCount(pickedIds.size)} permanently?`}
+          busy={removing}
+          onConfirm={() => void changeRemoved("delete")}
+          onCancel={() => setConfirmDelete(false)}
         />
       )}
 

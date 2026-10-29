@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
-import { isManagerOrAbove } from "@/lib/rbac";
-import { getAssignableReps, getMetaLeadStages } from "@/lib/meta-ads/queries";
+import { isAdmin, isManagerOrAbove } from "@/lib/rbac";
+import { getAssignableReps, getMetaLeadLabels, getMetaLeadStages } from "@/lib/meta-ads/queries";
 import { getInitialWebsiteLeadList, parseLeadRange } from "@/lib/website-leads/list";
 import WebsiteLeadsClient from "./WebsiteLeadsClient";
 import WebsiteAnalyticsPage from "./analytics/WebsiteAnalyticsPage";
@@ -21,10 +21,11 @@ export default async function WebsiteLeadsPage({
   if (searchParams.tab === "analytics") return <WebsiteAnalyticsPage />;
   const { from, to } = parseLeadRange(searchParams.from, searchParams.to);
 
-  const [initial, reps, stageCatalog] = await Promise.all([
+  const [initial, reps, stageCatalog, labelCatalog] = await Promise.all([
     getInitialWebsiteLeadList({ from, to }),
     getAssignableReps(),
     getMetaLeadStages(),
+    getMetaLeadLabels(), // for the side panel's label picker
   ]);
 
   return (
@@ -32,8 +33,11 @@ export default async function WebsiteLeadsPage({
       initial={initial}
       reps={reps}
       stageCatalog={stageCatalog}
+      labelCatalog={labelCatalog}
+      currentUserId={user.id}
       canBulkAssign={isManagerOrAbove(user.role)}
       canRemove={isManagerOrAbove(user.role)}
+      canDelete={isAdmin(user.role)}
       range={{ from: searchParams.from ?? "", to: searchParams.to ?? "" }}
     />
   );

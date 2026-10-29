@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import DateRangePicker, { type DateRange } from "@/components/DateRangePicker";
 import type { Rep } from "@/components/meta/MoveToCrmDialog";
 import type { MetaLeadStageRow } from "@/lib/meta-ads/lead-fields";
+import type { MetaLeadLabelChip } from "@/lib/meta-ads/queries";
 import type { WebsiteLeadPage, WebsiteLeadOptions } from "@/lib/website-leads/list";
 import WebsiteLeadsTable from "./WebsiteLeadsTable";
 import WebsiteLeadsTabs from "./analytics/WebsiteLeadsTabs";
@@ -17,15 +18,21 @@ export default function WebsiteLeadsClient({
   initial,
   reps,
   stageCatalog,
+  labelCatalog,
+  currentUserId,
   canBulkAssign,
   canRemove,
+  canDelete,
   range,
 }: {
   initial: WebsiteLeadPage & { options: WebsiteLeadOptions };
   reps: Rep[];
   stageCatalog: MetaLeadStageRow[];
+  labelCatalog: MetaLeadLabelChip[];
+  currentUserId: string;
   canBulkAssign: boolean;
   canRemove: boolean;
+  canDelete: boolean;
   range: DateRange;
 }) {
   const router = useRouter();
@@ -63,8 +70,11 @@ export default function WebsiteLeadsClient({
           range={range}
           reps={reps}
           stageCatalog={stageCatalog}
+          labelCatalog={labelCatalog}
+          currentUserId={currentUserId}
           canBulkAssign={canBulkAssign}
           canRemove={canRemove}
+          canDelete={canDelete}
         />
       </div>
     </div>

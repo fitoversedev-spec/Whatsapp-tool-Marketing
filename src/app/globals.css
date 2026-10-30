@@ -69,6 +69,19 @@ html.dark {
   color-scheme: dark;
 }
 
+/* Assist button position (src/components/AssistLauncher.tsx) — also read by the
+   toast stack so toasts always sit above it. Phones: clear of the 3.5rem bottom
+   nav. Raised on the Inbox so it never covers the reply bar (≈81px tall). */
+:root {
+  --assist-right: 12px;
+  --assist-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px) + 12px);
+}
+html[data-assist-raised] { --assist-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px) + 88px); }
+@media (min-width: 768px) {
+  :root { --assist-right: 16px; --assist-bottom: 16px; }
+  html[data-assist-raised] { --assist-bottom: 104px; }
+}
+
 html, body {
   background-color: var(--bg);
   color: rgb(var(--tx));

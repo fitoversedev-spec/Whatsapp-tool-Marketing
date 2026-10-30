@@ -401,7 +401,8 @@ export default function InboxClient({
   }
 
   return (
-    <div className="flex flex-1 md:h-screen h-[calc(100vh-3.5rem-3.5rem)] md:items-stretch">
+    // -mb cancels the layout's 80px Assist-button padding — the inbox fills the viewport exactly.
+    <div className="flex flex-1 md:h-screen h-[calc(100vh-3.5rem-3.5rem)] md:items-stretch -mb-[80px]">
       {/* Conversation list */}
       <div
         className={`

@@ -693,7 +693,7 @@ export default function WebsiteLeadsTable({
 
         {/* Ticked leads -> bulk actions */}
         {pickedIds.size > 0 && (
-          <div className="sticky top-0 z-20 bg-court-700 text-white rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 shadow-lg">
+          <div data-hides-assist className="sticky top-0 z-20 bg-court-700 text-white rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 shadow-lg">
             <span className="font-medium text-sm">{pickedIds.size} selected</span>
             <button type="button" onClick={clearPicked} className="text-xs underline opacity-80 hover:opacity-100">
               Clear

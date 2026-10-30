@@ -352,6 +352,7 @@ export default function LeadsClient({
         <div
           className="sticky top-0 z-20 mb-3 flex items-center gap-3 flex-wrap rounded-xl border border-court-200 bg-court-50 px-4 py-2 text-sm text-court-800"
           data-guide="crm-leads-bulk-bar"
+          data-hides-assist
         >
           <span className="font-semibold">{selected.size} selected</span>
           <button

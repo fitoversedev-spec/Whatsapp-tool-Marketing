@@ -81,7 +81,7 @@ export default function BulkActionBar({
 
   return (
     <>
-      <div className="sticky top-0 z-10 mb-3 bg-wa-green text-white rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-lg">
+      <div data-hides-assist className="sticky top-0 z-10 mb-3 bg-wa-green text-white rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-lg">
         <span className="font-medium text-sm">
           {count} selected
         </span>

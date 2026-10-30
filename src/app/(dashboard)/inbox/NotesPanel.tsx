@@ -122,6 +122,7 @@ export default function NotesPanel({
         aria-hidden="true"
       />
       <aside
+        data-hides-assist
         className={`
           fixed md:relative inset-y-0 right-0 z-50 md:z-auto
           w-full sm:w-96 md:w-80 xl:w-96 md:shrink-0 h-full

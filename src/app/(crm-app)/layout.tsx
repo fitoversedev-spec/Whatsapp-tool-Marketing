@@ -3,8 +3,7 @@ import { prisma } from "@/lib/prisma";
 import CrmSidebar from "@/components/CrmSidebar";
 import CronTick from "@/components/CronTick";
 import NavigationTracker from "@/components/NavigationTracker";
-import FloatingChatLauncher from "@/components/chat/FloatingChatLauncher";
-import AskAiLauncher from "@/components/AskAiLauncher";
+import AssistLauncher from "@/components/AssistLauncher";
 import CrossTabRefresh from "@/components/CrossTabRefresh";
 import PendingNotesFlusher from "@/components/PendingNotesFlusher";
 import BottomNav from "@/components/BottomNav";
@@ -26,7 +25,7 @@ export default async function CrmAppLayout({ children }: { children: React.React
 
   // Seeds every badge, so the shared badge poller (src/lib/live-counts.ts)
   // doesn't need to re-fetch them on page load.
-  const [pendingCount, crmReminderCount, chatUnread, chatMentions, chatRequests, aiApprover] = await Promise.all([
+  const [pendingCount, crmReminderCount, chatUnread, chatRequests, aiApprover] = await Promise.all([
     isAdminUser
       ? orZero(prisma.user.count({ where: { approvalStatus: "pending", deletedAt: null } }))
       : 0,
@@ -49,7 +48,6 @@ export default async function CrmAppLayout({ children }: { children: React.React
         .aggregate({ where: { userId: user.id }, _sum: { unreadCount: true } })
         .then((a) => a._sum.unreadCount ?? 0)
     ),
-    orZero(prisma.chatMention.count({ where: { mentionedUserId: user.id, seenAt: null } })),
     orZero(
       prisma.handoffRequest.count({
         where: isAdminUser
@@ -77,15 +75,12 @@ export default async function CrmAppLayout({ children }: { children: React.React
         aiApprover={aiApprover}
         aiApprovalCount={aiApprovalCount}
       />
-      <main className="flex-1 min-w-0 overflow-x-hidden pb-14 md:pb-0">{children}</main>
+      {/* Bottom padding = phone bottom nav (3.5rem) + 80px so the last rows,
+          pagination and sticky footers scroll clear of the Assist button. */}
+      <main className="flex-1 min-w-0 overflow-x-hidden pb-[calc(3.5rem_+_80px)] md:pb-[80px]">{children}</main>
       <NavigationTracker />
       <CronTick />
-      <FloatingChatLauncher
-        initialUnread={chatUnread}
-        initialMentions={chatMentions}
-        initialRequests={chatRequests}
-      />
-      <AskAiLauncher />
+      <AssistLauncher initialUnread={chatUnread} initialRequests={chatRequests} />
       <CrossTabRefresh events={["crm:contact-added", "crm:deal-updated", "crm:data-changed"]} />
       <PendingNotesFlusher userId={user.id} />
       <BottomNav reminderCount={crmReminderCount} />

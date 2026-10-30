@@ -365,7 +365,7 @@ export default function AccountContactsClient({
           )}
         </div>
         {selected.size > 0 && (
-          <div className="flex items-center gap-2 bg-court-50 border border-court-200 rounded px-3 py-1.5 flex-wrap">
+          <div data-hides-assist className="flex items-center gap-2 bg-court-50 border border-court-200 rounded px-3 py-1.5 flex-wrap">
             <span className="text-sm font-medium text-court-700"><span className="font-mono">{selected.size}</span> selected</span>
             <button
               onClick={syncSelected}

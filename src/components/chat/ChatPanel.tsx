@@ -2,7 +2,8 @@
 
 // The launcher's open panel: an inbox of the current user's threads, and the
 // selected thread's conversation. Fixed bottom-right on desktop, full-screen on
-// mobile. State lives here so "minimize" (parent hides this) preserves it.
+// mobile, and raised above the Assist button (AssistLauncher) that opens it.
+// State lives here so "minimize" (parent hides this) preserves it.
 import { useCallback, useEffect, useState } from "react";
 import ChatThreadView from "./ChatThreadView";
 import SetLeaveModal from "./SetLeaveModal";
@@ -97,7 +98,7 @@ export default function ChatPanel({
   const actionable = requests.filter((r) => r.canRespond || r.canApprove);
 
   return (
-    <div className="fixed z-[60] flex flex-col bg-white shadow-2xl border border-slate-200 inset-0 w-full h-full md:inset-auto md:right-4 md:bottom-4 md:w-[380px] md:h-[560px] md:rounded-2xl">
+    <div data-assist-panel className="fixed z-[60] flex flex-col bg-white shadow-2xl border border-slate-200 inset-0 w-full h-full md:inset-auto md:right-4 md:bottom-[68px] md:w-[380px] md:h-[560px] md:max-h-[calc(100dvh-84px)] md:rounded-2xl">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 shrink-0">
         {view === "thread" ? (

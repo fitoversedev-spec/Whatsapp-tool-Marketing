@@ -5,7 +5,8 @@
 // (header + minimize/close, fixed bottom-right, full-screen on mobile) but docks
 // to the LEFT of the chat panel on desktop so both can be open at once — read a
 // rep's report while messaging that rep. State lives inside AiReportTab, so
-// "minimize" (parent CSS-hides this) preserves the question and report.
+// "minimize" (parent CSS-hides this) preserves the question and report. On
+// desktop it sits above the Assist button (AssistLauncher), which opens it.
 import AiReportTab from "@/components/analytics/AiReportTab";
 
 export default function AiPanel({
@@ -16,7 +17,7 @@ export default function AiPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed z-50 flex flex-col bg-white shadow-2xl border border-slate-200 inset-0 w-full h-full md:inset-auto md:right-4 md:bottom-4 md:w-[440px] md:h-[600px] md:rounded-2xl md:max-w-[calc(100vw-5rem)] lg:right-[404px]">
+    <div data-assist-panel className="fixed z-50 flex flex-col bg-white shadow-2xl border border-slate-200 inset-0 w-full h-full md:inset-auto md:right-4 md:bottom-[68px] md:w-[440px] md:h-[600px] md:max-h-[calc(100dvh-84px)] md:rounded-2xl md:max-w-[calc(100vw-5rem)] lg:right-[404px]">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 shrink-0">
         <span aria-hidden className="text-lg leading-none">✨</span>

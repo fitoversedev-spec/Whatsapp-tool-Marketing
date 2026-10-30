@@ -208,6 +208,7 @@ export default function ContactDetailDrawer({
 
       {/* Drawer */}
       <aside
+        data-hides-assist
         className="fixed inset-y-0 right-0 z-50 w-full sm:w-[600px] bg-white shadow-2xl flex flex-col"
         style={{ maxWidth: "100vw" }}
       >

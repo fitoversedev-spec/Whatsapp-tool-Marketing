@@ -3,8 +3,7 @@ import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/Sidebar";
 import CronTick from "@/components/CronTick";
 import NavigationTracker from "@/components/NavigationTracker";
-import FloatingChatLauncher from "@/components/chat/FloatingChatLauncher";
-import AskAiLauncher from "@/components/AskAiLauncher";
+import AssistLauncher from "@/components/AssistLauncher";
 import CrossTabRefresh from "@/components/CrossTabRefresh";
 import PendingNotesFlusher from "@/components/PendingNotesFlusher";
 import BottomNav from "@/components/BottomNav";
@@ -37,9 +36,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   // These are all independent — run them in one parallel batch instead of
   // stacking serial round-trips to the Neon pooler. They seed every badge
-  // (sidebar, bottom nav, chat bubble), so the shared badge poller
+  // (sidebar, bottom nav, Assist button), so the shared badge poller
   // (src/lib/live-counts.ts) doesn't need to re-fetch them on page load.
-  const [pendingCount, unreadCount, reminderCount, chatUnread, chatMentions, chatRequests, pendingTemplates] =
+  const [pendingCount, unreadCount, reminderCount, chatUnread, chatRequests, pendingTemplates] =
     await Promise.all([
       isAdminUser
         ? orZero(prisma.user.count({ where: { approvalStatus: "pending", deletedAt: null } }))
@@ -64,14 +63,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
           },
         })
       ),
-      // Team-chat unread, unseen mentions and pending handoff asks — the
-      // floating launcher's badge.
+      // Team-chat unread and pending handoff asks — the Assist button's badge.
       orZero(
         prisma.chatParticipant
           .aggregate({ where: { userId: user.id }, _sum: { unreadCount: true } })
           .then((a) => a._sum.unreadCount ?? 0)
       ),
-      orZero(prisma.chatMention.count({ where: { mentionedUserId: user.id, seenAt: null } })),
       orZero(
         prisma.handoffRequest.count({
           where: isAdminUser
@@ -103,15 +100,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
         pendingTemplates={pendingTemplates}
         tokenExpired={tokenExpired}
       />
-      <main className="flex-1 min-w-0 overflow-x-hidden pb-14 md:pb-0">{children}</main>
+      {/* Bottom padding = phone bottom nav (3.5rem) + 80px so the last rows,
+          pagination and sticky footers scroll clear of the Assist button. */}
+      <main className="flex-1 min-w-0 overflow-x-hidden pb-[calc(3.5rem_+_80px)] md:pb-[80px]">{children}</main>
       <NavigationTracker />
       <CronTick />
-      <FloatingChatLauncher
-        initialUnread={chatUnread}
-        initialMentions={chatMentions}
-        initialRequests={chatRequests}
-      />
-      <AskAiLauncher />
+      <AssistLauncher initialUnread={chatUnread} initialRequests={chatRequests} />
       <CrossTabRefresh events={["marketing:contact-added", "marketing:data-changed"]} />
       <PendingNotesFlusher userId={user.id} />
       <BottomNav reminderCount={reminderCount} />

@@ -669,6 +669,7 @@ export default function LeadsTable({
           <div
             className="sticky top-0 z-20 bg-court-700 text-white rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 shadow-lg"
             data-guide="wa-ad-bulk-bar"
+            data-hides-assist
           >
             <span className="font-medium text-sm">{pickedIds.size} selected</span>
             <button type="button" onClick={clearPicked} className="text-xs underline opacity-80 hover:opacity-100">
@@ -996,7 +997,7 @@ export default function LeadsTable({
             className="fixed inset-0 bg-black/20 z-40 lg:hidden"
             onClick={() => { setSelectedLeadId(null); setSidebarDetail(null); }}
           />
-          <aside className="fixed top-0 right-0 h-screen w-[400px] max-w-[90vw] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 z-50 flex flex-col shadow-xl">
+          <aside data-hides-assist className="fixed top-0 right-0 h-screen w-[400px] max-w-[90vw] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 z-50 flex flex-col shadow-xl">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 shrink-0">
               <h3 className="text-sm font-semibold text-slate-900 truncate">

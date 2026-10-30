@@ -86,6 +86,7 @@ export default function WebsiteLeadPanel({
       <div className="fixed inset-0 bg-black/20 z-40 lg:hidden" onClick={onClose} />
       <aside
         aria-label="Lead details"
+        data-hides-assist
         className="fixed top-0 right-0 h-screen supports-[height:100dvh]:h-dvh w-[400px] max-w-[90vw] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 z-50 flex flex-col shadow-xl"
       >
         {/* Header */}
